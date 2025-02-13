@@ -7,7 +7,11 @@ authors = [
     { name = "Jeffrey Wright", email = "jeffrey.wright@wartsila.com" }
 ]
 requires-python = ">=3.9.16"
-dependencies = []
+dependencies = [
+    "hatch>=1.14.0",
+    "pre-commit>=4.1.0",
+    "pytest>=6.2",
+]
 
 [project.scripts]
 pytest-insight = "pytest_insight:main"
@@ -29,3 +33,10 @@ fixable = ["I"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.9.6",
+]
