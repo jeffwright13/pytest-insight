@@ -24,3 +24,7 @@ dist/
 .coverage
 .coveragerc
 .test-results.db
+
+# Oof possible dirs
+oof/
+.oof/
