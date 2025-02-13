@@ -1,0 +1,31 @@
+[project]
+name = "pytest-insight"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Jeffrey Wright", email = "jeffrey.wright@wartsila.com" }
+]
+requires-python = ">=3.9.16"
+dependencies = []
+
+[project.scripts]
+pytest-insight = "pytest_insight:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+fix = true
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+fixable = ["I"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
