@@ -2,13 +2,21 @@ import pytest
 
 
 def pytest_addoption(parser):
-    """Add pytest-insight specific command line options."""
+    """Add pytest-insight command line options."""
     group = parser.getgroup("insight")
     group.addoption(
         "--insight",
         action="store_true",
         default=False,
         help="Enable pytest-insight plugin for test history analysis",
+    )
+
+    # Add options for pytest.ini
+    parser.addini(
+        "insight",
+        type="bool",
+        help="Enable the insight plugin, providing test history analysis",
+        default=False,
     )
 
 

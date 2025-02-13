@@ -13,6 +13,9 @@ dependencies = [
     "pytest>=6.2",
 ]
 
+[project.entry-points.pytest11]
+insight = "pytest_insight.plugin"
+
 [project.scripts]
 pytest-insight = "pytest_insight:main"
 

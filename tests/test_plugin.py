@@ -16,10 +16,14 @@ def test_plugin_disabled_by_default(pytestconfig):
 def test_plugin_enabled_with_flag(tester):
     """Verify plugin is properly registered when --insight flag is used."""
     result = tester.runpytest("--insight")
-    # Exit code 4 means 'usage error'
-    assert result.ret == 4
+    # Exit code 5 means 'no tests collected' which is expected
+    assert result.ret == 5
     # But the plugin should be loaded
-    result.stdout.fnmatch_lines(["*pytest-insight-*"])
+    result.stdout.fnmatch_lines(
+        [
+            "*plugins:*insight-0.1.0*"  # Updated to match actual output
+        ]
+    )
 
 
 def test_help_shows_insight_option(tester):
