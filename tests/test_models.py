@@ -82,10 +82,7 @@ def test_random_test_session(random_test_session):
 
     # Test modifying test results properly
     new_result = TestResult(
-        nodeid="test_new.py::test_case",
-        outcome="PASSED",
-        start_time=datetime.utcnow(),
-        duration=0.1
+        nodeid="test_new.py::test_case", outcome="PASSED", start_time=datetime.utcnow(), duration=0.1
     )
     random_test_session.add_test_result(new_result)
 

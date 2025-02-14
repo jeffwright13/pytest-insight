@@ -107,19 +107,36 @@ class OutputFields:
 
 
 class RerunTestGroup:
-    """
-    Represents a test that has been run multiple times (aka 'rerun') using the pytest-rerunfailures plugin.
-    """
+    """Represents a test that has been run multiple times using pytest-rerunfailures."""
 
     def __init__(self, nodeid: str, final_outcome: str):
         self.nodeid = nodeid
         self.final_outcome = final_outcome
-        self.reruns: List[TestResult] = []
-        self.full_test_list: List[TestResult] = []
+        self._reruns: List[TestResult] = []
+        self._full_test_list: List[TestResult] = []
 
     @property
-    def final_test(self) -> TestResult:
-        return self.full_test_list[-1] if self.full_test_list else None
+    def reruns(self) -> List[TestResult]:
+        """Get rerun test results."""
+        return self._reruns.copy()
+
+    @property
+    def full_test_list(self) -> List[TestResult]:
+        """Get full list of test results including original and reruns."""
+        return self._full_test_list.copy()
+
+    def add_rerun(self, result: TestResult) -> None:
+        """Add a rerun test result."""
+        self._reruns.append(result)
+
+    def add_test(self, result: TestResult) -> None:
+        """Add a test result to the full list."""
+        self._full_test_list.append(result)
+
+    @property
+    def final_test(self) -> Optional[TestResult]:
+        """Get the final test result."""
+        return self._full_test_list[-1] if self._full_test_list else None
 
 
 class TestSession:
