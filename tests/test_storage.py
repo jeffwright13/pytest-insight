@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from pytest_insight.models import (
     TestSession,
 )
-from pytest_insight.storage import InMemoryTestResultStorage
+from pytest_insight.storage import InMemoryTestResultStorage, JSONTestResultStorage
 
 
 def test_storage_loads_persisted_sessions():
@@ -20,3 +20,44 @@ def test_storage_loads_persisted_sessions():
     assert len(stored_sessions) == 2
     assert stored_sessions[0].session_id == "session-001"
     assert stored_sessions[1].session_id == "session-002"
+
+    storage.clear_sessions()
+    assert len(storage.load_sessions()) == 0
+    assert storage.load_sessions() == []
+    assert len(storage.load_sessions()) == 0
+
+
+def test_storage_saves_sessions():
+    """Ensure storage correctly saves and retrieves sessions."""
+    storage = InMemoryTestResultStorage()
+
+    session1 = TestSession("SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=120))
+    session2 = TestSession("SUT-1", "session-002", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=90))
+    storage.save_session(session1)
+    storage.save_session(session2)
+    stored_sessions = storage.load_sessions()
+    assert len(stored_sessions) == 2
+    assert stored_sessions[0] == session1
+    assert stored_sessions[1] == session2
+    assert len(storage.load_sessions()) == 2
+    assert storage.load_sessions() == [session1, session2]
+
+
+def test_storage_clears_sessions():
+    """Ensure storage correctly clears all stored sessions."""
+    storage = InMemoryTestResultStorage()
+
+    session1 = TestSession("SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=120))
+    TestSession("SUT-1", "session-002", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=90))
+    storage.save_session(session1)
+
+    storage.clear_sessions()
+    assert len(storage.load_sessions()) == 0
+    assert storage.load_sessions() == []
+
+
+def test_storage_json_saves_sessions():
+    """Ensure JSON storage correctly saves and retrieves sessions."""
+    JSONTestResultStorage()
+
+    TestSession("SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=120))

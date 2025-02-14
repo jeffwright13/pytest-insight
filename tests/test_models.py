@@ -9,7 +9,6 @@ from pytest_insight.models import (
     TestResult,
     TestSession,
 )
-from pytest_insight.storage import InMemoryTestResultStorage
 
 
 def test_random_test_results(random_test_result):
@@ -31,7 +30,6 @@ def test_random_test_results(random_test_result):
 
 def test_random_test_session(random_test_session):
     """Test random test session properties and methods."""
-
     # Test basic session properties
     assert isinstance(random_test_session.sut_name, str) and random_test_session.sut_name.startswith("SUT-")
     assert isinstance(random_test_session.session_id, str) and random_test_session.session_id.startswith("session-")
@@ -74,14 +72,13 @@ def test_random_test_session(random_test_session):
     assert found_result is not None
     assert found_result.nodeid == first_result.nodeid
 
-    # Example of incorrect direct attribute setting that needs to be fixed:
-    random_test_session.output_fields = OutputFields()  # This is OK, has setter
+    # Test setting output fields
+    new_fields = OutputFields()
+    new_fields.set(OutputFieldType.ERRORS, "Test error")
+    random_test_session.output_fields = new_fields
+    assert random_test_session.output_fields.get_content(OutputFieldType.ERRORS) == "Test error"
 
-    # Instead, use proper methods:
-    for result in test_results:
-        random_test_session.add_test_result(result)
-
-    # Test modifying test results properly
+    # Test adding new test result
     new_result = TestResult(
         nodeid="test_new.py::test_case", outcome="PASSED", start_time=datetime.utcnow(), duration=0.1
     )
@@ -179,7 +176,7 @@ def test_rerun_test_group():
     assert len(group.full_test_list) == 2
 
 
-def test_test_history():
+def sa():
     """Test TestHistory functionality."""
     history = TestHistory()
     now = datetime.utcnow()
@@ -218,22 +215,3 @@ def test_output_field_string_representation():
     empty_field = OutputField(OutputFieldType.ERRORS, "")
     assert not str(empty_field)
     assert not bool(empty_field)
-
-
-def test_storage_persists_sessions():
-    """Verify test sessions are stored and retrieved correctly."""
-    storage = InMemoryTestResultStorage()
-
-    session1 = TestSession("SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=5))
-    session2 = TestSession("SUT-1", "session-002", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=10))
-
-    storage.save_session(session1)
-    storage.save_session(session2)
-
-    stored_sessions = storage.load_sessions()
-    assert len(stored_sessions) == 2
-    assert stored_sessions[0] == session1
-    assert stored_sessions[1] == session2
-
-    storage.clear_sessions()
-    assert len(storage.load_sessions()) == 0

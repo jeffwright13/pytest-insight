@@ -175,14 +175,8 @@ def random_test_result(nodeid, text_gen):
         caplog=text_gen.sentence(),
         capstderr=text_gen.sentence() if outcome_config["needs_error_output"] else "",
         capstdout=text_gen.sentence(),
-        longreprtext=(
-            text_gen.paragraph() if outcome_config["needs_error_output"] else ""
-        ),
-        has_warning=(
-            random.choice([True, False])
-            if outcome_config["can_have_warning"]
-            else False
-        ),
+        longreprtext=(text_gen.paragraph() if outcome_config["needs_error_output"] else ""),
+        has_warning=(random.choice([True, False]) if outcome_config["can_have_warning"] else False),
     )
 
     return result
@@ -233,15 +227,12 @@ def random_test_session(nodeid, text_gen, random_output_fields):
     # Generate unique rerun groups
     session_rerun_test_groups = []
     for _ in range(random.randint(1, 3)):
-        group = RerunTestGroup(
-            nodeid=str(nodeid), final_outcome=random.choice(["PASSED", "FAILED"])
-        )
+        group = RerunTestGroup(nodeid=str(nodeid), final_outcome=random.choice(["PASSED", "FAILED"]))
         for _ in range(random.randint(1, 4)):
             result = TestResult(
                 nodeid=str(nodeid),
                 outcome=random.choice(["PASSED", "FAILED"]),
-                start_time=session_start_time
-                + timedelta(seconds=random.randint(1, 30)),
+                start_time=session_start_time + timedelta(seconds=random.randint(1, 30)),
                 duration=random.uniform(0.1, 5.0),
                 caplog=text_gen.sentence(),
                 capstderr=text_gen.sentence(),
@@ -260,9 +251,23 @@ def random_test_session(nodeid, text_gen, random_output_fields):
         session_stop_time=session_stop_time,
         session_duration=session_duration,
     )
-    session.test_results = session_test_results
-    session.rerun_test_groups = session_rerun_test_groups
+
+    # Add test results using proper method
+    for result in session_test_results:
+        session.add_test_result(result)
+
+    # Add rerun groups using proper method
+    for group in session_rerun_test_groups:
+        session.add_rerun_group(group)
+
+    # Set output fields using proper setter
     session.output_fields = random_output_fields
-    session.session_tags = {"key": text_gen.word()}
+
+    # Add some random session tags
+    session.session_tags = {
+        "environment": random.choice(["dev", "qa", "prod"]),
+        "platform": random.choice(["linux", "windows", "macos"]),
+        "python_version": random.choice(["3.8", "3.9", "3.10"]),
+    }
 
     return session
