@@ -1,4 +1,3 @@
-import random
 import warnings
 
 
@@ -6,7 +5,7 @@ def fake_data(min: int = 30, max: int = 120) -> str:
     return "Yadda yadda yadda ..."
 
 
-def test_1_fails_with_warnings():
+def test_1_fails_with_warning():
     print("This test fails with warnings. See Warnings section for info.")
     warnings.warn(Warning(fake_data(50, 200)))
     warnings.warn(UserWarning(fake_data(55, 205)))
@@ -23,7 +22,7 @@ def test_1_fails_with_warnings():
     assert False
 
 
-def test_2_passes_with_warnings():
+def test_2_passes_with_warning():
     print("This test passes, but with warnings. See Warnings section for info.")
     warnings.warn(Warning(fake_data(50, 200)))
     warnings.warn(UserWarning(fake_data(55, 205)))

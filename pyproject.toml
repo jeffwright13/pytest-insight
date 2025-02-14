@@ -10,10 +10,11 @@ requires-python = ">=3.9.16"
 dependencies = [
     "hatch>=1.14.0",
     "pre-commit>=4.1.0",
-    "pytest-oof>=1.1.0",
     "pytest>=6.2",
     "pytest-rerunfailures>=15.0",
     "isort>=6.0.0",
+    "pyflakes>=3.2.0",
+    "black>=25.1.0",
 ]
 
 [project.entry-points.pytest11]
@@ -38,7 +39,7 @@ src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
-fixable = ["I"]
+fixable = ["E", "F", "I"]
 
 [tool.ruff.format]
 quote-style = "double"
