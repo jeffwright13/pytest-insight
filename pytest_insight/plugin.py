@@ -14,9 +14,16 @@ from pytest_insight.models import (
     TestResult,
     TestSession,
 )
+from pytest_insight.storage import JSONTestResultStorage
 
 _INSIGHT_INITIALIZED: bool = False
 _INSIGHT_ENABLED: bool = False
+
+
+# # storage = InMemoryTestResultStorage()  # Using in-memory storage for now
+# storage = JSONTestResultStorage()
+# Initialize storage once, at the module level
+storage = None
 
 
 def insight_enabled(config: Optional[Config] = None) -> bool:
@@ -57,9 +64,14 @@ def pytest_configure(config: Config):
     """Configure the plugin if enabled."""
     insight_enabled(config)
 
+    # Initialize both test history and current session
     if insight_enabled():
-        # Initialize both test history and current session
         config._insight_test_history = TestHistory()
+
+    # Initialize persistent storage at the beginning of the pytest session and ensure a single instance is used
+    global storage
+    if storage is None:
+        storage = JSONTestResultStorage()
 
 
 @pytest.hookimpl
@@ -194,8 +206,16 @@ def pytest_sessionfinish(session: Session, exitstatus):
     test_session.session_stop_time = end_time
     test_session.session_duration = duration
 
-    # Store session in history
-    session.config._insight_test_history.add_test_session(test_session)
+    # Save the session to storage
+    storage.save_session(test_session)
+
+    # Debugging: Print all stored test sessions
+    print("\n[pytest-insight] Stored Sessions Summary:")
+    for idx, session in enumerate(storage.load_sessions(), start=1):
+        print(
+            f"Session {idx}: {session.session_id}, Started: {session.session_start_time}, "
+            f"Duration: {session.session_duration}, Tests: {len(session.test_results)}"
+        )
 
 
 @pytest.hookimpl

@@ -8,6 +8,8 @@ class TestResult:
     Represents a single test result for an individual test run.
     """
 
+    __test__ = False  # Tell Pytest this is NOT a test class
+
     def __init__(
         self,
         nodeid: str,
@@ -142,6 +144,8 @@ class RerunTestGroup:
 class TestSession:
     """Represents a single test session for a single SUT."""
 
+    __test__ = False  # Tell Pytest this is NOT a test class
+
     def __init__(
         self,
         sut_name: str,
@@ -231,6 +235,17 @@ class TestSession:
     def find_test_result_by_nodeid(self, nodeid: str) -> TestResult:
         return next((t for t in self._test_results if t.nodeid == nodeid), None)
 
+    def to_dict(self) -> dict:
+        """Convert TestSession to a dictionary for JSON storage."""
+        return {
+            "sut_name": self.sut_name,
+            "session_id": self.session_id,
+            "session_start_time": self.session_start_time.isoformat(),
+            "session_stop_time": self.session_stop_time.isoformat(),
+            "session_duration": str(self.session_duration),
+            "test_results": [tr.__dict__ for tr in self.test_results],
+        }
+
 
 class SUTGroup:
     """
@@ -250,6 +265,8 @@ class SUTGroup:
 
 class TestHistory:
     """Tracks test sessions across multiple SUTs."""
+
+    __test__ = False  # Tell Pytest this is NOT a test class
 
     def __init__(self):
         self._sessions: Dict[str, SUTGroup] = {}

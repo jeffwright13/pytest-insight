@@ -28,3 +28,6 @@ dist/
 # Oof possible dirs
 oof/
 .oof/
+
+# JSON output files
+*.json

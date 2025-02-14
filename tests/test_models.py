@@ -9,6 +9,7 @@ from pytest_insight.models import (
     TestResult,
     TestSession,
 )
+from pytest_insight.storage import InMemoryTestResultStorage
 
 
 def test_random_test_results(random_test_result):
@@ -166,14 +167,16 @@ def test_rerun_test_group():
         nodeid="test_example.py::test_case", outcome="PASSED", start_time=now + timedelta(seconds=1), duration=0.7
     )
 
-    # Use proper methods if available, otherwise modify lists directly
-    group.reruns.append(result1)
-    group.full_test_list.append(result1)
-    group.full_test_list.append(result2)
+    # Use proper methods to add results
+    group.add_rerun(result1)  # Add to reruns list
+    group.add_test(result1)  # Add to full test list
+    group.add_test(result2)  # Add to full test list
 
     assert group.nodeid == "test_example.py::test_case"
     assert group.final_outcome == "FAILED"
     assert group.final_test == result2
+    assert len(group.reruns) == 1
+    assert len(group.full_test_list) == 2
 
 
 def test_test_history():
@@ -210,8 +213,27 @@ def test_output_field_string_representation():
     """Test OutputField string conversion."""
     field = OutputField(OutputFieldType.ERRORS, "Test error")
     assert str(field) == "Test error"
-    assert bool(field) is True
+    assert bool(field)
 
     empty_field = OutputField(OutputFieldType.ERRORS, "")
-    assert str(empty_field) == ""
-    assert bool(empty_field) is False
+    assert not str(empty_field)
+    assert not bool(empty_field)
+
+
+def test_storage_persists_sessions():
+    """Verify test sessions are stored and retrieved correctly."""
+    storage = InMemoryTestResultStorage()
+
+    session1 = TestSession("SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=5))
+    session2 = TestSession("SUT-1", "session-002", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=10))
+
+    storage.save_session(session1)
+    storage.save_session(session2)
+
+    stored_sessions = storage.load_sessions()
+    assert len(stored_sessions) == 2
+    assert stored_sessions[0] == session1
+    assert stored_sessions[1] == session2
+
+    storage.clear_sessions()
+    assert len(storage.load_sessions()) == 0
