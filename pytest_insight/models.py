@@ -34,29 +34,19 @@ class TestResult:
 class OutputFieldType(Enum):
     """Valid output field types in pytest terminal output."""
 
-    TEST_SESSION_STARTS = "test_session_starts"
     ERRORS = "errors"
-    FAILURES = "failures"
-    PASSES = "passes"
-    WARNINGS_SUMMARY = "warnings_summary"
+    WARNINGS_SUMMARY = "warnings_summary"  # Added to match usage
     RERUN_TEST_SUMMARY = "rerun_test_summary"
     SHORT_TEST_SUMMARY = "short_test_summary"
-    LAST_LINE = "lastline"
+    SESSION_START = "session_start"
 
 
 class OutputField:
-    """A section of pytest terminal output with specific content type."""
+    """A section of pytest terminal output with specific content."""
 
     def __init__(self, field_type: OutputFieldType, content: str):
-        """
-        Initialize an output field.
-
-        Args:
-            field_type: Type of output field from OutputFieldType enum
-            content: The actual content of the field
-        """
         self.field_type = field_type
-        self.content = content
+        self.content = content.strip()
 
     def __str__(self) -> str:
         return self.content
@@ -69,51 +59,51 @@ class OutputFields:
     """Collection of pytest terminal output sections."""
 
     def __init__(self):
-        """Initialize empty output fields collection."""
         self._fields: Dict[OutputFieldType, OutputField] = {}
-
-    def set(self, field_type: OutputFieldType, content: str) -> None:
-        """
-        Set content for a specific output field type.
-
-        Args:
-            field_type: Type of field to set
-            content: Content to store in the field
-        """
-        self._fields[field_type] = OutputField(field_type, content)
-
-    def get(self, field_type: OutputFieldType) -> Optional[OutputField]:
-        """
-        Get content of a specific output field type.
-
-        Args:
-            field_type: Type of field to retrieve
-
-        Returns:
-            OutputField if it exists, None otherwise
-        """
-        return self._fields.get(field_type)
-
-    def get_content(self, field_type: OutputFieldType) -> str:
-        """
-        Get content string of a specific output field type.
-
-        Args:
-            field_type: Type of field to retrieve content from
-
-        Returns:
-            Content string if field exists, empty string otherwise
-        """
-        field = self.get(field_type)
-        return field.content if field else ""
 
     @property
     def fields(self) -> Dict[OutputFieldType, OutputField]:
-        """Get all output fields."""
+        """Get a copy of all output fields."""
         return self._fields.copy()
+
+    def set(self, field_type: OutputFieldType, content: str) -> None:
+        """Set content for a specific output field type."""
+        self._fields[field_type] = OutputField(field_type, content)
+
+    def get(self, field_type: OutputFieldType) -> Optional[OutputField]:
+        """Get an output field by type."""
+        return self._fields.get(field_type)
+
+    def get_content(self, field_type: OutputFieldType) -> str:
+        """Get content string for a field type."""
+        field = self.get(field_type)
+        return str(field) if field else ""
+
+    @property
+    def errors(self) -> str:
+        """Get error output content."""
+        return self.get_content(OutputFieldType.ERRORS)
+
+    @property
+    def warnings(self) -> str:
+        """Get warnings output content."""
+        return self.get_content(OutputFieldType.WARNINGS)
+
+    @property
+    def final_summary(self) -> str:
+        """Get the final summary line."""
+        return self.get_content(OutputFieldType.SHORT_TEST_SUMMARY)
+
+    @property
+    def rerun_summary(self) -> str:
+        """Get rerun test summary."""
+        return self.get_content(OutputFieldType.RERUN_SUMMARY)
 
     def __bool__(self) -> bool:
         return bool(self._fields)
+
+    def __str__(self) -> str:
+        return self.final_summary
 
 
 class RerunTestGroup:
@@ -133,9 +123,7 @@ class RerunTestGroup:
 
 
 class TestSession:
-    """
-    Represents a single test session for a single SUT. This is generally made up of multiple TestResult objects.
-    """
+    """Represents a single test session for a single SUT."""
 
     def __init__(
         self,
@@ -143,7 +131,7 @@ class TestSession:
         session_id: str,
         session_start_time: datetime,
         session_stop_time: datetime,
-        session_duration: timedelta,  # TODO: Is this necessary for init(), or can we just calculate it?
+        session_duration: timedelta,
     ):
         self.sut_name = sut_name
         self.session_id = session_id
@@ -151,37 +139,80 @@ class TestSession:
         self.session_stop_time = session_stop_time
         self.session_duration = session_duration
 
-        self.test_results: List[TestResult] = []
-        self.rerun_test_groups: List[RerunTestGroup] = []
-        self.output_fields = OutputFields()
+        self._test_results: List[TestResult] = []
+        self._rerun_test_groups: List[RerunTestGroup] = []
+        self._output_fields = OutputFields()  # Make private
         self.session_tags: Dict[str, str] = {}
 
+    @property
+    def output_fields(self) -> OutputFields:
+        """Get output fields."""
+        return self._output_fields
+
+    @output_fields.setter
+    def output_fields(self, fields: OutputFields) -> None:
+        """Set output fields."""
+        self._output_fields = fields
+
+    @property
+    def test_results(self) -> List[TestResult]:
+        """Get all test results."""
+        return self._test_results.copy()
+
+    @property
+    def rerun_test_groups(self) -> List[RerunTestGroup]:
+        """Get all rerun test groups."""
+        return self._rerun_test_groups.copy()
+
+    def add_test_result(self, result: TestResult) -> None:
+        """Add a test result to the session."""
+        self._test_results.append(result)
+
+    def add_rerun_group(self, group: RerunTestGroup) -> None:
+        """Add a rerun test group to the session."""
+        self._rerun_test_groups.append(group)
+
+    @property
+    def test_counts(self) -> Dict[str, int]:
+        """Get counts of test results by outcome."""
+        counts = {
+            "passed": len(self.all_passes()),
+            "failed": len(self.all_failures()),
+            "skipped": len(self.all_skipped()),
+            "xfailed": len(self.all_xfailed()),
+            "xpassed": len(self.all_xpassed()),
+            "rerun": len(self.all_reruns()),
+            "error": len(self.with_error()),
+            "warnings": len(self.with_warning()),
+        }
+        return counts
+
     def all_passes(self) -> List[TestResult]:
-        return [t for t in self.test_results if t.outcome == "PASSED"]
+        return [t for t in self._test_results if t.outcome == "PASSED"]
 
     def all_failures(self) -> List[TestResult]:
-        return [t for t in self.test_results if t.outcome == "FAILED"]
+        return [t for t in self._test_results if t.outcome == "FAILED"]
 
     def all_skipped(self) -> List[TestResult]:
-        return [t for t in self.test_results if t.outcome == "SKIPPED"]
+        return [t for t in self._test_results if t.outcome == "SKIPPED"]
 
     def all_xfailed(self) -> List[TestResult]:
-        return [t for t in self.test_results if t.outcome == "XFAILED"]
+        return [t for t in self._test_results if t.outcome == "XFAILED"]
 
     def all_xpassed(self) -> List[TestResult]:
-        return [t for t in self.test_results if t.outcome == "XPASSED"]
+        return [t for t in self._test_results if t.outcome == "XPASSED"]
 
     def all_reruns(self) -> List[TestResult]:
-        return [t for t in self.test_results if t.outcome == "RERUN"]
+        return [t for t in self._test_results if t.outcome == "RERUN"]
 
     def with_error(self) -> List[TestResult]:
-        return [t for t in self.test_results if t.outcome == "ERROR"]
+        return [t for t in self._test_results if t.outcome == "ERROR"]
 
     def with_warning(self) -> List[TestResult]:
-        return [t for t in self.test_results if t.has_warning]
+        return [t for t in self._test_results if t.has_warning]
 
     def find_test_result_by_nodeid(self, nodeid: str) -> TestResult:
-        return next((t for t in self.test_results if t.nodeid == nodeid), None)
+        return next((t for t in self._test_results if t.nodeid == nodeid), None)
 
 
 class SUTGroup:
@@ -197,25 +228,28 @@ class SUTGroup:
         self.sessions.append(session)
 
     def latest_session(self) -> TestSession:
-        return (
-            max(self.sessions, key=lambda s: s.session_start_time)
-            if self.sessions
-            else None
-        )
+        return max(self.sessions, key=lambda s: s.session_start_time) if self.sessions else None
 
 
 class TestHistory:
-    """
-    Tracks test sessions across multiple SUTs.
-    """
+    """Tracks test sessions across multiple SUTs."""
 
     def __init__(self):
-        self.sut_groups: Dict[str, SUTGroup] = {}
+        self._sessions: Dict[str, SUTGroup] = {}
+
+    @property
+    def sessions(self) -> List[TestSession]:
+        """Get all sessions across all SUTs."""
+        all_sessions = []
+        for sut_group in self._sessions.values():
+            all_sessions.extend(sut_group.sessions)
+        return all_sessions
 
     def add_test_session(self, session: TestSession) -> None:
-        if session.sut_name not in self.sut_groups:
-            self.sut_groups[session.sut_name] = SUTGroup(sut_name=session.sut_name)
-        self.sut_groups[session.sut_name].add_session(session)
+        """Add a test session to the appropriate SUT group."""
+        if session.sut_name not in self._sessions:
+            self._sessions[session.sut_name] = SUTGroup(session.sut_name)
+        self._sessions[session.sut_name].add_session(session)
 
     def get_sessions_for_sut(self, sut_name: str) -> List[TestSession]:
-        return self.sut_groups.get(sut_name, SUTGroup(sut_name=sut_name)).sessions
+        return self._sessions.get(sut_name, SUTGroup(sut_name=sut_name)).sessions
