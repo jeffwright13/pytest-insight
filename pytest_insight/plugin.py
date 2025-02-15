@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 import pytest
@@ -85,7 +85,6 @@ def pytest_sessionstart(session: Session) -> None:
         session_id=f"session-{int(datetime.utcnow().timestamp())}",
         session_start_time=datetime.utcnow(),
         session_stop_time=datetime.utcnow(),
-        session_duration=timedelta(0),
     )
     session.config._insight_start_time = datetime.utcnow()
 
@@ -218,18 +217,7 @@ def pytest_sessionfinish(session: Session, exitstatus):
         print("[pytest-insight] ERROR: No test session found at finish.")
         return
     test_session.session_stop_time = datetime.utcnow()
-    test_session.session_duration = datetime.utcnow() - test_session.session_start_time
-
-    # Save the session to storage
     storage.save_session(test_session)
-
-    # # Debugging: Print all stored test sessions
-    # print("\n[pytest-insight] Stored Sessions Summary:")
-    # for idx, session in enumerate(storage.load_sessions(), start=1):
-    #     print(
-    #         f"Session {idx}: {session.session_id}, Started: {session.session_start_time}, "
-    #         f"Duration: {session.session_duration}, Tests: {len(session.test_results)}"
-    #     )
 
 
 @pytest.hookimpl

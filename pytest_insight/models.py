@@ -166,16 +166,47 @@ class TestSession:
         session_id: str,
         session_start_time: datetime,
         session_stop_time: datetime,
-        session_duration: timedelta,
-        test_results: List = None,  # Ensure it is mutable
+        session_duration: Optional[timedelta] = None,
+        test_results: Optional[List[TestResult]] = None,
+        rerun_test_groups: Optional[List[RerunTestGroup]] = None,
     ):
         self.sut_name = sut_name
         self.session_id = session_id
         self.session_start_time = session_start_time
         self.session_stop_time = session_stop_time
-        self.session_duration = session_duration
+        self._session_duration = session_duration
         self._test_results = test_results if test_results is not None else []
-        self._rerun_test_groups = []
+        self._rerun_test_groups = rerun_test_groups if rerun_test_groups is not None else []
+        self._output_fields = OutputFields()
+
+    @property
+    def session_duration(self) -> timedelta:
+        """Compute session duration dynamically based on start and stop times."""
+        return self.session_stop_time - self.session_start_time
+
+    @property
+    def test_results(self) -> List[TestResult]:
+        """Return a copy to prevent accidental mutation."""
+        return self._test_results.copy()
+
+    @test_results.setter
+    def test_results(self, value: List[TestResult]) -> None:
+        """Enforce type safety when setting."""
+        if not isinstance(value, list):
+            raise ValueError("test_results must be a list.")
+        self._test_results = value
+
+    @property
+    def rerun_test_groups(self) -> List[RerunTestGroup]:
+        """Return a copy to prevent accidental mutation."""
+        return self._rerun_test_groups.copy()
+
+    @rerun_test_groups.setter
+    def rerun_test_groups(self, value: List[RerunTestGroup]) -> None:
+        """Enforce type safety when setting."""
+        if not isinstance(value, list):
+            raise ValueError("rerun_test_groups must be a list.")
+        self._rerun_test_groups = value
 
     def to_dict(self):
         """Convert the test session to a dictionary for JSON serialization."""
@@ -186,20 +217,7 @@ class TestSession:
             "session_stop_time": self.session_stop_time.isoformat(),
             "session_duration": self.session_duration.total_seconds(),
             "test_results": [test.to_dict() for test in self.test_results],
-            "rerun_test_groups": self._rerun_test_groups,
         }
-
-    @property
-    def test_results(self) -> List[TestResult]:
-        """Return the list of test results."""
-        return self._test_results
-
-    @test_results.setter
-    def test_results(self, value: List) -> None:
-        """Allow setting test_results dynamically."""
-        if not isinstance(value, list):
-            raise ValueError("test_results must be a list.")
-        self._test_results = value
 
     @property
     def output_fields(self) -> OutputFields:
@@ -223,21 +241,6 @@ class TestSession:
     def add_rerun_group(self, group: RerunTestGroup) -> None:
         """Add a rerun test group to the session."""
         self._rerun_test_groups.append(group)
-
-    @property
-    def test_counts(self) -> Dict[str, int]:
-        """Get counts of test results by outcome."""
-        counts = {
-            "passed": len(self.all_passes()),
-            "failed": len(self.all_failures()),
-            "skipped": len(self.all_skipped()),
-            "xfailed": len(self.all_xfailed()),
-            "xpassed": len(self.all_xpassed()),
-            "rerun": len(self.all_reruns()),
-            "error": len(self.with_error()),
-            "warnings": len(self.with_warning()),
-        }
-        return counts
 
     def all_passes(self) -> List[TestResult]:
         return [t for t in self._test_results if t.outcome == "PASSED"]
@@ -266,6 +269,36 @@ class TestSession:
     def find_test_result_by_nodeid(self, nodeid: str) -> TestResult:
         return next((t for t in self._test_results if t.nodeid == nodeid), None)
 
+    @property
+    def test_counts(self) -> Dict[str, int]:
+        """Get counts of test results by outcome."""
+        counts = {
+            "passed": len(self.all_passes()),
+            "failed": len(self.all_failures()),
+            "skipped": len(self.all_skipped()),
+            "xfailed": len(self.all_xfailed()),
+            "xpassed": len(self.all_xpassed()),
+            "rerun": len(self.all_reruns()),
+            "error": len(self.with_error()),
+            "warnings": len(self.with_warning()),
+        }
+        return counts
+
+    @property
+    def outcome_summary(self) -> str:
+        """Get a compact summary of test outcomes."""
+        counts = {
+            "P": len(self.all_passes()),
+            "F": len(self.all_failures()),
+            "S": len(self.all_skipped()),
+            "XF": len(self.all_xfailed()),
+            "XP": len(self.all_xpassed()),
+            "E": len(self.with_error()),
+            "W": len(self.with_warning()),
+            "R": len(self.all_reruns()),
+        }
+        return " ".join(f"{k}:{v}" for k, v in counts.items() if v > 0)
+
 
 class SUTGroup:
     """
@@ -286,8 +319,6 @@ class SUTGroup:
 class TestHistory:
     """Tracks test sessions across multiple SUTs."""
 
-    __test__ = False  # Tell Pytest this is NOT a test class
-
     def __init__(self):
         self._sessions: Dict[str, SUTGroup] = {}
 
@@ -305,5 +336,8 @@ class TestHistory:
             self._sessions[session.sut_name] = SUTGroup(session.sut_name)
         self._sessions[session.sut_name].add_session(session)
 
-    def get_sessions_for_sut(self, sut_name: str) -> List[TestSession]:
-        return self._sessions.get(sut_name, SUTGroup(sut_name=sut_name)).sessions
+    def latest_session(self) -> Optional[TestSession]:
+        """Get the most recent test session across all SUTs."""
+        if not self.sessions:
+            return None
+        return max(self.sessions, key=lambda s: s.session_start_time)

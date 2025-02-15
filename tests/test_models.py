@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+import pytest
 from pytest_insight.models import (
     OutputField,
     OutputFields,
@@ -12,20 +13,19 @@ from pytest_insight.models import (
 
 
 def test_random_test_results(random_test_result):
+    """Test random test result properties."""
     assert random_test_result.nodeid != ""
     assert random_test_result.nodeid == str(random_test_result.nodeid)
     assert random_test_result.outcome in ["PASSED", "FAILED", "SKIPPED", "XFAILED", "XPASSED", "RERUN", "ERROR"]
     assert isinstance(random_test_result.start_time, datetime)
     assert isinstance(random_test_result.duration, float)
     assert random_test_result.has_warning in [True, False]
-    assert random_test_result.caplog != ""
-    if random_test_result.outcome in ["FAILED", "ERROR"]:
-        assert random_test_result.capstderr != ""
-        assert random_test_result.longreprtext != ""
-    else:
-        assert random_test_result.capstderr == ""
-        assert random_test_result.longreprtext == ""
-    assert random_test_result.capstdout != ""
+
+    # These fields can be empty
+    assert isinstance(random_test_result.caplog, str)
+    assert isinstance(random_test_result.capstderr, str)
+    assert isinstance(random_test_result.capstdout, str)
+    assert isinstance(random_test_result.longreprtext, str)
 
 
 def test_random_test_session(random_test_session):
@@ -93,9 +93,16 @@ def test_random_test_session(random_test_session):
 def test_test_session():
     """Test basic TestSession functionality."""
     start_time = datetime.utcnow()
-    session = TestSession("SUT-1", "session-123", start_time, start_time, timedelta(seconds=10))
+    stop_time = start_time + timedelta(seconds=10)
 
-    # Add test results instead of trying to set counts directly
+    session = TestSession(
+        sut_name="SUT-1",
+        session_id="session-123",
+        session_start_time=start_time,
+        session_stop_time=stop_time,  # Removed session_duration as it's calculated
+    )
+
+    # Add test results
     for _ in range(5):
         session.add_test_result(TestResult(nodeid="test_pass", outcome="PASSED", start_time=start_time, duration=0.1))
     for _ in range(2):
@@ -110,7 +117,7 @@ def test_test_session():
     assert session.sut_name == "SUT-1"
     assert session.session_id == "session-123"
     assert session.session_start_time == start_time
-    assert session.session_duration == timedelta(seconds=10)
+    assert session.session_duration == stop_time - start_time  # Updated assertion to match calculation
 
     # Test counts through result categorization methods
     assert len(session.all_passes()) == 6  # Updated to include warning test case
@@ -130,7 +137,6 @@ def test_test_session_properties():
         session_id="test-123",
         session_start_time=datetime.utcnow(),
         session_stop_time=datetime.utcnow() + timedelta(seconds=10),
-        session_duration=timedelta(seconds=10),
     )
 
     # Test output fields setter (has proper setter method)
@@ -152,6 +158,10 @@ def test_test_session_properties():
     # Test test counts (readonly property)
     assert isinstance(session.test_counts, dict)
     assert session.test_counts["passed"] == 1
+
+    # Try to set session duration directly (should fail since it is always calculated from start and stop times)
+    with pytest.raises(AttributeError):
+        session.session_duration = timedelta(seconds=20)
 
 
 def test_rerun_test_group():
@@ -176,15 +186,15 @@ def test_rerun_test_group():
     assert len(group.full_test_list) == 2
 
 
-def sa():
+def test_history():
     """Test TestHistory functionality."""
     history = TestHistory()
     now = datetime.utcnow()
+    stop_time1 = now + timedelta(seconds=5)
+    stop_time2 = now + timedelta(seconds=20)
 
-    session1 = TestSession("SUT-1", "session-001", now, now + timedelta(seconds=5), timedelta(seconds=5))
-    session2 = TestSession(
-        "SUT-1", "session-002", now + timedelta(seconds=10), now + timedelta(seconds=20), timedelta(seconds=10)
-    )
+    session1 = TestSession("SUT-1", "session-001", now, stop_time1)
+    session2 = TestSession("SUT-1", "session-002", now + timedelta(seconds=10), stop_time2)
 
     # Use proper add method
     history.add_test_session(session1)

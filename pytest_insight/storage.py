@@ -1,9 +1,17 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from pytest_insight import constants
 from pytest_insight.models import TestResult, TestSession
+
+
+def get_storage_instance() -> "TestResultStorage":
+    """Get configured storage instance."""
+    storage_classes = {"JSONTestResultStorage": JSONTestResultStorage}
+    storage_class = storage_classes[constants.DEFAULT_STORAGE_CLASS]
+    return storage_class()
 
 
 class TestResultStorage:
@@ -30,6 +38,23 @@ class TestResultStorage:
         """Retrieve a test session by its unique identifier."""
         sessions = self.load_sessions()
         return next((s for s in sessions if s.session_id == session_id), None)
+
+    def get_sessions_summary(self) -> List[str]:
+        """Get formatted summary strings for all test sessions."""
+        sessions = self.load_sessions()
+        if not sessions:
+            return ["[pytest-insight] No test sessions found."]
+
+        return [
+            (
+                f"Session {idx}: {session.session_id}, "
+                f"Started: {session.session_start_time}, "
+                f"Duration: {session.session_duration}, "
+                f"Tests: {len(session.test_results)}\n"
+                f"{session.outcome_summary}"
+            )
+            for idx, session in enumerate(sessions, start=1)
+        ]
 
 
 class InMemoryTestResultStorage(TestResultStorage):
@@ -93,7 +118,6 @@ class JSONTestResultStorage(TestResultStorage):
                     session_id=d["session_id"],
                     session_start_time=datetime.fromisoformat(d["session_start_time"]),
                     session_stop_time=datetime.fromisoformat(d["session_stop_time"]),
-                    session_duration=timedelta(seconds=float(d["session_duration"])),  # ✅ Fix applied here
                     test_results=[
                         TestResult(
                             nodeid=t["nodeid"],
@@ -106,7 +130,7 @@ class JSONTestResultStorage(TestResultStorage):
                             longreprtext=t.get("longreprtext", ""),
                             has_warning=t.get("has_warning", False),
                         )
-                        for t in d.get("test_results", [])  # Ensure test_results is deserialized properly
+                        for t in d.get("test_results", [])  # Ensure test_results are deserialized properly
                     ],
                 )
                 for d in raw_data

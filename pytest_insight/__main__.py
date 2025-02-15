@@ -1,27 +1,16 @@
 import typer
 
-from pytest_insight.storage import JSONTestResultStorage
+from pytest_insight.storage import get_storage_instance
 
 app = typer.Typer()
-storage = JSONTestResultStorage()
+storage = get_storage_instance()
 
 
 @app.command()
 def summary():
-    """Display a summary of past test sessions."""
-    sessions = storage.load_sessions()
-    if not sessions:
-        print("[pytest-insight] No stored sessions.")
-        return
-
+    """Show summary of all test sessions."""
     print("\n[pytest-insight] Stored Sessions Summary:")
-    for idx, session in enumerate(sessions, start=1):
-        print(
-            f"Session {idx}: {session.session_id}, "
-            f"Started: {session.session_start_time}, "
-            f"Duration: {session.session_duration}, "
-            f"Tests: {len(session.test_results)}"
-        )
+    print("\n".join(storage.get_sessions_summary()))
 
 
 @app.command()

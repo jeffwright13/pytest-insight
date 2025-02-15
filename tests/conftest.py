@@ -153,33 +153,18 @@ TEST_OUTCOMES = {
 
 @pytest.fixture
 def random_test_result(nodeid, text_gen):
-    """Fixture to generate a random TestResult object with realistic properties."""
-    # Extract outcomes and weights
-    outcomes = list(TEST_OUTCOMES.keys())
-    weights = [data["weight"] for data in TEST_OUTCOMES.values()]
-
-    # Generate timestamps within last 2 minutes
-    start_time = datetime.utcnow() - timedelta(seconds=random.randint(1, 120))
-    duration = random.uniform(0.1, 5.0)
-
-    # Select outcome using weights
-    outcome = random.choices(outcomes, weights=weights, k=1)[0]
-    outcome_config = TEST_OUTCOMES[outcome]
-
-    # Generate appropriate output based on outcome
-    result = TestResult(
+    """Generate a random TestResult instance."""
+    return TestResult(
         nodeid=str(nodeid),
-        outcome=outcome,
-        start_time=start_time,
-        duration=duration,
-        caplog=text_gen.sentence(),
-        capstderr=text_gen.sentence() if outcome_config["needs_error_output"] else "",
-        capstdout=text_gen.sentence(),
-        longreprtext=(text_gen.paragraph() if outcome_config["needs_error_output"] else ""),
-        has_warning=(random.choice([True, False]) if outcome_config["can_have_warning"] else False),
+        outcome=random.choice(["PASSED", "FAILED", "SKIPPED", "XFAILED", "XPASSED", "RERUN", "ERROR"]),
+        start_time=datetime.utcnow(),
+        duration=random.uniform(0.1, 5.0),
+        caplog="" if random.choice([True, False]) else text_gen.sentence(),  # Allow empty strings
+        capstderr="",  # Default empty
+        capstdout="",  # Default empty
+        longreprtext="",  # Default empty
+        has_warning=random.choice([True, False]),
     )
-
-    return result
 
 
 @pytest.fixture
@@ -202,7 +187,6 @@ def random_test_session(nodeid, text_gen, random_output_fields):
     base_time = datetime.utcnow() - timedelta(minutes=random.randint(1, 60))
     session_start_time = base_time
     session_stop_time = base_time + timedelta(seconds=random.randint(30, 300))
-    session_duration = session_stop_time - session_start_time
 
     # Generate unique test results
     session_test_results = []
@@ -249,7 +233,6 @@ def random_test_session(nodeid, text_gen, random_output_fields):
         session_id=session_id,
         session_start_time=session_start_time,
         session_stop_time=session_stop_time,
-        session_duration=session_duration,
     )
 
     # Add test results using proper method
