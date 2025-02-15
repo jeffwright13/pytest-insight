@@ -26,11 +26,25 @@ class TestResult:
         self.outcome = outcome
         self.start_time = start_time
         self.duration = duration
-        self.caplog = caplog
-        self.capstderr = capstderr
-        self.capstdout = capstdout
-        self.longreprtext = longreprtext
+        self.caplog = caplog or ""
+        self.capstderr = capstderr or ""
+        self.capstdout = capstdout or ""
+        self.longreprtext = longreprtext or ""
         self.has_warning = has_warning
+
+    def to_dict(self):
+        """Convert test result to a dictionary for JSON serialization."""
+        return {
+            "nodeid": self.nodeid,
+            "outcome": self.outcome,
+            "start_time": self.start_time.isoformat(),
+            "duration": self.duration,
+            "longreprtext": self.longreprtext,
+            "caplog": self.caplog,
+            "capstderr": self.capstderr,
+            "capstdout": self.capstdout,
+            "has_warning": self.has_warning,
+        }
 
 
 class OutputFieldType(Enum):
@@ -153,17 +167,39 @@ class TestSession:
         session_start_time: datetime,
         session_stop_time: datetime,
         session_duration: timedelta,
+        test_results: List = None,  # Ensure it is mutable
     ):
         self.sut_name = sut_name
         self.session_id = session_id
         self.session_start_time = session_start_time
         self.session_stop_time = session_stop_time
         self.session_duration = session_duration
+        self._test_results = test_results if test_results is not None else []
+        self._rerun_test_groups = []
 
-        self._test_results: List[TestResult] = []
-        self._rerun_test_groups: List[RerunTestGroup] = []
-        self._output_fields = OutputFields()  # Make private
-        self.session_tags: Dict[str, str] = {}
+    def to_dict(self):
+        """Convert the test session to a dictionary for JSON serialization."""
+        return {
+            "sut_name": self.sut_name,
+            "session_id": self.session_id,
+            "session_start_time": self.session_start_time.isoformat(),
+            "session_stop_time": self.session_stop_time.isoformat(),
+            "session_duration": self.session_duration.total_seconds(),
+            "test_results": [test.to_dict() for test in self.test_results],
+            "rerun_test_groups": self._rerun_test_groups,
+        }
+
+    @property
+    def test_results(self) -> List[TestResult]:
+        """Return the list of test results."""
+        return self._test_results
+
+    @test_results.setter
+    def test_results(self, value: List) -> None:
+        """Allow setting test_results dynamically."""
+        if not isinstance(value, list):
+            raise ValueError("test_results must be a list.")
+        self._test_results = value
 
     @property
     def output_fields(self) -> OutputFields:
@@ -174,11 +210,6 @@ class TestSession:
     def output_fields(self, fields: OutputFields) -> None:
         """Set output fields."""
         self._output_fields = fields
-
-    @property
-    def test_results(self) -> List[TestResult]:
-        """Get all test results."""
-        return self._test_results.copy()
 
     @property
     def rerun_test_groups(self) -> List[RerunTestGroup]:
@@ -234,17 +265,6 @@ class TestSession:
 
     def find_test_result_by_nodeid(self, nodeid: str) -> TestResult:
         return next((t for t in self._test_results if t.nodeid == nodeid), None)
-
-    def to_dict(self) -> dict:
-        """Convert TestSession to a dictionary for JSON storage."""
-        return {
-            "sut_name": self.sut_name,
-            "session_id": self.session_id,
-            "session_start_time": self.session_start_time.isoformat(),
-            "session_stop_time": self.session_stop_time.isoformat(),
-            "session_duration": str(self.session_duration),
-            "test_results": [tr.__dict__ for tr in self.test_results],
-        }
 
 
 class SUTGroup:

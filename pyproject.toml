@@ -15,13 +15,14 @@ dependencies = [
     "isort>=6.0.0",
     "pyflakes>=3.2.0",
     "black>=25.1.0",
+    "typer>=0.15.1",
 ]
 
 [project.entry-points.pytest11]
 insight = "pytest_insight.plugin"
 
 [project.scripts]
-pytest-insight = "pytest_insight:main"
+insight = "pytest_insight.__main__:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -30,7 +31,6 @@ build-backend = "hatchling.build"
 [tool.isort]
 profile = "black"
 line_length = 120
-
 
 [tool.ruff]
 line-length = 120

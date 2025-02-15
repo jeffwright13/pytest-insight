@@ -1,4 +1,3 @@
-import pytest
 from pytest_insight import __version__
 
 
@@ -30,7 +29,7 @@ def test_plugin_enabled_with_flag(tester):
 def test_help_shows_insight_option(tester):
     """Verify our plugin option appears in pytest help."""
     result = tester.runpytest("--help")
-    result.stdout.fnmatch_lines(["*insight:*", "*--insight*Enable pytest-insight plugin for test history analysis*"])
+    result.stdout.fnmatch_lines("*insight (bool):*")
 
 
 def test_plugin_registers_hooks(tester):

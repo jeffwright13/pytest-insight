@@ -56,6 +56,42 @@ def test_storage_clears_sessions():
     assert storage.load_sessions() == []
 
 
+def test_storage_get_last_session():
+    """Ensure storage correctly retrieves the most recent session."""
+    storage = InMemoryTestResultStorage()
+
+    session1 = TestSession("SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=120))
+    session2 = TestSession("SUT-1", "session-002", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=90))
+    storage.save_session(session1)
+    storage.save_session(session2)
+    last_session = storage.get_last_session()
+    assert last_session == session2
+    assert last_session is not None
+    assert storage.get_last_session() == session2
+    assert storage.get_last_session() is not None
+
+    storage.clear_sessions()
+    assert storage.get_last_session() is None
+
+
+def test_get_session_by_id():
+    """Ensure storage correctly retrieves a session by its ID."""
+    storage = InMemoryTestResultStorage()
+
+    session1 = TestSession("SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=120))
+    session2 = TestSession("SUT-1", "session-002", datetime.utcnow(), datetime.utcnow(), timedelta(seconds=90))
+    storage.save_session(session1)
+    storage.save_session(session2)
+    retrieved_session = storage.get_session_by_id("session-001")
+    assert retrieved_session == session1
+    assert retrieved_session is not None
+    assert storage.get_session_by_id("session-001") == session1
+    assert storage.get_session_by_id("session-001") is not None
+    assert storage.get_session_by_id("session-002") == session2
+    assert storage.get_session_by_id("session-002") is not None
+    assert storage.get_session_by_id("nonexistent-session") is None
+
+
 def test_storage_json_saves_sessions():
     """Ensure JSON storage correctly saves and retrieves sessions."""
     JSONTestResultStorage()

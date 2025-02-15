@@ -20,8 +20,6 @@ _INSIGHT_INITIALIZED: bool = False
 _INSIGHT_ENABLED: bool = False
 
 
-# # storage = InMemoryTestResultStorage()  # Using in-memory storage for now
-# storage = JSONTestResultStorage()
 # Initialize storage once, at the module level
 storage = None
 
@@ -46,9 +44,10 @@ def pytest_addoption(parser):
     group = parser.getgroup("insight")
     group.addoption(
         "--insight",
+        dest="insight",
         action="store_true",
         default=False,
-        help="Enable pytest-insight plugin for test history analysis",
+        help="Enable pytest-insight plugin for test-run history analysis",
     )
 
     parser.addini(
@@ -78,6 +77,7 @@ def pytest_configure(config: Config):
 def pytest_sessionstart(session: Session) -> None:
     """Initialize test session tracking."""
     if not insight_enabled():
+        print("[pytest-insight] pytest_sessionstart: Insight not enabled, skipping log report.")
         return
 
     session.config._insight_test_session = TestSession(
@@ -94,6 +94,7 @@ def pytest_sessionstart(session: Session) -> None:
 def pytest_runtest_makereport(item, call):
     """Capture individual test results and store them in the session."""
     if not insight_enabled():
+        print("[pytest-insight] pytest_runtest_makereport: Insight not enabled, skipping log report.")
         yield
     else:
         outcome = yield
@@ -127,6 +128,7 @@ def pytest_runtest_makereport(item, call):
 def pytest_runtest_protocol(item, nextitem):
     """Hook into test execution to track when tests start."""
     if not insight_enabled():
+        print("[pytest-insight] pytest_runtest_protocol: Insight not enabled, skipping log report.")
         return None
 
     insight_test_session = item.config._insight_test_session
@@ -136,9 +138,13 @@ def pytest_runtest_protocol(item, nextitem):
         start_time=datetime.utcnow(),
         duration=0.0,
     )
-    # Store temporarily to update later
-    item.config._current_test = current_test
 
+    # Store test result in item, so we can retrieve it in pytest_runtest_logreport
+    item.user_properties.append(("current_test", current_test))
+    # Also store config explicitly for later use
+    item.user_properties.append(("config", item.config))
+
+    # Check if this is a rerun
     if hasattr(item, "execution_count"):
         # This is a rerun
         rerun_group = next((g for g in insight_test_session.rerun_test_groups if g.nodeid == item.nodeid), None)
@@ -157,19 +163,26 @@ def pytest_runtest_protocol(item, nextitem):
 def pytest_runtest_logreport(report: TestReport) -> None:
     """Capture test results from pytest's internal reports."""
     if not insight_enabled():
+        print("[pytest-insight] pytest_runtest_logreport: Insight not enabled, skipping log report.")
         return
 
-    # Get session config through the pytest session
-    try:
-        # Get config through pytest's current session
-        config = pytest.Session._current.config
-    except (AttributeError, RuntimeError):
+    # ✅ Extract `config` and `current_test` from user properties
+    config = None
+    current_test = None
+    for name, value in getattr(report, "user_properties", []):
+        if name == "current_test":
+            current_test = value
+        elif name == "config":
+            config = value
+
+    if not config:
+        print("[pytest-insight] ❌ ERROR: No config found in report. Skipping test result.")
         return
 
     insight_test_session = config._insight_test_session
-    current_test = getattr(config, "_current_test", None)
 
     if not current_test:
+        print(f"[pytest-insight] ⚠️ WARNING: _current_test not found for {report.nodeid}")
         return
 
     if report.when == "call" or (report.when == "setup" and report.outcome == "skipped"):
@@ -182,9 +195,9 @@ def pytest_runtest_logreport(report: TestReport) -> None:
         current_test.capstdout = report.capstdout if hasattr(report, "capstdout") else ""
         current_test.has_warning = bool(getattr(report, "warnings", False))
 
-        # Add to insight_test_session
         insight_test_session.add_test_result(current_test)
 
+    # Check if rerun info was set in runtest_protocol
     rerun_group = getattr(config, "_current_rerun_group", None)
     if rerun_group and report.when == "call":
         rerun_group.reruns.append(current_test)
@@ -197,31 +210,33 @@ def pytest_runtest_logreport(report: TestReport) -> None:
 def pytest_sessionfinish(session: Session, exitstatus):
     """Store final session results in TestSession and add to TestHistory."""
     if not insight_enabled():
+        print("[pytest-insight] pytest_sessionfinish: Insight not enabled, skipping log report.")
         return
 
-    end_time = datetime.utcnow()
-    duration = end_time - session.config._insight_start_time
-
     test_session = session.config._insight_test_session
-    test_session.session_stop_time = end_time
-    test_session.session_duration = duration
+    if not test_session:
+        print("[pytest-insight] ERROR: No test session found at finish.")
+        return
+    test_session.session_stop_time = datetime.utcnow()
+    test_session.session_duration = datetime.utcnow() - test_session.session_start_time
 
     # Save the session to storage
     storage.save_session(test_session)
 
-    # Debugging: Print all stored test sessions
-    print("\n[pytest-insight] Stored Sessions Summary:")
-    for idx, session in enumerate(storage.load_sessions(), start=1):
-        print(
-            f"Session {idx}: {session.session_id}, Started: {session.session_start_time}, "
-            f"Duration: {session.session_duration}, Tests: {len(session.test_results)}"
-        )
+    # # Debugging: Print all stored test sessions
+    # print("\n[pytest-insight] Stored Sessions Summary:")
+    # for idx, session in enumerate(storage.load_sessions(), start=1):
+    #     print(
+    #         f"Session {idx}: {session.session_id}, Started: {session.session_start_time}, "
+    #         f"Duration: {session.session_duration}, Tests: {len(session.test_results)}"
+    #     )
 
 
 @pytest.hookimpl
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """Extract test results summary and store in insight_test_session."""
     if not insight_enabled():
+        print("[pytest-insight] pytest_terminal_summary: Insight not enabled, skipping log report.")
         return
 
     insight_test_session = config._insight_test_session

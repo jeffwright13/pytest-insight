@@ -1,9 +1,9 @@
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
-from pytest_insight.models import TestSession
+from pytest_insight.models import TestResult, TestSession
 
 
 class TestResultStorage:
@@ -20,6 +20,16 @@ class TestResultStorage:
     def clear_sessions(self) -> None:
         """Remove all stored sessions."""
         raise NotImplementedError
+
+    def get_last_session(self) -> Optional[TestSession]:
+        """Retrieve the most recent test session."""
+        sessions = self.load_sessions()
+        return max(sessions, key=lambda s: s.session_start_time) if sessions else None
+
+    def get_session_by_id(self, session_id: str) -> Optional[TestSession]:
+        """Retrieve a test session by its unique identifier."""
+        sessions = self.load_sessions()
+        return next((s for s in sessions if s.session_id == session_id), None)
 
 
 class InMemoryTestResultStorage(TestResultStorage):
@@ -41,7 +51,7 @@ class InMemoryTestResultStorage(TestResultStorage):
         self.sessions.clear()
 
 
-class JSONTestResultStorage:
+class JSONTestResultStorage(TestResultStorage):
     """Store test sessions in a JSON file for persistence."""
 
     FILE_PATH = Path("test_sessions.json")
@@ -55,6 +65,10 @@ class JSONTestResultStorage:
 
         # Append the new session's dictionary
         session_dicts.append(test_session.to_dict())
+
+        # Convert `session_duration` to a float before saving
+        for session in session_dicts:
+            session["session_duration"] = test_session.session_duration.total_seconds()
 
         # Write back all sessions
         self.FILE_PATH.write_text(json.dumps(session_dicts, indent=4))
@@ -79,9 +93,24 @@ class JSONTestResultStorage:
                     session_id=d["session_id"],
                     session_start_time=datetime.fromisoformat(d["session_start_time"]),
                     session_stop_time=datetime.fromisoformat(d["session_stop_time"]),
-                    session_duration=timedelta(seconds=float(d["session_duration"].split(":")[-1])),
+                    session_duration=timedelta(seconds=float(d["session_duration"])),  # ✅ Fix applied here
+                    test_results=[
+                        TestResult(
+                            nodeid=t["nodeid"],
+                            outcome=t["outcome"],
+                            start_time=datetime.fromisoformat(t["start_time"]),
+                            duration=t["duration"],
+                            caplog=t.get("caplog", ""),
+                            capstderr=t.get("capstderr", ""),
+                            capstdout=t.get("capstdout", ""),
+                            longreprtext=t.get("longreprtext", ""),
+                            has_warning=t.get("has_warning", False),
+                        )
+                        for t in d.get("test_results", [])  # Ensure test_results is deserialized properly
+                    ],
                 )
                 for d in raw_data
+                if isinstance(d, dict)  # Ensure each item is a dictionary
             ]
 
         except json.JSONDecodeError:
