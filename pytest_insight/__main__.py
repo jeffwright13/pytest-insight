@@ -16,8 +16,12 @@ def summary():
 
     print("\n[pytest-insight] Stored Sessions Summary:")
     for idx, session in enumerate(sessions, start=1):
-        print(f"Session {idx}: {session.session_id}, Started: {session.session_start_time}")
-        print(f"Duration: {session.session_duration}, Tests: {len(session.test_results)}")
+        print(
+            f"Session {idx}: {session.session_id}, "
+            f"Started: {session.session_start_time}, "
+            f"Duration: {session.session_duration}, "
+            f"Tests: {len(session.test_results)}"
+        )
 
 
 @app.command()
