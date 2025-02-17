@@ -24,6 +24,7 @@ dist/
 .coverage
 .coveragerc
 .test-results.db
+.qodo
 
 # Oof possible dirs
 oof/

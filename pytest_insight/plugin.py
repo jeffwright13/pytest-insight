@@ -1,21 +1,21 @@
-from pytest import ExitCode
-from _pytest.reports import CollectReport
 from datetime import datetime
 from typing import Optional, Union
 
 import pytest
 from _pytest.config import Config
+from _pytest.reports import TestReport
 from _pytest.terminal import TerminalReporter, WarningReport
-from _pytest.reports import TestReport, CollectReport
+from pytest import ExitCode
 
 from pytest_insight.models import TestResult, TestSession
-from pytest_insight.storage import JSONTestResultStorage
+from pytest_insight.storage import JSONStorage
 
 _INSIGHT_INITIALIZED: bool = False
 _INSIGHT_ENABLED: bool = False
 
 # Initialize storage once, at the module level
 storage = None
+
 
 def insight_enabled(config: Optional[Config] = None) -> bool:
     """
@@ -30,6 +30,7 @@ def insight_enabled(config: Optional[Config] = None) -> bool:
         _INSIGHT_ENABLED = bool(getattr(config.option, "insight", False))
         _INSIGHT_INITIALIZED = True
     return _INSIGHT_ENABLED
+
 
 def pytest_addoption(parser):
     """Add pytest-insight command line options."""
@@ -49,6 +50,7 @@ def pytest_addoption(parser):
         default=False,
     )
 
+
 @pytest.hookimpl
 def pytest_configure(config: Config):
     """Configure the plugin if enabled."""
@@ -57,7 +59,8 @@ def pytest_configure(config: Config):
     # Initialize persistent storage at the beginning of the pytest session and ensure a single instance is used
     global storage
     if storage is None:
-        storage = JSONTestResultStorage()
+        storage = JSONStorage()
+
 
 @pytest.hookimpl
 def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
@@ -108,8 +111,8 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     )
     storage.save_session(session)
 
-    # Print summary
-    terminalreporter.write_sep("=", "insight summary info")
+    # Print summary to console
+    terminalreporter.write_sep("=", "insight summary info", cyan=True)
     summary = {outcome: len(reports) for outcome, reports in stats.items()}
     for outcome, count in summary.items():
         terminalreporter.write_line(f"  {outcome.upper()}: {count} tests")

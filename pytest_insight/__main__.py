@@ -1,8 +1,9 @@
-import typer
 from datetime import datetime, timedelta
+
 import pytest
+import typer
+
 from pytest_insight.storage import StorageManager
-from pytest_insight.plugin import storage as plugin_storage
 
 app = typer.Typer(help="Test history and analytics tool for pytest")
 session_app = typer.Typer(help="Manage test sessions")
@@ -18,6 +19,7 @@ app.add_typer(analytics_app, name="analytics")
 
 storage = StorageManager()
 
+
 # Session commands
 @session_app.command("run")
 def run_session(
@@ -26,12 +28,17 @@ def run_session(
     """Run a new test session."""
     pytest.main([path, "--insight"])
 
+
 @session_app.command("show")
 def show_session(
-    session_id: str = typer.Argument(None, help="Session ID to show. Latest if not specified")
+    session_id: str = typer.Argument(
+        None, help="Session ID to show. Latest if not specified"
+    )
 ):
     """Show details of a specific test session."""
-    session = storage.get_session(session_id) if session_id else storage.get_last_session()
+    session = (
+        storage.get_session(session_id) if session_id else storage.get_last_session()
+    )
     if not session:
         typer.secho("Session not found", fg=typer.colors.RED)
         return
@@ -53,17 +60,17 @@ def show_session(
     for outcome, count in outcomes.items():
         typer.echo(f"{outcome}: {count}")
 
+
 # History commands
 @history_app.command("list")
-def list_history(
-    days: int = typer.Option(7, help="Number of days of history to show")
-):
+def list_history(days: int = typer.Option(7, help="Number of days of history to show")):
     """List test session history."""
     sessions = storage.load_sessions()
     cutoff = datetime.now() - timedelta(days=days)
     recent = [s for s in sessions if s.session_start_time > cutoff]
     for session in recent:
         typer.echo(f"{session.session_start_time}: {session.session_id}")
+
 
 # SUT commands
 @sut_app.command("list")
@@ -74,11 +81,10 @@ def list_suts():
     for sut in sorted(suts):
         typer.echo(sut)
 
+
 # Analytics commands
 @analytics_app.command("summary")
-def show_summary(
-    sut: str = typer.Argument(None, help="Show summary for specific SUT")
-):
+def show_summary(sut: str = typer.Argument(None, help="Show summary for specific SUT")):
     """Show test execution summary."""
     session = storage.get_last_session()
     if not session:
@@ -100,6 +106,7 @@ def show_summary(
 
     for outcome, count in outcomes.items():
         typer.echo(f"{outcome}: {count}")
+
 
 if __name__ == "__main__":
     app()

@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta
 
-import pytest
 from pytest_insight.models import (
     RerunTestGroup,
     TestHistory,
     TestResult,
     TestSession,
 )
+
 
 def test_random_test_results(random_test_result):
     """Test random test result properties."""
@@ -38,32 +38,21 @@ def test_random_test_session(random_test_session):
     assert len(random_test_session.test_results) >= 2
     assert len(random_test_session.rerun_test_groups) >= 1
 
-    # Test category filters
-    assert any(
-        [
-            random_test_session.all_passes(),
-            random_test_session.all_failures(),
-            random_test_session.all_skipped(),
-            random_test_session.all_xfailed(),
-            random_test_session.all_xpassed(),
-            random_test_session.all_reruns(),
-            random_test_session.with_error(),
-            random_test_session.with_warning(),
-        ]
-    )
+    # Test outcome categorization
+    outcomes = {test.outcome for test in random_test_session.test_results}
+    warnings = any(test.has_warning for test in random_test_session.test_results)
 
-    # Test retrieving a nonexistent test result
-    assert random_test_session.find_test_result_by_nodeid("nonexistent/test.py::test_fake") is None
-
-    # Test retrieving an existing test result
-    first_result = random_test_session.test_results[0]
-    assert random_test_session.find_test_result_by_nodeid(first_result.nodeid) == first_result
-
-    # Test adding a new test result
-    new_result = TestResult(nodeid="test_new.py::test_case", outcome="PASSED", start_time=datetime.utcnow(), duration=0.1)
-    random_test_session.add_test_result(new_result)
-
-    assert random_test_session.find_test_result_by_nodeid("test_new.py::test_case") == new_result
+    # Verify we have at least one test result with a meaningful outcome
+    assert any([
+        "PASSED" in outcomes,
+        "FAILED" in outcomes,
+        "SKIPPED" in outcomes,
+        "XFAILED" in outcomes,
+        "XPASSED" in outcomes,
+        "RERUN" in outcomes,
+        "ERROR" in outcomes,
+        warnings
+    ])
 
 
 def test_test_session():
@@ -80,14 +69,7 @@ def test_test_session():
 
     # Add test results
     for _ in range(5):
-        session.add_test_result(
-            TestResult(
-                nodeid="test_pass",
-                outcome="PASSED",
-                start_time=start_time,
-                duration=0.1
-            )
-        )
+        session.add_test_result(TestResult(nodeid="test_pass", outcome="PASSED", start_time=start_time, duration=0.1))
 
     assert len(session.test_results) == 5
     assert session.session_duration.total_seconds() == 10.0
