@@ -5,8 +5,6 @@ from importlib.metadata import version
 
 import pytest
 from pytest_insight.models import (
-    OutputFields,
-    OutputFieldType,
     RerunTestGroup,
     TestResult,
     TestSession,
@@ -115,29 +113,75 @@ def nodeid():
 
 
 @pytest.fixture
-def random_rerun_test_group(nodeid):
-    """Fixture to generate a random RerunTestGroup object."""
-    final_outcome = random.choice(["PASSED", "FAILED"])
-    group = RerunTestGroup(nodeid=str(nodeid), final_outcome=final_outcome)
-    num_reruns = random.randint(1, 5)
+def random_test_session(nodeid, text_gen):
+    """Fixture to generate a random TestSession object."""
+    sut_name = f"SUT-{random.randint(1, 10)}"
+    session_id = f"session-{random.randint(100, 999)}"
 
-    for _ in range(num_reruns):
+    # Create base session time window
+    base_time = datetime.utcnow() - timedelta(minutes=random.randint(1, 60))
+    session_start_time = base_time
+    session_stop_time = base_time + timedelta(seconds=random.randint(30, 300))
+
+    # Generate unique test results
+    session_test_results = []
+    for _ in range(random.randint(2, 6)):
         result = TestResult(
             nodeid=str(nodeid),
-            outcome=random.choice(["PASSED", "FAILED"]),
-            start_time=datetime.utcnow() - timedelta(minutes=random.randint(1, 60)),
+            outcome=random.choice(["PASSED", "FAILED", "SKIPPED", "XFAILED", "XPASSED", "RERUN", "ERROR"]),
+            start_time=session_start_time + timedelta(seconds=random.randint(1, 30)),
             duration=random.uniform(0.1, 5.0),
-            caplog="Log output",
-            capstderr="Error output" if random.choice([True, False]) else "",
-            capstdout="Standard output",
-            longreprtext="Traceback details" if random.choice([True, False]) else "",
+            caplog=text_gen.sentence(),
+            capstderr=text_gen.sentence(),
+            capstdout=text_gen.sentence(),
+            longreprtext=text_gen.paragraph(),
             has_warning=random.choice([True, False]),
         )
-        group.reruns.append(result)
-        group.full_test_list.append(result)
+        session_test_results.append(result)
 
-    return group
+    # Generate unique rerun groups
+    session_rerun_test_groups = []
+    for _ in range(random.randint(1, 3)):
+        group = RerunTestGroup(nodeid=str(nodeid), final_outcome=random.choice(["PASSED", "FAILED"]))
+        for _ in range(random.randint(1, 4)):
+            result = TestResult(
+                nodeid=str(nodeid),
+                outcome=random.choice(["PASSED", "FAILED"]),
+                start_time=session_start_time + timedelta(seconds=random.randint(1, 30)),
+                duration=random.uniform(0.1, 5.0),
+                caplog=text_gen.sentence(),
+                capstderr=text_gen.sentence(),
+                capstdout=text_gen.sentence(),
+                longreprtext=text_gen.paragraph(),
+                has_warning=random.choice([True, False]),
+            )
+            group.add_rerun(result)
+            group.add_test(result)
+        session_rerun_test_groups.append(group)
 
+    session = TestSession(
+        sut_name=sut_name,
+        session_id=session_id,
+        session_start_time=session_start_time,
+        session_stop_time=session_stop_time,
+    )
+
+    # Add test results using proper method
+    for result in session_test_results:
+        session.add_test_result(result)
+
+    # Add rerun groups using proper method
+    for group in session_rerun_test_groups:
+        session.add_rerun_group(group)
+
+    # Add session tags
+    session.session_tags = {
+        "environment": random.choice(["dev", "qa", "prod"]),
+        "platform": random.choice(["linux", "windows", "macos"]),
+        "python_version": random.choice(["3.8", "3.9", "3.10"]),
+    }
+
+    return session
 
 # Constants for test result generation
 TEST_OUTCOMES = {
@@ -165,92 +209,3 @@ def random_test_result(nodeid, text_gen):
         longreprtext="",  # Default empty
         has_warning=random.choice([True, False]),
     )
-
-
-@pytest.fixture
-def random_output_fields(text_gen):
-    """Fixture to generate random OutputFields."""
-    fields = OutputFields()
-    for _ in range(random.randint(1, 5)):
-        key = random.choice(list(OutputFieldType))
-        fields.set(key, text_gen.paragraph())
-    return fields
-
-
-@pytest.fixture
-def random_test_session(nodeid, text_gen, random_output_fields):
-    """Fixture to generate a random TestSession object."""
-    sut_name = f"SUT-{random.randint(1, 10)}"
-    session_id = f"session-{random.randint(100, 999)}"
-
-    # Create base session time window
-    base_time = datetime.utcnow() - timedelta(minutes=random.randint(1, 60))
-    session_start_time = base_time
-    session_stop_time = base_time + timedelta(seconds=random.randint(30, 300))
-
-    # Generate unique test results
-    session_test_results = []
-    for _ in range(random.randint(2, 6)):
-        result = TestResult(
-            nodeid=str(nodeid),
-            outcome=random.choices(
-                ["PASSED", "FAILED", "SKIPPED", "XFAILED", "XPASSED", "RERUN", "ERROR"],
-                weights=[70, 15, 5, 3, 2, 3, 2],
-                k=1,
-            )[0],
-            start_time=session_start_time + timedelta(seconds=random.randint(1, 30)),
-            duration=random.uniform(0.1, 5.0),
-            caplog=text_gen.sentence(),
-            capstderr=text_gen.sentence(),
-            capstdout=text_gen.sentence(),
-            longreprtext=text_gen.paragraph(),
-            has_warning=random.choice([True, False]),
-        )
-        session_test_results.append(result)
-
-    # Generate unique rerun groups
-    session_rerun_test_groups = []
-    for _ in range(random.randint(1, 3)):
-        group = RerunTestGroup(nodeid=str(nodeid), final_outcome=random.choice(["PASSED", "FAILED"]))
-        for _ in range(random.randint(1, 4)):
-            result = TestResult(
-                nodeid=str(nodeid),
-                outcome=random.choice(["PASSED", "FAILED"]),
-                start_time=session_start_time + timedelta(seconds=random.randint(1, 30)),
-                duration=random.uniform(0.1, 5.0),
-                caplog=text_gen.sentence(),
-                capstderr=text_gen.sentence(),
-                capstdout=text_gen.sentence(),
-                longreprtext=text_gen.paragraph(),
-                has_warning=random.choice([True, False]),
-            )
-            group.reruns.append(result)
-            group.full_test_list.append(result)
-        session_rerun_test_groups.append(group)
-
-    session = TestSession(
-        sut_name=sut_name,
-        session_id=session_id,
-        session_start_time=session_start_time,
-        session_stop_time=session_stop_time,
-    )
-
-    # Add test results using proper method
-    for result in session_test_results:
-        session.add_test_result(result)
-
-    # Add rerun groups using proper method
-    for group in session_rerun_test_groups:
-        session.add_rerun_group(group)
-
-    # Set output fields using proper setter
-    session.output_fields = random_output_fields
-
-    # Add some random session tags
-    session.session_tags = {
-        "environment": random.choice(["dev", "qa", "prod"]),
-        "platform": random.choice(["linux", "windows", "macos"]),
-        "python_version": random.choice(["3.8", "3.9", "3.10"]),
-    }
-
-    return session

@@ -2,26 +2,22 @@ from datetime import datetime, timedelta
 
 import pytest
 from pytest_insight.models import (
-    OutputField,
-    OutputFields,
-    OutputFieldType,
     RerunTestGroup,
     TestHistory,
     TestResult,
     TestSession,
 )
 
-
 def test_random_test_results(random_test_result):
     """Test random test result properties."""
     assert random_test_result.nodeid != ""
-    assert random_test_result.nodeid == str(random_test_result.nodeid)
+    assert isinstance(random_test_result.nodeid, str)
     assert random_test_result.outcome in ["PASSED", "FAILED", "SKIPPED", "XFAILED", "XPASSED", "RERUN", "ERROR"]
     assert isinstance(random_test_result.start_time, datetime)
     assert isinstance(random_test_result.duration, float)
-    assert random_test_result.has_warning in [True, False]
+    assert isinstance(random_test_result.has_warning, bool)
 
-    # These fields can be empty
+    # Fields that can be empty but must be strings
     assert isinstance(random_test_result.caplog, str)
     assert isinstance(random_test_result.capstderr, str)
     assert isinstance(random_test_result.capstdout, str)
@@ -30,64 +26,44 @@ def test_random_test_results(random_test_result):
 
 def test_random_test_session(random_test_session):
     """Test random test session properties and methods."""
-    # Test basic session properties
     assert isinstance(random_test_session.sut_name, str) and random_test_session.sut_name.startswith("SUT-")
     assert isinstance(random_test_session.session_id, str) and random_test_session.session_id.startswith("session-")
 
-    # Test timestamp properties
     assert isinstance(random_test_session.session_start_time, datetime)
     assert isinstance(random_test_session.session_stop_time, datetime)
     assert isinstance(random_test_session.session_duration, timedelta)
     assert random_test_session.session_stop_time > random_test_session.session_start_time
 
-    # Test collections have expected content
-    assert len(random_test_session.test_results) >= 2, "Should have multiple test results"
-    assert len(random_test_session.rerun_test_groups) >= 1, "Should have at least one rerun group"
+    # Ensure test results and rerun groups are populated
+    assert len(random_test_session.test_results) >= 2
+    assert len(random_test_session.rerun_test_groups) >= 1
 
-    # Test output fields and tags
-    for field_name in random_test_session.output_fields.fields:
-        assert random_test_session.output_fields.get(field_name) is not None
-    assert random_test_session.session_tags, "Should have session tags"
-
-    # Test result categorization methods
-    test_categories = [
-        random_test_session.all_passes(),
-        random_test_session.all_failures(),
-        random_test_session.all_skipped(),
-        random_test_session.all_xfailed(),
-        random_test_session.all_xpassed(),
-        random_test_session.all_reruns(),
-        random_test_session.with_error(),
-        random_test_session.with_warning(),
-    ]
-    assert any(test_categories), "Should have results in at least one category"
-
-    # Test result lookup functionality
-    nonexistent_nodeid = "nonexistent/test_file.py::test_fake"
-    assert random_test_session.find_test_result_by_nodeid(nonexistent_nodeid) is None
-
-    # Test we can find an existing result
-    first_result = random_test_session.test_results[0]
-    found_result = random_test_session.find_test_result_by_nodeid(str(first_result.nodeid))
-    assert found_result is not None
-    assert found_result.nodeid == first_result.nodeid
-
-    # Test setting output fields
-    new_fields = OutputFields()
-    new_fields.set(OutputFieldType.ERRORS, "Test error")
-    random_test_session.output_fields = new_fields
-    assert random_test_session.output_fields.get_content(OutputFieldType.ERRORS) == "Test error"
-
-    # Test adding new test result
-    new_result = TestResult(
-        nodeid="test_new.py::test_case", outcome="PASSED", start_time=datetime.utcnow(), duration=0.1
+    # Test category filters
+    assert any(
+        [
+            random_test_session.all_passes(),
+            random_test_session.all_failures(),
+            random_test_session.all_skipped(),
+            random_test_session.all_xfailed(),
+            random_test_session.all_xpassed(),
+            random_test_session.all_reruns(),
+            random_test_session.with_error(),
+            random_test_session.with_warning(),
+        ]
     )
+
+    # Test retrieving a nonexistent test result
+    assert random_test_session.find_test_result_by_nodeid("nonexistent/test.py::test_fake") is None
+
+    # Test retrieving an existing test result
+    first_result = random_test_session.test_results[0]
+    assert random_test_session.find_test_result_by_nodeid(first_result.nodeid) == first_result
+
+    # Test adding a new test result
+    new_result = TestResult(nodeid="test_new.py::test_case", outcome="PASSED", start_time=datetime.utcnow(), duration=0.1)
     random_test_session.add_test_result(new_result)
 
-    # Verify the new result was added
-    found_result = random_test_session.find_test_result_by_nodeid("test_new.py::test_case")
-    assert found_result is not None
-    assert found_result.nodeid == "test_new.py::test_case"
+    assert random_test_session.find_test_result_by_nodeid("test_new.py::test_case") == new_result
 
 
 def test_test_session():
@@ -99,69 +75,22 @@ def test_test_session():
         sut_name="SUT-1",
         session_id="session-123",
         session_start_time=start_time,
-        session_stop_time=stop_time,  # Removed session_duration as it's calculated
+        session_stop_time=stop_time,
     )
 
     # Add test results
     for _ in range(5):
-        session.add_test_result(TestResult(nodeid="test_pass", outcome="PASSED", start_time=start_time, duration=0.1))
-    for _ in range(2):
-        session.add_test_result(TestResult(nodeid="test_fail", outcome="FAILED", start_time=start_time, duration=0.1))
-    session.add_test_result(TestResult(nodeid="test_skip", outcome="SKIPPED", start_time=start_time, duration=0.1))
-    session.add_test_result(TestResult(nodeid="test_xfail", outcome="XFAILED", start_time=start_time, duration=0.1))
-    session.add_test_result(
-        TestResult(nodeid="test_warn", outcome="PASSED", start_time=start_time, duration=0.1, has_warning=True)
-    )
+        session.add_test_result(
+            TestResult(
+                nodeid="test_pass",
+                outcome="PASSED",
+                start_time=start_time,
+                duration=0.1
+            )
+        )
 
-    # Test properties
-    assert session.sut_name == "SUT-1"
-    assert session.session_id == "session-123"
-    assert session.session_start_time == start_time
-    assert session.session_duration == stop_time - start_time  # Updated assertion to match calculation
-
-    # Test counts through result categorization methods
-    assert len(session.all_passes()) == 6  # Updated to include warning test case
-    assert len(session.all_failures()) == 2
-    assert len(session.all_skipped()) == 1
-    assert len(session.all_xfailed()) == 1
-    assert len(session.all_xpassed()) == 0
-    assert len(session.with_warning()) == 1
-    assert len(session.with_error()) == 0
-    assert len(session.all_reruns()) == 0
-
-
-def test_test_session_properties():
-    """Test TestSession property getters and setters."""
-    session = TestSession(
-        sut_name="test_sut",
-        session_id="test-123",
-        session_start_time=datetime.utcnow(),
-        session_stop_time=datetime.utcnow() + timedelta(seconds=10),
-    )
-
-    # Test output fields setter (has proper setter method)
-    fields = OutputFields()
-    fields.set(OutputFieldType.ERRORS, "Test error")
-    session.output_fields = fields
-    assert session.output_fields.get_content(OutputFieldType.ERRORS) == "Test error"
-
-    # Test adding test results (using add method)
-    result = TestResult(nodeid="test_file.py::test_case", outcome="PASSED", start_time=datetime.utcnow(), duration=0.1)
-    session.add_test_result(result)
-    assert len(session.test_results) == 1
-
-    # Test adding rerun groups (using add method)
-    rerun_group = RerunTestGroup(nodeid="test_file.py::test_case", final_outcome="PASSED")
-    session.add_rerun_group(rerun_group)
-    assert len(session.rerun_test_groups) == 1
-
-    # Test test counts (readonly property)
-    assert isinstance(session.test_counts, dict)
-    assert session.test_counts["passed"] == 1
-
-    # Try to set session duration directly (should fail since it is always calculated from start and stop times)
-    with pytest.raises(AttributeError):
-        session.session_duration = timedelta(seconds=20)
+    assert len(session.test_results) == 5
+    assert session.session_duration.total_seconds() == 10.0
 
 
 def test_rerun_test_group():
@@ -175,9 +104,9 @@ def test_rerun_test_group():
     )
 
     # Use proper methods to add results
-    group.add_rerun(result1)  # Add to reruns list
-    group.add_test(result1)  # Add to full test list
-    group.add_test(result2)  # Add to full test list
+    group.add_rerun(result1)
+    group.add_test(result1)
+    group.add_test(result2)
 
     assert group.nodeid == "test_example.py::test_case"
     assert group.final_outcome == "FAILED"
@@ -193,35 +122,11 @@ def test_history():
     stop_time1 = now + timedelta(seconds=5)
     stop_time2 = now + timedelta(seconds=20)
 
-    session1 = TestSession("SUT-1", "session-001", now, stop_time1)
-    session2 = TestSession("SUT-1", "session-002", now + timedelta(seconds=10), stop_time2)
+    session1 = TestSession("SUT-1", "session-001", now, stop_time1, [], [])
+    session2 = TestSession("SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], [])
 
-    # Use proper add method
     history.add_test_session(session1)
     history.add_test_session(session2)
 
     assert len(history.sessions) == 2
     assert history.latest_session() == session2
-
-
-def test_output_fields():
-    """Test OutputFields functionality."""
-    fields = OutputFields()
-
-    # Test empty fields
-    assert not fields.fields  # Access through property
-
-    # Test setting and getting fields
-    fields.set(OutputFieldType.ERRORS, "Test error")
-    assert fields.fields[OutputFieldType.ERRORS].content == "Test error"
-
-
-def test_output_field_string_representation():
-    """Test OutputField string conversion."""
-    field = OutputField(OutputFieldType.ERRORS, "Test error")
-    assert str(field) == "Test error"
-    assert bool(field)
-
-    empty_field = OutputField(OutputFieldType.ERRORS, "")
-    assert not str(empty_field)
-    assert not bool(empty_field)

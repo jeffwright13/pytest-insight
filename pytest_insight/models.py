@@ -1,8 +1,9 @@
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
 from typing import Dict, List, Optional
 
 
+@dataclass
 class TestResult:
     """
     Represents a single test result for an individual test run.
@@ -10,29 +11,17 @@ class TestResult:
 
     __test__ = False  # Tell Pytest this is NOT a test class
 
-    def __init__(
-        self,
-        nodeid: str,
-        outcome: str,
-        start_time: datetime,
-        duration: float,
-        caplog: str = "",
-        capstderr: str = "",
-        capstdout: str = "",
-        longreprtext: str = "",
-        has_warning: bool = False,
-    ):
-        self.nodeid = nodeid
-        self.outcome = outcome
-        self.start_time = start_time
-        self.duration = duration
-        self.caplog = caplog or ""
-        self.capstderr = capstderr or ""
-        self.capstdout = capstdout or ""
-        self.longreprtext = longreprtext or ""
-        self.has_warning = has_warning
+    nodeid: str
+    outcome: str
+    start_time: datetime
+    duration: float
+    caplog: str = ""
+    capstderr: str = ""
+    capstdout: str = ""
+    longreprtext: str = ""
+    has_warning: bool = False
 
-    def to_dict(self):
+    def to_dict(self) -> Dict:
         """Convert test result to a dictionary for JSON serialization."""
         return {
             "nodeid": self.nodeid,
@@ -46,100 +35,51 @@ class TestResult:
             "has_warning": self.has_warning,
         }
 
-
-class OutputFieldType(Enum):
-    """Valid output field types in pytest terminal output."""
-
-    ERRORS = "errors"
-    WARNINGS_SUMMARY = "warnings_summary"  # Added to match usage
-    RERUN_TEST_SUMMARY = "rerun_test_summary"
-    SHORT_TEST_SUMMARY = "short_test_summary"
-    SESSION_START = "session_start"
-
-
-class OutputField:
-    """A section of pytest terminal output with specific content."""
-
-    def __init__(self, field_type: OutputFieldType, content: str):
-        self.field_type = field_type
-        self.content = content.strip()
-
-    def __str__(self) -> str:
-        return self.content
-
-    def __bool__(self) -> bool:
-        return bool(self.content)
+    @classmethod
+    def from_dict(cls, data: Dict) -> "TestResult":
+        """Create a TestResult from a dictionary."""
+        return cls(
+            nodeid=data["nodeid"],
+            outcome=data["outcome"],
+            start_time=datetime.fromisoformat(data["start_time"]),
+            duration=data["duration"],
+            caplog=data.get("caplog", ""),
+            capstderr=data.get("capstderr", ""),
+            capstdout=data.get("capstdout", ""),
+            longreprtext=data.get("longreprtext", ""),
+            has_warning=data.get("has_warning", False),
+        )
 
 
-class OutputFields:
-    """Collection of pytest terminal output sections."""
-
-    def __init__(self):
-        self._fields: Dict[OutputFieldType, OutputField] = {}
-
-    @property
-    def fields(self) -> Dict[OutputFieldType, OutputField]:
-        """Get a copy of all output fields."""
-        return self._fields.copy()
-
-    def set(self, field_type: OutputFieldType, content: str) -> None:
-        """Set content for a specific output field type."""
-        self._fields[field_type] = OutputField(field_type, content)
-
-    def get(self, field_type: OutputFieldType) -> Optional[OutputField]:
-        """Get an output field by type."""
-        return self._fields.get(field_type)
-
-    def get_content(self, field_type: OutputFieldType) -> str:
-        """Get content string for a field type."""
-        field = self.get(field_type)
-        return str(field) if field else ""
-
-    @property
-    def errors(self) -> str:
-        """Get error output content."""
-        return self.get_content(OutputFieldType.ERRORS)
-
-    @property
-    def warnings(self) -> str:
-        """Get warnings output content."""
-        return self.get_content(OutputFieldType.WARNINGS)
-
-    @property
-    def final_summary(self) -> str:
-        """Get the final summary line."""
-        return self.get_content(OutputFieldType.SHORT_TEST_SUMMARY)
-
-    @property
-    def rerun_summary(self) -> str:
-        """Get rerun test summary."""
-        return self.get_content(OutputFieldType.RERUN_SUMMARY)
-
-    def __bool__(self) -> bool:
-        return bool(self._fields)
-
-    def __str__(self) -> str:
-        return self.final_summary
-
-
+@dataclass
 class RerunTestGroup:
-    """Represents a test that has been run multiple times using pytest-rerunfailures."""
+    """Represents a test that has been run multiple times."""
+    nodeid: str
+    _final_outcome: str = field(default="UNKNOWN")
+    _reruns: List[TestResult] = field(default_factory=list)
+    _full_test_list: List[TestResult] = field(default_factory=list)
 
     def __init__(self, nodeid: str, final_outcome: str):
+        """Initialize a rerun test group."""
         self.nodeid = nodeid
-        self.final_outcome = final_outcome
-        self._reruns: List[TestResult] = []
-        self._full_test_list: List[TestResult] = []
+        self._final_outcome = final_outcome
+        self._reruns = []
+        self._full_test_list = []
+
+    @property
+    def final_outcome(self) -> str:
+        """Get the final outcome of all test runs."""
+        return self.final_test.outcome if self.final_test else self._final_outcome
 
     @property
     def reruns(self) -> List[TestResult]:
         """Get rerun test results."""
-        return self._reruns.copy()
+        return self._reruns
 
     @property
     def full_test_list(self) -> List[TestResult]:
-        """Get full list of test results including original and reruns."""
-        return self._full_test_list.copy()
+        """Get all test results."""
+        return self._full_test_list
 
     def add_rerun(self, result: TestResult) -> None:
         """Add a rerun test result."""
@@ -154,61 +94,36 @@ class RerunTestGroup:
         """Get the final test result."""
         return self._full_test_list[-1] if self._full_test_list else None
 
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for serialization."""
+        return {
+            "nodeid": self.nodeid,
+            "final_outcome": self.final_outcome,
+            "reruns": [r.to_dict() for r in self._reruns],
+            "full_test_list": [t.to_dict() for t in self._full_test_list]
+        }
 
+
+@dataclass
 class TestSession:
     """Represents a single test session for a single SUT."""
 
     __test__ = False  # Tell Pytest this is NOT a test class
 
-    def __init__(
-        self,
-        sut_name: str,
-        session_id: str,
-        session_start_time: datetime,
-        session_stop_time: datetime,
-        session_duration: Optional[timedelta] = None,
-        test_results: Optional[List[TestResult]] = None,
-        rerun_test_groups: Optional[List[RerunTestGroup]] = None,
-    ):
-        self.sut_name = sut_name
-        self.session_id = session_id
-        self.session_start_time = session_start_time
-        self.session_stop_time = session_stop_time
-        self._session_duration = session_duration
-        self._test_results = test_results if test_results is not None else []
-        self._rerun_test_groups = rerun_test_groups if rerun_test_groups is not None else []
-        self._output_fields = OutputFields()
+    sut_name: str
+    session_id: str
+    session_start_time: datetime
+    session_stop_time: datetime
+    test_results: List[TestResult] = field(default_factory=list)
+    rerun_test_groups: List[RerunTestGroup] = field(default_factory=list)
+    session_tags: Dict[str, str] = field(default_factory=dict)
 
     @property
     def session_duration(self) -> timedelta:
         """Compute session duration dynamically based on start and stop times."""
         return self.session_stop_time - self.session_start_time
 
-    @property
-    def test_results(self) -> List[TestResult]:
-        """Return a copy to prevent accidental mutation."""
-        return self._test_results.copy()
-
-    @test_results.setter
-    def test_results(self, value: List[TestResult]) -> None:
-        """Enforce type safety when setting."""
-        if not isinstance(value, list):
-            raise ValueError("test_results must be a list.")
-        self._test_results = value
-
-    @property
-    def rerun_test_groups(self) -> List[RerunTestGroup]:
-        """Return a copy to prevent accidental mutation."""
-        return self._rerun_test_groups.copy()
-
-    @rerun_test_groups.setter
-    def rerun_test_groups(self, value: List[RerunTestGroup]) -> None:
-        """Enforce type safety when setting."""
-        if not isinstance(value, list):
-            raise ValueError("rerun_test_groups must be a list.")
-        self._rerun_test_groups = value
-
-    def to_dict(self):
+    def to_dict(self) -> Dict:
         """Convert the test session to a dictionary for JSON serialization."""
         return {
             "sut_name": self.sut_name,
@@ -217,127 +132,68 @@ class TestSession:
             "session_stop_time": self.session_stop_time.isoformat(),
             "session_duration": self.session_duration.total_seconds(),
             "test_results": [test.to_dict() for test in self.test_results],
+            "rerun_test_groups": [group.to_dict() for group in self.rerun_test_groups],
         }
 
-    @property
-    def output_fields(self) -> OutputFields:
-        """Get output fields."""
-        return self._output_fields
-
-    @output_fields.setter
-    def output_fields(self, fields: OutputFields) -> None:
-        """Set output fields."""
-        self._output_fields = fields
-
-    @property
-    def rerun_test_groups(self) -> List[RerunTestGroup]:
-        """Get all rerun test groups."""
-        return self._rerun_test_groups.copy()
+    @classmethod
+    def from_dict(cls, data: Dict) -> "TestSession":
+        """Create a TestSession from a dictionary."""
+        return cls(
+            sut_name=data["sut_name"],
+            session_id=data["session_id"],
+            session_start_time=datetime.fromisoformat(data["session_start_time"]),
+            session_stop_time=datetime.fromisoformat(data["session_stop_time"]),
+            test_results=[
+                TestResult.from_dict(t) for t in data.get("test_results", [])
+            ],
+        )
 
     def add_test_result(self, result: TestResult) -> None:
-        """Add a test result to the session."""
-        self._test_results.append(result)
-
-    def add_rerun_group(self, group: RerunTestGroup) -> None:
-        """Add a rerun test group to the session."""
-        self._rerun_test_groups.append(group)
-
-    def all_passes(self) -> List[TestResult]:
-        return [t for t in self._test_results if t.outcome == "PASSED"]
-
-    def all_failures(self) -> List[TestResult]:
-        return [t for t in self._test_results if t.outcome == "FAILED"]
-
-    def all_skipped(self) -> List[TestResult]:
-        return [t for t in self._test_results if t.outcome == "SKIPPED"]
-
-    def all_xfailed(self) -> List[TestResult]:
-        return [t for t in self._test_results if t.outcome == "XFAILED"]
-
-    def all_xpassed(self) -> List[TestResult]:
-        return [t for t in self._test_results if t.outcome == "XPASSED"]
-
-    def all_reruns(self) -> List[TestResult]:
-        return [t for t in self._test_results if t.outcome == "RERUN"]
-
-    def with_error(self) -> List[TestResult]:
-        return [t for t in self._test_results if t.outcome == "ERROR"]
-
-    def with_warning(self) -> List[TestResult]:
-        return [t for t in self._test_results if t.has_warning]
-
-    def find_test_result_by_nodeid(self, nodeid: str) -> TestResult:
-        return next((t for t in self._test_results if t.nodeid == nodeid), None)
-
-    @property
-    def test_counts(self) -> Dict[str, int]:
-        """Get counts of test results by outcome."""
-        counts = {
-            "passed": len(self.all_passes()),
-            "failed": len(self.all_failures()),
-            "skipped": len(self.all_skipped()),
-            "xfailed": len(self.all_xfailed()),
-            "xpassed": len(self.all_xpassed()),
-            "rerun": len(self.all_reruns()),
-            "error": len(self.with_error()),
-            "warnings": len(self.with_warning()),
-        }
-        return counts
-
-    @property
-    def outcome_summary(self) -> str:
-        """Get a compact summary of test outcomes."""
-        counts = {
-            "P": len(self.all_passes()),
-            "F": len(self.all_failures()),
-            "S": len(self.all_skipped()),
-            "XF": len(self.all_xfailed()),
-            "XP": len(self.all_xpassed()),
-            "E": len(self.with_error()),
-            "W": len(self.with_warning()),
-            "R": len(self.all_reruns()),
-        }
-        return " ".join(f"{k}:{v}" for k, v in counts.items() if v > 0)
+        """Add a test result to this session."""
+        self.test_results.append(result)
 
 
+@dataclass
 class SUTGroup:
-    """
-    Represents a collection of test sessions for a single SUT.
-    """
+    """Represents a collection of test sessions for a single SUT."""
 
-    def __init__(self, sut_name: str):
-        self.sut_name = sut_name
-        self.sessions: List[TestSession] = []
+    sut_name: str
+    sessions: List[TestSession] = field(default_factory=list)
 
     def add_session(self, session: TestSession) -> None:
         self.sessions.append(session)
 
-    def latest_session(self) -> TestSession:
-        return max(self.sessions, key=lambda s: s.session_start_time) if self.sessions else None
+    def latest_session(self) -> Optional[TestSession]:
+        return (
+            max(self.sessions, key=lambda s: s.session_start_time)
+            if self.sessions
+            else None
+        )
 
 
+@dataclass
 class TestHistory:
-    """Tracks test sessions across multiple SUTs."""
+    """Collection of test sessions grouped by SUT."""
 
     def __init__(self):
-        self._sessions: Dict[str, SUTGroup] = {}
+        self._sessions_by_sut = {}  # Initialize sessions dict
 
     @property
     def sessions(self) -> List[TestSession]:
-        """Get all sessions across all SUTs."""
+        """Get all sessions across all SUTs, sorted by start time."""
         all_sessions = []
-        for sut_group in self._sessions.values():
-            all_sessions.extend(sut_group.sessions)
-        return all_sessions
+        for sut_sessions in self._sessions_by_sut.values():
+            all_sessions.extend(sut_sessions)
+        return sorted(all_sessions, key=lambda s: s.session_start_time)
 
     def add_test_session(self, session: TestSession) -> None:
         """Add a test session to the appropriate SUT group."""
-        if session.sut_name not in self._sessions:
-            self._sessions[session.sut_name] = SUTGroup(session.sut_name)
-        self._sessions[session.sut_name].add_session(session)
+        if session.sut_name not in self._sessions_by_sut:
+            self._sessions_by_sut[session.sut_name] = []
+        self._sessions_by_sut[session.sut_name].append(session)
 
     def latest_session(self) -> Optional[TestSession]:
-        """Get the most recent test session across all SUTs."""
+        """Get the most recent test session."""
         if not self.sessions:
             return None
-        return max(self.sessions, key=lambda s: s.session_start_time)
+        return self.sessions[-1]
