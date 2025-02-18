@@ -1,15 +1,39 @@
 from datetime import datetime, timedelta
 
-import pytest
 import typer
+from typing_extensions import Annotated
 
 from pytest_insight.storage import get_storage_instance
+from pytest_insight.analytics import SUTAnalytics
 
-app = typer.Typer(help="Test history and analytics tool for pytest")
-session_app = typer.Typer(help="Manage test sessions")
-history_app = typer.Typer(help="View and analyze test history")
-sut_app = typer.Typer(help="Manage Systems Under Test")
-analytics_app = typer.Typer(help="Generate test analytics and reports")
+# Create typer apps with rich help enabled and showing help on ambiguous commands
+app = typer.Typer(
+    help="Test history and analytics tool for pytest",
+    rich_markup_mode="rich",
+    no_args_is_help=True,  # Show help when no args provided
+    add_completion=True  # Enable completion support
+)
+
+session_app = typer.Typer(
+    help="Manage test sessions",
+    rich_markup_mode="rich",
+    no_args_is_help=True
+)
+history_app = typer.Typer(
+    help="View and analyze test history",
+    rich_markup_mode="rich",
+    no_args_is_help=True
+)
+sut_app = typer.Typer(
+    help="Manage Systems Under Test",
+    rich_markup_mode="rich",
+    no_args_is_help=True
+)
+analytics_app = typer.Typer(
+    help="Generate test analytics and reports",
+    rich_markup_mode="rich",
+    no_args_is_help=True
+)
 
 # Add sub-applications
 app.add_typer(session_app, name="session")
@@ -22,9 +46,13 @@ storage = get_storage_instance()
 
 # Session commands
 @session_app.command("run")
-def run_session(path: str = typer.Argument("tests", help="Path to test directory or file")):
+def run_session(
+    path: str = typer.Argument("tests", help="Path to test directory or file")
+):
     """Run a new test session."""
     pytest.main([path, "--insight"])
+
+
 
 
 @session_app.command("show")
@@ -56,7 +84,7 @@ def show_session():
         "total_reruns": sum(len(group.reruns) for group in session.rerun_test_groups),
         "total_groups": len(session.rerun_test_groups),
         "passed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "PASSED"),
-        "failed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "FAILED"),
+        "failed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "FAILED")
     }
 
     # Print Session Info
@@ -83,7 +111,6 @@ def show_session():
     typer.echo(f"  Rerun Groups: {rerun_stats['total_groups']}")
     typer.echo(f"  ↳ Rerun Groups That Passed: {rerun_stats['passed_groups']}")
     typer.echo(f"  ↳ Rerun Groups That Failed: {rerun_stats['failed_groups']}")
-
 
 # History commands
 @history_app.command("list")
@@ -130,6 +157,58 @@ def show_summary(sut: str = typer.Argument(None, help="Show summary for specific
 
     for outcome, count in outcomes.items():
         typer.echo(f"{outcome}: {count}")
+
+
+@analytics_app.command("analyze")
+def analyze_sut(
+    sut_name: str = typer.Argument(
+        ...,
+        help="Name of SUT to analyze",
+        autocompletion=lambda: [s.sut_name for s in storage.load_sessions()]
+    ),
+    metric: str = typer.Option(
+        "all",
+        help="Metric to analyze",
+        autocompletion=lambda: ["all", "stability", "performance", "warnings", "health"]
+    )
+):
+    """Analyze test history for a specific SUT."""
+    sessions = storage.load_sessions()
+    sut_sessions = [s for s in sessions if s.sut_name == sut_name]
+
+    if not sut_sessions:
+        typer.echo(f"No sessions found for SUT: {sut_name}")
+        raise typer.Exit(1)
+
+    analytics = SUTAnalytics(sut_sessions)
+
+    if metric in ("all", "stability"):
+        stability = analytics.stability_metrics()
+        typer.echo("\nStability Metrics:")
+        typer.echo(f"  Flaky Tests: {len(stability['flaky_tests'])}")
+        typer.echo("\n  Most Unstable Tests:")
+        for test, rate in stability["most_unstable"]:
+            typer.echo(f"    {test}: {rate:.1%} failure rate")
+
+    if metric in ("all", "performance"):
+        perf = analytics.performance_metrics()
+        typer.echo("\nPerformance Metrics:")
+        typer.echo("\n  Slowest Tests:")
+        for test, duration in perf["slowest_tests"]:
+            typer.echo(f"    {test}: {duration:.2f}s avg")
+
+    if metric in ("all", "warnings"):
+        warnings = analytics.warning_metrics()
+        typer.echo("\nWarning Metrics:")
+        typer.echo("\n  Most Common Warnings:")
+        for msg, count in warnings["common_warnings"]:
+            typer.echo(f"    {count}x: {msg[:60]}...")
+
+    if metric in ("all", "health"):
+        health = analytics.health_score()
+        typer.echo("\nTest Health Scores:")
+        for test, score in sorted(health.items(), key=lambda x: x[1]):
+            typer.echo(f"  {test}: {score:.0f}/100")
 
 
 if __name__ == "__main__":
