@@ -22,9 +22,7 @@ storage = get_storage_instance()
 
 # Session commands
 @session_app.command("run")
-def run_session(
-    path: str = typer.Argument("tests", help="Path to test directory or file")
-):
+def run_session(path: str = typer.Argument("tests", help="Path to test directory or file")):
     """Run a new test session."""
     pytest.main([path, "--insight"])
 
@@ -51,24 +49,14 @@ def show_session():
 
     # Count warnings
     total_warnings = sum(test.has_warning for test in session.test_results)
-    unique_warnings = len(
-        {test.nodeid for test in session.test_results if test.has_warning}
-    )
+    unique_warnings = len({test.nodeid for test in session.test_results if test.has_warning})
 
     # Count rerun statistics
     rerun_stats = {
         "total_reruns": sum(len(group.reruns) for group in session.rerun_test_groups),
         "total_groups": len(session.rerun_test_groups),
-        "passed_groups": sum(
-            1
-            for group in session.rerun_test_groups
-            if group.final_outcome.upper() == "PASSED"
-        ),
-        "failed_groups": sum(
-            1
-            for group in session.rerun_test_groups
-            if group.final_outcome.upper() == "FAILED"
-        ),
+        "passed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "PASSED"),
+        "failed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "FAILED"),
     }
 
     # Print Session Info

@@ -66,9 +66,7 @@ def pytest_configure(config: Config):
 
 
 @pytest.hookimpl
-def pytest_terminal_summary(
-    terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config
-):
+def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
     """Process test results and store in TestSession."""
     storage = get_storage_instance()
 
@@ -88,8 +86,7 @@ def pytest_terminal_summary(
 
             # Capture only call-phase or error failures from setup/teardown
             if report.when == "call" or (
-                report.when in ("setup", "teardown")
-                and report.outcome in ("failed", "error")
+                report.when in ("setup", "teardown") and report.outcome in ("failed", "error")
             ):
                 report_time = datetime.fromtimestamp(report.start)
 
@@ -133,9 +130,7 @@ def pytest_terminal_summary(
     session_end = session_end or datetime.now()
 
     # Generate unique session ID
-    session_id = (
-        f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
-    )
+    session_id = f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
 
     # # Process rerun groups
     # rerun_groups = group_rerun_tests(test_results)
@@ -174,9 +169,7 @@ def group_rerun_tests(test_results: List[TestResult]) -> List[RerunTestGroup]:
     for test in test_results:
         if test.outcome.lower() == "rerun":
             if test.nodeid not in rerun_groups:
-                rerun_groups[test.nodeid] = RerunTestGroup(
-                    nodeid=test.nodeid, final_outcome="UNKNOWN"
-                )
+                rerun_groups[test.nodeid] = RerunTestGroup(nodeid=test.nodeid, final_outcome="UNKNOWN")
             rerun_groups[test.nodeid].add_rerun(test)
 
     # Assign final outcomes
