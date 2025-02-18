@@ -29,8 +29,6 @@ def run_session(
     pytest.main([path, "--insight"])
 
 
-
-
 @session_app.command("show")
 def show_session():
     """Show details of the most recent test session."""
@@ -53,24 +51,35 @@ def show_session():
 
     # Count warnings
     total_warnings = sum(test.has_warning for test in session.test_results)
-    unique_warnings = len({test.nodeid for test in session.test_results if test.has_warning})
+    unique_warnings = len(
+        {test.nodeid for test in session.test_results if test.has_warning}
+    )
 
     # Count rerun statistics
     rerun_stats = {
         "total_reruns": sum(len(group.reruns) for group in session.rerun_test_groups),
         "total_groups": len(session.rerun_test_groups),
-        "passed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "PASSED"),
-        "failed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "FAILED")
+        "passed_groups": sum(
+            1
+            for group in session.rerun_test_groups
+            if group.final_outcome.upper() == "PASSED"
+        ),
+        "failed_groups": sum(
+            1
+            for group in session.rerun_test_groups
+            if group.final_outcome.upper() == "FAILED"
+        ),
     }
 
     # Print Session Info
-    typer.echo(f"Session {session.session_id}")
-    typer.echo(f"SUT: {session.sut_name}")
-    typer.echo(f"Start time: {session.session_start_time}")
-    typer.echo(f"Duration: {session.session_duration}")
+    typer.echo("\nSession Info:")
+    typer.echo(f"  Session ID: {session.session_id}")
+    typer.echo(f"  SUT: {session.sut_name}")
+    typer.echo(f"  Start time: {session.session_start_time}")
+    typer.echo(f"  Duration: {session.session_duration}")
 
     # Print Test Statistics
-    typer.echo("\nTest Statistics:")
+    typer.echo("\nSession Stats:")
     typer.echo(f"  Total Tests: {total_tests}")
     for outcome, count in sorted(outcomes.items()):
         typer.echo(f"  {outcome}: {count}")
@@ -87,7 +96,6 @@ def show_session():
     typer.echo(f"  ↳ Rerun Groups That Passed: {rerun_stats['passed_groups']}")
     typer.echo(f"  ↳ Rerun Groups That Failed: {rerun_stats['failed_groups']}")
 
-    print()
 
 # History commands
 @history_app.command("list")
