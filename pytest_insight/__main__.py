@@ -30,74 +30,64 @@ def run_session(
 
 
 
+
 @session_app.command("show")
-def show_session(
-    session_id: str = typer.Argument(
-        None, help="Session ID to show. Latest if not specified"
-    )
-):
-    """Show details of a specific test session with insights beyond raw test stats."""
+def show_session():
+    """Show details of the most recent test session."""
     storage = get_storage_instance()
-    session = (
-        storage.get_session_by_id(session_id) if session_id else storage.get_last_session()
-    )
+    session = storage.get_last_session()
 
     if not session:
         typer.echo("[pytest-insight] No test sessions found.")
         raise typer.Exit(code=1)
 
-    unique_tests = {test.nodeid: test for test in session.test_results}  # Unique tests by NodeID
-    total_num_tests = len(unique_tests)
+    # Unique test cases (removes duplicates)
+    unique_tests = {test.nodeid: test for test in session.test_results}
+    total_tests = len(unique_tests)
 
-    total_warnings = sum(bool(test.has_warning)
-                     for test in session.test_results)
-    unique_warning_tests = len(
-        {test.nodeid for test in session.test_results if test.has_warning}
-    )
-
-    # Outcome tally (including XPASSED, XFAILED, ERROR, etc.)
+    # Count outcomes
     outcomes = {}
-    rerun_tests = {}
-
     for test in session.test_results:
-        outcome = test.outcome.capitalize()  # Camel Case
-        if outcome not in outcomes:
-            outcomes[outcome] = 0
-        outcomes[outcome] += 1
+        outcome = test.outcome.capitalize()
+        outcomes[outcome] = outcomes.get(outcome, 0) + 1
 
-        # Track reruns separately
-        if outcome == "Rerun":
-            if test.nodeid not in rerun_tests:
-                rerun_tests[test.nodeid] = []
-            rerun_tests[test.nodeid].append(test)
+    # Count warnings
+    total_warnings = sum(test.has_warning for test in session.test_results)
+    unique_warnings = len({test.nodeid for test in session.test_results if test.has_warning})
 
-    # **Step 3: Print insights**
-    typer.echo("Session Info:")
-    typer.echo(f"  Session {session.session_id}")
-    typer.echo(f"  SUT: {session.sut_name}")
-    typer.echo(f"  Start time: {session.session_start_time}")
-    typer.echo(f"  Stop time: {session.session_stop_time}")
-    typer.echo(f"  Duration: {session.session_stop_time - session.session_start_time}")  # Fix duration
+    # Count rerun statistics
+    rerun_stats = {
+        "total_reruns": sum(len(group.reruns) for group in session.rerun_test_groups),
+        "total_groups": len(session.rerun_test_groups),
+        "passed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "PASSED"),
+        "failed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "FAILED")
+    }
 
-    typer.echo("Session Stats:")
-    typer.echo(f"  Total Tests: {total_num_tests}")
+    # Print Session Info
+    typer.echo(f"Session {session.session_id}")
+    typer.echo(f"SUT: {session.sut_name}")
+    typer.echo(f"Start time: {session.session_start_time}")
+    typer.echo(f"Duration: {session.session_duration}")
+
+    # Print Test Statistics
+    typer.echo("\nTest Statistics:")
+    typer.echo(f"  Total Tests: {total_tests}")
     for outcome, count in sorted(outcomes.items()):
         typer.echo(f"  {outcome}: {count}")
-    typer.echo(f"  Unique Warnings: {unique_warning_tests}")
 
-    # Rerun groups
-    total_num_reruns = sum(len(group) for group in rerun_tests.values())
-    reruns_that_failed = sum(
-        group.final_outcome == "FAILED" for group in session.rerun_test_groups
-    )
-    reruns_that_passed = sum(
-        group.final_outcome == "PASSED" for group in session.rerun_test_groups
-    )
-    typer.echo(f"  Total Number of Rerun Tests: {total_num_reruns}")
-    typer.echo(f"  ↳ Rerun Groups: {len(session.rerun_test_groups)}")
-    typer.echo(f"  ↳ Rerun Groups That Passed: {reruns_that_passed}")
-    typer.echo(f"  ↳ Rerun Groups That Failed: {reruns_that_failed}")
+    # Print Warning Statistics
+    typer.echo("\nWarning Statistics:")
+    typer.echo(f"  Total Warnings: {total_warnings}")
+    typer.echo(f"  Unique Tests With Warnings: {unique_warnings}")
 
+    # Print Rerun Statistics
+    typer.echo("\nRerun Statistics:")
+    typer.echo(f"  Total Reruns: {rerun_stats['total_reruns']}")
+    typer.echo(f"  Rerun Groups: {rerun_stats['total_groups']}")
+    typer.echo(f"  ↳ Rerun Groups That Passed: {rerun_stats['passed_groups']}")
+    typer.echo(f"  ↳ Rerun Groups That Failed: {rerun_stats['failed_groups']}")
+
+    print()
 
 # History commands
 @history_app.command("list")

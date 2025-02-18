@@ -1,6 +1,7 @@
 from collections import Counter
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union
+import uuid
 
 import pytest
 import sys
@@ -10,7 +11,7 @@ from _pytest.terminal import TerminalReporter, WarningReport
 from pytest import ExitCode
 
 from pytest_insight.models import RerunTestGroup, TestResult, TestSession
-from pytest_insight.storage import JSONStorage
+from pytest_insight.storage import JSONStorage, get_storage_instance
 
 _INSIGHT_INITIALIZED: bool = False
 _INSIGHT_ENABLED: bool = False
@@ -70,45 +71,35 @@ def pytest_configure(config: Config):
 @pytest.hookimpl
 def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
     """Process test results and store in TestSession."""
-    if not insight_enabled():
-        print("[pytest-insight] Insight not enabled, skipping.")
-        return
+    storage = get_storage_instance()
 
-    # Get all test reports
     stats = terminalreporter.stats
     test_results = []
     session_start = None
     session_end = None
 
-    # Mapping for pytest outcomes to our format
-    outcome_map = {
-        "passed": "PASSED",
-        "failed": "FAILED",
-        "skipped": "SKIPPED",
-        "xfailed": "XFAILED",
-        "xpassed": "XPASSED",
-        "error": "ERROR",
-        "rerun": "RERUN",
-        "warnings": "WARNING"
-    }
-
-    # Process each report type
+    # Process all test reports
     for outcome, reports in stats.items():
+        if outcome == "warnings":
+            continue  # Handle warnings separately
+
         for report in reports:
-            # Only process TestReport instances in 'call' phase
-            if isinstance(report, TestReport) and report.when == "call":
-                # Track session timing
+            if not isinstance(report, TestReport):
+                continue
+
+            # Capture only call-phase or error failures from setup/teardown
+            if report.when == "call" or (report.when in ("setup", "teardown") and report.outcome in ("failed", "error")):
                 report_time = datetime.fromtimestamp(report.start)
+
                 if session_start is None or report_time < session_start:
                     session_start = report_time
                 report_end = report_time + timedelta(seconds=report.duration)
                 if session_end is None or report_end > session_end:
                     session_end = report_end
 
-                # Create TestResult with all available info
-                test_result = TestResult(
+                test_results.append(TestResult(
                     nodeid=report.nodeid,
-                    outcome=outcome_map.get(report.outcome, "UNKNOWN"),
+                    outcome=outcome,
                     start_time=report_time,
                     duration=report.duration,
                     caplog=getattr(report, "caplog", ""),
@@ -116,12 +107,12 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                     capstdout=getattr(report, "capstdout", ""),
                     longreprtext=str(report.longrepr) if report.longrepr else "",
                     has_warning=bool(getattr(report, "warning_messages", []))
-                )
+                ))
 
-                test_results.append(test_result)
-
-            # Handle warning reports separately
-            elif isinstance(report, WarningReport):
+    # Handle warnings separately
+    if "warnings" in stats:
+        for report in stats["warnings"]:
+            if isinstance(report, WarningReport):
                 test_results.append(TestResult(
                     nodeid=report.nodeid,
                     outcome="WARNING",
@@ -132,18 +123,24 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 ))
 
     # Fallback for session timing
-    if not session_start:
-        session_start = datetime.now()
-    if not session_end:
-        session_end = datetime.now()
+    session_start = session_start or datetime.now()
+    session_end = session_end or datetime.now()
 
-    # Create TestSession with all results
-    session = TestSession(
+    # Generate unique session ID
+    session_id = f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
+
+    # # Process rerun groups
+    # rerun_groups = group_rerun_tests(test_results)
+    rerun_test_group_list = group_rerun_tests(test_results)
+
+    # Create and store test session
+    test_session = TestSession(
         sut_name=config.getoption("insight_sut_name", "default_sut"),
-        session_id=f"session-{int(session_start.timestamp())}",
+        session_id=session_id,
         session_start_time=session_start,
         session_stop_time=session_end,
         test_results=test_results,
+        rerun_test_groups=rerun_test_group_list,
         session_tags={
             "platform": sys.platform,
             "python_version": sys.version.split()[0],
@@ -151,109 +148,65 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         }
     )
 
-    # Process rerun groups if any
-    populate_rerun_groups(session)
-
-    # Store session
-    storage.save_session(session)
+    storage.save_session(test_session)
 
     # Print summary
     terminalreporter.write_sep("=", "pytest-insight summary", cyan=True)
     outcome_counts = Counter(result.outcome for result in test_results)
-    for outcome, count in outcome_counts.items():
+    for outcome, count in sorted(outcome_counts.items()):
         terminalreporter.write_line(f"  {outcome}: {count}")
+    print()
 
 
-
-# @pytest.hookimpl
-# def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
-#     """Extract test results summary and store in insight_test_session."""
-#     if not insight_enabled():
-#         print("[pytest-insight] pytest_terminal_summary: Insight not enabled, skipping log report.")
-#         return
-
-#     stats = terminalreporter.stats
-
-#     items = dict(stats.items())
-
-#     test_results = []
-
-#     for outcome, reports in stats.items():
-#         for report in reports:
-#             if isinstance(report, TestReport):
-#                 test_result = TestResult(
-#                     nodeid=report.nodeid,
-#                     outcome=report.outcome.upper(),
-#                     start_time=datetime.fromtimestamp(report.start),
-#                     duration=report.duration,
-#                     caplog=getattr(report, "caplog", ""),
-#                     capstderr=getattr(report, "capstderr", ""),
-#                     capstdout=getattr(report, "capstdout", ""),
-#                     longreprtext=str(report.longrepr) if report.longrepr else "",
-#                     has_warning=bool(getattr(report, "warning_messages", [])),
-#                 )
-#                 test_results.append(test_result)
-#             elif isinstance(report, WarningReport):
-#                 test_result = TestResult(
-#                     nodeid=report.nodeid,
-#                     outcome="WARNING",
-#                     start_time=datetime.now(),
-#                     duration=0.0,
-#                     caplog=str(report.message),
-#                     capstderr="",
-#                     capstdout="",
-#                     longreprtext="",
-#                     has_warning=True,
-#                 )
-#                 test_results.append(test_result)
-
-#     # Convert raw dictionary into a proper TestSession object
-#     session = TestSession(
-#         sut_name="default_sut",
-#         session_id=str(datetime.now().timestamp()),  # Unique session ID
-#         session_start_time=datetime.now(),
-#         session_stop_time=datetime.now(),
-#         test_results=test_results,  # Include the list of TestResult objects
-#     )
-
-#     # Group reruns
-#     populate_rerun_groups(session)
-
-#     # Save session
-#     storage.save_session(session)
-
-#     # Print summary to console in its own "insight summary" section
-#     terminalreporter.write_sep("=", "insight summary info", cyan=True)
-#     summary = {outcome: len(reports) for outcome, reports in stats.items()}
-#     for outcome, count in summary.items():
-#         terminalreporter.write_line(f"  {outcome.upper()}: {count} tests")
-
-#     print()
-
-
-def _group_rerun_tests(test_results: List[TestResult]) -> Dict[str, RerunTestGroup]:
-    """Sort rerun tests into groups and determine final outcome efficiently."""
-
+def group_rerun_tests(test_results: List[TestResult]) -> List[RerunTestGroup]:
+    """Sort rerun tests into groups and determine final outcome."""
     rerun_groups = {}
 
+    # Collect rerun instances
     for test in test_results:
-        if test.nodeid not in rerun_groups:
-            rerun_groups[test.nodeid] = RerunTestGroup(nodeid=test.nodeid, final_outcome="UNKNOWN")
+        if test.outcome.lower() == "rerun":
+            if test.nodeid not in rerun_groups:
+                rerun_groups[test.nodeid] = RerunTestGroup(nodeid=test.nodeid, final_outcome="UNKNOWN")
+            rerun_groups[test.nodeid].add_rerun(test)
 
-        group = rerun_groups[test.nodeid]
+    # Assign final outcomes
+    for test in test_results:
+        if test.outcome.lower() != "rerun" and test.nodeid in rerun_groups:
+            rerun_groups[test.nodeid].final_outcome = test.outcome
+            rerun_groups[test.nodeid].add_test(test)
 
-        if test.outcome == "RERUN":
-            group.add_rerun(test)  # Store rerun attempts
-        else:
-            group.final_outcome = test.outcome  # Set final outcome
-            group.add_test(test)  # Store final test attempt
-
-    for group in rerun_groups.values():
-        group._full_test_list = group._reruns + [group.final_test] if group.final_test else []
-
-    return {groupname: group for groupname, group in rerun_groups.items() if group.reruns}
+    return list(rerun_groups.values())
 
 def populate_rerun_groups(test_session: TestSession) -> None:
     """Attach rerun test groups to the test session."""
-    rerun_groups = _group_rerun_tests(test_session.test_results)
-    test_session.rerun_test_groups = list(rerun_groups.values())
+    rerun_groups = group_rerun_tests(test_session.test_results)
+    test_session.rerun_test_groups = rerun_groups  # Store groups in session
+
+
+
+# def group_rerun_tests(test_results: List[TestResult]) -> Dict[str, RerunTestGroup]:
+#     """Sort rerun tests into groups and determine final outcome efficiently."""
+
+#     rerun_groups = {}
+
+#     for test in test_results:
+#         if test.nodeid not in rerun_groups:
+#             rerun_groups[test.nodeid] = RerunTestGroup(nodeid=test.nodeid, final_outcome="UNKNOWN")
+
+#         group = rerun_groups[test.nodeid]
+
+#         if test.outcome == "RERUN":
+#             group.add_rerun(test)  # Store rerun attempts
+#         else:
+#             group.final_outcome = test.outcome  # Set final outcome
+#             group.add_test(test)  # Store final test attempt
+
+#     for group in rerun_groups.values():
+#         group._full_test_list = group._reruns + [group.final_test] if group.final_test else []
+
+#     return {groupname: group for groupname, group in rerun_groups.items() if group.reruns}
+
+# def populate_rerun_groups(test_session: TestSession) -> None:
+#     """Attach rerun test groups to the test session."""
+#     rerun_groups = group_rerun_tests(test_session.test_results)
+#     test_session.rerun_test_groups = list(rerun_groups.values())
