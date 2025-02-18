@@ -102,6 +102,9 @@ class RerunTestGroup:
             _full_test_list=[TestResult.from_dict(t) for t in data.get("full_test_list", [])],  # ✅ Restore full test list
         )
 
+    def __len__(self):
+        return len(self._full_test_list)
+
 
 @dataclass
 class TestSession:
