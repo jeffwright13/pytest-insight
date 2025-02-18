@@ -111,6 +111,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     )
     storage.save_session(session)
 
+    # Immediately load and verify stored data
+    loaded_session = storage.get_last_session()
+
     # Print summary to console
     terminalreporter.write_sep("=", "insight summary info", cyan=True)
     summary = {outcome: len(reports) for outcome, reports in stats.items()}
