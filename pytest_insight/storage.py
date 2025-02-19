@@ -1,13 +1,13 @@
-import os
-import json
 import fcntl
+import json
+import os
 import shutil
-from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from pytest_insight.models import TestResult, TestSession
 from pytest_insight.constants import DEFAULT_STORAGE_CLASS
+from pytest_insight.models import TestSession
+
 
 class BaseStorage:
     """Abstract interface for persisting test session data."""
@@ -51,6 +51,7 @@ class BaseStorage:
             for idx, session in enumerate(sessions, start=1)
         ]
 
+
 class InMemoryStorage(BaseStorage):
     """Temporary, in-memory storage for test sessions."""
 
@@ -69,11 +70,12 @@ class InMemoryStorage(BaseStorage):
         """Remove all stored test sessions."""
         self.sessions.clear()
 
+
 class JSONStorage(BaseStorage):
     """Store test sessions in a JSON file for persistence with safe writes and corruption recovery."""
 
     FILE_PATH = Path.home() / ".pytest_insight" / "test_sessions.json"
-    BACKUP_PATH = FILE_PATH.with_suffix('.backup')
+    BACKUP_PATH = FILE_PATH.with_suffix(".backup")
 
     def __init__(self):
         super().__init__()
@@ -81,7 +83,7 @@ class JSONStorage(BaseStorage):
 
     def save_session(self, test_session: TestSession) -> None:
         """Save a test session to storage."""
-        temp_path = self.FILE_PATH.with_suffix('.tmp')
+        temp_path = self.FILE_PATH.with_suffix(".tmp")
 
         try:
             # Ensure parent directory exists
@@ -91,7 +93,7 @@ class JSONStorage(BaseStorage):
             sessions = []
             if self.FILE_PATH.exists():
                 try:
-                    with self.FILE_PATH.open('r') as f:
+                    with self.FILE_PATH.open("r") as f:
                         fcntl.flock(f, fcntl.LOCK_SH)
                         data = json.load(f)
                         fcntl.flock(f, fcntl.LOCK_UN)
@@ -104,7 +106,7 @@ class JSONStorage(BaseStorage):
 
             # Add new session and write to temp file
             sessions.append(test_session.to_dict())
-            with temp_path.open('w') as f:
+            with temp_path.open("w") as f:
                 fcntl.flock(f, fcntl.LOCK_EX)
                 json.dump(sessions, f, indent=4)
                 f.flush()
@@ -131,7 +133,7 @@ class JSONStorage(BaseStorage):
                 self.FILE_PATH.unlink()
                 return []
 
-            with self.FILE_PATH.open('r') as f:
+            with self.FILE_PATH.open("r") as f:
                 fcntl.flock(f, fcntl.LOCK_SH)
                 data = json.load(f)
                 fcntl.flock(f, fcntl.LOCK_UN)
@@ -161,7 +163,7 @@ class JSONStorage(BaseStorage):
                 print("[pytest-insight] No backup found. Recovery failed.")
                 return []
 
-            with self.BACKUP_PATH.open('r') as f:
+            with self.BACKUP_PATH.open("r") as f:
                 fcntl.flock(f, fcntl.LOCK_SH)
                 raw_data = json.load(f)
                 fcntl.flock(f, fcntl.LOCK_UN)
@@ -170,17 +172,25 @@ class JSONStorage(BaseStorage):
                 print("[pytest-insight] Backup file is not in the correct format.")
                 return []
 
-            valid_sessions = [TestSession.from_dict(item) for item in raw_data if isinstance(item, dict)]
+            valid_sessions = [
+                TestSession.from_dict(item)
+                for item in raw_data
+                if isinstance(item, dict)
+            ]
 
             if valid_sessions:
                 print("[pytest-insight] Restoring from backup...")
-                shutil.copy(self.BACKUP_PATH, self.FILE_PATH)  # ✅ Replace corrupted file
+                shutil.copy(
+                    self.BACKUP_PATH, self.FILE_PATH
+                )  # ✅ Replace corrupted file
                 return valid_sessions
 
         except (json.JSONDecodeError, OSError) as e:
             print(f"[pytest-insight] ERROR: Could not recover from backup: {e}")
 
-        print("[pytest-insight] Both primary and backup JSON files are corrupt. Starting fresh.")
+        print(
+            "[pytest-insight] Both primary and backup JSON files are corrupt. Starting fresh."
+        )
         return []
 
     def get_session_by_id(self, session_id: str) -> Optional[TestSession]:
@@ -197,6 +207,7 @@ class JSONStorage(BaseStorage):
             self._session_index.clear()
         except Exception as e:
             print(f"[pytest-insight] ERROR: Failed to clear session storage - {e}")
+
 
 def get_storage_instance() -> "BaseStorage":
     """Get configured storage instance."""

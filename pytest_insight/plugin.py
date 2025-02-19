@@ -38,16 +38,12 @@ def insight_enabled(config: Optional[Config] = None) -> bool:
 def pytest_addoption(parser):
     """Add pytest-insight specific options."""
     group = parser.getgroup("insight", "pytest-insight")
-    group.addoption(
-        "--insight",
-        action="store_true",
-        help="Enable pytest-insight"
-    )
+    group.addoption("--insight", action="store_true", help="Enable pytest-insight")
     group.addoption(
         "--insight-sut",
         default="default_sut",
         dest="insight_sut",  # Add dest to make option accessible
-        help="Specify the System Under Test (SUT) name"
+        help="Specify the System Under Test (SUT) name",
     )
 
 
@@ -63,13 +59,17 @@ def pytest_configure(config: Config):
 
 
 @pytest.hookimpl
-def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
+def pytest_terminal_summary(
+    terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config
+):
     """Process test results and store in TestSession."""
     if not insight_enabled(config):
         return
 
     storage = get_storage_instance()
-    sut_name = config.getoption("insight_sut", "default_sut")  # Get SUT name from pytest option
+    sut_name = config.getoption(
+        "insight_sut", "default_sut"
+    )  # Get SUT name from pytest option
 
     stats = terminalreporter.stats
     test_results = []
@@ -87,7 +87,8 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
             # Capture only call-phase or error failures from setup/teardown
             if report.when == "call" or (
-                report.when in ("setup", "teardown") and report.outcome in ("failed", "error")
+                report.when in ("setup", "teardown")
+                and report.outcome in ("failed", "error")
             ):
                 report_time = datetime.fromtimestamp(report.start)
 
@@ -131,7 +132,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     session_end = session_end or datetime.now()
 
     # Generate unique session ID
-    session_id = f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
+    session_id = (
+        f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
+    )
 
     # # Process rerun groups
     # rerun_groups = group_rerun_tests(test_results)
@@ -146,10 +149,10 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         test_results=test_results,
         rerun_test_groups=rerun_test_group_list,
         session_tags={
-            'platform': sys.platform,
-            'python_version': sys.version.split()[0],
-            'environment': config.getoption("environment", "test"),
-        }
+            "platform": sys.platform,
+            "python_version": sys.version.split()[0],
+            "environment": config.getoption("environment", "test"),
+        },
     )
 
     storage.save_session(session)
@@ -170,7 +173,9 @@ def group_rerun_tests(test_results: List[TestResult]) -> List[RerunTestGroup]:
     for test in test_results:
         if test.outcome.lower() == "rerun":
             if test.nodeid not in rerun_groups:
-                rerun_groups[test.nodeid] = RerunTestGroup(nodeid=test.nodeid, final_outcome="UNKNOWN")
+                rerun_groups[test.nodeid] = RerunTestGroup(
+                    nodeid=test.nodeid, final_outcome="UNKNOWN"
+                )
             rerun_groups[test.nodeid].add_rerun(test)
 
     # Assign final outcomes

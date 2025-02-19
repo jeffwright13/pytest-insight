@@ -1,14 +1,13 @@
+from collections import Counter
 from datetime import datetime, timedelta
+from typing import List, Optional
 
 import pytest
 import typer
-from typing_extensions import Annotated
-from typing import Optional, List
-from collections import Counter
 
-from pytest_insight.storage import get_storage_instance
 from pytest_insight.analytics import SUTAnalytics
 from pytest_insight.filters import TestFilter, common_filter_options
+from pytest_insight.storage import get_storage_instance
 
 # Create typer apps with rich help enabled and showing help on ambiguous commands
 app = typer.Typer(
@@ -16,9 +15,7 @@ app = typer.Typer(
     rich_markup_mode="rich",
     no_args_is_help=True,  # Show help when no args provided
     add_completion=True,  # Enable completion support
-    context_settings={
-        "help_option_names": ["-h", "--help"]  # Enable -h as help alias
-    }
+    context_settings={"help_option_names": ["-h", "--help"]},  # Enable -h as help alias
 )
 
 # Update all sub-apps to use the same context settings
@@ -26,25 +23,25 @@ session_app = typer.Typer(
     help="Manage test sessions",
     rich_markup_mode="rich",
     no_args_is_help=True,
-    context_settings={"help_option_names": ["-h", "--help"]}
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 history_app = typer.Typer(
     help="View and analyze test history",
     rich_markup_mode="rich",
     no_args_is_help=True,
-    context_settings={"help_option_names": ["-h", "--help"]}
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 sut_app = typer.Typer(
     help="Manage Systems Under Test",
     rich_markup_mode="rich",
     no_args_is_help=True,
-    context_settings={"help_option_names": ["-h", "--help"]}
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 analytics_app = typer.Typer(
     help="Generate test analytics and reports",
     rich_markup_mode="rich",
     no_args_is_help=True,
-    context_settings={"help_option_names": ["-h", "--help"]}
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 # Add sub-applications
@@ -61,7 +58,9 @@ storage = get_storage_instance()
 def run_session(
     path: str = typer.Argument("tests", help="Path to test directory or file"),
     sut: str = typer.Option("default_sut", "--sut", help="System Under Test name"),
-    pytest_args: List[str] = typer.Argument(None, help="Additional pytest options (after --)")
+    pytest_args: List[str] = typer.Argument(
+        None, help="Additional pytest options (after --)"
+    ),
 ):
     """
     Run a new test session.
@@ -72,11 +71,7 @@ def run_session(
         insight session run tests --sut my-api -- -v -k "test_api" --tb=short
     """
     # Build pytest arguments list
-    pytest_opts = [
-        path,
-        "--insight",
-        f"--insight-sut={sut}"
-    ]
+    pytest_opts = [path, "--insight", f"--insight-sut={sut}"]
 
     # Add any additional pytest options
     if pytest_args:
@@ -98,7 +93,7 @@ def show_session(
     outcome: Optional[str] = None,
     warnings: Optional[bool] = None,
     reruns: Optional[bool] = None,
-    contains: Optional[str] = None
+    contains: Optional[str] = None,
 ):
     """Show details of test sessions with optional filtering."""
     storage = get_storage_instance()
@@ -111,7 +106,7 @@ def show_session(
         outcome=outcome,
         has_warnings=warnings,
         has_reruns=reruns,
-        nodeid_contains=contains
+        nodeid_contains=contains,
     )
 
     filtered_sessions = test_filter.filter_sessions(sessions)
@@ -134,14 +129,24 @@ def show_session(
 
     # Count warnings
     total_warnings = sum(test.has_warning for test in filtered_results)
-    unique_warnings = len({test.nodeid for test in filtered_results if test.has_warning})
+    unique_warnings = len(
+        {test.nodeid for test in filtered_results if test.has_warning}
+    )
 
     # Count rerun statistics
     rerun_stats = {
         "total_reruns": sum(len(group.reruns) for group in session.rerun_test_groups),
         "total_groups": len(session.rerun_test_groups),
-        "passed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "PASSED"),
-        "failed_groups": sum(1 for group in session.rerun_test_groups if group.final_outcome.upper() == "FAILED")
+        "passed_groups": sum(
+            1
+            for group in session.rerun_test_groups
+            if group.final_outcome.upper() == "PASSED"
+        ),
+        "failed_groups": sum(
+            1
+            for group in session.rerun_test_groups
+            if group.final_outcome.upper() == "FAILED"
+        ),
     }
 
     # Print Session Info
@@ -169,19 +174,24 @@ def show_session(
     typer.echo(f"  ↳ Rerun Groups That Passed: {rerun_stats['passed_groups']}")
     typer.echo(f"  ↳ Rerun Groups That Failed: {rerun_stats['failed_groups']}")
 
+
 # History commands
 @history_app.command("list")
 def list_history(
-    days: int = typer.Option(7, "--days", "-d", help="Number of days of history to show"),
+    days: int = typer.Option(
+        7, "--days", "-d", help="Number of days of history to show"
+    ),
     by_sut: bool = typer.Option(False, "--by-sut", "-s", help="Group results by SUT"),
-    sut: Optional[str] = typer.Option(None, help="Show history for specific SUT")
+    sut: Optional[str] = typer.Option(None, help="Show history for specific SUT"),
 ):
     """List test session history, optionally grouped by SUT."""
     sessions = storage.load_sessions()
 
     # Debug: Show available SUTs
     available_suts = {s.sut_name for s in sessions}
-    typer.secho(f"Available SUTs: {', '.join(sorted(available_suts))}", fg=typer.colors.BLUE)
+    typer.secho(
+        f"Available SUTs: {', '.join(sorted(available_suts))}", fg=typer.colors.BLUE
+    )
 
     cutoff = datetime.now() - timedelta(days=days)
 
@@ -192,7 +202,9 @@ def list_history(
         recent = [s for s in recent if s.sut_name.lower() == sut]
 
     if not recent:
-        typer.secho("No test sessions found for the specified criteria", fg=typer.colors.YELLOW)
+        typer.secho(
+            "No test sessions found for the specified criteria", fg=typer.colors.YELLOW
+        )
         return
 
     def format_session_summary(session):
@@ -200,10 +212,18 @@ def list_history(
         passed = sum(1 for t in session.test_results if t.outcome == "PASSED")
         total = len(session.test_results)
         if total == 0:
-            return f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')}: No tests run (Duration: {session.session_duration})"
+            return (
+                f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')} "
+                f"[{session.session_id}]: No tests run (Duration: {session.session_duration})"
+            )
 
         percentage = (passed / total * 100) if total > 0 else 0
-        return f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')}: {passed}/{total} passed ({percentage:.1f}%) Duration: {session.session_duration}"
+        return (
+            f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')} "
+            f"[{session.session_id}]: "
+            f"{passed}/{total} passed ({percentage:.1f}%) "
+            f"Duration: {session.session_duration}"
+        )
 
     if by_sut:
         # Group by SUT and show summary for each
@@ -215,12 +235,16 @@ def list_history(
 
         for sut_name, sut_sessions in sorted(by_sut_dict.items()):
             typer.secho(f"\nSUT: {sut_name}", fg=typer.colors.BLUE, bold=True)
-            for session in sorted(sut_sessions, key=lambda s: s.session_start_time, reverse=True):
+            for session in sorted(
+                sut_sessions, key=lambda s: s.session_start_time, reverse=True
+            ):
                 typer.echo(f"  {format_session_summary(session)}")
     else:
         # Show flat chronological list
         for session in sorted(recent, key=lambda s: s.session_start_time, reverse=True):
-            typer.echo(f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')} [{session.sut_name}]: {format_session_summary(session)}")
+            typer.echo(
+                f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')} [{session.sut_name}]: {format_session_summary(session)}"
+            )
 
 
 # SUT commands
@@ -237,7 +261,7 @@ def list_suts():
 @analytics_app.command("summary")
 def show_summary(
     sut: str = typer.Argument(None, help="Show summary for specific SUT"),
-    days: int = typer.Option(7, help="Show summary for last N days")
+    days: int = typer.Option(7, help="Show summary for last N days"),
 ):
     """Show comprehensive test execution summary."""
     storage = get_storage_instance()
@@ -246,17 +270,23 @@ def show_summary(
     # Filter sessions
     cutoff = datetime.now() - timedelta(days=days)
     if sut:
-        sessions = [s for s in sessions if s.sut_name == sut and s.session_start_time > cutoff]
+        sessions = [
+            s for s in sessions if s.sut_name == sut and s.session_start_time > cutoff
+        ]
     else:
         sessions = [s for s in sessions if s.session_start_time > cutoff]
 
     if not sessions:
-        typer.secho("No test data available for the specified criteria", fg=typer.colors.YELLOW)
+        typer.secho(
+            "No test data available for the specified criteria", fg=typer.colors.YELLOW
+        )
         return
 
     # Calculate summary statistics
     total_sessions = len(sessions)
-    total_duration = sum((s.session_stop_time - s.session_start_time).total_seconds() for s in sessions)
+    total_duration = sum(
+        (s.session_stop_time - s.session_start_time).total_seconds() for s in sessions
+    )
 
     # Aggregate test results across sessions
     all_tests = set()
@@ -268,7 +298,7 @@ def show_summary(
         "to_fail": 0,
         "groups": 0,
         "groups_passed": 0,
-        "groups_failed": 0
+        "groups_failed": 0,
     }
 
     for session in sessions:
@@ -297,7 +327,9 @@ def show_summary(
     typer.echo(f"Sessions: {total_sessions}")
     typer.echo(f"Unique Tests: {len(all_tests)}")
     typer.echo(f"Total Duration: {timedelta(seconds=int(total_duration))}")
-    typer.echo(f"Average Session Duration: {timedelta(seconds=int(total_duration/total_sessions))}")
+    typer.echo(
+        f"Average Session Duration: {timedelta(seconds=int(total_duration/total_sessions))}"
+    )
 
     typer.echo("\nTest Outcomes:")
     for outcome, count in sorted(outcome_counts.items()):
@@ -317,13 +349,17 @@ def show_summary(
         typer.echo(f"  ↳ Groups that Failed: {rerun_stats['groups_failed']}")
 
         # Add success rates
-        if rerun_stats['groups'] > 0:
-            group_success_rate = (rerun_stats['groups_passed'] / rerun_stats['groups']) * 100
+        if rerun_stats["groups"] > 0:
+            group_success_rate = (
+                rerun_stats["groups_passed"] / rerun_stats["groups"]
+            ) * 100
             typer.echo(f"\n  Rerun Success Rate: {group_success_rate:.1f}%")
 
     # Show session trend
     typer.echo("\nRecent Sessions:")
-    for session in sorted(sessions, key=lambda s: s.session_start_time, reverse=True)[:5]:
+    for session in sorted(sessions, key=lambda s: s.session_start_time, reverse=True)[
+        :5
+    ]:
         passed = sum(1 for t in session.test_results if t.outcome == "PASSED")
         failed = sum(1 for t in session.test_results if t.outcome == "FAILED")
         total = len(session.test_results)
@@ -343,7 +379,7 @@ def analyze_sut(
     outcome: Optional[str] = None,
     warnings: Optional[bool] = None,
     reruns: Optional[bool] = None,
-    contains: Optional[str] = None
+    contains: Optional[str] = None,
 ):
     """Analyze test history for a specific SUT."""
     storage = get_storage_instance()
@@ -356,7 +392,7 @@ def analyze_sut(
         outcome=outcome,
         has_warnings=warnings,
         has_reruns=reruns,
-        nodeid_contains=contains
+        nodeid_contains=contains,
     )
 
     filtered_sessions = test_filter.filter_sessions(sessions)
@@ -402,7 +438,7 @@ def analyze_sut(
 @common_filter_options
 def analyze_failures(
     sut_name: str = typer.Argument(..., help="Name of SUT to analyze"),
-    nodeid: str = typer.Option(None, help="Show detailed history for specific test")
+    nodeid: str = typer.Option(None, help="Show detailed history for specific test"),
 ):
     """Analyze test failure patterns."""
     analytics = SUTAnalytics(filtered_sessions)
@@ -415,24 +451,24 @@ def analyze_failures(
         typer.echo(f"  Total runs: {history['total_runs']}")
         typer.echo(f"  Failure rate: {history['failure_rate']:.1%}")
 
-        if history['transitions']:
+        if history["transitions"]:
             typer.echo("\nState transitions:")
-            for t in history['transitions']:
+            for t in history["transitions"]:
                 typer.echo(f"  {t['time']}: {t['from']} → {t['to']}")
-                if t['error']:
+                if t["error"]:
                     typer.echo(f"    Error: {t['error'][:100]}...")
     else:
         patterns = analytics.analyze_failure_patterns()
         typer.echo("\nMost Common Errors:")
-        for msg, count in patterns['common_error_messages']:
+        for msg, count in patterns["common_error_messages"]:
             typer.echo(f"  {count}x: {msg[:100]}...")
 
         typer.echo("\nCorrelated Failures:")
-        for (test1, test2), count in patterns['correlated_failures']:
+        for (test1, test2), count in patterns["correlated_failures"]:
             typer.echo(f"  {count}x: {test1} and {test2} failed together")
 
         typer.echo("\nMost Flaky Tests:")
-        for test, flips in patterns['most_flaky']:
+        for test, flips in patterns["most_flaky"]:
             typer.echo(f"  {test}: {flips} state changes")
 
 

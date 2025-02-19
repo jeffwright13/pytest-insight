@@ -58,7 +58,9 @@ class RerunTestGroup:
     nodeid: str
     final_outcome: str
     _reruns: List["TestResult"] = field(default_factory=list)  # ✅ Private storage
-    _full_test_list: List["TestResult"] = field(default_factory=list)  # ✅ Private storage
+    _full_test_list: List["TestResult"] = field(
+        default_factory=list
+    )  # ✅ Private storage
 
     @property
     def reruns(self) -> List["TestResult"]:
@@ -88,8 +90,12 @@ class RerunTestGroup:
         return {
             "nodeid": self.nodeid,
             "final_outcome": self.final_outcome,
-            "reruns": [test.to_dict() for test in self._reruns],  # ✅ Convert rerun list
-            "full_test_list": [test.to_dict() for test in self._full_test_list],  # ✅ Convert full test list
+            "reruns": [
+                test.to_dict() for test in self._reruns
+            ],  # ✅ Convert rerun list
+            "full_test_list": [
+                test.to_dict() for test in self._full_test_list
+            ],  # ✅ Convert full test list
         }
 
     @classmethod
@@ -98,8 +104,12 @@ class RerunTestGroup:
         return cls(
             nodeid=data["nodeid"],
             final_outcome=data["final_outcome"],
-            _reruns=[TestResult.from_dict(t) for t in data.get("reruns", [])],  # ✅ Restore reruns
-            _full_test_list=[TestResult.from_dict(t) for t in data.get("full_test_list", [])],  # ✅ Restore full test list
+            _reruns=[
+                TestResult.from_dict(t) for t in data.get("reruns", [])
+            ],  # ✅ Restore reruns
+            _full_test_list=[
+                TestResult.from_dict(t) for t in data.get("full_test_list", [])
+            ],  # ✅ Restore full test list
         )
 
     def __len__(self):
@@ -138,11 +148,11 @@ class TestSession:
                     "nodeid": group.nodeid,
                     "final_outcome": group.final_outcome,
                     "reruns": [r.to_dict() for r in group.reruns],
-                    "full_test_list": [t.to_dict() for t in group.full_test_list]
+                    "full_test_list": [t.to_dict() for t in group.full_test_list],
                 }
                 for group in self.rerun_test_groups
             ],
-            "session_tags": self.session_tags or {}
+            "session_tags": self.session_tags or {},
         }
 
     @classmethod
@@ -162,8 +172,7 @@ class TestSession:
         # Add rerun groups
         for group_data in data.get("rerun_test_groups", []):
             group = RerunTestGroup(
-                nodeid=group_data["nodeid"],
-                final_outcome=group_data["final_outcome"]
+                nodeid=group_data["nodeid"], final_outcome=group_data["final_outcome"]
             )
             for rerun_data in group_data.get("reruns", []):
                 group.add_rerun(TestResult.from_dict(rerun_data))
