@@ -36,21 +36,18 @@ def insight_enabled(config: Optional[Config] = None) -> bool:
 
 
 def pytest_addoption(parser):
-    """Add pytest-insight command line options."""
-    group = parser.getgroup("insight")
+    """Add pytest-insight specific options."""
+    group = parser.getgroup("insight", "pytest-insight")
     group.addoption(
         "--insight",
-        dest="insight",
         action="store_true",
-        default=False,
-        help="Enable pytest-insight plugin for test-run history analysis",
+        help="Enable pytest-insight"
     )
-
-    parser.addini(
-        "insight",
-        type="bool",
-        help="Enable the insight plugin, providing test history analysis",
-        default=False,
+    group.addoption(
+        "--insight-sut",
+        default="default_sut",
+        dest="insight_sut",  # Add dest to make option accessible
+        help="Specify the System Under Test (SUT) name"
     )
 
 
@@ -68,7 +65,11 @@ def pytest_configure(config: Config):
 @pytest.hookimpl
 def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
     """Process test results and store in TestSession."""
+    if not insight_enabled(config):
+        return
+
     storage = get_storage_instance()
+    sut_name = config.getoption("insight_sut", "default_sut")  # Get SUT name from pytest option
 
     stats = terminalreporter.stats
     test_results = []
@@ -136,22 +137,22 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     # rerun_groups = group_rerun_tests(test_results)
     rerun_test_group_list = group_rerun_tests(test_results)
 
-    # Create and store test session
-    test_session = TestSession(
-        sut_name=config.getoption("insight_sut_name", "default_sut"),
-        session_id=session_id,
-        session_start_time=session_start,
-        session_stop_time=session_end,
+    # Create and store session with SUT name
+    session = TestSession(
+        session_id=f"session-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')[:13]}",
+        sut_name=sut_name,  # Use the SUT name from pytest option
+        session_start_time=session_start or datetime.now(),
+        session_stop_time=session_end or datetime.now(),
         test_results=test_results,
         rerun_test_groups=rerun_test_group_list,
         session_tags={
-            "platform": sys.platform,
-            "python_version": sys.version.split()[0],
-            "environment": config.getoption("environment", "test"),
-        },
+            'platform': sys.platform,
+            'python_version': sys.version.split()[0],
+            'environment': config.getoption("environment", "test"),
+        }
     )
 
-    storage.save_session(test_session)
+    storage.save_session(session)
 
     # Print summary
     terminalreporter.write_sep("=", "pytest-insight summary", cyan=True)

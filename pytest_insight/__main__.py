@@ -15,28 +15,36 @@ app = typer.Typer(
     help="Test history and analytics tool for pytest",
     rich_markup_mode="rich",
     no_args_is_help=True,  # Show help when no args provided
-    add_completion=True  # Enable completion support
+    add_completion=True,  # Enable completion support
+    context_settings={
+        "help_option_names": ["-h", "--help"]  # Enable -h as help alias
+    }
 )
 
+# Update all sub-apps to use the same context settings
 session_app = typer.Typer(
     help="Manage test sessions",
     rich_markup_mode="rich",
-    no_args_is_help=True
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]}
 )
 history_app = typer.Typer(
     help="View and analyze test history",
     rich_markup_mode="rich",
-    no_args_is_help=True
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]}
 )
 sut_app = typer.Typer(
     help="Manage Systems Under Test",
     rich_markup_mode="rich",
-    no_args_is_help=True
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]}
 )
 analytics_app = typer.Typer(
     help="Generate test analytics and reports",
     rich_markup_mode="rich",
-    no_args_is_help=True
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]}
 )
 
 # Add sub-applications
@@ -51,10 +59,35 @@ storage = get_storage_instance()
 # Session commands
 @session_app.command("run")
 def run_session(
-    path: str = typer.Argument("tests", help="Path to test directory or file")
+    path: str = typer.Argument("tests", help="Path to test directory or file"),
+    sut: str = typer.Option("default_sut", "--sut", help="System Under Test name"),
+    pytest_args: List[str] = typer.Argument(None, help="Additional pytest options (after --)")
 ):
-    """Run a new test session."""
-    pytest.main([path, "--insight"])
+    """
+    Run a new test session.
+
+    All arguments after -- are passed directly to pytest.
+
+    Example:
+        insight session run tests --sut my-api -- -v -k "test_api" --tb=short
+    """
+    # Build pytest arguments list
+    pytest_opts = [
+        path,
+        "--insight",
+        f"--insight-sut={sut}"
+    ]
+
+    # Add any additional pytest options
+    if pytest_args:
+        pytest_opts.extend(pytest_args)
+
+    # Run pytest with all options
+    typer.echo(f"Running tests in {path} for SUT: {sut}")
+    if pytest_args:
+        typer.echo(f"Additional pytest options: {' '.join(pytest_args)}")
+
+    pytest.main(pytest_opts)
 
 
 @session_app.command("show")
@@ -138,13 +171,56 @@ def show_session(
 
 # History commands
 @history_app.command("list")
-def list_history(days: int = typer.Option(7, help="Number of days of history to show")):
-    """List test session history."""
+def list_history(
+    days: int = typer.Option(7, "--days", "-d", help="Number of days of history to show"),
+    by_sut: bool = typer.Option(False, "--by-sut", "-s", help="Group results by SUT"),
+    sut: Optional[str] = typer.Option(None, help="Show history for specific SUT")
+):
+    """List test session history, optionally grouped by SUT."""
     sessions = storage.load_sessions()
+
+    # Debug: Show available SUTs
+    available_suts = {s.sut_name for s in sessions}
+    typer.secho(f"Available SUTs: {', '.join(sorted(available_suts))}", fg=typer.colors.BLUE)
+
     cutoff = datetime.now() - timedelta(days=days)
+
+    # Filter by date and optionally by SUT (case-insensitive)
     recent = [s for s in sessions if s.session_start_time > cutoff]
-    for session in recent:
-        typer.echo(f"{session.session_start_time}: {session.session_id}")
+    if sut:
+        sut = sut.lower()  # Convert input to lowercase
+        recent = [s for s in recent if s.sut_name.lower() == sut]
+
+    if not recent:
+        typer.secho("No test sessions found for the specified criteria", fg=typer.colors.YELLOW)
+        return
+
+    def format_session_summary(session):
+        """Format session summary with safe percentage calculation."""
+        passed = sum(1 for t in session.test_results if t.outcome == "PASSED")
+        total = len(session.test_results)
+        if total == 0:
+            return f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')}: No tests run (Duration: {session.session_duration})"
+
+        percentage = (passed / total * 100) if total > 0 else 0
+        return f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')}: {passed}/{total} passed ({percentage:.1f}%) Duration: {session.session_duration}"
+
+    if by_sut:
+        # Group by SUT and show summary for each
+        by_sut_dict = {}
+        for session in recent:
+            if session.sut_name not in by_sut_dict:
+                by_sut_dict[session.sut_name] = []
+            by_sut_dict[session.sut_name].append(session)
+
+        for sut_name, sut_sessions in sorted(by_sut_dict.items()):
+            typer.secho(f"\nSUT: {sut_name}", fg=typer.colors.BLUE, bold=True)
+            for session in sorted(sut_sessions, key=lambda s: s.session_start_time, reverse=True):
+                typer.echo(f"  {format_session_summary(session)}")
+    else:
+        # Show flat chronological list
+        for session in sorted(recent, key=lambda s: s.session_start_time, reverse=True):
+            typer.echo(f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')} [{session.sut_name}]: {format_session_summary(session)}")
 
 
 # SUT commands
