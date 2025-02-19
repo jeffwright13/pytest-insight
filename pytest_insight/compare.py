@@ -1,19 +1,39 @@
-from collections import defaultdict
 from datetime import datetime, timedelta
-from statistics import mean
 from typing import Dict, List, Optional, Set, Tuple
+from collections import defaultdict
+from statistics import mean
 
-from pytest_insight.models import TestSession
-
+from pytest_insight.models import TestResult, TestSession
 
 class ComparisonAnalyzer:
     """Compare test results between sessions or time periods."""
 
     @staticmethod
     def compare_sessions(
-        base_session: TestSession, target_session: TestSession
+        sessions: List[TestSession],
+        base_id: str,
+        target_id: str,
+        time_window: Optional[timedelta] = None
     ) -> Dict:
-        """Compare two specific test sessions."""
+        """Compare two sessions within specified time windows."""
+        now = datetime.now()
+        cutoff = now - time_window if time_window else None
+
+        # Filter both sessions by time window if specified
+        filtered_sessions = sessions
+        if cutoff:
+            filtered_sessions = [s for s in sessions if s.session_start_time > cutoff]
+
+        base_session = next((s for s in filtered_sessions if s.session_id == base_id), None)
+        target_session = next((s for s in filtered_sessions if s.session_id == target_id), None)
+
+        if not base_session or not target_session:
+            raise ValueError(
+                f"Sessions not found within the last {time_window}: "
+                f"{'base session' if not base_session else ''}"
+                f"{'target session' if not target_session else ''}"
+            )
+
         base_results = {t.nodeid: t for t in base_session.test_results}
         target_results = {t.nodeid: t for t in target_session.test_results}
 
@@ -37,12 +57,14 @@ class ComparisonAnalyzer:
             "changed_tests": len(changes),
             "performance_changes": ComparisonAnalyzer._analyze_performance_changes(
                 base_results, target_results
-            ),
+            )
         }
 
     @staticmethod
     def _analyze_performance_changes(
-        base_results: Dict, target_results: Dict, threshold: float = 0.2
+        base_results: Dict,
+        target_results: Dict,
+        threshold: float = 0.2
     ) -> List[Tuple[str, float, float]]:
         """Identify significant performance changes."""
         changes = []
@@ -51,10 +73,7 @@ class ComparisonAnalyzer:
         for test in common_tests:
             base_duration = base_results[test].duration
             target_duration = target_results[test].duration
-            if (
-                base_duration > 0
-                and abs(target_duration - base_duration) / base_duration > threshold
-            ):
+            if base_duration > 0 and abs(target_duration - base_duration) / base_duration > threshold:
                 changes.append((test, base_duration, target_duration))
 
         return sorted(changes, key=lambda x: abs(x[2] - x[1]), reverse=True)
@@ -64,39 +83,45 @@ class ComparisonAnalyzer:
         sessions: List[TestSession],
         period1_end: datetime,
         period2_end: datetime,
-        days: int = 7,
+        days: int = 7
     ) -> Dict:
         """Compare test results between two time periods."""
         period1_start = period1_end - timedelta(days=days)
         period2_start = period2_end - timedelta(days=days)
 
         period1_sessions = [
-            s for s in sessions if period1_start <= s.session_start_time <= period1_end
+            s for s in sessions
+            if period1_start <= s.session_start_time <= period1_end
         ]
         period2_sessions = [
-            s for s in sessions if period2_start <= s.session_start_time <= period2_end
+            s for s in sessions
+            if period2_start <= s.session_start_time <= period2_end
         ]
 
         return ComparisonAnalyzer._compare_session_groups(
-            period1_sessions, period2_sessions
+            period1_sessions,
+            period2_sessions
         )
 
     @staticmethod
     def _compare_session_groups(
-        group1: List[TestSession], group2: List[TestSession]
+        group1: List[TestSession],
+        group2: List[TestSession]
     ) -> Dict:
         """Compare two groups of sessions."""
         # Implementation for period comparison
         # ... add period comparison logic here ...
         return {}
 
-
 class SUTComparator:
     """Compare test results between different SUTs."""
 
     @staticmethod
     def compare_suts(
-        sessions: List[TestSession], sut1: str, sut2: str, days: Optional[int] = None
+        sessions: List[TestSession],
+        sut1: str,
+        sut2: str,
+        days: Optional[int] = None
     ) -> Dict:
         """Compare test execution between two SUTs."""
         # Filter sessions by SUT and optionally by time
@@ -118,7 +143,7 @@ class SUTComparator:
                 "unique_to_sut2": sorted(sut2_tests - sut1_tests),
                 "common": sorted(sut1_tests & sut2_tests),
                 "total_sut1": len(sut1_tests),
-                "total_sut2": len(sut2_tests),
+                "total_sut2": len(sut2_tests)
             },
             "performance": SUTComparator._compare_performance(
                 sut1_sessions, sut2_sessions, sut1_tests & sut2_tests
@@ -128,15 +153,15 @@ class SUTComparator:
             ),
             "session_stats": {
                 "sut1": SUTComparator._get_session_stats(sut1_sessions),
-                "sut2": SUTComparator._get_session_stats(sut2_sessions),
-            },
+                "sut2": SUTComparator._get_session_stats(sut2_sessions)
+            }
         }
 
     @staticmethod
     def _compare_performance(
         sut1_sessions: List[TestSession],
         sut2_sessions: List[TestSession],
-        common_tests: Set[str],
+        common_tests: Set[str]
     ) -> Dict:
         """Compare test performance between SUTs with safety checks."""
         sut1_durations = defaultdict(list)
@@ -163,7 +188,9 @@ class SUTComparator:
 
         return {
             "significant_differences": sorted(
-                differences, key=lambda x: abs(x[3]), reverse=True
+                differences,
+                key=lambda x: abs(x[3]),
+                reverse=True
             )[:10]
         }
 
@@ -171,10 +198,9 @@ class SUTComparator:
     def _compare_stability(
         sut1_sessions: List[TestSession],
         sut2_sessions: List[TestSession],
-        common_tests: Set[str],
+        common_tests: Set[str]
     ) -> Dict:
         """Compare test stability between SUTs with safety checks."""
-
         def get_failure_rates(sessions):
             failures = defaultdict(int)
             totals = defaultdict(int)
@@ -209,7 +235,9 @@ class SUTComparator:
 
         return {
             "stability_differences": sorted(
-                differences, key=lambda x: abs(x[3]), reverse=True
+                differences,
+                key=lambda x: abs(x[3]),
+                reverse=True
             )
         }
 
@@ -229,6 +257,6 @@ class SUTComparator:
             "total_tests": sum(len(s.test_results) for s in sessions),
             "date_range": (
                 min(s.session_start_time for s in sessions),
-                max(s.session_start_time for s in sessions),
-            ),
+                max(s.session_start_time for s in sessions)
+            )
         }

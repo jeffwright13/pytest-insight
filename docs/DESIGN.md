@@ -311,3 +311,302 @@ class Results:
             rerun_test_groups=test_info["oof_rerun_test_groups"],
         )
 ```
+# Separating data analysys from user interfaces...
+is a good architectural suggestion. We can separate the concerns by creating distinct layers:
+
+Core Library Layer - Analysis and insights engine
+CLI Layer - User interface using Typer
+Public API Layer - For other UIs to build upon
+Here's a proposed restructuring:
+```
+pytest-insight/
+├── pytest_insight/
+│   ├── core/                     # Core analysis engine
+│   │   ├── __init__.py
+│   │   ├── analyzer.py          # Main analysis logic
+│   │   ├── compare.py           # Comparison logic
+│   │   ├── models.py            # Data models
+│   │   ├── storage.py           # Storage mechanisms
+│   │   └── filters.py           # Filtering logic
+│   ├── cli/                     # CLI-specific code
+│   │   ├── __init__.py
+│   │   ├── app.py              # Typer app and commands
+│   │   ├── formatters.py       # CLI output formatting
+│   │   └── options.py          # CLI option definitions
+│   ├── api/                     # Public API for other UIs
+│   │   ├── __init__.py
+│   │   └── insight.py          # Main API entry point
+│   └── plugin.py               # pytest plugin (unchanged)
+```
+
+Here's how to start the separation:
+
+```
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+from ..core.models import TestSession
+from ..core.storage import Storage
+
+class InsightAnalyzer:
+    """Core analysis engine for pytest-insight."""
+
+    def __init__(self, storage: Storage):
+        self.storage = storage
+
+    def get_test_history(
+        self,
+        sut: Optional[str] = None,
+        timespan: Optional[timedelta] = None
+    ) -> List[TestSession]:
+        """Get filtered test history."""
+        sessions = self.storage.load_sessions()
+
+        if timespan:
+            cutoff = datetime.now() - timespan
+            sessions = [s for s in sessions if s.session_start_time > cutoff]
+
+        if sut:
+            sessions = [s for s in sessions if s.sut_name == sut]
+
+        return sessions
+
+    def analyze_failures(self, sessions: List[TestSession]) -> Dict:
+        """Analyze failure patterns in sessions."""
+        # Move existing failure analysis here
+        ...
+
+    def get_sut_summary(self, sut: str, timespan: Optional[timedelta] = None) -> Dict:
+        """Get summary statistics for a SUT."""
+        # Move existing summary logic here
+````
+
+```
+from typing import Optional
+from datetime import timedelta
+
+from ..core.analyzer import InsightAnalyzer
+from ..core.storage import get_storage_instance
+
+class PytestInsight:
+    """Public API for pytest-insight."""
+
+    def __init__(self):
+        self.storage = get_storage_instance()
+        self.analyzer = InsightAnalyzer(self.storage)
+
+    def get_history(self, sut: Optional[str] = None, days: int = 7):
+        """Get test execution history."""
+        return self.analyzer.get_test_history(
+            sut=sut,
+            timespan=timedelta(days=days)
+        )
+
+    def compare_suts(self, sut1: str, sut2: str, timespan: Optional[timedelta] = None):
+        """Compare two SUTs."""
+        return self.analyzer.compare_suts(sut1, sut2, timespan)
+
+    def get_failure_analysis(self, sut: str, timespan: Optional[timedelta] = None):
+        """Get failure analysis for a SUT."""
+        sessions = self.analyzer.get_test_history(sut, timespan)
+        return self.analyzer.analyze_failures(sessions)
+```
+
+```
+import typer
+from typing import Optional
+
+from ..api.insight import PytestInsight
+from .formatters import format_session_summary, format_comparison_results
+
+app = typer.Typer()
+insight = PytestInsight()
+
+@app.command()
+def history(
+    sut: Optional[str] = None,
+    days: int = 7,
+    show_all: bool = False
+):
+    """Show test history."""
+    results = insight.get_history(sut, days)
+    formatted = format_session_summary(results, limit=None if show_all else 50)
+    typer.echo(formatted)
+```
+Benefits of this restructuring:
+
+Clear separation of concerns
+Core logic is UI-agnostic
+Easy to add new UIs (web, GUI, etc.)
+Testable core functionality
+Simplified CLI code
+Public API for third-party integration
+The lift would be moderate because:
+
+Most logic already exists
+Main work is moving code
+Core analysis is already well-structured
+CLI commands map cleanly to API methods
+
+# Distributed Test Results Collection
+This is a great question about scaling pytest-insight to handle distributed teams. Here's a proposed approach:
+
+1. Storage Backend Options
+We can modify the storage system to support multiple backends:
+```
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from pytest_insight.models import TestSession
+
+class StorageBackend(ABC):
+    """Abstract base class for storage backends."""
+
+    @abstractmethod
+    def save_session(self, session: TestSession) -> None:
+        """Save a test session."""
+        pass
+
+    @abstractmethod
+    def load_sessions(self) -> List[TestSession]:
+        """Load all test sessions."""
+        pass
+
+class RemoteStorageConfig:
+    """Configuration for remote storage."""
+    def __init__(
+        self,
+        url: str,
+        api_key: Optional[str] = None,
+        team_id: Optional[str] = None
+    ):
+        self.url = url
+        self.api_key = api_key
+        self.team_id = team_id
+```
+
+2. Implement Multiple Storage Options
+Local JSON (existing):
+```
+class JSONStorage(StorageBackend):
+    """Local JSON file storage."""
+    # ... existing implementation ...
+```
+
+Remote REST API:
+```
+import requests
+from typing import List
+from pytest_insight.models import TestSession
+
+class RemoteStorage(StorageBackend):
+    """Remote API storage backend."""
+
+    def __init__(self, config: RemoteStorageConfig):
+        self.config = config
+        self.headers = {
+            "Authorization": f"Bearer {config.api_key}",
+            "Content-Type": "application/json"
+        }
+
+    def save_session(self, session: TestSession) -> None:
+        response = requests.post(
+            f"{self.config.url}/api/v1/sessions",
+            headers=self.headers,
+            json=session.dict()
+        )
+        response.raise_for_status()
+
+    def load_sessions(self) -> List[TestSession]:
+        response = requests.get(
+            f"{self.config.url}/api/v1/sessions",
+            headers=self.headers
+        )
+        response.raise_for_status()
+        return [TestSession(**data) for data in response.json()]
+```
+
+Database Storage:
+```
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+class DatabaseStorage(StorageBackend):
+    """SQL database storage backend."""
+
+    def __init__(self, connection_string: str):
+        self.engine = create_engine(connection_string)
+        self.Session = sessionmaker(bind=self.engine)
+```
+
+3. Configuration
+Add storage configuration to pytest options:
+```
+def pytest_addoption(parser):
+    """Add pytest-insight specific options."""
+    group = parser.getgroup("insight", "pytest-insight")
+    group.addoption(
+        "--insight-storage",
+        default="local",
+        choices=["local", "remote", "database"],
+        help="Storage backend to use"
+    )
+    group.addoption(
+        "--insight-remote-url",
+        help="Remote storage URL"
+    )
+    group.addoption(
+        "--insight-api-key",
+        help="API key for remote storage"
+    )
+```
+
+4. Example Server Implementation
+A simple FastAPI server to collect results:
+```
+from fastapi import FastAPI, HTTPException, Depends
+from sqlalchemy.orm import Session
+from typing import List
+
+app = FastAPI()
+
+@app.post("/api/v1/sessions")
+def create_session(session: TestSession, db: Session = Depends(get_db)):
+    """Save a test session."""
+    db_session = models.Session(**session.dict())
+    db.add(db_session)
+    db.commit()
+    return {"status": "success"}
+
+@app.get("/api/v1/sessions")
+def list_sessions(db: Session = Depends(get_db)) -> List[TestSession]:
+    """Get all test sessions."""
+    return db.query(models.Session).all()
+```
+
+Usage Examples
+Local Team (Shared Database):
+`pytest --insight --insight-storage=database --insight-db-url="postgresql://localhost/insight_db"`
+Remote Team (API Server):
+`pytest --insight --insight-storage=remote --insight-remote-url="https://insight.company.com" --insight-api-key="YOUR_KEY"`
+Mixed Mode (Local + Remote Sync):
+```
+# Run tests with local storage
+pytest --insight
+
+# Sync results to remote server
+insight sync --remote-url="https://insight.company.com" --api-key="YOUR_KEY"
+```
+
+Next Steps
+1. Authentication/Authorization
+  Team-based access control
+  API key management
+  Role-based permissions
+2. Data Synchronization
+  Conflict resolution
+  Incremental updates
+  Offline support
+3. Server Deployment
+  Docker containers
+  Database migrations
+  Backup/restore
