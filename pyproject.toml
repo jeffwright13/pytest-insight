@@ -16,6 +16,7 @@ dependencies = [
     "pyflakes>=3.2.0",
     "black>=25.1.0",
     "typer>=0.15.1",
+    "colorama>=0.4.6",
 ]
 
 [project.entry-points.pytest11]

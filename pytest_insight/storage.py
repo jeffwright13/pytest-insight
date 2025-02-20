@@ -53,22 +53,24 @@ class BaseStorage:
 
 
 class InMemoryStorage(BaseStorage):
-    """Temporary, in-memory storage for test sessions."""
+    """In-memory storage implementation."""
 
-    def __init__(self):
-        self.sessions: List[TestSession] = []
-
-    def save_session(self, test_session: TestSession) -> None:
-        """Save a session in memory."""
-        self.sessions.append(test_session)
+    def __init__(self, sessions=None):
+        """Initialize storage with optional sessions."""
+        super().__init__()
+        self._sessions = sessions if sessions is not None else []
 
     def load_sessions(self) -> List[TestSession]:
-        """Retrieve all stored test sessions."""
-        return self.sessions
+        """Get all stored sessions."""
+        return self._sessions
+
+    def save_session(self, session: TestSession) -> None:
+        """Save a test session."""
+        self._sessions.append(session)
 
     def clear_sessions(self) -> None:
         """Remove all stored test sessions."""
-        self.sessions.clear()
+        self._sessions.clear()
 
 
 class JSONStorage(BaseStorage):

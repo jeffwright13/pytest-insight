@@ -319,9 +319,23 @@ CLI Layer - User interface using Typer
 Public API Layer - For other UIs to build upon
 Here's a proposed restructuring:
 ```
+HI LEVEL:
 pytest-insight/
 ├── pytest_insight/
-│   ├── core/                     # Core analysis engine
+│   ├── core/          # Core analytics (test first)
+│   ├── api/           # Public API (test second)
+│   ├── cli/           # CLI code (moves last)
+│   └── plugin.py      # Remains unchanged
+├── tests/
+│   ├── core/          # Core analytics tests
+│   ├── api/           # API tests
+│   └── integration/   # Cross-component tests
+
+
+MID LEVEL:
+pytest-insight/
+├── pytest_insight/
+│   ├── core/                    # Core analysis engine
 │   │   ├── __init__.py
 │   │   ├── analyzer.py          # Main analysis logic
 │   │   ├── compare.py           # Comparison logic
@@ -333,7 +347,7 @@ pytest-insight/
 │   │   ├── app.py              # Typer app and commands
 │   │   ├── formatters.py       # CLI output formatting
 │   │   └── options.py          # CLI option definitions
-│   ├── api/                     # Public API for other UIs
+│   ├── api/                    # Public API for other UIs
 │   │   ├── __init__.py
 │   │   └── insight.py          # Main API entry point
 │   └── plugin.py               # pytest plugin (unchanged)
@@ -446,7 +460,7 @@ The lift would be moderate because:
 Most logic already exists
 Main work is moving code
 Core analysis is already well-structured
-CLI commands map cleanly to API methods
+CLI commands map cleanly to API methodsw
 
 # Distributed Test Results Collection
 This is a great question about scaling pytest-insight to handle distributed teams. Here's a proposed approach:
@@ -610,3 +624,73 @@ Next Steps
   Docker containers
   Database migrations
   Backup/restore
+
+
+
+# Command Structure Hierarchy
+
+insight
+├── session                        # Session management
+│   ├── run                      # Run new test session
+│   │   ├── --sut              # SUT name
+│   │   └── <pytest_args>      # Additional pytest arguments
+│   │
+│   └── show <id>              # Show session details
+│       ├── --time            # Time window
+│       └── --verbose         # Show all details
+│
+├── history                       # Historical views
+│   └── list                    # List test sessions
+│       ├── --time            # Time window (e.g., 7d, 24h)
+│       ├── --by-sut         # Group by SUT
+│       ├── --sut            # Filter by specific SUT
+│       └── --all            # Show all entries (vs 50)
+│
+├── sut                           # SUT operations
+│   └── list                    # List available SUTs
+│
+└── analytics                     # Analysis operations
+    ├── summary                 # Show summary statistics
+    │   ├── --sut            # Filter by SUT
+    │   └── --days           # Time window in days
+    │
+    ├── compare                # Compare test results
+    │   ├── --base           # Base (session/SUT/date)
+    │   ├── --target        # Target (session/SUT/date)
+    │   ├── --mode          # session/sut/period
+    │   └── --time          # Time window
+    │
+    ├── analyze                # Analyze SUT metrics
+    │   ├── --sut            # SUT to analyze
+    │   ├── --metric        # Metric to analyze
+    │   └── --days          # Time window in days
+    │
+    └── failures               # Show failure patterns
+        ├── --sut            # SUT to analyze
+        └── --nodeid        # Show specific test history
+
+---
+One way to slice/dice the commands is to group them by the level of abstraction they operate on. Here's a proposed hierarchy:
+
+SUT
+ └── TestSession
+      └── TestResult
+
+insight
+├── sut                     # SUT-level operations
+│   ├── list               # List all SUTs
+│   ├── show <sut>         # Show SUT details
+│   ├── compare            # Compare SUTs
+│   └── analyze            # Analyze SUT trends
+│
+├── session                 # Session-level operations
+│   ├── run                # Run new session (launches Pytest)
+│   ├── list               # List sessions
+│   ├── show <id>          # Show session details
+│   └── compare            # Compare sessions
+│
+└── test                    # Test-level operations
+    ├── list               # List all tests
+    ├── show <nodeid>      # Show test details
+    ├── history            # Show test history
+    └── trends             # Show test trends

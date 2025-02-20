@@ -2,13 +2,13 @@
 
 from collections import Counter
 from statistics import mean, stdev
-from typing import Dict, List, Set
+from typing import Any, Dict, List, Set
 
 from pytest_insight.models import TestResult, TestSession
 
 
 class SUTAnalytics:
-    """Analytics queries for a specific SUT's test history."""
+    """Analytics for a System Under Test."""
 
     def __init__(self, sessions: List[TestSession]):
         self.sessions = sessions
@@ -104,3 +104,47 @@ class SUTAnalytics:
             ) * 100
 
         return scores
+
+    def analyze_failure_patterns(self) -> Dict[str, Any]:
+        """Analyze patterns in test failures."""
+        failure_data = {}
+        for session in self.sessions:
+            for result in session.test_results:
+                if result.outcome != "failed":
+                    continue
+
+                if result.nodeid not in failure_data:
+                    failure_data[result.nodeid] = {
+                        "failure_count": 0,
+                        "durations": [],
+                        "timestamps": [],
+                    }
+
+                data = failure_data[result.nodeid]
+                data["failure_count"] += 1
+                data["durations"].append(result.duration)
+                data["timestamps"].append(result.start_time)
+
+        # Find most failed tests
+        most_failed = sorted(
+            [
+                {"nodeid": nodeid, "failure_count": data["failure_count"]}
+                for nodeid, data in failure_data.items()
+            ],
+            key=lambda x: x["failure_count"],
+            reverse=True,
+        )[
+            :5
+        ]  # Top 5 failing tests
+
+        # Find timing-related failures
+        timing_related = []
+        for nodeid, data in failure_data.items():
+            if len(data["durations"]) >= 2:  # Need at least 2 failures to analyze
+                avg_duration = sum(data["durations"]) / len(data["durations"])
+                if any(d > avg_duration * 1.5 for d in data["durations"]):
+                    timing_related.append(
+                        {"nodeid": nodeid, "avg_duration": avg_duration}
+                    )
+
+        return {"most_failed": most_failed, "timing_related": timing_related}

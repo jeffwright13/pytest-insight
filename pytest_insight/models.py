@@ -14,12 +14,23 @@ class TestResult:
     nodeid: str
     outcome: str
     start_time: datetime
-    duration: float
+    stop_time: Optional[datetime] = None
+    duration: Optional[float] = None
     caplog: str = ""
     capstderr: str = ""
     capstdout: str = ""
     longreprtext: str = ""
     has_warning: bool = False
+
+    def __post_init__(self):
+        """Calculate timing information once at initialization."""
+        if self.stop_time is None and self.duration is None:
+            raise ValueError("Either stop_time or duration must be provided")
+
+        if self.stop_time is None:
+            self.stop_time = self.start_time + timedelta(seconds=self.duration)
+        elif self.duration is None:
+            self.duration = (self.stop_time - self.start_time).total_seconds()
 
     def to_dict(self) -> Dict:
         """Convert test result to a dictionary for JSON serialization."""
@@ -27,22 +38,26 @@ class TestResult:
             "nodeid": self.nodeid,
             "outcome": self.outcome,
             "start_time": self.start_time.isoformat(),
+            "stop_time": self.stop_time.isoformat(),
             "duration": self.duration,
-            "longreprtext": self.longreprtext,
             "caplog": self.caplog,
             "capstderr": self.capstderr,
             "capstdout": self.capstdout,
+            "longreprtext": self.longreprtext,
             "has_warning": self.has_warning,
         }
 
     @classmethod
     def from_dict(cls, data: Dict) -> "TestResult":
         """Create a TestResult from a dictionary."""
+        start_time = datetime.fromisoformat(data["start_time"])
+        stop_time = datetime.fromisoformat(data["stop_time"])
+
         return cls(
             nodeid=data["nodeid"],
             outcome=data["outcome"],
-            start_time=datetime.fromisoformat(data["start_time"]),
-            duration=data["duration"],
+            start_time=start_time,
+            stop_time=stop_time,
             caplog=data.get("caplog", ""),
             capstderr=data.get("capstderr", ""),
             capstdout=data.get("capstdout", ""),
@@ -57,10 +72,8 @@ class RerunTestGroup:
 
     nodeid: str
     final_outcome: str
-    _reruns: List["TestResult"] = field(default_factory=list)  # ✅ Private storage
-    _full_test_list: List["TestResult"] = field(
-        default_factory=list
-    )  # ✅ Private storage
+    _reruns: List["TestResult"] = field(default_factory=list)
+    _full_test_list: List["TestResult"] = field(default_factory=list)
 
     @property
     def reruns(self) -> List["TestResult"]:
@@ -93,9 +106,7 @@ class RerunTestGroup:
             "reruns": [
                 test.to_dict() for test in self._reruns
             ],  # ✅ Convert rerun list
-            "full_test_list": [
-                test.to_dict() for test in self._full_test_list
-            ],  # ✅ Convert full test list
+            "full_test_list": [test.to_dict() for test in self._full_test_list],
         }
 
     @classmethod
@@ -125,15 +136,27 @@ class TestSession:
     sut_name: str
     session_id: str
     session_start_time: datetime
-    session_stop_time: datetime
+    session_stop_time: Optional[datetime] = None
+    session_duration: Optional[float] = None
     test_results: List[TestResult] = field(default_factory=list)
     rerun_test_groups: List[RerunTestGroup] = field(default_factory=list)
     session_tags: Dict[str, str] = field(default_factory=dict)
 
-    @property
-    def session_duration(self) -> timedelta:
-        """Compute session duration dynamically based on start and stop times."""
-        return self.session_stop_time - self.session_start_time
+    def __post_init__(self):
+        """Calculate timing information once at initialization."""
+        if self.session_stop_time is None and self.session_duration is None:
+            raise ValueError(
+                "Either session_stop_time or session_duration must be provided"
+            )
+
+        if self.session_stop_time is None:
+            self.session_stop_time = self.session_start_time + timedelta(
+                seconds=self.session_duration
+            )
+        elif self.session_duration is None:
+            self.session_duration = (
+                self.session_stop_time - self.session_start_time
+            ).total_seconds()
 
     def to_dict(self) -> Dict:
         """Convert TestSession to a dictionary for JSON serialization."""
@@ -142,6 +165,7 @@ class TestSession:
             "session_id": self.session_id,
             "session_start_time": self.session_start_time.isoformat(),
             "session_stop_time": self.session_stop_time.isoformat(),
+            "session_duration": self.session_duration,
             "test_results": [test.to_dict() for test in self.test_results],
             "rerun_test_groups": [
                 {
@@ -233,6 +257,4 @@ class TestHistory:
 
     def latest_session(self) -> Optional[TestSession]:
         """Get the most recent test session."""
-        if not self.sessions:
-            return None
-        return self.sessions[-1]
+        return self.sessions[-1] if self.sessions else None
