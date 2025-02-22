@@ -1,0 +1,90 @@
+First, verify your JSON API server is running:
+    uvicorn pytest_insight.server:app --host 0.0.0.0 --port 8000 --reload
+
+Configure Grafana JSON datasource:
+    1. Add new datasource
+    2. Select "JSON API"
+    3. URL: `http://localhost:8000`
+    4. Access: Browser
+
+Create dashboard panels based on your metrics. Here's the JSON configuration:
+  {
+    "annotations": {
+      "list": []
+    },
+    "editable": true,
+    "panels": [
+      {
+        "title": "Test Duration Trends",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [{
+          "target": "test.duration.trend",
+          "type": "timeseries"
+        }]
+      },
+      {
+        "title": "Test Failure Rate",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+        "targets": [{
+          "target": "test.failure.rate",
+          "type": "timeseries"
+        }],
+        "options": {
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholds": [
+            { "value": 20, "color": "green" },
+            { "value": 50, "color": "yellow" },
+            { "value": 80, "color": "red" }
+          ]
+        }
+      },
+      {
+        "title": "Top 5 Slowest Tests",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [{
+          "target": "test.patterns.slow",
+          "type": "table"
+        }]
+      },
+      {
+        "title": "Warning Counts",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [{
+          "target": "test.warnings.count",
+          "type": "timeseries"
+        }]
+      }
+    ],
+    "refresh": "5s",
+    "schemaVersion": 38,
+    "title": "pytest-insight Analytics",
+    "version": 1
+  }
+
+Update your server endpoints to match:
+    1. test.duration.trend
+    2. test.failure.rate
+    3. test.patterns.slow
+    4. test.warnings.count
+
+
+Import the dashboard into Grafana:
+  Open Grafana (http://localhost:3000)
+  Click + icon -> Import
+  Click Upload JSON file
+  Select your test_metrics.json
+  Or use the Grafana CLI:
+      grafana-cli dashboard import test_metrics.json
+
+      The dashboard will now be available in your Grafana instance at: http://localhost:3000/dashboards
+
+Note: Make sure your FastAPI server is running and the JSON API datasource is configured before importing the dashboard.
+
+
+pytest_insight/grafana/dashboards/test_metrics.json
+grafana-cli dashboard import pytest_insight/grafana/dashboards/test_metrics.json
