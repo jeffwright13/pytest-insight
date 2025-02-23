@@ -1,3 +1,4 @@
+import json
 from collections import Counter
 from datetime import datetime, timedelta
 from enum import Enum
@@ -5,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 import typer
+from fastapi.testclient import TestClient
 
 from pytest_insight.analytics import SUTAnalytics
 from pytest_insight.cli.commands import get_api
@@ -14,6 +16,8 @@ from pytest_insight.core.analyzer import SessionFilter
 from pytest_insight.filters import TestFilter, common_filter_options
 from pytest_insight.storage import get_storage_instance
 from pytest_insight.time_utils import TimeSpanParser
+
+from .server import app
 
 # Create typer apps with rich help enabled and showing help on ambiguous commands
 app = typer.Typer(
@@ -46,6 +50,14 @@ sut_app = typer.Typer(
 analytics_app = typer.Typer(
     help="Generate test analytics and reports",
     rich_markup_mode="rich",
+    no_args_is_help=True,  # Show help when no args provided
+    context_settings={
+        "help_option_names": ["-h", "--help"]  # Support both -h and --help
+    },
+)
+metrics_app = typer.Typer(
+    help="Test and verify metrics",
+    rich_markup_mode="rich",
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
@@ -55,8 +67,35 @@ app.add_typer(session_app, name="session")
 app.add_typer(history_app, name="history")
 app.add_typer(sut_app, name="sut")
 app.add_typer(analytics_app, name="analytics")
+app.add_typer(metrics_app, name="metrics")
 
 storage = get_storage_instance()
+
+cli = typer.Typer()
+client = TestClient(app)
+
+
+@cli.command()
+def test_metric(
+    metric: str,
+    pretty: bool = typer.Option(False, "--pretty", "-p", help="Pretty print output"),
+):
+    """Test a specific metric query."""
+    response = client.post("/query", json={"target": metric})
+    data = response.json()
+    if pretty:
+        print(json.dumps(data, indent=2))
+    else:
+        print(data)
+
+
+@cli.command()
+def list_metrics():
+    """List all available metrics."""
+    response = client.get("/search")
+    metrics = response.json()
+    for metric in metrics:
+        print(metric)
 
 
 # Session commands
@@ -69,9 +108,7 @@ def run_session(
     ),
 ):
     """
-    Run a new test session.
-
-    All arguments after -- are passed directly to pytest.
+    Run a new pytest session. All arguments after -- are passed directly to pytest.
 
     Example:
         insight session run tests --sut my-api -- -v -k "test_api" --tb=short
@@ -265,7 +302,9 @@ def list_history(
                     )
 
             for session in sorted_sessions:
-                typer.echo(f"  {format_session_summary(session)}")
+                session_summary = format_session_summary(session)
+                formatted_time = session.session_start_time.strftime("%Y-%m-%d %H:%M")
+                typer.echo(f"{formatted_time} [{session.sut_name}]: {session_summary}")
     else:
         # Show flat chronological list
         sorted_sessions = sorted(
@@ -284,9 +323,9 @@ def list_history(
                 )
 
         for session in sorted_sessions:
-            typer.echo(
-                f"{session.session_start_time.strftime('%Y-%m-%d %H:%M')} [{session.sut_name}]: {format_session_summary(session)}"
-            )
+            session_summary = format_session_summary(session)
+            formatted_time = session.session_start_time.strftime("%Y-%m-%d %H:%M")
+            typer.echo(f"{formatted_time} [{session.sut_name}]: {session_summary}")
 
 
 # SUT commands
@@ -492,11 +531,11 @@ class ComparisonMode(str, Enum):
 
 @analytics_app.command("compare")
 def compare(
-    base: str = typer.Argument(
-        ..., help="Base session ID, SUT name, or date (YYYY-MM-DD)"
+    base: Optional[str] = typer.Argument(
+        None, help="Base session ID, SUT name, or date (YYYY-MM-DD)"
     ),
-    target: str = typer.Argument(
-        ..., help="Target session ID, SUT name, or date (YYYY-MM-DD)"
+    target: Optional[str] = typer.Argument(
+        None, help="Target session ID, SUT name, or date (YYYY-MM-DD)"
     ),
     mode: ComparisonMode = typer.Option(
         ComparisonMode.SESSION,
@@ -504,19 +543,33 @@ def compare(
         "-m",
         help="Comparison mode: session, sut, or period",
     ),
-    timespan: str = typer.Option(
-        None,
-        "--time",
-        "-t",
-        help="Time window to consider for both targets (e.g., 20m, 1h, 7d)",
+    timespan: Optional[str] = typer.Option(
+        None, "--time", "-t", help="Time window to consider (e.g., 20m, 1h, 7d)"
     ),
 ):
-    """
-    Compare test results between sessions, SUTs, or time periods.
+    """Compare test results between different execution contexts.
 
-    The --time option sets a rolling window for both targets, e.g.:
-    --time 20m will only consider test results from the last 20 minutes for both targets.
+    Compare test results across:
+    - Different test sessions
+    - Different Systems Under Test (SUTs)
+    - Different time periods
+
+    Examples:
+        Compare sessions:
+            insight analytics compare 1234567 2345678 --mode session
+
+        Compare SUTs:
+            insight analytics compare api-v1 api-v2 --mode sut -t 7d
+
+        Compare time periods:
+            insight analytics compare 2025-01-01 2025-02-01 --mode period -t 30d
     """
+    if base is None or target is None:
+        # Show help when no arguments provided
+        ctx = typer.get_current_context()
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
+
     try:
         delta = TimeSpanParser.parse(timespan)
     except ValueError as e:
@@ -557,8 +610,20 @@ def compare(
         _display_period_comparison(results, base_date, target_date, delta.days)
 
 
-@app.command("compare")
-def compare_suts(sut1: str, sut2: str):
+@app.command(
+    "compare", help="Compare test results between two targets: SUTs, sessions or times"
+)
+def compare_suts(
+    sut1: str = typer.Argument(..., help="First SUT to compare"),
+    sut2: str = typer.Argument(..., help="Second SUT to compare"),
+):
+    """Compare test results between two Systems Under Test (SUTs).
+
+    Analyzes and displays differences in:
+    - Test coverage
+    - Failure rates
+    - Performance metrics
+    """
     api = get_api()
     comparison = api.compare_suts(sut1, sut2)
     ResultsDisplay.show_comparison(comparison)
@@ -636,5 +701,43 @@ def _display_period_comparison(
     # ... implement period-specific display logic ...
 
 
+@metrics_app.command("list")
+def list_metrics():
+    """List all available metrics following style guide."""
+    client = TestClient(app)
+    response = client.get("/search")
+    metrics = response.json()
+
+    # Group metrics by category for better readability
+    categories = {}
+    for metric in metrics:
+        category = metric.split(".")[1]
+        if category not in categories:
+            categories[category] = []
+        categories[category].append(metric)
+
+    for category, metrics in sorted(categories.items()):
+        typer.secho(f"\n{category.upper()}", fg=typer.colors.BLUE, bold=True)
+        for metric in sorted(metrics):
+            typer.echo(f"  {metric}")
+
+
+@metrics_app.command("test")
+def test_metric(
+    metric: str = typer.Argument(..., help="Metric to test"),
+    pretty: bool = typer.Option(False, "--pretty", "-p", help="Pretty print output"),
+):
+    """Test a specific metric query."""
+    client = TestClient(app)
+    response = client.post("/query", json={"target": metric})
+    data = response.json()
+
+    if pretty:
+        typer.echo(json.dumps(data, indent=2))
+    else:
+        typer.echo(data)
+
+
 if __name__ == "__main__":
+    cli()
     app()

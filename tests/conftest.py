@@ -4,6 +4,7 @@ import random
 import string
 from datetime import datetime, timedelta
 from importlib.metadata import version
+from pathlib import Path
 
 import pytest
 from pytest_insight.models import (
@@ -15,6 +16,13 @@ from pytest_insight.models import (
 # Enable the pytester plugin explicitly
 pytest_plugins = ["pytester"]
 
+# Add markers
+def pytest_configure(config):
+    """Configure pytest with custom markers."""
+    config.addinivalue_line("markers", "unit: Unit tests")
+    config.addinivalue_line("markers", "integration: Integration tests")
+    config.addinivalue_line("markers", "cli: CLI tests")
+    config.addinivalue_line("markers", "api: API tests")
 
 @pytest.fixture
 def tester(request):
@@ -214,6 +222,18 @@ def random_test_result(nodeid, text_gen):
     )
 
 
+# Add common fixtures
+@pytest.fixture
+def test_data_dir():
+    """Return path to test data directory."""
+    return Path(__file__).parent / "data"
+
+@pytest.fixture
+def temp_storage_dir(tmp_path):
+    """Create temporary storage directory."""
+    storage_dir = tmp_path / "storage"
+    storage_dir.mkdir()
+    return storage_dir
 
 # STORAGE FIXTURES - for testing storage.py
 # ------------------------------------------------------------------------------
