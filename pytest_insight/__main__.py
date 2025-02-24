@@ -99,47 +99,6 @@ def list_metrics():
         print(metric)
 
 
-# # Update common filter options to return more descriptive help
-# def common_filter_options(f: Callable) -> Callable:
-#     """Add common filter options to commands."""
-#     decorators = [
-#         typer.option(
-#             "--sut",
-#             help="Filter by System Under Test name",
-#             default=None
-#         ),
-#         typer.option(
-#             "--days",
-#             help="Number of days to look back",
-#             default=30
-#         ),
-#         typer.option(
-#             "--outcome",
-#             help="Filter by test outcome (PASSED, FAILED, etc.)",
-#             default=None
-#         ),
-#         typer.option(
-#             "--warnings",
-#             help="Filter tests with warnings",
-#             is_flag=True,
-#             default=None
-#         ),
-#         typer.option(
-#             "--reruns",
-#             help="Filter tests with reruns",
-#             is_flag=True,
-#             default=None
-#         ),
-#         typer.option(
-#             "--contains",
-#             help="Filter by test name pattern",
-#             default=None
-#         )
-#     ]
-
-#     for decorator in reversed(decorators):
-#         f = decorator(f)
-#     return f
 
 # Add filter support to all relevant commands
 @session_app.command("run")
