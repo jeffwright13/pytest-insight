@@ -29,7 +29,8 @@ def test_plugin_enabled_with_flag(tester):
 def test_help_shows_insight_option(tester):
     """Verify our plugin option appears in pytest help."""
     result = tester.runpytest("--help")
-    result.stdout.fnmatch_lines("*insight (bool):*")
+    result.stdout.fnmatch_lines("*insight:*")
+    result.stdout.fnmatch_lines("*Enable pytest-insight:*")
 
 
 def test_plugin_registers_hooks(tester):

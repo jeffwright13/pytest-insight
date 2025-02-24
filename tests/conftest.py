@@ -1,3 +1,4 @@
+from typer.testing import CliRunner
 from pytest_insight.storage import InMemoryStorage, JSONStorage
 import json
 import random
@@ -328,3 +329,56 @@ def mock_session_w_reruns(mocker):
     )
 
     return session
+
+@pytest.fixture
+def cli_runner():
+    """Fixture to create a CLI runner for Typer."""
+    return CliRunner()
+
+import pytest
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List
+from pytest_mock import MockerFixture
+
+from pytest_insight.models import TestResult, TestSession
+from pytest_insight.storage import JSONStorage
+
+@pytest.fixture
+def mock_terminal_reporter(mocker: MockerFixture):
+    """Create a mock terminal reporter with standard attributes."""
+    reporter = mocker.Mock()
+    reporter.stats = {
+        'passed': [],
+        'failed': [],
+        'skipped': [],
+        'xfailed': [],
+        'xpassed': [],
+        'error': [],
+        'rerun': []
+    }
+    return reporter
+
+@pytest.fixture
+def mock_config(mocker: MockerFixture):
+    """Create a mock pytest config."""
+    config = mocker.Mock()
+    mocker.patch("pytest_insight.plugin.insight_enabled", return_value=True)
+    return config
+
+@pytest.fixture
+def sample_test_result():
+    """Create a sample test result."""
+    return TestResult(
+        nodeid="test_example.py::test_something",
+        outcome="PASSED",
+        start_time=datetime.utcnow(),
+        duration=1.5,
+        has_warning=False
+    )
+
+@pytest.fixture
+def temp_storage(tmp_path):
+    """Create temporary storage for tests."""
+    storage_file = tmp_path / "test_sessions.json"
+    return JSONStorage(storage_file)

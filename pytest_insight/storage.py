@@ -79,9 +79,11 @@ class JSONStorage(BaseStorage):
     FILE_PATH = Path.home() / ".pytest_insight" / "test_sessions.json"
     BACKUP_PATH = FILE_PATH.with_suffix(".backup")
 
-    def __init__(self):
+    def __init__(self, file_path: Optional[Path] = None):
         super().__init__()
         self._session_index = {}
+        self.FILE_PATH = file_path or self.FILE_PATH
+        self.BACKUP_PATH = self.FILE_PATH.with_suffix(".backup")
 
     def save_session(self, test_session: TestSession) -> None:
         """Save a test session to storage."""
@@ -211,10 +213,10 @@ class JSONStorage(BaseStorage):
             print(f"[pytest-insight] ERROR: Failed to clear session storage - {e}")
 
 
-def get_storage_instance() -> "BaseStorage":
-    """Get configured storage instance."""
-    storage_classes = {
-        "JSONStorage": JSONStorage,
-        "InMemoryStorage": InMemoryStorage,
-    }
-    return storage_classes.get(DEFAULT_STORAGE_CLASS, JSONStorage)()
+def get_storage_instance() -> JSONStorage:
+    """Get storage instance, respecting environment configuration."""
+    storage_path = os.environ.get(
+        "PYTEST_INSIGHT_STORAGE",
+        os.path.expanduser("~/.pytest_insight/sessions.json")
+    )
+    return JSONStorage(Path(storage_path))

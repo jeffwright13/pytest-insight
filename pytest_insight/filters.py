@@ -68,6 +68,12 @@ def common_filter_options(f: Callable) -> Callable:
         days: Optional[int] = typer.Option(
             None, "--days", help="Filter to last N days", min=0
         ),
+        hours: Optional[int] = typer.Option(
+            None, "--hours", help="Filter to last N hours", min=0
+        ),
+        minutes: Optional[int] = typer.Option(
+            None, "--minutes", help="Filter to last N minutes", min=0
+        ),
         outcome: Optional[str] = typer.Option(
             None, "--outcome", help="Filter by test outcome (PASSED, FAILED, etc.)"
         ),
@@ -88,6 +94,10 @@ def common_filter_options(f: Callable) -> Callable:
             filter_args["sut"] = sut
         if not isinstance(days, typer.models.OptionInfo):
             filter_args["days"] = days
+        if not isinstance(hours, typer.models.OptionInfo):
+            filter_args["hours"] = hours
+        if not isinstance(minutes, typer.models.OptionInfo):
+            filter_args["minutes"] = minutes
         if not isinstance(outcome, typer.models.OptionInfo):
             filter_args["outcome"] = outcome
         if not isinstance(warnings, typer.models.OptionInfo):

@@ -2,7 +2,8 @@ import json
 from collections import Counter
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
+from typer import Option
 
 import pytest
 import typer
@@ -98,7 +99,49 @@ def list_metrics():
         print(metric)
 
 
-# Session commands
+# # Update common filter options to return more descriptive help
+# def common_filter_options(f: Callable) -> Callable:
+#     """Add common filter options to commands."""
+#     decorators = [
+#         typer.option(
+#             "--sut",
+#             help="Filter by System Under Test name",
+#             default=None
+#         ),
+#         typer.option(
+#             "--days",
+#             help="Number of days to look back",
+#             default=30
+#         ),
+#         typer.option(
+#             "--outcome",
+#             help="Filter by test outcome (PASSED, FAILED, etc.)",
+#             default=None
+#         ),
+#         typer.option(
+#             "--warnings",
+#             help="Filter tests with warnings",
+#             is_flag=True,
+#             default=None
+#         ),
+#         typer.option(
+#             "--reruns",
+#             help="Filter tests with reruns",
+#             is_flag=True,
+#             default=None
+#         ),
+#         typer.option(
+#             "--contains",
+#             help="Filter by test name pattern",
+#             default=None
+#         )
+#     ]
+
+#     for decorator in reversed(decorators):
+#         f = decorator(f)
+#     return f
+
+# Add filter support to all relevant commands
 @session_app.command("run")
 def run_session(
     path: str = typer.Argument("tests", help="Path to test directory or file"),
@@ -129,14 +172,13 @@ def run_session(
 
 
 @session_app.command("show")
-@common_filter_options
 def show_session(
-    sut: Optional[str] = None,
-    days: Optional[int] = None,
-    outcome: Optional[str] = None,
-    warnings: Optional[bool] = None,
-    reruns: Optional[bool] = None,
-    contains: Optional[str] = None,
+    sut: Optional[str] = typer.Option(None, "--sut", help="Filter by System Under Test name"),
+    days: int = typer.Option(30, "--days", help="Number of days to look back"),
+    outcome: Optional[str] = typer.Option(None, "--outcome", help="Filter by test outcome (PASSED, FAILED, etc.)"),
+    warnings: Optional[bool] = typer.Option(None, "--warnings/--no-warnings", help="Filter tests with warnings"),
+    reruns: Optional[bool] = typer.Option(None, "--reruns/--no-reruns", help="Filter tests with reruns"),
+    contains: Optional[str] = typer.Option(None, "--contains", help="Filter by test name pattern"),
 ):
     """Show details of test sessions with optional filtering."""
     storage = get_storage_instance()
@@ -218,27 +260,40 @@ def show_session(
     typer.echo(f"  ↳ Rerun Groups That Failed: {rerun_stats['failed_groups']}")
 
 
-# History commands
 @history_app.command("list")
 def list_history(
-    timespan: str = typer.Option(
-        "7d", "--time", "-t", help="Time span to show (e.g., 7d, 24h, 30m, 1d12h)"
-    ),
+    sut: Optional[str] = typer.Option(None, "--sut", help="Filter by System Under Test name"),
+    days: int = typer.Option(30, "--days", help="Number of days to look back"),
+    outcome: Optional[str] = typer.Option(None, "--outcome", help="Filter by test outcome"),
+    warnings: Optional[bool] = typer.Option(None, "--warnings/--no-warnings", help="Filter tests with warnings"),
+    reruns: Optional[bool] = typer.Option(None, "--reruns/--no-reruns", help="Filter tests with reruns"),
+    contains: Optional[str] = typer.Option(None, "--contains", help="Filter by test name pattern"),
     by_sut: bool = typer.Option(False, "--by-sut", "-s", help="Group results by SUT"),
-    sut: Optional[str] = typer.Option(None, help="Show history for specific SUT"),
-    show_all: bool = typer.Option(
-        False, "--all", "-a", help="Show all entries (default: limit to 50)"
-    ),
+    show_all: bool = typer.Option(False, "--all", "-a", help="Show all entries"),
 ):
-    """List test session history, optionally grouped by SUT."""
-    try:
-        delta = TimeSpanParser.parse(timespan)
-    except ValueError as e:
-        typer.secho(str(e), fg=typer.colors.RED)
-        raise typer.Exit(1)
-
+    """List test session history with filtering support."""
     sessions = storage.load_sessions()
-    cutoff = datetime.now() - delta
+    cutoff = datetime.now() - timedelta(days=days)
+
+    # Create filter from options
+    test_filter = TestFilter(
+        sut=sut,
+        days=days,
+        outcome=outcome,
+        has_warnings=warnings,
+        has_reruns=reruns,
+        nodeid_contains=contains
+    )
+
+    # Filter sessions
+    filtered_sessions = test_filter.filter_sessions(sessions)
+
+    if not filtered_sessions:
+        typer.secho(
+            "No test sessions found for the specified criteria",
+            fg=typer.colors.YELLOW
+        )
+        return
 
     # Debug: Show available SUTs
     available_suts = {s.sut_name for s in sessions}
@@ -340,119 +395,82 @@ def list_suts():
 
 # Analytics commands
 @analytics_app.command("summary")
-def show_summary(
-    sut: str = typer.Argument(None, help="Show summary for specific SUT"),
-    days: int = typer.Option(7, help="Show summary for last N days"),
+def analytics_summary(
+    sut: Optional[str] = typer.Option(None, "--sut", help="Filter by System Under Test name"),
+    days: int = typer.Option(30, "--days", help="Number of days to look back"),
+    outcome: Optional[str] = typer.Option(None, "--outcome", help="Filter by test outcome"),
+    warnings: Optional[bool] = typer.Option(None, "--warnings/--no-warnings", help="Filter tests with warnings"),
+    reruns: Optional[bool] = typer.Option(None, "--reruns/--no-reruns", help="Filter tests with reruns"),
+    contains: Optional[str] = typer.Option(None, "--contains", help="Filter by test name pattern"),
 ):
-    """Show comprehensive test execution summary."""
-    storage = get_storage_instance()
-    sessions = storage.load_sessions()
+    """Show summary of test analytics with filtering support."""
+    api = get_api()
 
-    # Filter sessions
-    cutoff = datetime.now() - timedelta(days=days)
-    if sut:
-        sessions = [
-            s for s in sessions if s.sut_name == sut and s.session_start_time > cutoff
-        ]
-    else:
-        sessions = [s for s in sessions if s.session_start_time > cutoff]
-
-    if not sessions:
-        typer.secho(
-            "No test data available for the specified criteria", fg=typer.colors.YELLOW
-        )
-        return
-
-    # Calculate summary statistics
-    total_sessions = len(sessions)
-    total_duration = sum(
-        (s.session_stop_time - s.session_start_time).total_seconds() for s in sessions
+    # Create filter from options
+    test_filter = TestFilter(
+        sut=sut,
+        days=days,
+        outcome=outcome,
+        has_warnings=warnings,
+        has_reruns=reruns,
+        nodeid_contains=contains
     )
 
-    # Display summary
-    typer.echo(f"\nTest Summary for past {days} days:")
-    if sut:
-        typer.echo(f"SUT: {sut}")
-    typer.echo(f"Sessions: {total_sessions}")
+    # Get filtered sessions and results
+    sessions = api.get_sessions()
+    filtered_sessions = test_filter.filter_sessions(sessions)
 
-    # Safely calculate and display duration statistics
-    if total_sessions > 0:
-        typer.echo(f"Total Duration: {timedelta(seconds=int(total_duration))}")
-        typer.echo(
-            f"Average Session Duration: {timedelta(seconds=int(total_duration/total_sessions))}"
-        )
+    if not filtered_sessions:
+        typer.secho("No matching test sessions found.", fg=typer.colors.YELLOW)
+        raise typer.Exit(1)
 
-    # Aggregate test results across sessions
-    all_tests = set()
-    outcome_counts = Counter()
-    warning_count = 0
+    # Display summary header
+    typer.secho("\n=== Test Analytics Summary ===", fg=typer.colors.BLUE, bold=True)
 
-    for session in sessions:
-        for test in session.test_results:
-            all_tests.add(test.nodeid)
-            outcome_counts[test.outcome] += 1
-            if test.has_warning:
-                warning_count += 1
+    # Display filter info
+    if any([sut, outcome, warnings, reruns, contains]):
+        typer.secho("\nActive Filters:", fg=typer.colors.GREEN)
+        if sut:
+            typer.echo(f"  SUT: {sut}")
+        if outcome:
+            typer.echo(f"  Outcome: {outcome}")
+        if warnings is not None:
+            typer.echo(f"  Warnings: {warnings}")
+        if reruns is not None:
+            typer.echo(f"  Reruns: {reruns}")
+        if contains:
+            typer.echo(f"  Contains: {contains}")
 
-    typer.echo(f"Unique Tests: {len(all_tests)}")
+    # Display statistics
+    typer.secho(f"\nTime Range: Last {days} days", fg=typer.colors.BLUE)
+    typer.echo(f"Total Sessions: {len(filtered_sessions)}")
 
-    # Safely display outcome percentages
-    total_outcomes = sum(outcome_counts.values())
-    if total_outcomes > 0:
-        typer.echo("\nTest Outcomes:")
-        for outcome, count in sorted(outcome_counts.items()):
-            percentage = (count / total_outcomes) * 100
-            typer.echo(f"  {outcome}: {count} ({percentage:.1f}%)")
+    total_tests = sum(len(session.test_results) for session in filtered_sessions)
+    typer.echo(f"Total Tests: {total_tests}")
 
-    if warning_count:
-        typer.echo(f"\nWarnings: {warning_count}")
+    # Calculate and display outcome distribution
+    outcomes = defaultdict(int)
+    for session in filtered_sessions:
+        for result in session.test_results:
+            if test_filter.matches(result):
+                outcomes[result.outcome] += 1
 
-    # Process rerun statistics
-    rerun_stats = {
-        "total": 0,
-        "to_pass": 0,
-        "to_fail": 0,
-        "groups": 0,
-        "groups_passed": 0,
-        "groups_failed": 0,
-    }
-
-    for session in sessions:
-        for group in session.rerun_test_groups:
-            rerun_stats["total"] += len(group.reruns)
-            rerun_stats["groups"] += 1
-
-            if group.final_outcome.upper() == "PASSED":
-                rerun_stats["to_pass"] += len(group.reruns)
-                rerun_stats["groups_passed"] += 1
-            else:
-                rerun_stats["to_fail"] += len(group.reruns)
-                rerun_stats["groups_failed"] += 1
-
-    if rerun_stats["total"]:
-        typer.echo("\nRerun Analysis:")
-        typer.echo(f"  Total Reruns: {rerun_stats['total']}")
-        typer.echo(f"  ↳ Eventually Passed: {rerun_stats['to_pass']}")
-        typer.echo(f"  ↳ Remained Failed: {rerun_stats['to_fail']}")
-        typer.echo(f"\n  Rerun Groups: {rerun_stats['groups']}")
-        typer.echo(f"  ↳ Groups that Passed: {rerun_stats['groups_passed']}")
-        typer.echo(f"  ↳ Groups that Failed: {rerun_stats['groups_failed']}")
-
-        # Safely calculate success rate
-        if rerun_stats["groups"] > 0:
-            group_success_rate = (
-                rerun_stats["groups_passed"] / rerun_stats["groups"]
-            ) * 100
-            typer.echo(f"\n  Rerun Success Rate: {group_success_rate:.1f}%")
-
+    typer.secho("\nOutcome Distribution:", fg=typer.colors.BLUE)
+    for outcome, count in sorted(outcomes.items()):
+        percentage = (count / total_tests * 100) if total_tests else 0
+        typer.echo(f"  {outcome}: {count} ({percentage:.1f}%)")
 
 @analytics_app.command("analyze")
-@common_filter_options
 def analyze_sut(
     sut_name: str = typer.Argument(..., help="Name of SUT to analyze"),
     metric: str = typer.Option("all", help="Metric to analyze"),
+    days: int = typer.Option(30, "--days", help="Number of days to look back"),
+    outcome: Optional[str] = typer.Option(None, "--outcome", help="Filter by test outcome"),
+    warnings: Optional[bool] = typer.Option(None, "--warnings/--no-warnings", help="Filter tests with warnings"),
+    reruns: Optional[bool] = typer.Option(None, "--reruns/--no-reruns", help="Filter tests with reruns"),
+    contains: Optional[str] = typer.Option(None, "--contains", help="Filter by test name pattern"),
 ):
-    """Analyze test suite health and patterns."""
+    """Analyze test suite health and patterns with filtering."""
     api = get_api()
     display = ResultsDisplay()
 
@@ -470,12 +488,16 @@ def analyze_sut(
 
 
 @analytics_app.command("failures")
-@common_filter_options
 def analyze_failures(
     sut_name: str = typer.Argument(..., help="Name of SUT to analyze"),
     nodeid: str = typer.Option(None, help="Show detailed history for specific test"),
+    days: int = typer.Option(30, "--days", help="Number of days to look back"),
+    outcome: Optional[str] = typer.Option(None, "--outcome", help="Filter by test outcome"),
+    warnings: Optional[bool] = typer.Option(None, "--warnings/--no-warnings", help="Filter tests with warnings"),
+    reruns: Optional[bool] = typer.Option(None, "--reruns/--no-reruns", help="Filter tests with reruns"),
+    contains: Optional[str] = typer.Option(None, "--contains", help="Filter by test name pattern"),
 ):
-    """Analyze test failure patterns."""
+    """Analyze test failure patterns with filtering."""
     storage = get_storage_instance()
     sessions = storage.load_sessions()
 
@@ -530,6 +552,7 @@ class ComparisonMode(str, Enum):
 
 
 @analytics_app.command("compare")
+@common_filter_options
 def compare(
     base: Optional[str] = typer.Argument(
         None, help="Base session ID, SUT name, or date (YYYY-MM-DD)"
@@ -547,28 +570,15 @@ def compare(
         None, "--time", "-t", help="Time window to consider (e.g., 20m, 1h, 7d)"
     ),
 ):
-    """Compare test results between different execution contexts.
-
-    Compare test results across:
-    - Different test sessions
-    - Different Systems Under Test (SUTs)
-    - Different time periods
-
-    Examples:
-        Compare sessions:
-            insight analytics compare 1234567 2345678 --mode session
-
-        Compare SUTs:
-            insight analytics compare api-v1 api-v2 --mode sut -t 7d
-
-        Compare time periods:
-            insight analytics compare 2025-01-01 2025-02-01 --mode period -t 30d
-    """
+    """Compare test results between different execution contexts."""
     if base is None or target is None:
-        # Show help when no arguments provided
-        ctx = typer.get_current_context()
-        typer.echo(ctx.get_help())
-        raise typer.Exit()
+        raise typer.BadParameter(
+            "Both BASE and TARGET arguments are required.\n\n"
+            "Example usage:\n"
+            "  insight analytics compare api-v1 api-v2 --mode sut -t 7d\n"
+            "  insight analytics compare 1234567 2345678 --mode session\n"
+            "  insight analytics compare 2025-01-01 2025-02-01 --mode period -t 30d"
+        )
 
     try:
         delta = TimeSpanParser.parse(timespan)
@@ -584,7 +594,12 @@ def compare(
         target_session = next((s for s in sessions if s.session_id == target), None)
 
         if not base_session or not target_session:
-            typer.secho("Session(s) not found", fg=typer.colors.RED)
+            typer.secho(f"One or more BASE, TARGET sessions not found", fg=typer.colors.RED)
+            typer.secho(f"BASE: {base}", fg=typer.colors.RED)
+            typer.secho(f"TARGET: {target}", fg=typer.colors.RED)
+            typer.echo("Available sessions:")
+            for session in sessions:
+                typer.echo(f"  {session.session_id}")
             raise typer.Exit(1)
 
         results = ComparisonAnalyzer.compare_sessions(base_session, target_session)
