@@ -1,8 +1,7 @@
 from _pytest.config import Config
 from _pytest.terminal import TerminalReporter
-from pytest_mock import MockerFixture
-
 from pytest_insight.plugin import pytest_configure, pytest_terminal_summary
+from pytest_mock import MockerFixture
 
 
 def test_terminal_summary(mocker: MockerFixture):
@@ -10,13 +9,13 @@ def test_terminal_summary(mocker: MockerFixture):
     # Create mock terminal reporter with required attributes
     terminal_reporter = mocker.Mock(spec=TerminalReporter)
     terminal_reporter.stats = {
-        'passed': [],
-        'failed': [],
-        'skipped': [],
-        'xfailed': [],
-        'xpassed': [],
-        'error': [],
-        'rerun': []
+        "passed": [],
+        "failed": [],
+        "skipped": [],
+        "xfailed": [],
+        "xpassed": [],
+        "error": [],
+        "rerun": [],
     }
 
     # Mock config and plugin state
@@ -25,9 +24,7 @@ def test_terminal_summary(mocker: MockerFixture):
 
     # Run the hook
     pytest_terminal_summary(terminalreporter=terminal_reporter, exitstatus=0, config=config)
-    terminal_reporter.write_line.assert_called_with(
-        "\n[pytest-insight] Test history updated."
-    )
+    terminal_reporter.write_line.assert_called_with("\n[pytest-insight] Test history updated.")
 
 
 def test_pytest_configure(mocker: MockerFixture):

@@ -1,6 +1,31 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
 from typing import Dict, List, Optional
+
+
+class TestOutcome(Enum):
+    """Test outcome states."""
+
+    PASSED = "passed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    XFAILED = "xfailed"
+    XPASSED = "xpassed"
+    RERUN = "rerun"
+    ERROR = "error"
+
+    @classmethod
+    def from_str(cls, outcome: str) -> "TestOutcome":
+        """Convert string to TestOutcome, case-insensitive."""
+        try:
+            return cls[outcome.upper()]
+        except KeyError:
+            raise ValueError(f"Invalid test outcome: {outcome}")
+
+    def to_str(self) -> str:
+        """Convert TestOutcome to string."""
+        return self.value
 
 
 @dataclass
@@ -12,7 +37,7 @@ class TestResult:
     __test__ = False  # Tell Pytest this is NOT a test class
 
     nodeid: str
-    outcome: str
+    outcome: TestOutcome
     start_time: datetime
     stop_time: Optional[datetime] = None
     duration: Optional[float] = None
@@ -23,10 +48,9 @@ class TestResult:
     has_warning: bool = False
 
     def __post_init__(self):
-        """Calculate timing information once at initialization."""
+        """Validate and process initialization data."""
         if self.stop_time is None and self.duration is None:
             raise ValueError("Either stop_time or duration must be provided")
-
         if self.stop_time is None:
             self.stop_time = self.start_time + timedelta(seconds=self.duration)
         elif self.duration is None:
@@ -36,7 +60,7 @@ class TestResult:
         """Convert test result to a dictionary for JSON serialization."""
         return {
             "nodeid": self.nodeid,
-            "outcome": self.outcome,
+            "outcome": self.outcome.to_str(),  # Use to_str() instead of str()
             "start_time": self.start_time.isoformat(),
             "stop_time": self.stop_time.isoformat(),
             "duration": self.duration,
@@ -55,7 +79,7 @@ class TestResult:
 
         return cls(
             nodeid=data["nodeid"],
-            outcome=data["outcome"],
+            outcome=TestOutcome.from_str(data["outcome"]),
             start_time=start_time,
             stop_time=stop_time,
             caplog=data.get("caplog", ""),
@@ -72,8 +96,8 @@ class RerunTestGroup:
 
     nodeid: str
     final_outcome: str
-    _reruns: List["TestResult"] = field(default_factory=list)
-    _full_test_list: List["TestResult"] = field(default_factory=list)
+    _reruns: List["TestResult"] = field(default_factory=list)  # Fix: use = for default_factory
+    _full_test_list: List["TestResult"] = field(default_factory=list)  # Fix: use = for default_factory
 
     @property
     def reruns(self) -> List["TestResult"]:
@@ -103,9 +127,7 @@ class RerunTestGroup:
         return {
             "nodeid": self.nodeid,
             "final_outcome": self.final_outcome,
-            "reruns": [
-                test.to_dict() for test in self._reruns
-            ],  # ✅ Convert rerun list
+            "reruns": [test.to_dict() for test in self._reruns],  # ✅ Convert rerun list
             "full_test_list": [test.to_dict() for test in self._full_test_list],
         }
 
@@ -115,9 +137,7 @@ class RerunTestGroup:
         return cls(
             nodeid=data["nodeid"],
             final_outcome=data["final_outcome"],
-            _reruns=[
-                TestResult.from_dict(t) for t in data.get("reruns", [])
-            ],  # ✅ Restore reruns
+            _reruns=[TestResult.from_dict(t) for t in data.get("reruns", [])],  # ✅ Restore reruns
             _full_test_list=[
                 TestResult.from_dict(t) for t in data.get("full_test_list", [])
             ],  # ✅ Restore full test list
@@ -138,25 +158,19 @@ class TestSession:
     session_start_time: datetime
     session_stop_time: Optional[datetime] = None
     session_duration: Optional[float] = None
-    test_results: List[TestResult] = field(default_factory=list)
-    rerun_test_groups: List[RerunTestGroup] = field(default_factory=list)
-    session_tags: Dict[str, str] = field(default_factory=dict)
+    test_results: List[TestResult] = field(default_factory=list)  # Fix: use =list
+    rerun_test_groups: List[RerunTestGroup] = field(default_factory=list)  # Fix: use =list
+    session_tags: Dict[str, str] = field(default_factory=dict)  # Fix: use =dict
 
     def __post_init__(self):
         """Calculate timing information once at initialization."""
         if self.session_stop_time is None and self.session_duration is None:
-            raise ValueError(
-                "Either session_stop_time or session_duration must be provided"
-            )
+            raise ValueError("Either session_stop_time or session_duration must be provided")
 
         if self.session_stop_time is None:
-            self.session_stop_time = self.session_start_time + timedelta(
-                seconds=self.session_duration
-            )
+            self.session_stop_time = self.session_start_time + timedelta(seconds=self.session_duration)
         elif self.session_duration is None:
-            self.session_duration = (
-                self.session_stop_time - self.session_start_time
-            ).total_seconds()
+            self.session_duration = (self.session_stop_time - self.session_start_time).total_seconds()
 
     def to_dict(self) -> Dict:
         """Convert TestSession to a dictionary for JSON serialization."""
@@ -195,9 +209,7 @@ class TestSession:
 
         # Add rerun groups
         for group_data in data.get("rerun_test_groups", []):
-            group = RerunTestGroup(
-                nodeid=group_data["nodeid"], final_outcome=group_data["final_outcome"]
-            )
+            group = RerunTestGroup(nodeid=group_data["nodeid"], final_outcome=group_data["final_outcome"])
             for rerun_data in group_data.get("reruns", []):
                 group.add_rerun(TestResult.from_dict(rerun_data))
             for test_data in group_data.get("full_test_list", []):
@@ -221,17 +233,15 @@ class SUTGroup:
     """Represents a collection of test sessions for a single SUT."""
 
     sut_name: str
-    sessions: List[TestSession] = field(default_factory=list)
+    sessions: List[TestSession] = field(default_factory=list)  # Fix: correct default_factory syntax
 
     def add_session(self, session: TestSession) -> None:
+        """Add a test session to this group."""
         self.sessions.append(session)
 
     def latest_session(self) -> Optional[TestSession]:
-        return (
-            max(self.sessions, key=lambda s: s.session_start_time)
-            if self.sessions
-            else None
-        )
+        """Get the most recent test session."""
+        return max(self.sessions, key=lambda s: s.session_start_time) if self.sessions else None
 
 
 @dataclass

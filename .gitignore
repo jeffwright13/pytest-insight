@@ -32,3 +32,4 @@ oof/
 
 # JSON output files
 *.json
+tui_files

@@ -1,11 +1,12 @@
+from typing import Optional
+
 import pytest
 import typer
-from typing import Optional
-from pytest_insight.filters import common_filter_options, TestFilter
-from pytest_insight.core.analyzer import SessionFilter
+from pytest_insight.filters import common_filter_options
 
 # Test command setup
 app = typer.Typer()
+
 
 @app.command()
 @common_filter_options
@@ -29,12 +30,10 @@ def test_command(
         "contains": contains,
     }
 
+
 def test_common_filter_options_basic(cli_runner):
     """Test basic filter option passing."""
-    result = cli_runner.invoke(
-        app,
-        ["test-arg", "--sut", "api", "--days", "7"]
-    )
+    result = cli_runner.invoke(app, ["test-arg", "--sut", "api", "--days", "7"])
     assert result.exit_code == 0
     assert result.called_with_args == {
         "base_arg": "test-arg",
@@ -46,24 +45,32 @@ def test_common_filter_options_basic(cli_runner):
         "contains": None,
     }
 
+
 def test_common_filter_options_all_options(cli_runner):
     """Test all options available in common_filter_options."""
     from typer.testing import CliRunner
+
     runner = CliRunner()
 
     result = cli_runner.invoke(
         app,
         [
             "test-arg",
-            "--sut", "api",
-            "--days", "7",
-            "--hours", "12",
-            "--minutes", "30",
-            "--outcome", "FAILED",
+            "--sut",
+            "api",
+            "--days",
+            "7",
+            "--hours",
+            "12",
+            "--minutes",
+            "30",
+            "--outcome",
+            "FAILED",
             "--warnings",
             "--reruns",
-            "--contains", "test_api"
-        ]
+            "--contains",
+            "test_api",
+        ],
     )
     assert result.exit_code == 0
     assert result.called_with_args == {
@@ -76,9 +83,11 @@ def test_common_filter_options_all_options(cli_runner):
         "contains": "test_api",
     }
 
+
 def test_common_filter_options_no_options(cli_runner):
     """Test command without any filters."""
     from typer.testing import CliRunner
+
     runner = CliRunner()
 
     result = cli_runner.invoke(app, ["test-arg"])
@@ -95,6 +104,7 @@ def test_common_filter_options_no_options(cli_runner):
         "contains": None,
     }
 
+
 @pytest.mark.parametrize(
     "days",
     [
@@ -102,23 +112,22 @@ def test_common_filter_options_no_options(cli_runner):
         -1,
         "a",
         "1.5",
-    ]
+    ],
 )
-
 def test_common_filter_options_invalid_values(cli_runner, days):
     """Test invalid filter values."""
     from typer.testing import CliRunner
+
     runner = CliRunner()
 
-    result = cli_runner.invoke(
-        app,
-        ["test-arg", "--days", days]
-    )
+    result = cli_runner.invoke(app, ["test-arg", "--days", days])
     assert result.exit_code == 2  # Typer error code for invalid value
+
 
 def test_common_filter_options_help(cli_runner):
     """Test help message for filter options."""
     from typer.testing import CliRunner
+
     runner = CliRunner()
 
     result = cli_runner.invoke(app, ["test-arg", "--help"])
@@ -132,13 +141,14 @@ def test_common_filter_options_help(cli_runner):
     assert "--reruns" in result.stdout
     assert "--contains" in result.stdout
 
+
 def _rnd_utf_8_chars() -> str:
     """Return a random string of UTF-8 characters."""
     import random
     import string
-    return "".join(
-        random.choices(string.printable, k=random.randint(1, 100))
-    )
+
+    return "".join(random.choices(string.printable, k=random.randint(1, 100)))
+
 
 # inject w/ random utf-8s
 @pytest.mark.parametrize(
@@ -147,17 +157,15 @@ def _rnd_utf_8_chars() -> str:
         _rnd_utf_8_chars(),
         _rnd_utf_8_chars(),
         _rnd_utf_8_chars(),
-    ]
+    ],
 )
 def test_common_filter_options_sut(cli_runner, sut):
     """Test System Under Test filter option."""
     from typer.testing import CliRunner
+
     runner = CliRunner()
 
-    result = cli_runner.invoke(
-        app,
-        ["test-arg", "--sut", sut]
-    )
+    result = cli_runner.invoke(app, ["test-arg", "--sut", sut])
     assert result.exit_code == 0
     assert sut in result.stdout
     assert all(
@@ -172,7 +180,6 @@ def test_common_filter_options_sut(cli_runner, sut):
             "contains",
         ]
     )
-
 
 
 # class Result:
