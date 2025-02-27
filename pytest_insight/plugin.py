@@ -10,7 +10,7 @@ from _pytest.reports import TestReport
 from _pytest.terminal import TerminalReporter, WarningReport
 from pytest import ExitCode
 
-from pytest_insight.models import RerunTestGroup, TestResult, TestSession
+from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
 from pytest_insight.storage import JSONStorage, get_storage_instance
 
 _INSIGHT_INITIALIZED: bool = False
@@ -59,17 +59,13 @@ def pytest_configure(config: Config):
 
 
 @pytest.hookimpl
-def pytest_terminal_summary(
-    terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config
-):
+def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
     """Process test results and store in TestSession."""
     if not insight_enabled(config):
         return
 
     storage = get_storage_instance()
-    sut_name = config.getoption(
-        "insight_sut", "default_sut"
-    )  # Get SUT name from pytest option
+    sut_name = config.getoption("insight_sut", "default_sut")  # Get SUT name from pytest option
 
     stats = terminalreporter.stats
     test_results = []
@@ -87,8 +83,7 @@ def pytest_terminal_summary(
 
             # Capture only call-phase or error failures from setup/teardown
             if report.when == "call" or (
-                report.when in ("setup", "teardown")
-                and report.outcome in ("failed", "error")
+                report.when in ("setup", "teardown") and report.outcome in ("failed", "error")
             ):
                 report_time = datetime.fromtimestamp(report.start)
 
@@ -101,7 +96,7 @@ def pytest_terminal_summary(
                 test_results.append(
                     TestResult(
                         nodeid=report.nodeid,
-                        outcome=outcome,
+                        outcome=TestOutcome.from_str(outcome.upper()),  # Convert string to enum
                         start_time=report_time,
                         duration=report.duration,
                         caplog=getattr(report, "caplog", ""),
@@ -112,29 +107,22 @@ def pytest_terminal_summary(
                     )
                 )
 
-    # Handle warnings separately
+    # Try to match individual WarningReport instances to TestResult instances, setting 'has_warning' to True if found
     if "warnings" in stats:
         for report in stats["warnings"]:
             if isinstance(report, WarningReport):
-                test_results.append(
-                    TestResult(
-                        nodeid=report.nodeid,
-                        outcome="WARNING",
-                        start_time=datetime.now(),
-                        duration=0.0,
-                        caplog=str(report.message),
-                        has_warning=True,
-                    )
-                )
+                # Find the corresponding TestResult instance
+                for test_result in test_results:
+                    if test_result.nodeid == report.nodeid:
+                        test_result.has_warning = True
+                        break
 
     # Fallback for session timing
     session_start = session_start or datetime.now()
     session_end = session_end or datetime.now()
 
     # Generate unique session ID
-    session_id = (
-        f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
-    )
+    session_id = f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
 
     # # Process rerun groups
     # rerun_groups = group_rerun_tests(test_results)
@@ -159,7 +147,7 @@ def pytest_terminal_summary(
 
     # Print summary
     terminalreporter.write_sep("=", "pytest-insight summary", cyan=True)
-    outcome_counts = Counter(result.outcome for result in test_results)
+    outcome_counts = Counter(result.outcome.to_str() for result in test_results)  # Convert to strings
     for outcome, count in sorted(outcome_counts.items()):
         terminalreporter.write_line(f"  {outcome}: {count}")
     print()
@@ -171,17 +159,15 @@ def group_rerun_tests(test_results: List[TestResult]) -> List[RerunTestGroup]:
 
     # Collect rerun instances
     for test in test_results:
-        if test.outcome.lower() == "rerun":
+        if test.outcome == TestOutcome.RERUN:  # Compare with enum value directly
             if test.nodeid not in rerun_groups:
-                rerun_groups[test.nodeid] = RerunTestGroup(
-                    nodeid=test.nodeid, final_outcome="UNKNOWN"
-                )
+                rerun_groups[test.nodeid] = RerunTestGroup(nodeid=test.nodeid, final_outcome="UNKNOWN")
             rerun_groups[test.nodeid].add_rerun(test)
 
     # Assign final outcomes
     for test in test_results:
-        if test.outcome.lower() != "rerun" and test.nodeid in rerun_groups:
-            rerun_groups[test.nodeid].final_outcome = test.outcome
+        if test.outcome != TestOutcome.RERUN and test.nodeid in rerun_groups:
+            rerun_groups[test.nodeid].final_outcome = test.outcome.to_str()  # Convert enum to string
             rerun_groups[test.nodeid].add_test(test)
 
     return list(rerun_groups.values())
