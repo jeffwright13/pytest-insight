@@ -234,6 +234,32 @@ class Test_TestOutcome:
         # Test string representation matches serialization format
         assert TestOutcome.FAILED.to_str() == "failed"
 
+    def test_test_outcome_case_handling(self):
+        """Test TestOutcome enum handles case conversion correctly."""
+        # Verify from_str() always creates uppercase internal values
+        assert TestOutcome.from_str("passed").value == "PASSED"
+        assert TestOutcome.from_str("PASSED").value == "PASSED"
+        assert TestOutcome.from_str("PaSsEd").value == "PASSED"
+
+        # Verify to_str() always returns lowercase
+        assert TestOutcome.PASSED.to_str() == "passed"
+        assert TestOutcome.FAILED.to_str() == "failed"
+        assert TestOutcome.RERUN.to_str() == "rerun"
+
+        # Verify raw enum values remain uppercase
+        assert TestOutcome.PASSED.value == "PASSED"
+        assert str(TestOutcome.PASSED) == "TestOutcome.PASSED"
+
+    def test_test_outcome_invalid_values(self):
+        """Test TestOutcome enum handles invalid values appropriately."""
+        with pytest.raises(ValueError) as exc:
+            TestOutcome.from_str("INVALID")
+        assert "Invalid test outcome: INVALID" in str(exc.value)
+
+        with pytest.raises(ValueError) as exc:
+            TestOutcome.from_str("")
+        assert "Invalid test outcome: " in str(exc.value)
+
 
 class Test_TestResult:
     """Test the TestResult model."""

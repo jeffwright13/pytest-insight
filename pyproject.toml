@@ -39,6 +39,7 @@ line_length = 120
 [tool.ruff]
 line-length = 120
 fix = true
+unsafe-fixes = true
 src = ["src"]
 
 [tool.ruff.lint]

@@ -125,12 +125,12 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     session_id = f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
 
     # # Process rerun groups
-    # rerun_groups = group_rerun_tests(test_results)
     rerun_test_group_list = group_rerun_tests(test_results)
 
     # Create and store session with SUT name
     session = TestSession(
-        session_id=f"session-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')[:13]}",
+        # session_id=f"session-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')[:13]}",
+        session_id=session_id,
         sut_name=sut_name,  # Use the SUT name from pytest option
         session_start_time=session_start or datetime.now(),
         session_stop_time=session_end or datetime.now(),

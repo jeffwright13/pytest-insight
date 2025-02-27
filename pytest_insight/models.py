@@ -7,25 +7,27 @@ from typing import Dict, List, Optional
 class TestOutcome(Enum):
     """Test outcome states."""
 
-    PASSED = "passed"
-    FAILED = "failed"
-    SKIPPED = "skipped"
-    XFAILED = "xfailed"
-    XPASSED = "xpassed"
-    RERUN = "rerun"
-    ERROR = "error"
+    __test__ = False  # Tell Pytest this is NOT a test class
+
+    PASSED = "PASSED"  # Internal representation in UPPERCASE
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+    XFAILED = "XFAILED"
+    XPASSED = "XPASSED"
+    RERUN = "RERUN"
+    ERROR = "ERROR"
 
     @classmethod
     def from_str(cls, outcome: str) -> "TestOutcome":
-        """Convert string to TestOutcome, case-insensitive."""
+        """Convert string to TestOutcome, always uppercase internally."""
         try:
             return cls[outcome.upper()]
         except KeyError:
             raise ValueError(f"Invalid test outcome: {outcome}")
 
     def to_str(self) -> str:
-        """Convert TestOutcome to string."""
-        return self.value
+        """Convert TestOutcome to string, always lowercase externally."""
+        return self.value.lower()
 
 
 @dataclass
@@ -93,6 +95,8 @@ class TestResult:
 @dataclass
 class RerunTestGroup:
     """Represents a test that has been run multiple times using pytest-rerunfailures."""
+
+    __test__ = False  # Tell Pytest this is NOT a test class
 
     nodeid: str
     final_outcome: str
@@ -232,6 +236,8 @@ class TestSession:
 class SUTGroup:
     """Represents a collection of test sessions for a single SUT."""
 
+    __test__ = False  # Tell Pytest this is NOT a test class
+
     sut_name: str
     sessions: List[TestSession] = field(default_factory=list)  # Fix: correct default_factory syntax
 
@@ -247,6 +253,8 @@ class SUTGroup:
 @dataclass
 class TestHistory:
     """Collection of test sessions grouped by SUT."""
+
+    __test__ = False  # Tell Pytest this is NOT a test class
 
     def __init__(self):
         self._sessions_by_sut = {}  # Initialize sessions dict
