@@ -118,6 +118,7 @@ def test0_warning():
     assert api_v1() == 1
 
 
+# Has a 1 in 32 chance of failing
 @pytest.mark.flaky(reruns=5)
 def test_flaky_3():
     assert random.choice([True, False])

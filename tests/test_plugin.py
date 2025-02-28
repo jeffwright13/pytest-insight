@@ -1,38 +1,46 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pytest_insight.models import TestOutcome, TestResult
-from pytest_insight.plugin import group_rerun_tests
+from pytest_insight.plugin import group_tests_into_rerun_test_groups
 
 
-def create_test_result(nodeid: str, outcome: TestOutcome) -> TestResult:
-    """Helper to create test results for testing."""
-    return TestResult(nodeid=nodeid, outcome=outcome, start_time=datetime.utcnow(), duration=0.1)
+def create_test_result(nodeid: str, outcome: TestOutcome, offset_seconds: int = 0) -> TestResult:
+    """Helper to create test results for testing with ordered timestamps."""
+    now = datetime.utcnow()
+    return TestResult(nodeid=nodeid, outcome=outcome, start_time=now + timedelta(seconds=offset_seconds), duration=0.1)
 
 
-def test_group_rerun_tests_with_enum_outcomes():
+def test_group_tests_into_rerun_test_groups_with_enum_outcomes():
     """Test rerun grouping with TestOutcome enum values."""
-    # Create a set of test results with enum outcomes
+    # Create a set of test results with enum outcomes and ordered timestamps
     test_results = [
-        create_test_result("test_a.py::test_1", TestOutcome.RERUN),
-        create_test_result("test_a.py::test_1", TestOutcome.RERUN),
-        create_test_result("test_a.py::test_1", TestOutcome.PASSED),
-        create_test_result("test_b.py::test_2", TestOutcome.RERUN),
-        create_test_result("test_b.py::test_2", TestOutcome.FAILED),
+        create_test_result("test_a.py::test_1", TestOutcome.RERUN, 0),  # First run
+        create_test_result("test_a.py::test_1", TestOutcome.RERUN, 1),  # Second run
+        create_test_result("test_a.py::test_1", TestOutcome.PASSED, 2),  # Final pass
+        create_test_result("test_b.py::test_2", TestOutcome.RERUN, 3),  # First run
+        create_test_result("test_b.py::test_2", TestOutcome.FAILED, 4),  # Final fail
     ]
 
-    rerun_groups = group_rerun_tests(test_results)
+    rerun_groups = group_tests_into_rerun_test_groups(test_results)
 
     assert len(rerun_groups) == 2, "Should have two rerun groups"
 
     # Check first group
     group_a = next(g for g in rerun_groups if g.nodeid == "test_a.py::test_1")
-    assert len(group_a.reruns) == 2, "Should have two reruns"
-    assert group_a.final_outcome == "passed"
+    assert len(group_a.tests) == 3
+    assert [t.outcome for t in group_a.tests] == [TestOutcome.RERUN, TestOutcome.RERUN, TestOutcome.PASSED]
+    assert group_a.final_outcome == TestOutcome.PASSED
 
     # Check second group
     group_b = next(g for g in rerun_groups if g.nodeid == "test_b.py::test_2")
-    assert len(group_b.reruns) == 1, "Should have one rerun"
-    assert group_b.final_outcome == "failed"
+    assert len(group_b.tests) == 2
+    assert [t.outcome for t in group_b.tests] == [TestOutcome.RERUN, TestOutcome.FAILED]
+    assert group_b.final_outcome == TestOutcome.FAILED
+
+    # Verify chronological ordering in both groups
+    for group in [group_a, group_b]:
+        for i in range(len(group.tests) - 1):
+            assert group.tests[i].start_time < group.tests[i + 1].start_time
 
 
 def test_test_outcome_enum_conversion():

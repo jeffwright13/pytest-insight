@@ -338,30 +338,52 @@ class Test_TestResult:
         assert result.longreprtext == random_test_result.longreprtext
         assert result.has_warning == random_test_result.has_warning
 
+    # def test_test_result_timing_calculations(self):
+    #     """Test that timing values are calculated correctly on initialization."""
+    #     now = datetime.now()
+
+    #     # Test initialization with duration
+    #     result1 = TestResult(
+    #         nodeid="test_example.py::test_case",
+    #         outcome=TestOutcome.PASSED,
+    #         start_time=now,
+    #         duration=5.0,
+    #     )
+    #     assert result1.stop_time == now + timedelta(seconds=5.0)
+    #     assert result1.duration == 5.0
+
+    #     # Test initialization with stop_time
+    #     stop_time = now + timedelta(seconds=10.0)
+    #     result2 = TestResult(
+    #         nodeid="test_example.py::test_case",
+    #         outcome=TestOutcome.PASSED,
+    #         start_time=now,
+    #         stop_time=stop_time,
+    #     )
+    #     assert result2.stop_time == stop_time
+    #     assert result2.duration == 10.0
+
     def test_test_result_timing_calculations(self):
-        """Test that timing values are calculated correctly on initialization."""
-        now = datetime.now()
+        """Test TestResult handles timing calculations correctly."""
+        now = datetime.utcnow()
 
-        # Test initialization with duration
-        result1 = TestResult(
-            nodeid="test_example.py::test_case",
-            outcome=TestOutcome.PASSED,
-            start_time=now,
-            duration=5.0,
-        )
-        assert result1.stop_time == now + timedelta(seconds=5.0)
-        assert result1.duration == 5.0
+        # Test with duration provided
+        result1 = TestResult(nodeid="test_a.py::test_1", outcome=TestOutcome.PASSED, start_time=now, duration=1.5)
+        assert result1.stop_time == now + timedelta(seconds=1.5)
 
-        # Test initialization with stop_time
-        stop_time = now + timedelta(seconds=10.0)
+        # Test with stop_time provided
         result2 = TestResult(
-            nodeid="test_example.py::test_case",
+            nodeid="test_a.py::test_1",
             outcome=TestOutcome.PASSED,
             start_time=now,
-            stop_time=stop_time,
+            stop_time=now + timedelta(seconds=2.0),
         )
-        assert result2.stop_time == stop_time
-        assert result2.duration == 10.0
+        assert result2.duration == 2.0
+
+        # Test invalid initialization
+        with pytest.raises(ValueError) as exc:
+            TestResult(nodeid="test_a.py::test_1", outcome=TestOutcome.PASSED, start_time=now)
+        assert "Either stop_time or duration must be provided" in str(exc.value)
 
 
 class test_TestSession:
@@ -471,18 +493,41 @@ class test_TestSession:
         assert len(session.rerun_test_groups) == len(random_test_session.rerun_test_groups)
         assert session.session_tags == random_test_session.session_tags
 
+    def test_test_session_serialization(self):
+        """Test TestSession serialization to dictionary."""
+        now = datetime.utcnow()
+        session = TestSession(
+            sut_name="test-app",
+            session_id="session-123",
+            session_start_time=now,
+            session_stop_time=now + timedelta(minutes=1),
+            test_results=[
+                TestResult(nodeid="test_a.py::test_1", outcome=TestOutcome.PASSED, start_time=now, duration=1.0)
+            ],
+            session_tags={"env": "test"},
+        )
+
+        data = session.to_dict()
+        assert data["sut_name"] == "test-app"
+        assert data["session_id"] == "session-123"
+        assert isinstance(data["session_start_time"], str)
+        assert isinstance(data["session_stop_time"], str)
+        assert isinstance(data["test_results"], list)
+        assert data["session_tags"] == {"env": "test"}
+
 
 class Test_RerunTestGroup:
     """Test the RerunTestGroup model."""
 
     def test_rerun_test_group(self):
         """Test RerunTestGroup functionality."""
-        group = RerunTestGroup("test_example.py::test_case", TestOutcome.FAILED)
         now = datetime.utcnow()
+        group = RerunTestGroup(nodeid="test_example.py::test_case")
 
+        # Create test results in chronological order
         result1 = TestResult(
             nodeid="test_example.py::test_case",
-            outcome=TestOutcome.FAILED,
+            outcome=TestOutcome.RERUN,
             start_time=now,
             duration=0.5,
         )
@@ -493,25 +538,23 @@ class Test_RerunTestGroup:
             duration=0.7,
         )
 
-        # Use proper methods to add results
-        group.add_rerun(result1)
+        # Add tests in order
         group.add_test(result1)
         group.add_test(result2)
 
         assert group.nodeid == "test_example.py::test_case"
-        assert group.final_outcome == TestOutcome.FAILED
-        assert group.final_test == result2
-        assert len(group.reruns) == 1
-        assert len(group.full_test_list) == 2
+        assert group.final_outcome == TestOutcome.PASSED
+        assert len(group.tests) == 2
+        assert group.tests == [result1, result2]
 
     def test_rerun_test_group_to_dict(self):
         """Test the to_dict method of the RerunTestGroup model."""
-        group = RerunTestGroup("test_example.py::test_case", TestOutcome.FAILED)
         now = datetime.utcnow()
+        group = RerunTestGroup(nodeid="test_example.py::test_case")
 
         result1 = TestResult(
             nodeid="test_example.py::test_case",
-            outcome=TestOutcome.FAILED,
+            outcome=TestOutcome.RERUN,
             start_time=now,
             duration=0.5,
         )
@@ -522,25 +565,24 @@ class Test_RerunTestGroup:
             duration=0.7,
         )
 
-        group.add_rerun(result1)
         group.add_test(result1)
         group.add_test(result2)
 
         group_dict = group.to_dict()
         assert isinstance(group_dict, dict)
         assert group_dict["nodeid"] == group.nodeid
-        assert group_dict["final_outcome"] == group.final_outcome
-        assert len(group_dict["reruns"]) == 1
-        assert len(group_dict["full_test_list"]) == 2
+        assert len(group_dict["tests"]) == 2
+        assert group_dict["tests"][0]["outcome"] == "rerun"
+        assert group_dict["tests"][1]["outcome"] == "passed"
 
     def test_rerun_test_group_from_dict(self):
         """Test the from_dict method of the RerunTestGroup model."""
-        group = RerunTestGroup("test_example.py::test_case", TestOutcome.FAILED)
         now = datetime.utcnow()
+        group = RerunTestGroup(nodeid="test_example.py::test_case")
 
         result1 = TestResult(
             nodeid="test_example.py::test_case",
-            outcome=TestOutcome.FAILED,
+            outcome=TestOutcome.RERUN,
             start_time=now,
             duration=0.5,
         )
@@ -551,17 +593,19 @@ class Test_RerunTestGroup:
             duration=0.7,
         )
 
-        group.add_rerun(result1)
         group.add_test(result1)
         group.add_test(result2)
 
+        # Test serialization/deserialization
         group_dict = group.to_dict()
         new_group = RerunTestGroup.from_dict(group_dict)
+
         assert isinstance(new_group, RerunTestGroup)
         assert new_group.nodeid == group.nodeid
-        assert new_group.final_outcome == group.final_outcome
-        assert len(new_group.reruns) == 1
-        assert len(new_group.full_test_list) == 2
+        assert new_group.final_outcome == TestOutcome.PASSED
+        assert len(new_group.tests) == 2
+        assert new_group.tests[0].outcome == TestOutcome.RERUN
+        assert new_group.tests[1].outcome == TestOutcome.PASSED
 
 
 class Test_TestHistory:

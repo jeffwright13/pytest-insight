@@ -2,7 +2,7 @@ import sys
 import uuid
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import pytest
 from _pytest.config import Config
@@ -124,8 +124,8 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     # Generate unique session ID
     session_id = f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
 
-    # # Process rerun groups
-    rerun_test_group_list = group_rerun_tests(test_results)
+    # Create/process rerun test groups
+    rerun_test_group_list = group_tests_into_rerun_test_groups(test_results)
 
     # Create and store session with SUT name
     session = TestSession(
@@ -153,27 +153,23 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     print()
 
 
-def group_rerun_tests(test_results: List[TestResult]) -> List[RerunTestGroup]:
-    """Sort rerun tests into groups and determine final outcome."""
-    rerun_groups = {}
+def group_tests_into_rerun_test_groups(test_results: List[TestResult]) -> List[RerunTestGroup]:
+    """Group test results by nodeid into RerunTestGroups.
 
-    # Collect rerun instances
-    for test in test_results:
-        if test.outcome == TestOutcome.RERUN:  # Compare with enum value directly
-            if test.nodeid not in rerun_groups:
-                rerun_groups[test.nodeid] = RerunTestGroup(nodeid=test.nodeid, final_outcome="UNKNOWN")
-            rerun_groups[test.nodeid].add_rerun(test)
+    A valid rerun group must have:
+    - Multiple test results for the same nodeid
+    - All tests except the last must have outcome = RERUN
+    - Last test (chronologically) must have any outcome except RERUN
+    - Tests ordered by start_time
+    """
+    rerun_test_groups: Dict[str, RerunTestGroup] = {}
 
-    # Assign final outcomes
-    for test in test_results:
-        if test.outcome != TestOutcome.RERUN and test.nodeid in rerun_groups:
-            rerun_groups[test.nodeid].final_outcome = test.outcome.to_str()  # Convert enum to string
-            rerun_groups[test.nodeid].add_test(test)
+    # First pass: group by nodeid
+    for test_result in test_results:
+        if test_result.nodeid not in rerun_test_groups:
+            rerun_test_groups[test_result.nodeid] = RerunTestGroup(nodeid=test_result.nodeid)
+        rerun_test_groups[test_result.nodeid].add_test(test_result)
 
-    return list(rerun_groups.values())
-
-
-def populate_rerun_groups(test_session: TestSession) -> None:
-    """Attach rerun test groups to the test session."""
-    rerun_groups = group_rerun_tests(test_session.test_results)
-    test_session.rerun_test_groups = rerun_groups  # Store groups in session
+    # Return only groups with reruns (more than one test)
+    # RerunTestGroup's add_test handles chronological ordering and validation
+    return [group for group in rerun_test_groups.values() if len(group.tests) > 1]
