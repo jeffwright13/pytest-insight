@@ -77,67 +77,50 @@ class JSONStorage(BaseStorage):
     """Store test sessions in a JSON file for persistence with safe writes and corruption recovery."""
 
     FILE_PATH = Path.home() / ".pytest_insight" / "test_sessions.json"
-    BACKUP_PATH = FILE_PATH.with_suffix(".backup")
 
     def __init__(self, file_path: Optional[Path] = None):
-        super().__init__()
-        self._session_index = {}
-        self.FILE_PATH = file_path or self.FILE_PATH
-        self.BACKUP_PATH = self.FILE_PATH.with_suffix(".backup")
+        """Initialize storage with optional custom file path."""
+        self.file_path = Path(file_path) if file_path else self.FILE_PATH
+        self.backup_path = self.file_path.with_suffix('.backup')
 
-    def save_session(self, test_session: TestSession) -> None:
-        """Save a test session to storage."""
-        temp_path = self.FILE_PATH.with_suffix(".tmp")
+        # Create parent directories immediately
+        if self.file_path:
+            self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
+    def save_session(self, session: TestSession) -> None:
+        """Save a test session to JSON storage."""
         try:
-            # Ensure parent directory exists
-            self.FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            # Load existing data or create new
+            data = []
+            if self.file_path.exists():
+                with open(self.file_path) as f:
+                    data = json.load(f)
 
-            # Load existing sessions
-            sessions = []
-            if self.FILE_PATH.exists():
-                try:
-                    with self.FILE_PATH.open("r") as f:
-                        fcntl.flock(f, fcntl.LOCK_SH)
-                        data = json.load(f)
-                        fcntl.flock(f, fcntl.LOCK_UN)
-                        if isinstance(data, list):
-                            sessions = data
-                except json.JSONDecodeError:
-                    # Create backup of corrupt file
-                    if self.FILE_PATH.exists():
-                        shutil.copy(self.FILE_PATH, self.BACKUP_PATH)
+            # Add new session and save
+            data.append(session.to_dict())
 
-            # Add new session and write to temp file
-            sessions.append(test_session.to_dict())
-            with temp_path.open("w") as f:
-                fcntl.flock(f, fcntl.LOCK_EX)
-                json.dump(sessions, f, indent=4)
-                f.flush()
-                os.fsync(f.fileno())
-                fcntl.flock(f, fcntl.LOCK_UN)
+            # Ensure parent directories exist before writing
+            self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Atomically replace original file
-            temp_path.rename(self.FILE_PATH)
+            # Write to file
+            with open(self.file_path, 'w') as f:
+                json.dump(data, f, indent=2)
 
-        except Exception as e:
-            print(f"[pytest-insight] ERROR: Failed to write session data - {e}")
-            if temp_path.exists():
-                temp_path.unlink()
-            raise
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[pytest-insight] Warning: Failed to save session - {e}")
 
     def load_sessions(self) -> List[TestSession]:
         """Load all test sessions, recovering from backup if needed."""
-        if not self.FILE_PATH.exists():
+        if not self.file_path.exists():
             return []
 
         try:
             # Handle empty file case
-            if self.FILE_PATH.stat().st_size == 0:
-                self.FILE_PATH.unlink()
+            if self.file_path.stat().st_size == 0:
+                self.file_path.unlink()
                 return []
 
-            with self.FILE_PATH.open("r") as f:
+            with self.file_path.open("r") as f:
                 fcntl.flock(f, fcntl.LOCK_SH)
                 data = json.load(f)
                 fcntl.flock(f, fcntl.LOCK_UN)
@@ -185,7 +168,7 @@ class JSONStorage(BaseStorage):
             if valid_sessions:
                 print("[pytest-insight] Restoring from backup...")
                 shutil.copy(
-                    self.BACKUP_PATH, self.FILE_PATH
+                    self.BACKUP_PATH, self.file_path
                 )  # ✅ Replace corrupted file
                 return valid_sessions
 
@@ -206,14 +189,14 @@ class JSONStorage(BaseStorage):
     def clear_sessions(self) -> None:
         """Delete all stored test sessions safely."""
         try:
-            if self.FILE_PATH.exists():
-                self.FILE_PATH.unlink()
+            if self.file_path.exists():
+                self.file_path.unlink()
             self._session_index.clear()
         except Exception as e:
             print(f"[pytest-insight] ERROR: Failed to clear session storage - {e}")
 
 
-def get_storage_instance(storage_type: str = None) -> BaseStorage:
+def get_storage_instance(storage_type: str = None, file_path: str = None) -> BaseStorage:
     """Get storage instance based on configuration."""
     storage_type = storage_type or os.environ.get(
         "PYTEST_INSIGHT_STORAGE_TYPE",
@@ -221,11 +204,7 @@ def get_storage_instance(storage_type: str = None) -> BaseStorage:
     )
 
     if storage_type == StorageType.JSON.value:
-        storage_path = os.environ.get(
-            "PYTEST_INSIGHT_STORAGE_PATH",
-            os.path.expanduser("~/.pytest_insight/sessions.json")
-        )
-        return JSONStorage(Path(storage_path))
+        return JSONStorage(file_path)
     elif storage_type == StorageType.LOCAL.value:
         return InMemoryStorage()
     elif storage_type == StorageType.REMOTE.value:

@@ -15,11 +15,6 @@ from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
 from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
 from pytest_insight.storage import JSONStorage, get_storage_instance
 
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-
 _INSIGHT_INITIALIZED: bool = False
 _INSIGHT_ENABLED: bool = False
 
@@ -200,140 +195,87 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     most_retried = sorted(rerun_groups, key=lambda g: len(g.tests), reverse=True)[:3]
 
     def write_section_header(terminalreporter, text):
-        """Write a section header in bold yellow."""
-        terminalreporter.write_line(f"\n{text}", yellow=True, bold=True)
+        """Write a section header with dashes."""
+        terminalreporter.write_line("")
+        terminalreporter.write_line(f"--- {text} ---", yellow=True)
 
     def write_stat_line(terminalreporter, label, value, **color_kwargs):
-        """Write a stat line with colored value."""
-        terminalreporter.write(f"  {label}: ")
+        """Write an indented stat line with colored value."""
+        terminalreporter.write("    ")  # 4-space indentation
+        terminalreporter.write(f"{label}: ")
         terminalreporter.write_line(f"{value}", **color_kwargs)
 
-    def write_insight_panel(title: str, content: str, style: str = "cyan"):
-        """Write a rich panel with the given title and content."""
-        console = Console()
-        panel = Panel(
-            content,
-            title=title,
-            border_style=style,
-            padding=(1, 2)
-        )
-        console.print(panel)
+    # Add screen-wide header only for main plugin section
+    terminalreporter.write_sep("=", "pytest-insight summary", cyan=True)
+    terminalreporter.write_line("")  # Add spacing
 
-    def format_stat_row(label: str, value: str, value_style: str = "none") -> Text:
-        """Format a statistics row with styled value."""
-        text = Text()
-        text.append(f"{label}: ")
-        text.append(value, style=value_style)
-        return text
+    # Main sections
+    write_section_header(terminalreporter, "Test Session Metadata")
+    write_stat_line(terminalreporter, "SUT Name", sut_name)
+    write_stat_line(terminalreporter, "Session ID", session_id)
 
-    # Replace existing terminal output with Rich panels
-    console = Console()
+    write_section_header(terminalreporter, "Test Execution Summary")
+    write_stat_line(terminalreporter, "Total Tests", str(total_tests), green=True)
+    write_stat_line(terminalreporter, "Total Duration", f"{total_duration:.2f}s", green=True)
+    write_stat_line(terminalreporter, "Start Time", session_start.isoformat())
+    write_stat_line(terminalreporter, "Stop Time", session_end.isoformat())
 
-    # Metadata panel
-    metadata_content = Text()
-    metadata_content.append_text(format_stat_row("SUT Name", sut_name))
-    metadata_content.append("\n")
-    metadata_content.append_text(format_stat_row("Session ID", session_id))
-    console.print(Panel(metadata_content, title="Test Session Metadata", border_style="yellow"))
-
-    # Execution Summary panel
-    summary_content = Text()
-    summary_content.append_text(format_stat_row("Total Tests", str(total_tests), "green"))
-    summary_content.append("\n")
-    summary_content.append_text(format_stat_row("Total Duration", f"{total_duration:.2f}s", "green"))
-    summary_content.append("\n")
-    summary_content.append_text(format_stat_row("Start Time", session_start.isoformat()))
-    summary_content.append("\n")
-    summary_content.append_text(format_stat_row("Stop Time", session_end.isoformat()))
-    console.print(Panel(summary_content, title="Test Execution Summary", border_style="blue"))
-
-    # Outcome Distribution table
-    table = Table(title="Outcome Distribution", border_style="cyan")
-    table.add_column("Outcome", style="bold")
-    table.add_column("Count", justify="right")
-    table.add_column("Percentage", justify="right")
-
+    write_section_header(terminalreporter, "Outcome Distribution")
     for outcome, reports in sorted(terminalreporter.stats.items()):
         if outcome not in ["warnings", ""]:
             count = len(reports)
             percentage = (count / total_tests) * 100 if total_tests > 0 else 0
-            outcome_style = {
-                "passed": "green",
-                "failed": "red",
-                "error": "red",
-                "skipped": "yellow",
-                "xfailed": "yellow",
-                "xpassed": "yellow",
-                "rerun": "cyan"
-            }.get(outcome, "white")
+            value = f"{count} ({percentage:.1f}%)" if outcome != "rerun" else str(count)
+            color_kwargs = {
+                "passed": {"green": True},
+                "failed": {"red": True},
+                "error": {"red": True},
+                "skipped": {"yellow": True},
+                "xfailed": {"yellow": True},
+                "xpassed": {"yellow": True},
+                "rerun": {"cyan": True}
+            }.get(outcome, {})
+            write_stat_line(terminalreporter, f"{outcome.capitalize()}", value, **color_kwargs)
 
-            table.add_row(
-                outcome.capitalize(),
-                str(count),
-                f"{percentage:.1f}%" if outcome != "rerun" else "",
-                style=outcome_style
-            )
-    console.print(table)
-
-    # Rerun Analysis panel
     if rerun_groups:
-        rerun_content = Text()
-        rerun_content.append_text(format_stat_row("Tests Requiring Reruns", str(len(rerun_groups)), "cyan"))
-        rerun_content.append("\n")
-        rerun_content.append_text(format_stat_row("Eventually Passed", str(len(flaky_tests)), "green"))
-        rerun_content.append("\n")
-        rerun_content.append_text(format_stat_row("Remained Failed", str(len(unstable_tests)), "red"))
-        console.print(Panel(rerun_content, title="Rerun Analysis", border_style="magenta"))
+        write_section_header(terminalreporter, "Rerun Analysis")
+        write_stat_line(terminalreporter, "Tests Requiring Reruns", str(len(rerun_groups)), cyan=True)
+        write_stat_line(terminalreporter, "Eventually Passed", str(len(flaky_tests)), green=True)
+        write_stat_line(terminalreporter, "Remained Failed", str(len(unstable_tests)), red=True)
 
-        # Most Retried Tests table
         if most_retried:
-            retry_table = Table(title="Most Retried Tests", border_style="magenta")
-            retry_table.add_column("Test", style="bold")
-            retry_table.add_column("Attempts", justify="right")
-            retry_table.add_column("Final Outcome", justify="right")
-
+            write_section_header(terminalreporter, "Most Retried Tests")
             for group in most_retried:
-                outcome_style = "green" if group.final_outcome == TestOutcome.PASSED else "red"
-                retry_table.add_row(
+                color_kwargs = {"green": True} if group.final_outcome == TestOutcome.PASSED else {"red": True}
+                write_stat_line(
+                    terminalreporter,
                     group.nodeid,
-                    str(len(group.tests)),
-                    group.final_outcome.to_str().capitalize(),
-                    style=outcome_style
+                    f"{len(group.tests)} attempts ({group.final_outcome.to_str().capitalize()})",
+                    **color_kwargs
                 )
-            console.print(retry_table)
 
-    # Longest Running Tests table
     if top_duration_tests:
-        duration_table = Table(title="Longest Running Tests", border_style="blue")
-        duration_table.add_column("Test", style="bold")
-        duration_table.add_column("Duration", justify="right")
-        duration_table.add_column("Outcome", justify="right")
-
+        write_section_header(terminalreporter, "Longest Running Tests")
         for test in top_duration_tests:
-            outcome_style = {
-                TestOutcome.PASSED: "green",
-                TestOutcome.FAILED: "red",
-                TestOutcome.ERROR: "red",
-                TestOutcome.SKIPPED: "yellow"
-            }.get(test.outcome, "white")
-
-            duration_table.add_row(
+            color_kwargs = {
+                TestOutcome.PASSED: {"green": True},
+                TestOutcome.FAILED: {"red": True},
+                TestOutcome.ERROR: {"red": True},
+                TestOutcome.SKIPPED: {"yellow": True}
+            }.get(test.outcome, {})
+            write_stat_line(
+                terminalreporter,
                 test.nodeid,
-                f"{test.duration:.2f}s",
-                test.outcome.to_str().capitalize(),
-                style=outcome_style
+                f"{test.duration:.2f}s ({test.outcome.to_str().capitalize()})",
+                **color_kwargs
             )
-        console.print(duration_table)
 
-    # Warnings panel
     if "warnings" in terminalreporter.stats:
-        warning_content = Text()
-        warning_count = len(terminalreporter.stats["warnings"])
-        warning_content.append_text(format_stat_row("Total", str(warning_count), "yellow"))
-        console.print(Panel(warning_content, title="Warnings Summary", border_style="yellow"))
+        write_section_header(terminalreporter, "Warnings Summary")
+        write_stat_line(terminalreporter, "Total", str(len(terminalreporter.stats["warnings"])), yellow=True)
 
     # Add final spacing
-    console.print()
+    terminalreporter.write_line("")
 
 
 def group_tests_into_rerun_test_groups(test_results: List[TestResult]) -> List[RerunTestGroup]:
