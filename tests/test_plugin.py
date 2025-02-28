@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from pathlib import Path
+import json
 
 from pytest_insight.models import TestOutcome, TestResult
 from pytest_insight.plugin import group_tests_into_rerun_test_groups
@@ -74,3 +76,80 @@ def test_test_outcome_enum_conversion():
     outcomes = [TestOutcome.FAILED, TestOutcome.PASSED, TestOutcome.RERUN]
     outcome_strs = [o.to_str() for o in outcomes]
     assert sorted(outcome_strs) == ["failed", "passed", "rerun"]
+
+
+def test_insight_json_output_default_path(testdir):
+    """Test JSON output is written to default path when no path specified."""
+    # Create a temporary test
+    testdir.makepyfile("""
+        def test_example():
+            assert True
+    """)
+
+    # Run pytest with insight enabled
+    result = testdir.runpytest('--insight')
+    result.assert_outcomes(passed=1)
+
+    # Check default JSON file exists
+    json_path = Path.home() / ".pytest_insight" / "test_sessions.json"
+    assert json_path.exists()
+
+    # Verify JSON content
+    with open(json_path) as f:
+        data = json.load(f)
+        assert len(data['sessions']) > 0
+        assert data['sessions'][-1]['test_results'][0]['outcome'] == 'passed'
+
+
+def test_insight_json_output_custom_path(testdir):
+    """Test JSON output is written to specified path."""
+    testdir.makepyfile("""
+        def test_example():
+            assert True
+    """)
+
+    # Run pytest with custom JSON path
+    custom_path = testdir.tmpdir / "custom_output.json"
+    result = testdir.runpytest('--insight', f'--insight-json={custom_path}')
+    result.assert_outcomes(passed=1)
+
+    # Verify file exists at custom path
+    assert custom_path.exists()
+
+    # Verify JSON content
+    with open(custom_path) as f:
+        data = json.load(f)
+        assert len(data['sessions']) > 0
+        assert data['sessions'][-1]['test_results'][0]['outcome'] == 'passed'
+
+
+def test_insight_json_output_disabled(testdir):
+    """Test JSON output can be disabled."""
+    testdir.makepyfile("""
+        def test_example():
+            assert True
+    """)
+
+    # Run pytest with JSON output disabled
+    result = testdir.runpytest('--insight', '--insight-json=none')
+    result.assert_outcomes(passed=1)
+
+    # Verify default file was not created
+    json_path = Path.home() / ".pytest_insight" / "test_sessions.json"
+    assert not json_path.exists()
+
+
+def test_insight_json_output_parent_dirs(testdir):
+    """Test JSON output creates parent directories if needed."""
+    testdir.makepyfile("""
+        def test_example():
+            assert True
+    """)
+
+    # Run pytest with nested path
+    nested_path = testdir.tmpdir / "nested" / "dir" / "output.json"
+    result = testdir.runpytest('--insight', f'--insight-json={nested_path}')
+    result.assert_outcomes(passed=1)
+
+    # Verify nested directories were created
+    assert nested_path.exists()

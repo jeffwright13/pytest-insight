@@ -1,4 +1,11 @@
 """Constants and configuration for pytest-insight."""
 
-# Storage configuration
-DEFAULT_STORAGE_CLASS = "JSONStorage"
+from enum import Enum
+
+class StorageType(Enum):
+    LOCAL = "local"
+    JSON = "json"
+    REMOTE = "remote"
+    DATABASE = "database"
+
+DEFAULT_STORAGE_TYPE = StorageType.JSON

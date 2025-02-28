@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import List, Optional
 
-from pytest_insight.constants import DEFAULT_STORAGE_CLASS
+from pytest_insight.constants import StorageType
 from pytest_insight.models import TestSession
 
 
@@ -213,10 +213,26 @@ class JSONStorage(BaseStorage):
             print(f"[pytest-insight] ERROR: Failed to clear session storage - {e}")
 
 
-def get_storage_instance() -> JSONStorage:
-    """Get storage instance, respecting environment configuration."""
-    storage_path = os.environ.get(
-        "PYTEST_INSIGHT_STORAGE",
-        os.path.expanduser("~/.pytest_insight/sessions.json")
+def get_storage_instance(storage_type: str = None) -> BaseStorage:
+    """Get storage instance based on configuration."""
+    storage_type = storage_type or os.environ.get(
+        "PYTEST_INSIGHT_STORAGE_TYPE",
+        StorageType.JSON.value
     )
-    return JSONStorage(Path(storage_path))
+
+    if storage_type == StorageType.JSON.value:
+        storage_path = os.environ.get(
+            "PYTEST_INSIGHT_STORAGE_PATH",
+            os.path.expanduser("~/.pytest_insight/sessions.json")
+        )
+        return JSONStorage(Path(storage_path))
+    elif storage_type == StorageType.LOCAL.value:
+        return InMemoryStorage()
+    elif storage_type == StorageType.REMOTE.value:
+        # Future: Return RemoteStorage implementation
+        raise NotImplementedError("Remote storage not yet implemented")
+    elif storage_type == StorageType.DATABASE.value:
+        # Future: Return DatabaseStorage implementation
+        raise NotImplementedError("Database storage not yet implemented")
+    else:
+        raise ValueError(f"Unknown storage type: {storage_type}")

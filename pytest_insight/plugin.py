@@ -10,6 +10,7 @@ from _pytest.reports import TestReport
 from _pytest.terminal import TerminalReporter, WarningReport
 from pytest import ExitCode
 
+from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
 from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
 from pytest_insight.storage import JSONStorage, get_storage_instance
 
@@ -36,7 +37,15 @@ def insight_enabled(config: Optional[Config] = None) -> bool:
 
 
 def pytest_addoption(parser):
-    """Add pytest-insight specific options."""
+    """Add pytest-insight specific command line options."""
+    group = parser.getgroup('pytest-insight')
+    group.addoption(
+        '--insight-json',
+        action='store',
+        dest='insight_json_path',
+        default=None,
+        help='Path to output JSON file for test results'
+    )
     group = parser.getgroup("insight", "pytest-insight")
     group.addoption("--insight", action="store_true", help="Enable pytest-insight")
     group.addoption(
@@ -45,6 +54,12 @@ def pytest_addoption(parser):
         dest="insight_sut",  # Add dest to make option accessible
         help="Specify the System Under Test (SUT) name",
     )
+    group.addoption(
+        "--insight-storage-type",
+        choices=[st.value for st in StorageType],
+        default=DEFAULT_STORAGE_TYPE.value,
+        help="Storage backend to use"
+    )
 
 
 @pytest.hookimpl
@@ -52,15 +67,15 @@ def pytest_configure(config: Config):
     """Configure the plugin if enabled."""
     insight_enabled(config)
 
-    # Initialize persistent storage at the beginning of the pytest session and ensure a single instance is used
     global storage
     if storage is None:
-        storage = JSONStorage()
+        storage_type = config.getoption("insight_storage_type")
+        storage = get_storage_instance(storage_type)
 
 
 @pytest.hookimpl
 def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
-    """Process test results and store in TestSession."""
+    """Process test results and show useful insights in terminal summary."""
     if not insight_enabled(config):
         return
 
@@ -122,7 +137,10 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     session_end = session_end or datetime.now()
 
     # Generate unique session ID
-    session_id = f"session-{session_start.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
+    session_id = (
+        f"{sut_name}-{session_start.strftime('%Y%m%d-%H%M%S')}-"
+        f"{str(uuid.uuid4())[:8]}"
+    ).lower()
 
     # Create/process rerun test groups
     rerun_test_group_list = group_tests_into_rerun_test_groups(test_results)
@@ -145,11 +163,119 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
     storage.save_session(session)
 
-    # Print summary
+    # Calculate insights
+    total_tests = len(test_results)
+    total_duration = sum(t.duration for t in test_results)
+    rerun_groups = group_tests_into_rerun_test_groups(test_results)
+    flaky_tests = [g for g in rerun_groups if g.final_outcome == TestOutcome.PASSED]
+    unstable_tests = [g for g in rerun_groups if g.final_outcome == TestOutcome.FAILED]
+
+    # Sort tests by duration
+    sorted_by_duration = sorted(test_results, key=lambda t: t.duration, reverse=True)
+    top_duration_tests = sorted_by_duration[:3]
+
+    # Sort rerun groups by number of attempts
+    most_retried = sorted(rerun_groups, key=lambda g: len(g.tests), reverse=True)[:3]
+
+    def write_section_header(terminalreporter, text):
+        """Write a section header in bold yellow."""
+        terminalreporter.write_line(f"\n{text}", yellow=True, bold=True)
+
+    def write_stat_line(terminalreporter, label, value, **color_kwargs):
+        """Write a stat line with colored value."""
+        terminalreporter.write(f"  {label}: ")
+        terminalreporter.write_line(f"{value}", **color_kwargs)
+
+    # Print summary header in cyan
     terminalreporter.write_sep("=", "pytest-insight summary", cyan=True)
-    outcome_counts = Counter(result.outcome.to_str() for result in test_results)  # Convert to strings
-    for outcome, count in sorted(outcome_counts.items()):
-        terminalreporter.write_line(f"  {outcome}: {count}")
+
+    # Metadata section in yellow with white content
+    write_section_header(terminalreporter, "Test Session Metadata")
+    write_stat_line(terminalreporter, "SUT Name", sut_name)
+    write_stat_line(terminalreporter, "Session ID", session_id)
+
+    # Execution summary
+    write_section_header(terminalreporter, "Test Execution Summary")
+    write_stat_line(terminalreporter, "Total Tests", str(total_tests), green=True)
+    write_stat_line(terminalreporter, "Total Duration", f"{total_duration:.2f}s", green=True)
+    write_stat_line(terminalreporter, "Start Time", session_start.isoformat())
+    write_stat_line(terminalreporter, "Stop Time", session_end.isoformat())
+
+    # First, calculate the correct total tests (excluding reruns and warnings)
+    total_tests = sum(
+        len(reports) for outcome, reports in stats.items()
+        if outcome not in ("warnings", "rerun", "")  # Add empty string to exclusion
+    )
+
+    # Outcome distribution
+    write_section_header(terminalreporter, "Outcome Distribution")
+    for outcome, reports in sorted(terminalreporter.stats.items()):
+        if outcome not in ["warnings", ""]:  # Skip empty outcome
+            count = len(reports)
+            outcome_name = outcome.capitalize()
+
+            # Format value string based on outcome type
+            if outcome == "rerun":
+                value = str(count)  # Just show count for reruns
+            else:
+                percentage = (count / total_tests) * 100 if total_tests > 0 else 0
+                value = f"{count} ({percentage:.1f}%)"
+
+            # Color coding
+            color_kwargs = {
+                "green": outcome == "passed",
+                "red": outcome in ("failed", "error"),
+                "yellow": outcome in ("skipped", "xfailed", "xpassed"),
+                "cyan": outcome == "rerun"
+            }
+            write_stat_line(terminalreporter, outcome_name, value, **color_kwargs)
+
+    terminalreporter.write_line("")  # Add blank line after distribution
+
+    # Rerun analysis
+    if rerun_groups:
+        write_section_header(terminalreporter, "Rerun Analysis")
+        write_stat_line(terminalreporter, "Tests Requiring Reruns", str(len(rerun_groups)), cyan=True)
+        write_stat_line(terminalreporter, "Eventually Passed", str(len(flaky_tests)), green=True)
+        write_stat_line(terminalreporter, "Remained Failed", str(len(unstable_tests)), red=True)
+
+        if most_retried:
+            write_section_header(terminalreporter, "Most Retried Tests")
+            for group in most_retried:
+                outcome_color = {
+                    TestOutcome.PASSED: "green",
+                    TestOutcome.FAILED: "red"
+                }.get(group.final_outcome, "yellow")
+                write_stat_line(
+                    terminalreporter,
+                    group.nodeid,
+                    f"{len(group.tests)} attempts ({group.final_outcome.to_str().capitalize()})",
+                    **{outcome_color: True}
+                )
+
+    # Longest running tests
+    if top_duration_tests:
+        write_section_header(terminalreporter, "Longest Running Tests")
+        for test in top_duration_tests:
+            outcome_color = {
+                TestOutcome.PASSED: "green",
+                TestOutcome.FAILED: "red",
+                TestOutcome.ERROR: "red",
+                TestOutcome.SKIPPED: "yellow"
+            }.get(test.outcome, "white")
+            write_stat_line(
+                terminalreporter,
+                test.nodeid,
+                f"{test.duration:.2f}s ({test.outcome.to_str().capitalize()})",
+                **{outcome_color: True}
+            )
+
+    # Warning summary
+    if "warnings" in terminalreporter.stats:
+        warning_count = len(terminalreporter.stats["warnings"])
+        write_section_header(terminalreporter, "Warnings")
+        write_stat_line(terminalreporter, "Total", str(warning_count), yellow=True)
+
     print()
 
 
