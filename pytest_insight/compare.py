@@ -30,8 +30,8 @@ class ComparisonAnalyzer:
         if not base_session or not target_session:
             raise ValueError(
                 f"Sessions not found within the last {time_window}: "
-                f"{'base session' if not base_session else ''}"
-                f"{'target session' if not target_session else ''}"
+                f"{'' if base_session else 'base session'}"
+                f"{'' if target_session else 'target session'}"
             )
 
         base_results = {t.nodeid: t for t in base_session.test_results}

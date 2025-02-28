@@ -1,5 +1,5 @@
 import json
-from collections import Counter
+from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Callable
@@ -414,10 +414,10 @@ def analytics_summary(
             if test_filter.matches(result):
                 outcomes[result.outcome] += 1
 
-    typer.secho("\nOutcome Distribution:", fg=typer.colors.BLUE)
-    for outcome, count in sorted(outcomes.items()):
-        percentage = (count / total_tests * 100) if total_tests else 0
-        typer.echo(f"  {outcome}: {count} ({percentage:.1f}%)")
+    # typer.secho("\nOutcome Distribution:", fg=typer.colors.BLUE)
+    # for outcome, count in sorted(outcomes.items()):
+    #     percentage = (count / total_tests * 100) if total_tests else 0
+    #     typer.echo(f"  {outcome}: {count} ({percentage:.1f}%)")
 
 @analytics_app.command("analyze")
 def analyze_sut(
