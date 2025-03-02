@@ -1,9 +1,7 @@
 import json
 from collections import defaultdict
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Callable
-from typer import Option
+from typing import Any, Dict, List, Optional
 
 import pytest
 import typer
@@ -12,8 +10,8 @@ from fastapi.testclient import TestClient
 from pytest_insight.analytics import SUTAnalytics
 from pytest_insight.cli.commands import get_api
 from pytest_insight.cli.display import ResultsDisplay
-from pytest_insight.compare import ComparisonAnalyzer, SUTComparator
-from pytest_insight.core.analyzer import SessionFilter
+from pytest_insight.dimensional_comparator import DimensionalComparator
+from pytest_insight.dimensions import DurationDimension, ModuleDimension, OutcomeDimension, SUTDimension, TimeDimension
 from pytest_insight.filters import TestFilter, common_filter_options
 from pytest_insight.storage import get_storage_instance
 from pytest_insight.time_utils import TimeSpanParser
@@ -99,15 +97,12 @@ def list_metrics():
         print(metric)
 
 
-
 # Add filter support to all relevant commands
 @session_app.command("run")
 def run_session(
     path: str = typer.Argument("tests", help="Path to test directory or file"),
     sut: str = typer.Option("default_sut", "--sut", help="System Under Test name"),
-    pytest_args: List[str] = typer.Argument(
-        None, help="Additional pytest options (after --)"
-    ),
+    pytest_args: List[str] = typer.Argument(None, help="Additional pytest options (after --)"),
 ):
     """
     Run a new pytest session. All arguments after -- are passed directly to pytest.
@@ -131,16 +126,16 @@ def run_session(
 
 
 @session_app.command("show")
+@common_filter_options
 def show_session(
     sut: Optional[str] = typer.Option(None, "--sut", help="Filter by System Under Test name"),
     days: int = typer.Option(30, "--days", help="Number of days to look back"),
-    outcome: Optional[str] = typer.Option(None, "--outcome", help="Filter by test outcome (PASSED, FAILED, etc.)"),
+    outcome: Optional[str] = typer.Option(None, "--outcome", help="Filter by test outcome"),
     warnings: Optional[bool] = typer.Option(None, "--warnings/--no-warnings", help="Filter tests with warnings"),
     reruns: Optional[bool] = typer.Option(None, "--reruns/--no-reruns", help="Filter tests with reruns"),
     contains: Optional[str] = typer.Option(None, "--contains", help="Filter by test name pattern"),
 ):
     """Show details of test sessions with optional filtering."""
-    storage = get_storage_instance()
     sessions = storage.load_sessions()
 
     # Apply filters
@@ -152,71 +147,37 @@ def show_session(
         has_reruns=reruns,
         nodeid_contains=contains,
     )
-
     filtered_sessions = test_filter.filter_sessions(sessions)
+
     if not filtered_sessions:
-        typer.echo("No sessions match the specified filters.")
-        raise typer.Exit(1)
+        typer.echo("No sessions found matching filters")
+        return
 
-    session = filtered_sessions[-1]  # Get most recent matching session
-    filtered_results = test_filter.filter_results(session.test_results)
-
-    # Update statistics for filtered results
-    unique_tests = {test.nodeid: test for test in filtered_results}
-    total_tests = len(unique_tests)
+    # Get latest session
+    latest = max(filtered_sessions, key=lambda s: s.session_start_time)
+    filtered_results = latest.test_results
 
     # Count outcomes
     outcomes = {}
     for test in filtered_results:
-        outcome = test.outcome.capitalize()
+        outcome = test.outcome.value
         outcomes[outcome] = outcomes.get(outcome, 0) + 1
 
     # Count warnings
-    total_warnings = sum(test.has_warning for test in filtered_results)
-    unique_warnings = len(
-        {test.nodeid for test in filtered_results if test.has_warning}
-    )
+    warning_count = sum(1 for test in filtered_results if test.has_warning)
 
-    # Count rerun statistics
-    rerun_stats = {
-        "total_reruns": sum(len(group.reruns) for group in session.rerun_test_groups),
-        "total_groups": len(session.rerun_test_groups),
-        "passed_groups": sum(
-            1
-            for group in session.rerun_test_groups
-            if group.final_outcome.upper() == "PASSED"
-        ),
-        "failed_groups": sum(
-            1
-            for group in session.rerun_test_groups
-            if group.final_outcome.upper() == "FAILED"
-        ),
-    }
+    # Display results
+    typer.echo("\nTest Session Summary:")
+    typer.echo(f"  SUT: {latest.sut_name}")
+    typer.echo(f"  Session ID: {latest.session_id}")
+    typer.echo(f"  Start Time: {latest.session_start_time}")
+    typer.echo(f"  Duration: {latest.session_duration:.2f}s")
 
-    # Print Session Info
-    typer.echo("\nSession Info:")
-    typer.echo(f"  Session ID: {session.session_id}")
-    typer.echo(f"  SUT: {session.sut_name}")
-    typer.echo(f"  Start time: {session.session_start_time}")
-    typer.echo(f"  Duration: {session.session_duration}")
-
-    # Print Test Statistics
-    typer.echo("\nSession Stats:")
-    typer.echo(f"  Total Tests: {total_tests}")
-    for outcome, count in sorted(outcomes.items()):
+    typer.echo("\nTest Results:")
+    typer.echo(f"  Total Tests: {len(filtered_results)}")
+    for outcome, count in outcomes.items():
         typer.echo(f"  {outcome}: {count}")
-
-    # Print Warning Statistics
-    typer.echo("\nWarning Statistics:")
-    typer.echo(f"  Total Warnings: {total_warnings}")
-    typer.echo(f"  Unique Tests With Warnings: {unique_warnings}")
-
-    # Print Rerun Statistics
-    typer.echo("\nRerun Statistics:")
-    typer.echo(f"  Total Reruns: {rerun_stats['total_reruns']}")
-    typer.echo(f"  Rerun Groups: {rerun_stats['total_groups']}")
-    typer.echo(f"  ↳ Rerun Groups That Passed: {rerun_stats['passed_groups']}")
-    typer.echo(f"  ↳ Rerun Groups That Failed: {rerun_stats['failed_groups']}")
+    typer.echo(f"  Tests with Warnings: {warning_count}")
 
 
 @history_app.command("list")
@@ -236,29 +197,19 @@ def list_history(
 
     # Create filter from options
     test_filter = TestFilter(
-        sut=sut,
-        days=days,
-        outcome=outcome,
-        has_warnings=warnings,
-        has_reruns=reruns,
-        nodeid_contains=contains
+        sut=sut, days=days, outcome=outcome, has_warnings=warnings, has_reruns=reruns, nodeid_contains=contains
     )
 
     # Filter sessions
     filtered_sessions = test_filter.filter_sessions(sessions)
 
     if not filtered_sessions:
-        typer.secho(
-            "No test sessions found for the specified criteria",
-            fg=typer.colors.YELLOW
-        )
+        typer.secho("No test sessions found for the specified criteria", fg=typer.colors.YELLOW)
         return
 
     # Debug: Show available SUTs
     available_suts = {s.sut_name for s in sessions}
-    typer.secho(
-        f"Available SUTs: {', '.join(sorted(available_suts))}", fg=typer.colors.BLUE
-    )
+    typer.secho(f"Available SUTs: {', '.join(sorted(available_suts))}", fg=typer.colors.BLUE)
 
     # Filter by date and optionally by SUT (case-insensitive)
     recent = [s for s in sessions if s.session_start_time > cutoff]
@@ -267,9 +218,7 @@ def list_history(
         recent = [s for s in recent if s.sut_name.lower() == sut]
 
     if not recent:
-        typer.secho(
-            "No test sessions found for the specified criteria", fg=typer.colors.YELLOW
-        )
+        typer.secho("No test sessions found for the specified criteria", fg=typer.colors.YELLOW)
         return
 
     def format_session_summary(session):
@@ -300,9 +249,7 @@ def list_history(
 
         for sut_name, sut_sessions in sorted(by_sut_dict.items()):
             typer.secho(f"\nSUT: {sut_name}", fg=typer.colors.BLUE, bold=True)
-            sorted_sessions = sorted(
-                sut_sessions, key=lambda s: s.session_start_time, reverse=True
-            )
+            sorted_sessions = sorted(sut_sessions, key=lambda s: s.session_start_time, reverse=True)
 
             # Apply truncation if not showing all
             if not show_all:
@@ -321,9 +268,7 @@ def list_history(
                 typer.echo(f"{formatted_time} [{session.sut_name}]: {session_summary}")
     else:
         # Show flat chronological list
-        sorted_sessions = sorted(
-            recent, key=lambda s: s.session_start_time, reverse=True
-        )
+        sorted_sessions = sorted(recent, key=lambda s: s.session_start_time, reverse=True)
 
         # Apply truncation if not showing all
         if not show_all:
@@ -367,12 +312,7 @@ def analytics_summary(
 
     # Create filter from options
     test_filter = TestFilter(
-        sut=sut,
-        days=days,
-        outcome=outcome,
-        has_warnings=warnings,
-        has_reruns=reruns,
-        nodeid_contains=contains
+        sut=sut, days=days, outcome=outcome, has_warnings=warnings, has_reruns=reruns, nodeid_contains=contains
     )
 
     # Get filtered sessions and results
@@ -418,6 +358,7 @@ def analytics_summary(
     # for outcome, count in sorted(outcomes.items()):
     #     percentage = (count / total_tests * 100) if total_tests else 0
     #     typer.echo(f"  {outcome}: {count} ({percentage:.1f}%)")
+
 
 @analytics_app.command("analyze")
 def analyze_sut(
@@ -502,177 +443,89 @@ def display_test_history(history: Dict[str, Any]) -> None:
     typer.echo(f"Failure Rate: {history['failure_rate']:.2%}")
 
 
-class ComparisonMode(str, Enum):
-    """Comparison modes for analytics."""
-
-    SESSION = "session"
-    SUT = "sut"
-    PERIOD = "period"
-
-
-@analytics_app.command("compare")
-@common_filter_options
+@app.command("compare", help="Compare test results between two targets (SUTs or time windows)")
 def compare(
-    base: Optional[str] = typer.Argument(
-        None, help="Base session ID, SUT name, or date (YYYY-MM-DD)"
+    base: str = typer.Argument(..., help="Base target (SUT name, time, outcome, etc.)"),
+    target: str = typer.Argument(..., help="Target to compare against"),
+    dimension: str = typer.Option(
+        "sut", "--dimension", "-d", help="Dimension to compare (sut/time/outcome/duration/module)"
     ),
-    target: Optional[str] = typer.Argument(
-        None, help="Target session ID, SUT name, or date (YYYY-MM-DD)"
-    ),
-    mode: ComparisonMode = typer.Option(
-        ComparisonMode.SESSION,
-        "--mode",
-        "-m",
-        help="Comparison mode: session, sut, or period",
-    ),
-    timespan: Optional[str] = typer.Option(
-        None, "--time", "-t", help="Time window to consider (e.g., 20m, 1h, 7d)"
+    window: str = typer.Option("1d", "--window", "-w", help="Time window size for time dimension"),
+    duration_threshold: float = typer.Option(
+        None, "--duration-threshold", "-t", help="Duration threshold in seconds for duration dimension"
     ),
 ):
-    """Compare test results between different execution contexts."""
-    if base is None or target is None:
-        raise typer.BadParameter(
-            "Both BASE and TARGET arguments are required.\n\n"
-            "Example usage:\n"
-            "  insight analytics compare api-v1 api-v2 --mode sut -t 7d\n"
-            "  insight analytics compare 1234567 2345678 --mode session\n"
-            "  insight analytics compare 2025-01-01 2025-02-01 --mode period -t 30d"
-        )
-
-    try:
-        delta = TimeSpanParser.parse(timespan)
-    except ValueError as e:
-        typer.secho(str(e), fg=typer.colors.RED)
-        raise typer.Exit(1)
-
-    storage = get_storage_instance()
+    """Compare test results along a dimension."""
     sessions = storage.load_sessions()
 
-    if mode == ComparisonMode.SESSION:
-        base_session = next((s for s in sessions if s.session_id == base), None)
-        target_session = next((s for s in sessions if s.session_id == target), None)
-
-        if not base_session or not target_session:
-            typer.secho(f"One or more BASE, TARGET sessions not found", fg=typer.colors.RED)
-            typer.secho(f"BASE: {base}", fg=typer.colors.RED)
-            typer.secho(f"TARGET: {target}", fg=typer.colors.RED)
-            typer.echo("Available sessions:")
-            for session in sessions:
-                typer.echo(f"  {session.session_id}")
-            raise typer.Exit(1)
-
-        results = ComparisonAnalyzer.compare_sessions(base_session, target_session)
-        _display_session_comparison(
-            results, base_session.session_id, target_session.session_id
-        )
-
-    elif mode == ComparisonMode.SUT:
-        results = SUTComparator.compare_suts(sessions, base, target, delta.days)
-        _display_sut_comparison(results, base, target, delta.days)
-
-    elif mode == ComparisonMode.PERIOD:
-        try:
-            base_date = datetime.strptime(base, "%Y-%m-%d")
-            target_date = datetime.strptime(target, "%Y-%m-%d")
-        except ValueError:
-            typer.secho("Invalid date format. Use YYYY-MM-DD", fg=typer.colors.RED)
-            raise typer.Exit(1)
-
-        results = ComparisonAnalyzer.compare_periods(
-            sessions, base_date, target_date, delta.days
-        )
-        _display_period_comparison(results, base_date, target_date, delta.days)
-
-
-@app.command(
-    "compare", help="Compare test results between two targets: SUTs, sessions or times"
-)
-def compare_suts(
-    sut1: str = typer.Argument(..., help="First SUT to compare"),
-    sut2: str = typer.Argument(..., help="Second SUT to compare"),
-):
-    """Compare test results between two Systems Under Test (SUTs).
-
-    Analyzes and displays differences in:
-    - Test coverage
-    - Failure rates
-    - Performance metrics
-    """
-    api = get_api()
-    comparison = api.compare_suts(sut1, sut2)
-    ResultsDisplay.show_comparison(comparison)
-
-
-def _display_session_comparison(results: Dict, base_id: str, target_id: str):
-    """Display session comparison results."""
-    typer.secho("\nComparing sessions:", fg=typer.colors.BLUE, bold=True)
-    typer.echo(f"  Base: {base_id}")
-    typer.echo(f"  Target: {target_id}")
-
-    typer.secho("\nTest Changes:", fg=typer.colors.GREEN)
-    for change_type, test, from_state, to_state in results["changes"]:
-        if change_type == "added":
-            typer.secho(f"  [+] {test}: {to_state}", fg=typer.colors.GREEN)
-        elif change_type == "removed":
-            typer.secho(f"  [-] {test}: {from_state}", fg=typer.colors.RED)
+    # Create appropriate dimension
+    if dimension == "sut":
+        dim = SUTDimension()
+    elif dimension == "time":
+        window_td = TimeSpanParser.parse(window)
+        dim = TimeDimension(window_td)
+    elif dimension == "outcome":
+        dim = OutcomeDimension()
+    elif dimension == "duration":
+        if duration_threshold:
+            ranges = [(duration_threshold, "FAST"), (float("inf"), "SLOW")]
+            dim = DurationDimension(ranges)
         else:
-            typer.secho(
-                f"  [*] {test}: {from_state} → {to_state}", fg=typer.colors.YELLOW
-            )
+            dim = DurationDimension()
+    elif dimension == "module":
+        dim = ModuleDimension()
+    else:
+        typer.echo(f"Error: Unknown dimension '{dimension}'", err=True)
+        raise typer.Exit(1)
 
-    if results["performance_changes"]:
-        typer.secho("\nPerformance Changes:", fg=typer.colors.BLUE)
-        for test, base_time, target_time in results["performance_changes"]:
-            change = ((target_time - base_time) / base_time) * 100
+    # Compare using dimension
+    comparator = DimensionalComparator(dim)
+    results = comparator.compare(sessions, base, target)
+
+    if "error" in results:
+        typer.echo(f"Error: {results['error']}", err=True)
+        raise typer.Exit(1)
+
+    # Display results
+    typer.echo(f"\nComparing {dimension} {base} vs {target}:\n")
+
+    # Show summary stats
+    typer.echo("Summary:")
+    for side in ["base", "target"]:
+        stats = results[side]
+        typer.echo(f"  {side.title()}:")
+        typer.echo(f"    Total Tests: {stats['total_tests']}")
+        typer.echo(f"    Passed: {stats['passed']}")
+        typer.echo(f"    Failed: {stats['failed']}")
+        typer.echo(f"    Skipped: {stats['skipped']}")
+        typer.echo(f"    Duration: {stats['duration']:.2f}s")
+
+    # Show differences
+    diffs = results["differences"]
+    typer.echo("\nDifferences:")
+
+    if diffs["new_tests"]:
+        typer.echo("\n  New Tests:")
+        for test in diffs["new_tests"]:
+            typer.echo(f"    + {test}")
+
+    if diffs["removed_tests"]:
+        typer.echo("\n  Removed Tests:")
+        for test in diffs["removed_tests"]:
+            typer.echo(f"    - {test}")
+
+    if diffs["status_changes"]:
+        typer.echo("\n  Status Changes:")
+        for change in diffs["status_changes"]:
+            typer.echo(f"    {change['nodeid']}: {change['base_status']} -> {change['target_status']}")
+
+    if diffs["duration_changes"]:
+        typer.echo("\n  Significant Duration Changes:")
+        for change in diffs["duration_changes"]:
             typer.echo(
-                f"  {test}: {base_time:.2f}s → {target_time:.2f}s ({change:+.1f}%)"
+                f"    {change['nodeid']}: {change['base_duration']:.2f}s -> "
+                f"{change['target_duration']:.2f}s ({change['percent_change']:.1f}% change)"
             )
-
-
-def _display_sut_comparison(results: Dict, sut1: str, sut2: str, days: int):
-    """Display SUT comparison results."""
-    coverage = results["test_coverage"]
-
-    typer.secho(
-        f"\nTest Coverage Comparison ({days} days):", fg=typer.colors.BLUE, bold=True
-    )
-    typer.echo(f"  {sut1}: {coverage['total_sut1']} total tests")
-    typer.echo(f"  {sut2}: {coverage['total_sut2']} total tests")
-    typer.echo(f"  Common tests: {len(coverage['common'])}")
-
-    if coverage["unique_to_sut1"]:
-        typer.secho(f"\nTests only in {sut1}:", fg=typer.colors.GREEN)
-        for test in coverage["unique_to_sut1"][:5]:
-            typer.echo(f"  {test}")
-        if len(coverage["unique_to_sut1"]) > 5:
-            typer.echo(f"  ... and {len(coverage['unique_to_sut1']) - 5} more")
-
-    if coverage["unique_to_sut2"]:
-        typer.secho(f"\nTests only in {sut2}:", fg=typer.colors.GREEN)
-        for test in coverage["unique_to_sut2"][:5]:
-            typer.echo(f"  {test}")
-        if len(coverage["unique_to_sut2"]) > 5:
-            typer.echo(f"  ... and {len(coverage['unique_to_sut2']) - 5} more")
-
-    if results["stability"]["stability_differences"]:
-        typer.secho("\nStability Differences:", fg=typer.colors.YELLOW)
-        for test, rate1, rate2, diff in results["stability"]["stability_differences"]:
-            typer.echo(f"  {test}:")
-            typer.echo(f"    {sut1}: {rate1:.1%} failure rate")
-            typer.echo(f"    {sut2}: {rate2:.1%} failure rate")
-            typer.echo(f"    Difference: {diff:+.1f}%")
-
-
-def _display_period_comparison(
-    results: Dict, base_date: datetime, target_date: datetime, days: int
-):
-    """Display period comparison results."""
-    typer.secho("\nComparing periods:", fg=typer.colors.BLUE, bold=True)
-    typer.echo(f"  Base: {base_date.strftime('%Y-%m-%d')} (-{days} days)")
-    typer.echo(f"  Target: {target_date.strftime('%Y-%m-%d')} (-{days} days)")
-
-    # Display period comparison results (similar to session comparison)
-    # ... implement period-specific display logic ...
 
 
 @metrics_app.command("list")
