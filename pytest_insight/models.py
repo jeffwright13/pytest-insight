@@ -202,46 +202,61 @@ class TestSession:
 
 
 @dataclass
-class SUTGroup:
-    """Represents a collection of test sessions for a single SUT."""
-
-    __test__ = False  # Tell Pytest this is NOT a test class
-
-    sut_name: str
-    sessions: List[TestSession] = field(default_factory=list)  # Fix: correct default_factory syntax
-
-    def add_session(self, session: TestSession) -> None:
-        """Add a test session to this group."""
-        self.sessions.append(session)
-
-    def latest_session(self) -> Optional[TestSession]:
-        """Get the most recent test session."""
-        return max(self.sessions, key=lambda s: s.session_start_time) if self.sessions else None
-
-
-@dataclass
 class TestHistory:
-    """Collection of test sessions grouped by SUT."""
+    """Collection of test sessions grouped by SUT with efficient access patterns."""
 
     __test__ = False  # Tell Pytest this is NOT a test class
 
     def __init__(self):
-        self._sessions_by_sut = {}  # Initialize sessions dict
-
-    @property
-    def sessions(self) -> List[TestSession]:
-        """Get all sessions across all SUTs, sorted by start time."""
-        all_sessions = []
-        for sut_sessions in self._sessions_by_sut.values():
-            all_sessions.extend(sut_sessions)
-        return sorted(all_sessions, key=lambda s: s.session_start_time)
+        # Main storage: Dict[sut_name, List[TestSession]]
+        self._sessions_by_sut: Dict[str, List[TestSession]] = {}
+        # Cache of latest sessions: Dict[sut_name, TestSession]
+        self._latest_by_sut: Dict[str, TestSession] = {}
+        # Cache for global session list
+        self._all_sessions_cache: Optional[List[TestSession]] = None
 
     def add_test_session(self, session: TestSession) -> None:
         """Add a test session to the appropriate SUT group."""
+        # Initialize SUT list if needed
         if session.sut_name not in self._sessions_by_sut:
             self._sessions_by_sut[session.sut_name] = []
+
+        # Add session
         self._sessions_by_sut[session.sut_name].append(session)
 
+        # Update latest session cache for this SUT
+        current_latest = self._latest_by_sut.get(session.sut_name)
+        if not current_latest or session.session_start_time > current_latest.session_start_time:
+            self._latest_by_sut[session.sut_name] = session
+
+        # Invalidate global cache
+        self._all_sessions_cache = None
+
+    def get_sut_sessions(self, sut_name: str) -> List[TestSession]:
+        """Get all sessions for a specific SUT, chronologically ordered."""
+        sessions = self._sessions_by_sut.get(sut_name, [])
+        return sorted(sessions, key=lambda s: s.session_start_time)
+
+    def get_sut_latest_session(self, sut_name: str) -> Optional[TestSession]:
+        """Get the most recent session for a specific SUT."""
+        return self._latest_by_sut.get(sut_name)
+
+    @property
+    def sessions(self) -> List[TestSession]:
+        """Get all sessions across all SUTs, sorted by start time (cached)."""
+        if self._all_sessions_cache is None:
+            all_sessions = []
+            for sut_sessions in self._sessions_by_sut.values():
+                all_sessions.extend(sut_sessions)
+            self._all_sessions_cache = sorted(all_sessions, key=lambda s: s.session_start_time)
+        return self._all_sessions_cache.copy()  # Return copy to prevent cache modification
+
     def latest_session(self) -> Optional[TestSession]:
-        """Get the most recent test session."""
-        return self.sessions[-1] if self.sessions else None
+        """Get the most recent session across all SUTs."""
+        if not self._latest_by_sut:
+            return None
+        return max(self._latest_by_sut.values(), key=lambda s: s.session_start_time)
+
+    def get_sut_names(self) -> List[str]:
+        """Get list of all SUT names."""
+        return list(self._sessions_by_sut.keys())

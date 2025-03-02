@@ -34,3 +34,5 @@ oof/
 *.json
 tui_files
 .copilot
+tests/test_plugin.py.old
+test_example.py

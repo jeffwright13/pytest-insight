@@ -1,9 +1,8 @@
 import sys
 import uuid
-from collections import Counter
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Union
 from pathlib import Path
+from typing import Dict, List, Optional, Union
 
 import pytest
 from _pytest.config import Config
@@ -13,7 +12,7 @@ from pytest import ExitCode
 
 from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
 from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
-from pytest_insight.storage import JSONStorage, get_storage_instance
+from pytest_insight.storage import get_storage_instance
 
 _INSIGHT_INITIALIZED: bool = False
 _INSIGHT_ENABLED: bool = False
@@ -39,27 +38,21 @@ def insight_enabled(config: Optional[Config] = None) -> bool:
 
 def pytest_addoption(parser):
     """Add pytest-insight specific command line options."""
-    group = parser.getgroup('pytest-insight')
-    group.addoption(
-        '--insight-json',
-        action='store',
-        dest='insight_json_path',
-        default=None,
-        help='Path to output JSON file for test results'
-    )
-    group = parser.getgroup("insight", "pytest-insight")
+    group = parser.getgroup("pytest-insight")  # Use same name as header
     group.addoption("--insight", action="store_true", help="Enable pytest-insight")
-    group.addoption(
-        "--insight-sut",
-        default="default_sut",
-        dest="insight_sut",  # Add dest to make option accessible
-        help="Specify the System Under Test (SUT) name",
-    )
+    group.addoption("--insight-sut", action="store", default="default_sut", help="Name of the system under test")
     group.addoption(
         "--insight-storage-type",
-        choices=[st.value for st in StorageType],
+        action="store",
+        choices=[t.value for t in StorageType],
         default=DEFAULT_STORAGE_TYPE.value,
-        help="Storage backend to use"
+        help=f"Storage type for test sessions (default: {DEFAULT_STORAGE_TYPE.value})",
+    )
+    group.addoption(
+        "--insight-json-path",
+        action="store",
+        default=None,  # Make path optional, use default from JSONStorage if not specified
+        help="Path to JSON storage file for test sessions (use 'none' to disable saving results)",
     )
 
 
@@ -78,14 +71,22 @@ def pytest_configure(config: Config):
         if json_path and json_path.lower() == "none":
             return
 
-        # Convert string path to Path object and ensure it's absolute
+        # Convert string path to Path object only if path is specified
         if json_path:
             json_path = Path(json_path).resolve()
-            # Create parent directories for custom path
             json_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Create storage instance
+        # Create storage instance (will use default path if json_path is None)
         storage = get_storage_instance(storage_type, json_path)
+
+    # Initialize session with empty metadata
+    sut_name = config.getoption("insight_sut", "default_sut")
+    config._insight_session = TestSession(
+        sut_name=sut_name,
+        session_id=f"{sut_name}-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}".lower(),
+        session_start_time=datetime.now(),
+        session_stop_time=datetime.now(),  # Will be updated later
+    )
 
 
 @pytest.hookimpl
@@ -154,17 +155,13 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     session_end = session_end or datetime.now()
 
     # Generate unique session ID
-    session_id = (
-        f"{sut_name}-{session_start.strftime('%Y%m%d-%H%M%S')}-"
-        f"{str(uuid.uuid4())[:8]}"
-    ).lower()
+    session_id = (f"{sut_name}-{session_start.strftime('%Y%m%d-%H%M%S')}-" f"{str(uuid.uuid4())[:8]}").lower()
 
     # Create/process rerun test groups
     rerun_test_group_list = group_tests_into_rerun_test_groups(test_results)
 
     # Create and store session with SUT name
     session = TestSession(
-        # session_id=f"session-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')[:13]}",
         session_id=session_id,
         sut_name=sut_name,  # Use the SUT name from pytest option
         session_start_time=session_start or datetime.now(),
@@ -178,7 +175,11 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         },
     )
 
-    storage.save_session(session)
+    try:
+        storage.save_session(session)
+    except Exception as e:
+        terminalreporter.write_line(f"[pytest-insight] Error: Failed to save session - {str(e)}", red=True)
+        terminalreporter.write_line(f"[pytest-insight] Error details: {str(e)}", red=True)
 
     # Calculate insights
     total_tests = len(test_results)
@@ -233,7 +234,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 "skipped": {"yellow": True},
                 "xfailed": {"yellow": True},
                 "xpassed": {"yellow": True},
-                "rerun": {"cyan": True}
+                "rerun": {"cyan": True},
             }.get(outcome, {})
             write_stat_line(terminalreporter, f"{outcome.capitalize()}", value, **color_kwargs)
 
@@ -251,7 +252,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                     terminalreporter,
                     group.nodeid,
                     f"{len(group.tests)} attempts ({group.final_outcome.to_str().capitalize()})",
-                    **color_kwargs
+                    **color_kwargs,
                 )
 
     if top_duration_tests:
@@ -261,13 +262,13 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 TestOutcome.PASSED: {"green": True},
                 TestOutcome.FAILED: {"red": True},
                 TestOutcome.ERROR: {"red": True},
-                TestOutcome.SKIPPED: {"yellow": True}
+                TestOutcome.SKIPPED: {"yellow": True},
             }.get(test.outcome, {})
             write_stat_line(
                 terminalreporter,
                 test.nodeid,
                 f"{test.duration:.2f}s ({test.outcome.to_str().capitalize()})",
-                **color_kwargs
+                **color_kwargs,
             )
 
     if "warnings" in terminalreporter.stats:

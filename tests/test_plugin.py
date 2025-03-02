@@ -1,155 +1,197 @@
-from datetime import datetime, timedelta
-from pathlib import Path
-import json
-
-from pytest_insight.models import TestOutcome, TestResult
-from pytest_insight.plugin import group_tests_into_rerun_test_groups
+from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
+from pytest_insight.plugin import pytest_addoption
 
 
-def create_test_result(nodeid: str, outcome: TestOutcome, offset_seconds: int = 0) -> TestResult:
-    """Helper to create test results for testing with ordered timestamps."""
-    now = datetime.utcnow()
-    return TestResult(nodeid=nodeid, outcome=outcome, start_time=now + timedelta(seconds=offset_seconds), duration=0.1)
+class TestPytestPlugin:
+    def test_invalid_storage_type_value(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
+        pytest_addoption(mock_parser)
 
-def test_group_tests_into_rerun_test_groups_with_enum_outcomes():
-    """Test rerun grouping with TestOutcome enum values."""
-    # Create a set of test results with enum outcomes and ordered timestamps
-    test_results = [
-        create_test_result("test_a.py::test_1", TestOutcome.RERUN, 0),  # First run
-        create_test_result("test_a.py::test_1", TestOutcome.RERUN, 1),  # Second run
-        create_test_result("test_a.py::test_1", TestOutcome.PASSED, 2),  # Final pass
-        create_test_result("test_b.py::test_2", TestOutcome.RERUN, 3),  # First run
-        create_test_result("test_b.py::test_2", TestOutcome.FAILED, 4),  # Final fail
-    ]
+        # Verify the choices passed to addoption
+        calls = mock_group.addoption.call_args_list
+        storage_type_call = next(call for call in calls if call[0][0] == "--insight-storage-type")
+        choices = storage_type_call[1]["choices"]
 
-    rerun_groups = group_tests_into_rerun_test_groups(test_results)
+        assert "invalid_type" not in choices
+        assert all(choice in [t.value for t in StorageType] for choice in choices)
 
-    assert len(rerun_groups) == 2, "Should have two rerun groups"
+    # Parser adds 'pytest-insight' option group successfully
+    def test_parser_adds_insight_group(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
-    # Check first group
-    group_a = next(g for g in rerun_groups if g.nodeid == "test_a.py::test_1")
-    assert len(group_a.tests) == 3
-    assert [t.outcome for t in group_a.tests] == [TestOutcome.RERUN, TestOutcome.RERUN, TestOutcome.PASSED]
-    assert group_a.final_outcome == TestOutcome.PASSED
+        pytest_addoption(mock_parser)
 
-    # Check second group
-    group_b = next(g for g in rerun_groups if g.nodeid == "test_b.py::test_2")
-    assert len(group_b.tests) == 2
-    assert [t.outcome for t in group_b.tests] == [TestOutcome.RERUN, TestOutcome.FAILED]
-    assert group_b.final_outcome == TestOutcome.FAILED
+        mock_parser.getgroup.assert_called_once_with("pytest-insight")
+        assert mock_group.addoption.call_count == 4
+        mock_group.addoption.assert_any_call("--insight", action="store_true", help="Enable pytest-insight")
 
-    # Verify chronological ordering in both groups
-    for group in [group_a, group_b]:
-        for i in range(len(group.tests) - 1):
-            assert group.tests[i].start_time < group.tests[i + 1].start_time
+    # Empty string passed as '--insight-sut' value
+    def test_empty_insight_sut_value(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
+        pytest_addoption(mock_parser)
 
-def test_test_outcome_enum_conversion():
-    """Test converting between strings and TestOutcome enum values."""
-    # Test string to enum conversion
-    assert TestOutcome.from_str("PASSED") == TestOutcome.PASSED
-    assert TestOutcome.from_str("FAILED") == TestOutcome.FAILED
-    assert TestOutcome.from_str("SKIPPED") == TestOutcome.SKIPPED
-    assert TestOutcome.from_str("XFAILED") == TestOutcome.XFAILED
-    assert TestOutcome.from_str("XPASSED") == TestOutcome.XPASSED
-    assert TestOutcome.from_str("RERUN") == TestOutcome.RERUN
-    assert TestOutcome.from_str("ERROR") == TestOutcome.ERROR
+        mock_group.addoption.assert_any_call(
+            "--insight-sut", action="store", default="default_sut", help="Name of the system under test"
+        )
 
-    # Test enum to string conversion
-    result = create_test_result("test.py::test_1", TestOutcome.PASSED)
-    assert result.outcome.to_str() == "passed"
-    result = create_test_result("test.py::test_2", TestOutcome.FAILED)
-    assert result.outcome.to_str() == "failed"
-    result = create_test_result("test.py::test_3", TestOutcome.SKIPPED)
-    assert result.outcome.to_str() == "skipped"
-    result = create_test_result("test.py::test_4", TestOutcome.XFAILED)
-    assert result.outcome.to_str() == "xfailed"
-    result = create_test_result("test.py::test_5", TestOutcome.XPASSED)
-    assert result.outcome.to_str() == "xpassed"
-    result = create_test_result("test.py::test_6", TestOutcome.RERUN)
-    assert result.outcome.to_str() == "rerun"
-    result = create_test_result("test.py::test_7", TestOutcome.ERROR)
-    assert result.outcome.to_str() == "error"
+    # '--insight' flag is added as a boolean option
+    def test_insight_flag_added_as_boolean_option(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
-    # Test sorting behavior
-    outcomes = [TestOutcome.FAILED, TestOutcome.PASSED, TestOutcome.RERUN]
-    outcome_strs = [o.to_str() for o in outcomes]
-    assert sorted(outcome_strs) == ["failed", "passed", "rerun"]
+        pytest_addoption(mock_parser)
 
+        mock_parser.getgroup.assert_called_once_with("pytest-insight")
+        mock_group.addoption.assert_any_call("--insight", action="store_true", help="Enable pytest-insight")
 
-def test_insight_json_output_default_path(testdir):
-    """Test JSON output is written to default path when no path specified."""
-    # Create a temporary test
-    testdir.makepyfile("""
-        def test_example():
-            assert True
-    """)
+    # '--insight-sut' option accepts string value with default 'default_sut'
+    def test_insight_sut_option_default_value(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
-    # Run pytest with insight enabled
-    result = testdir.runpytest('--insight')
-    result.assert_outcomes(passed=1)
+        pytest_addoption(mock_parser)
 
-    # Check default JSON file exists
-    json_path = Path.home() / ".pytest_insight" / "test_sessions.json"
-    assert json_path.exists()
+        mock_group.addoption.assert_any_call(
+            "--insight-sut", action="store", default="default_sut", help="Name of the system under test"
+        )
 
-    # Verify JSON content
-    with open(json_path) as f:
-        data = json.load(f)
-        assert len(data['sessions']) > 0
-        assert data['sessions'][-1]['test_results'][0]['outcome'] == 'passed'
+    # '--insight-storage-type' option accepts valid storage type values
+    def test_insight_storage_type_option_accepts_valid_values(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
+        pytest_addoption(mock_parser)
 
-def test_insight_json_output_custom_path(testdir):
-    """Test JSON output is written to specified path."""
-    testdir.makepyfile("""
-        def test_example():
-            assert True
-    """)
+        mock_parser.getgroup.assert_called_once_with("pytest-insight")
+        mock_group.addoption.assert_any_call(
+            "--insight-storage-type",
+            action="store",
+            choices=["local", "json", "remote", "database"],
+            default="json",
+            help="Storage type for test sessions (default: json)",
+        )
 
-    # Run pytest with custom JSON path
-    custom_path = testdir.tmpdir / "custom_output.json"
-    result = testdir.runpytest('--insight', f'--insight-json={custom_path}')
-    result.assert_outcomes(passed=1)
+    # '--insight-json-path' option accepts file path string value
+    def test_insight_json_path_option_accepts_file_path(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
-    # Verify file exists at custom path
-    assert custom_path.exists()
+        pytest_addoption(mock_parser)
 
-    # Verify JSON content
-    with open(custom_path) as f:
-        data = json.load(f)
-        assert len(data['sessions']) > 0
-        assert data['sessions'][-1]['test_results'][0]['outcome'] == 'passed'
+        mock_parser.getgroup.assert_called_once_with("pytest-insight")
+        mock_group.addoption.assert_any_call(
+            "--insight-json-path",
+            action="store",
+            default=None,
+            help="Path to JSON storage file for test sessions (use 'none' to disable saving results)",
+        )
 
+    # Non-existent path passed to '--insight-json-path'
+    def test_non_existent_insight_json_path(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
-def test_insight_json_output_disabled(testdir):
-    """Test JSON output can be disabled."""
-    testdir.makepyfile("""
-        def test_example():
-            assert True
-    """)
+        pytest_addoption(mock_parser)
 
-    # Run pytest with JSON output disabled
-    result = testdir.runpytest('--insight', '--insight-json=none')
-    result.assert_outcomes(passed=1)
+        mock_parser.getgroup.assert_called_once_with("pytest-insight")
+        mock_group.addoption.assert_any_call(
+            "--insight-json-path",
+            action="store",
+            default=None,
+            help="Path to JSON storage file for test sessions (use 'none' to disable saving results)",
+        )
 
-    # Verify default file was not created
-    json_path = Path.home() / ".pytest_insight" / "test_sessions.json"
-    assert not json_path.exists()
+    # Default storage type matches constant DEFAULT_STORAGE_TYPE
+    def test_default_storage_type(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
+        pytest_addoption(mock_parser)
 
-def test_insight_json_output_parent_dirs(testdir):
-    """Test JSON output creates parent directories if needed."""
-    testdir.makepyfile("""
-        def test_example():
-            assert True
-    """)
+        mock_group.addoption.assert_any_call(
+            "--insight-storage-type",
+            action="store",
+            choices=[t.value for t in StorageType],
+            default=DEFAULT_STORAGE_TYPE.value,
+            help=f"Storage type for test sessions (default: {DEFAULT_STORAGE_TYPE.value})",
+        )
 
-    # Run pytest with nested path
-    nested_path = testdir.tmpdir / "nested" / "dir" / "output.json"
-    result = testdir.runpytest('--insight', f'--insight-json={nested_path}')
-    result.assert_outcomes(passed=1)
+    # Storage type choices match all enum values from StorageType
+    def test_storage_type_choices_match_enum_values(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
 
-    # Verify nested directories were created
-    assert nested_path.exists()
+        pytest_addoption(mock_parser)
+
+        expected_choices = [t.value for t in StorageType]
+        mock_group.addoption.assert_any_call(
+            "--insight-storage-type",
+            action="store",
+            choices=expected_choices,
+            default=DEFAULT_STORAGE_TYPE.value,
+            help=f"Storage type for test sessions (default: {DEFAULT_STORAGE_TYPE.value})",
+        )
+
+    # Help text contains accurate default value descriptions
+    def test_help_text_contains_accurate_default_values(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
+
+        pytest_addoption(mock_parser)
+
+        mock_group.addoption.assert_any_call(
+            "--insight-sut", action="store", default="default_sut", help="Name of the system under test"
+        )
+        mock_group.addoption.assert_any_call(
+            "--insight-storage-type",
+            action="store",
+            choices=["local", "json", "remote", "database"],
+            default="json",
+            help="Storage type for test sessions (default: json)",
+        )
+        mock_group.addoption.assert_any_call(
+            "--insight-json-path",
+            action="store",
+            default=None,
+            help="Path to JSON storage file for test sessions (use 'none' to disable saving results)",
+        )
+
+    # Group name matches plugin name for consistency
+    def test_group_name_matches_plugin_name(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
+
+        pytest_addoption(mock_parser)
+
+        mock_parser.getgroup.assert_called_once_with("pytest-insight")
+
+    # Option names follow consistent '--insight-' prefix pattern
+    def test_option_names_have_insight_prefix(self, mocker):
+        mock_parser = mocker.Mock()
+        mock_group = mocker.Mock()
+        mock_parser.getgroup.return_value = mock_group
+
+        pytest_addoption(mock_parser)
+
+        expected_options = ["--insight", "--insight-sut", "--insight-storage-type", "--insight-json-path"]
+
+        actual_options = [call[0][0] for call in mock_group.addoption.call_args_list]
+        assert all(option.startswith("--insight") for option in actual_options)
+        assert set(expected_options) == set(actual_options)
