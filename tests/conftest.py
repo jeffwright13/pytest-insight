@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timedelta
 from importlib.metadata import version
 from pathlib import Path
@@ -9,6 +10,7 @@ from pytest_insight.models import (
     TestSession,
 )
 from pytest_insight.storage import JSONStorage
+from pytest_mock import MockerFixture
 from typer.testing import CliRunner
 
 # Enable the pytester plugin explicitly
@@ -55,8 +57,6 @@ def temp_storage_dir(tmp_path):
     return storage_dir
 
 
-# STORAGE FIXTURES - for testing storage.py
-# ------------------------------------------------------------------------------
 @pytest.fixture
 def temp_json_file(tmp_path):
     """Create a temporary JSON file for testing."""
@@ -82,6 +82,7 @@ def mock_test_result_pass():
         has_warning=False,
     )
 
+
 @pytest.fixture
 def mock_test_result_fail():
     """Fixture for a mock test result."""
@@ -92,6 +93,7 @@ def mock_test_result_fail():
         duration=1.5,
         has_warning=False,
     )
+
 
 @pytest.fixture
 def mock_test_result_skip():
@@ -104,6 +106,7 @@ def mock_test_result_skip():
         has_warning=False,
     )
 
+
 @pytest.fixture
 def mock_test_result_xfail():
     """Fixture for a mock test result."""
@@ -114,6 +117,7 @@ def mock_test_result_xfail():
         duration=1.5,
         has_warning=False,
     )
+
 
 @pytest.fixture
 def mock_test_result_xpass():
@@ -126,6 +130,7 @@ def mock_test_result_xpass():
         has_warning=False,
     )
 
+
 @pytest.fixture
 def mock_test_result_warning():
     """Fixture for a mock test result."""
@@ -136,6 +141,7 @@ def mock_test_result_warning():
         duration=1.5,
         has_warning=True,
     )
+
 
 @pytest.fixture
 def mock_test_result_error():
@@ -148,6 +154,7 @@ def mock_test_result_error():
         has_warning=False,
     )
 
+
 @pytest.fixture
 def mock_rerun_group1(mock_test_result):
     """Fixture for a rerun test group with a single test result."""
@@ -158,20 +165,46 @@ def mock_rerun_group1(mock_test_result):
 
 
 @pytest.fixture
-def mock_session_no_reruns(mock_test_result_pass, mock_test_result_fail, mock_test_result_skip, mock_test_result_xfail, mock_test_result_xpass, mock_test_result_warning, mock_test_result_error):
+def mock_session_no_reruns(
+    mock_test_result_pass,
+    mock_test_result_fail,
+    mock_test_result_skip,
+    mock_test_result_xfail,
+    mock_test_result_xpass,
+    mock_test_result_warning,
+    mock_test_result_error,
+):
     """Fixture for a test session with no reruns."""
     return TestSession(
         sut_name="test_sut",
         session_id="123",
         session_start_time=datetime.utcnow(),
         session_stop_time=datetime.utcnow() + timedelta(minutes=1),
+        test_results=[
+            mock_test_result_pass,
+            mock_test_result_fail,
+            mock_test_result_skip,
+            mock_test_result_xfail,
+            mock_test_result_xpass,
+            mock_test_result_warning,
+            mock_test_result_error,
+        ],
         rerun_test_groups=[],
-        test_results=[mock_test_result_pass, mock_test_result_fail, mock_test_result_skip, mock_test_result_xfail, mock_test_result_xpass, mock_test_result_warning, mock_test_result_error],
+        session_tags=["tag1", "tag2"],
     )
 
 
 @pytest.fixture
-def mock_session_w_reruns(mocker):
+def mock_session_w_reruns(
+    mocker,
+    mock_test_result_pass,
+    mock_test_result_fail,
+    mock_test_result_skip,
+    mock_test_result_xfail,
+    mock_test_result_xpass,
+    mock_test_result_warning,
+    mock_test_result_error,
+):
     """Generate a test session with mocked rerun test groups."""
 
     # Create first rerun group with failure
@@ -216,13 +249,23 @@ def mock_session_w_reruns(mocker):
         "full_test_list": [r.to_dict() for r in mock_rerun_group2.reruns],
     }
 
-    # Create test session with rerun groups
+    # Create test session with 2 rerun groups
     session = TestSession(
         sut_name="test-sut",
         session_id="test-session-123",
         session_start_time=datetime.utcnow() - timedelta(minutes=10),
         session_stop_time=datetime.utcnow(),
+        test_results=[
+            mock_test_result_pass,
+            mock_test_result_fail,
+            mock_test_result_skip,
+            mock_test_result_xfail,
+            mock_test_result_xpass,
+            mock_test_result_warning,
+            mock_test_result_error,
+        ],
         rerun_test_groups=[mock_rerun_group1, mock_rerun_group2],
+        session_tags=["tag1", "tag2"],
     )
 
     return session
@@ -232,10 +275,6 @@ def mock_session_w_reruns(mocker):
 def cli_runner():
     """Fixture to create a CLI runner for Typer."""
     return CliRunner()
-
-
-import pytest
-from pytest_mock import MockerFixture
 
 
 @pytest.fixture
@@ -271,3 +310,128 @@ def temp_storage(tmp_path):
     """Create temporary storage for tests."""
     storage_file = tmp_path / "test_sessions.json"
     return JSONStorage(storage_file)
+
+
+@pytest.fixture
+def random_test_result():
+    """Create a random test result."""
+    return TestResult(
+        nodeid=f"test_file_{random.randint(1, 1000)}.py::test_case_{random.randint(1, 1000)}",
+        outcome=random.choice(TestResult.OUTCOMES),
+        start_time=datetime.now(datetime.timezone.utc)(),
+        duration=random.uniform(0.1, 10.0),
+        caplog=random.choice([None, "", "Some log message"]),
+        capstderr=random.choice([None, "", "Some error message"]),
+        capstdout=random.choice([None, "", "Some system output"]),
+        longrepretxt=random.choice([None, "", "Some long representation text"]),
+        has_warning=random.choice([True, False]),
+    )
+
+
+@pytest.fixture
+def random_test_session(random_test_result):
+    """Create a random test session."""
+    return TestSession(
+        sut_name=f"test_sut_{random.randint(1, 1000)}",
+        session_id=f"{random.randint(1, 1000)}",
+        session_start_time=datetime.now(datetime.timezone.utc)(),
+        session_stop_time=datetime.now(datetime.timezone.utc)(),
+        test_results=[random_test_result],
+        rerun_test_groups=[],
+        session_tags=[f"tag_{random.randint(1, 100)}"],
+    )
+
+
+@pytest.fixture
+def random_test_sessions(random_test_result):
+    """Create a list of random test sessions."""
+    return [
+        TestSession(
+            sut_name=f"test_sut_{random.randint(1, 1000)}",
+            session_id=f"{random.randint(1, 1000)}",
+            session_start_time=datetime.now(datetime.timezone.utc)(),
+            session_stop_time=datetime.now(datetime.timezone.utc)(),
+            test_results=[random_test_result],
+            rerun_test_groups=[],
+            session_tags=[f"tag_{random.randint(1, 100)}"],
+        )
+        for _ in range(10)
+    ]
+
+
+@pytest.fixture
+def static_test_session_list(
+    mock_test_result_pass,
+    mock_test_result_fail,
+    mock_test_result_skip,
+    mock_test_result_xfail,
+    mock_test_result_xpass,
+    mock_test_result_warning,
+    mock_test_result_error,
+):
+    """Create a static test session."""
+    return [
+        TestSession(
+            sut_name="test_sut",
+            session_id="123",
+            session_start_time=datetime.utcnow(),
+            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
+            test_results=[mock_test_result_pass],
+            rerun_test_groups=[],
+            session_tags=["tag_always", "tag_pass"],
+        ),
+        TestSession(
+            sut_name="test_sut",
+            session_id="124",
+            session_start_time=datetime.utcnow(),
+            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
+            test_results=[mock_test_result_fail],
+            rerun_test_groups=[],
+            session_tags=["tag_always", "tag_fail"],
+        ),
+        TestSession(
+            sut_name="test_sut",
+            session_id="125",
+            session_start_time=datetime.utcnow(),
+            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
+            test_results=[mock_test_result_skip],
+            rerun_test_groups=[],
+            session_tags=["tag_always", "tag_skip"],
+        ),
+        TestSession(
+            sut_name="test_sut",
+            session_id="126",
+            session_start_time=datetime.utcnow(),
+            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
+            test_results=[mock_test_result_xfail],
+            rerun_test_groups=[],
+            session_tags=["tag_always", "tag_xfail"],
+        ),
+        TestSession(
+            sut_name="test_sut",
+            session_id="127",
+            session_start_time=datetime.utcnow(),
+            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
+            test_results=[mock_test_result_xpass],
+            rerun_test_groups=[],
+            session_tags=["tag_always", "tag_xpass"],
+        ),
+        TestSession(
+            sut_name="test_sut",
+            session_id="128",
+            session_start_time=datetime.utcnow(),
+            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
+            test_results=[mock_test_result_warning],
+            rerun_test_groups=[],
+            session_tags=["tag_always", "tag_warning"],
+        ),
+        TestSession(
+            sut_name="test_sut",
+            session_id="129",
+            session_start_time=datetime.utcnow(),
+            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
+            test_results=[mock_test_result_error],
+            rerun_test_groups=[],
+            session_tags=["tag_always", "tag_error"],
+        ),
+    ]

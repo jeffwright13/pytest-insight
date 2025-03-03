@@ -1,10 +1,10 @@
 """Compatibility layer for transitioning from old filter system to new query system."""
 
 from typing import List, Optional
-from datetime import datetime, timedelta
 
 from pytest_insight.models import TestSession
-from pytest_insight.query.builder import Query
+from pytest_insight.query.query_builder import Query
+
 
 class FilterAdapter:
     """Adapts old TestFilter interface to new Query system."""
@@ -16,7 +16,7 @@ class FilterAdapter:
         outcome: Optional[str] = None,
         has_warnings: Optional[bool] = None,
         has_reruns: Optional[bool] = None,
-        nodeid_contains: Optional[str] = None
+        nodeid_contains: Optional[str] = None,
     ):
         self.query = Query()
 
