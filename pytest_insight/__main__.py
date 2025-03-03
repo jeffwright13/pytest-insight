@@ -12,7 +12,8 @@ from pytest_insight.cli.commands import get_api
 from pytest_insight.cli.display import ResultsDisplay
 from pytest_insight.dimensional_comparator import DimensionalComparator
 from pytest_insight.dimensions import DurationDimension, ModuleDimension, OutcomeDimension, SUTDimension, TimeDimension
-from pytest_insight.filters import TestFilter, common_filter_options
+# from pytest_insight.filters import TestFilter  # Old
+from pytest_insight.compat import FilterAdapter as TestFilter  # New
 from pytest_insight.storage import get_storage_instance
 from pytest_insight.time_utils import TimeSpanParser
 

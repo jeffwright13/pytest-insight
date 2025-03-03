@@ -10,6 +10,8 @@ from pytest_insight.models import TestResult, TestSession
 class TestFilter:
     """Filter test sessions and results based on various criteria."""
 
+    __test__ = False
+
     def __init__(
         self,
         sut: Optional[str] = None,

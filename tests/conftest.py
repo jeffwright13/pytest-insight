@@ -72,6 +72,83 @@ def json_storage(temp_json_file, mocker):
 
 
 @pytest.fixture
+def mock_test_result_pass():
+    """Fixture for a mock test result."""
+    return TestResult(
+        nodeid="test_file.py::test_case_1_pass",
+        outcome="PASSED",
+        start_time=datetime.utcnow(),
+        duration=1.5,
+        has_warning=False,
+    )
+
+@pytest.fixture
+def mock_test_result_fail():
+    """Fixture for a mock test result."""
+    return TestResult(
+        nodeid="test_file.py::test_case_2_fail",
+        outcome="FAILED",
+        start_time=datetime.utcnow(),
+        duration=1.5,
+        has_warning=False,
+    )
+
+@pytest.fixture
+def mock_test_result_skip():
+    """Fixture for a mock test result."""
+    return TestResult(
+        nodeid="test_file.py::test_case_3_skip",
+        outcome="SKIPPED",
+        start_time=datetime.utcnow(),
+        duration=1.5,
+        has_warning=False,
+    )
+
+@pytest.fixture
+def mock_test_result_xfail():
+    """Fixture for a mock test result."""
+    return TestResult(
+        nodeid="test_file.py::test_case_4_xfail",
+        outcome="XFAILED",
+        start_time=datetime.utcnow(),
+        duration=1.5,
+        has_warning=False,
+    )
+
+@pytest.fixture
+def mock_test_result_xpass():
+    """Fixture for a mock test result."""
+    return TestResult(
+        nodeid="test_file.py::test_case_5_xpass",
+        outcome="XPASSED",
+        start_time=datetime.utcnow(),
+        duration=1.5,
+        has_warning=False,
+    )
+
+@pytest.fixture
+def mock_test_result_warning():
+    """Fixture for a mock test result."""
+    return TestResult(
+        nodeid="test_file.py::test_case_6_warning",
+        outcome="PASSED",
+        start_time=datetime.utcnow(),
+        duration=1.5,
+        has_warning=True,
+    )
+
+@pytest.fixture
+def mock_test_result_error():
+    """Fixture for a mock test result."""
+    return TestResult(
+        nodeid="test_file.py::test_case_7_error",
+        outcome="ERROR",
+        start_time=datetime.utcnow(),
+        duration=1.5,
+        has_warning=False,
+    )
+
+@pytest.fixture
 def mock_rerun_group1(mock_test_result):
     """Fixture for a rerun test group with a single test result."""
     group = RerunTestGroup(nodeid="test_rerun_group_1", final_outcome="PASSED")
@@ -81,15 +158,15 @@ def mock_rerun_group1(mock_test_result):
 
 
 @pytest.fixture
-def mock_session_no_reruns():
-    """Generate a test session."""
+def mock_session_no_reruns(mock_test_result_pass, mock_test_result_fail, mock_test_result_skip, mock_test_result_xfail, mock_test_result_xpass, mock_test_result_warning, mock_test_result_error):
+    """Fixture for a test session with no reruns."""
     return TestSession(
         sut_name="test_sut",
         session_id="123",
         session_start_time=datetime.utcnow(),
-        session_stop_time=datetime.utcnow(),
-        test_results=[],
+        session_stop_time=datetime.utcnow() + timedelta(minutes=1),
         rerun_test_groups=[],
+        test_results=[mock_test_result_pass, mock_test_result_fail, mock_test_result_skip, mock_test_result_xfail, mock_test_result_xpass, mock_test_result_warning, mock_test_result_error],
     )
 
 
