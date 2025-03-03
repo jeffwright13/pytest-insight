@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import pytest
 
-from pytest_insight.query.builder import Query
+from pytest_insight.query.builder import Query, InvalidQueryParameterError
 from pytest_insight.models import TestSession, TestResult, TestOutcome
 
 class Test_Query:
@@ -77,3 +77,29 @@ class Test_Query:
         results = query.execute([mock_session_no_reruns])
         assert len(results) == 1
         assert any("api" in t.nodeid for t in results[0].test_results)
+
+    def test_invalid_sut_name(self):
+        """Test error handling for invalid SUT names."""
+        query = Query()
+        with pytest.raises(InvalidQueryParameterError, match="non-empty string"):
+            query.for_sut("")
+        with pytest.raises(InvalidQueryParameterError, match="non-empty string"):
+            query.for_sut("   ")
+        with pytest.raises(InvalidQueryParameterError, match="non-empty string"):
+            query.for_sut(None)
+
+    def test_invalid_days(self):
+        """Test error handling for invalid day values."""
+        query = Query()
+        with pytest.raises(InvalidQueryParameterError, match="positive integer"):
+            query.in_last_days(0)
+        with pytest.raises(InvalidQueryParameterError, match="positive integer"):
+            query.in_last_days(-1)
+        with pytest.raises(InvalidQueryParameterError, match="positive integer"):
+            query.in_last_days("7")
+
+    def test_invalid_outcome(self):
+        """Test error handling for invalid test outcomes."""
+        query = Query()
+        with pytest.raises(InvalidQueryParameterError, match="Invalid outcome"):
+            query.with_outcome("UNKNOWN")

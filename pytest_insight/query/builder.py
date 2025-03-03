@@ -4,6 +4,14 @@ from typing import List, Optional, Any
 
 from pytest_insight.models import TestSession, TestOutcome
 
+class QueryError(Exception):
+    """Base exception for Query-related errors."""
+    pass
+
+class InvalidQueryParameterError(QueryError):
+    """Raised when query parameters are invalid."""
+    pass
+
 class Query:
     """Builder for creating and executing test session queries."""
 
@@ -13,17 +21,26 @@ class Query:
 
     def for_sut(self, name: str) -> 'Query':
         """Filter by SUT name."""
+        if not isinstance(name, str) or not name.strip():
+            raise InvalidQueryParameterError("SUT name must be a non-empty string")
         self._filters.append(lambda s: s.sut_name == name)
         return self
 
     def in_last_days(self, days: int) -> 'Query':
         """Filter sessions from last N days."""
+        if not isinstance(days, int) or days <= 0:
+            raise InvalidQueryParameterError("Days must be a positive integer")
         cutoff = datetime.now() - timedelta(days=days)
         self._filters.append(lambda s: s.session_start_time >= cutoff)
         return self
 
     def with_outcome(self, outcome: str) -> 'Query':
         """Filter sessions containing tests with specific outcome."""
+        valid_outcomes = {o.value for o in TestOutcome}
+        if outcome not in valid_outcomes:
+            raise InvalidQueryParameterError(
+                f"Invalid outcome: {outcome}. Must be one of: {', '.join(valid_outcomes)}"
+            )
         self._filters.append(
             lambda s: any(t.outcome == outcome for t in s.test_results)
         )

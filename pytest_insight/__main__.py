@@ -127,7 +127,7 @@ def run_session(
 
 
 @session_app.command("show")
-@common_filter_options
+# @common_filter_options
 def show_session(
     sut: Optional[str] = typer.Option(None, "--sut", help="Filter by System Under Test name"),
     days: int = typer.Option(30, "--days", help="Number of days to look back"),
