@@ -3,7 +3,7 @@
 from typing import List, Optional
 
 from pytest_insight.models import TestSession
-from pytest_insight.query.query_builder import Query
+from pytest_insight.query.query import Query
 
 
 class FilterAdapter:

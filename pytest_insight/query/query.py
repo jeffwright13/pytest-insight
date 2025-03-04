@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import List, Set, Optional, Callable
+from typing import List, Set, Optional, Callable, Union
 
 from pytest_insight.models import TestSession, TestOutcome
 from pytest_insight.storage import get_storage_instance
@@ -105,12 +105,33 @@ class Query:
         self._filters.append(lambda s: min_secs <= s.session_duration <= max_secs)
         return self
 
-    def with_outcome(self, outcome: str) -> 'Query':
-        """Filter sessions containing tests with specific outcome."""
+    def with_outcome(self, outcome: Union[str, TestOutcome]) -> 'Query':
+        """Filter sessions containing tests with specific outcome.
+
+        Args:
+            outcome: Test outcome as string or TestOutcome enum
+
+        Returns:
+            Query instance for method chaining
+
+        Raises:
+            InvalidQueryParameterError: If outcome is invalid
+        """
+        # Convert enum to string if needed
+        outcome_str = outcome.value if isinstance(outcome, TestOutcome) else outcome
+
         valid_outcomes = {o.value for o in TestOutcome}
-        if outcome not in valid_outcomes:
-            raise InvalidQueryParameterError(f"Invalid outcome: {outcome}. Must be one of: {', '.join(valid_outcomes)}")
-        self._filters.append(lambda s: any(t.outcome == outcome for t in s.test_results))
+        if outcome_str not in valid_outcomes:
+            raise InvalidQueryParameterError(
+                f"Invalid outcome: {outcome_str}. Must be one of: {', '.join(valid_outcomes)}"
+            )
+
+        self._filters.append(
+            lambda s: any(
+                (t.outcome.value if isinstance(t.outcome, TestOutcome) else t.outcome) == outcome_str
+                for t in s.test_results
+            )
+        )
         return self
 
     def having_warnings(self, has_warnings: bool) -> 'Query':
@@ -128,6 +149,21 @@ class Query:
     def test_contains(self, pattern: str) -> 'Query':
         """Filter sessions containing tests matching pattern."""
         self._filters.append(lambda s: any(pattern in t.nodeid for t in s.test_results))
+        return self
+
+    def before(self, timestamp: datetime) -> 'Query':
+        """Filter sessions that occurred before given timestamp.
+        """
+        if not isinstance(timestamp, datetime):
+            raise InvalidQueryParameterError("Timestamp must be a datetime object")
+        self._filters.append(lambda s: s.session_start_time < timestamp)
+        return self
+
+    def after(self, timestamp: datetime) -> 'Query':
+        """Filter sessions that occurred after given timestamp."""
+        if not isinstance(timestamp, datetime):
+            raise InvalidQueryParameterError("Timestamp must be a datetime object")
+        self._filters.append(lambda s: s.session_start_time > timestamp)
         return self
 
     def execute(self, sessions: Optional[List[TestSession]] = None) -> QueryResult:
