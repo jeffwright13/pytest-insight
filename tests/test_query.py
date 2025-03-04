@@ -1,166 +1,360 @@
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
-
 import pytest
-from pytest_insight.models import TestResult, TestSession
-from pytest_insight.query.query_builder import InvalidQueryParameterError, Query, QueryExecutionError
+from typing import List
 
+from pytest_insight.models import TestSession, TestResult, RerunTestGroup
+from pytest_insight.query.query import Query, InvalidQueryParameterError, QueryExecutionError
+from pytest_insight.storage import get_storage_instance
+
+@pytest.fixture
+def mock_session_now() -> TestSession:
+    """Fixture providing a test session."""
+    return TestSession(
+        sut_name="test_sut",
+        session_id="test-123",
+        session_start_time=datetime.now(),
+        session_stop_time=datetime.now(),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_endpoint",
+                outcome="PASSED",
+                start_time=datetime.now(),
+                duration=1.0
+            )
+        ],
+        rerun_test_groups=[]
+    )
+
+@pytest.fixture
+def mock_session_1_day_1_hour_ago() -> TestSession:
+    """Fixture providing a test session from 1d1m ago."""
+    return TestSession(
+        sut_name="test_sut",
+        session_id="test-123",
+        session_start_time=datetime.now() - timedelta(days=1, hours=1),
+        session_stop_time=datetime.now() - timedelta(days=1, hours=1),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_endpoint",
+                outcome="PASSED",
+                start_time=datetime.now() - timedelta(days=1, hours=1),
+                duration=1.0
+            )
+        ],
+        rerun_test_groups=[]
+    )
+
+@pytest.fixture
+def mock_session_1_hour_1_minute_ago() -> TestSession:
+    """Fixture providing a test session from 1h1m ago."""
+    return TestSession(
+        sut_name="test_sut",
+        session_id="test-123",
+        session_start_time=datetime.now() - timedelta(hours=1, minutes=1),
+        session_stop_time=datetime.now() - timedelta(hours=1, minutes=1),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_endpoint",
+                outcome="PASSED",
+                start_time=datetime.now() - timedelta(days=1, minutes=1),
+                duration=1.0
+            )
+        ],
+        rerun_test_groups=[]
+    )
+
+@pytest.fixture
+def mock_session_1_minute_1_second_ago() -> TestSession:
+    """Fixture providing a test session from 1m1s ago."""
+    return TestSession(
+        sut_name="test_sut",
+        session_id="test-123",
+        session_start_time=datetime.now() - timedelta(minutes=1, seconds=1),
+        session_stop_time=datetime.now() - timedelta(minutes=1, seconds=1),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_endpoint",
+                outcome="PASSED",
+                start_time=datetime.now() - timedelta(minutes=1, seconds=1),
+                duration=1.0
+            )
+        ],
+        rerun_test_groups=[]
+    )
+
+@pytest.fixture
+def mock_sessions(mock_session_now, mock_session_1_day_1_hour_ago, mock_session_1_hour_1_minute_ago, mock_session_1_minute_1_second_ago) -> List[TestSession]:
+    """Fixture providing a list of test sessions."""
+    return [mock_session_now, mock_session_1_day_1_hour_ago, mock_session_1_hour_1_minute_ago, mock_session_1_minute_1_second_ago]
+
+@pytest.fixture
+def base_session():
+    """Fixture providing a base test session."""
+    return TestSession(
+        sut_name="api-service",
+        session_id="base-123",
+        session_start_time=datetime.now() - timedelta(days=7),
+        session_stop_time=datetime.now() - timedelta(days=7),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_get",
+                outcome="PASSED",
+                start_time=datetime.now() - timedelta(days=7),
+                duration=1.0
+            ),
+            TestResult(
+                nodeid="test_api.py::test_post",
+                outcome="FAILED",
+                start_time=datetime.now() - timedelta(days=7),
+                duration=2.0
+            )
+        ],
+        rerun_test_groups=[]
+    )
+
+@pytest.fixture
+def target_session():
+    """Fixture providing a target test session with changes."""
+    return TestSession(
+        sut_name="api-service",
+        session_id="target-123",
+        session_start_time=datetime.now(),
+        session_stop_time=datetime.now(),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_get",
+                outcome="FAILED",  # Changed outcome
+                start_time=datetime.now(),
+                duration=2.0  # Slower
+            ),
+            TestResult(
+                nodeid="test_api.py::test_post",
+                outcome="PASSED",  # Fixed
+                start_time=datetime.now(),
+                duration=1.0  # Faster
+            )
+        ],
+        rerun_test_groups=[]
+    )
+
+@pytest.fixture
+def empty_query():
+    """Fixture for empty query."""
+    return Query(
+        sessions=[],
+        total_count=0,
+        execution_time=0.0,
+        matched_nodeids=set()
+    )
+
+@pytest.fixture
+def mock_session_with_reruns() -> TestSession:
+    """Fixture providing a test session with reruns."""
+    return TestSession(
+        sut_name="test_sut",
+        session_id="test-123",
+        session_start_time=datetime.now(),
+        session_stop_time=datetime.now(),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_endpoint",
+                outcome="PASSED",
+                start_time=datetime.now(),
+                duration=1.0
+            )
+        ],
+        rerun_test_groups=[
+            RerunTestGroup(
+                nodeid="test_api.py::test_endpoint",
+                tests=[
+                    TestResult(
+                        nodeid="test_api.py::test_endpoint",
+                        outcome="FAILED",
+                        start_time=datetime.now(),
+                        duration=0.6
+                    ),
+                    TestResult(
+                        nodeid="test_api.py::test_endpoint",
+                        outcome="RERUN",
+                        start_time=datetime.now() - timedelta(seconds=0.5),
+                        duration=0.3
+                    )
+                ]
+            )
+        ]
+    )
 
 class Test_Query:
-    """Test suite for Query builder functionality."""
+    """Test suite for Query functionality."""
 
     def test_query_initialization(self):
-        """Test basic query initialization."""
+        """Test basic Query initialization."""
         query = Query()
-        assert query is not None
-        assert query._filters == []
-        assert query._results is None
+        assert hasattr(query, '_filters')
+        assert len(query._filters) == 0
 
-    def test_for_sut_filter(self, mock_session_no_reruns):
-        """Test filtering by SUT name."""
+    def test_for_sut_filter(self, mock_sessions):
+        """Test SUT name filtering."""
         query = Query().for_sut("test_sut")
-        results = query.execute([mock_session_no_reruns])
-        assert len(results) == 1
-        assert results[0].sut_name == "test_sut"
+        result = query.execute(mock_sessions)
+        assert not result.empty
+        assert result.total_count == 4
+        assert all(s.sut_name == "test_sut" for s in result.sessions)
 
     def test_for_sut_validation(self):
         """Test SUT name validation."""
-        query = Query()
-        with pytest.raises(InvalidQueryParameterError, match="non-empty string"):
-            query.for_sut("")
-        with pytest.raises(InvalidQueryParameterError, match="non-empty string"):
-            query.for_sut(None)
+        with pytest.raises(InvalidQueryParameterError):
+            Query().for_sut("")
+        with pytest.raises(InvalidQueryParameterError):
+            Query().for_sut(None)
 
-    def test_in_last_days(self, mock_session_no_reruns):
-        """Test filtering by days."""
-        # Create old session
+    def test_in_last_days(self, mock_sessions):
+        """Test date range filtering."""
+        query = Query().in_last_days(1)
+        result = query.execute(mock_sessions)
+        assert not result.empty
+        assert result.total_count == 3
+
+        # Test old session gets filtered out
         old_session = TestSession(
             sut_name="test_sut",
             session_id="old-123",
-            session_start_time=datetime.now() - timedelta(days=10),
-            session_stop_time=datetime.now() - timedelta(days=10),
+            session_start_time=datetime.now() - timedelta(days=2),
+            session_stop_time=datetime.now() - timedelta(days=2),
             test_results=[],
-            rerun_test_groups=[],
+            rerun_test_groups=[]
         )
+        result = query.execute([old_session])
+        assert result.empty
 
-        query = Query().in_last_days(7)
-        results = query.execute([mock_session_no_reruns, old_session])
-        assert len(results) == 1
-        assert results[0].session_id == mock_session_no_reruns.session_id
+    def test_in_last_hours(self, mock_sessions):
+        """Test hours range filtering."""
+        query = Query().in_last_hours(1)
+        result = query.execute(mock_sessions)
+        assert not result.empty
+        assert result.total_count == 2
 
-    def test_with_outcome(self, mock_session_no_reruns):
-        """Test filtering by test outcome."""
-        # Add test results with different outcomes
-        mock_session_no_reruns.test_results.extend(
-            [
-                TestResult(nodeid="test_pass.py::test_pass", outcome="PASSED", start_time=datetime.now(), duration=1.0),
-                TestResult(nodeid="test_fail.py::test_fail", outcome="FAILED", start_time=datetime.now(), duration=1.0),
-            ]
+        # Test old session gets filtered out
+        old_session = TestSession(
+            sut_name="test_sut",
+            session_id="old-123",
+            session_start_time=datetime.now() - timedelta(hours=2),
+            session_stop_time=datetime.now() - timedelta(hours=2),
+            test_results=[],
+            rerun_test_groups=[]
         )
+        result = query.execute([old_session])
+        assert result.empty
 
+    def test_in_last_minutes(self, mock_sessions):
+        """Test minutes range filtering."""
+        query = Query().in_last_minutes(1)
+        result = query.execute(mock_sessions)
+
+        assert not result.empty
+        assert result.total_count == 1
+
+        # Test old session gets filtered out
+        old_session = TestSession(
+            sut_name="test_sut",
+            session_id="old-123",
+            session_start_time=datetime.now() - timedelta(minutes=30),
+            session_stop_time=datetime.now() - timedelta(minutes=30),
+            test_results=[],
+            rerun_test_groups=[]
+        )
+        result = query.execute([old_session])
+        assert result.empty
+
+    def test_with_outcome(self, mock_sessions):
+        """Test outcome filtering."""
         query = Query().with_outcome("PASSED")
-        results = query.execute([mock_session_no_reruns])
-        assert len(results) == 1
-        assert any(t.outcome == "PASSED" for t in results[0].test_results)
+        result = query.execute(mock_sessions)
 
-    def test_having_warnings(self, mock_session_no_reruns):
-        """Test filtering by warning presence."""
-        mock_session_no_reruns.test_results.append(
-            TestResult(
-                nodeid="test_warn.py::test_warning",
-                outcome="PASSED",
-                start_time=datetime.now(),
-                duration=1.0,
-                has_warning=True,
-            )
+        assert not result.empty
+        assert all(any(t.outcome == "PASSED" for t in s.test_results)
+                  for s in result.sessions)
+
+    def test_having_warnings(self, mock_session_now):
+        """Test warning presence filtering."""
+        warning_result = TestResult(
+            nodeid="test_warn.py::test_warning",
+            outcome="PASSED",
+            start_time=datetime.now(),
+            duration=1.0,
+            has_warning=True
         )
-
+        mock_session_now.test_results.append(warning_result)
         query = Query().having_warnings(True)
-        results = query.execute([mock_session_no_reruns])
-        assert len(results) == 1
-        assert any(t.has_warning for t in results[0].test_results)
+        result = query.execute([mock_session_now])
+        assert not result.empty
+        assert any(t.has_warning for s in result.sessions
+                  for t in s.test_results)
 
-    def test_with_reruns(self, mock_session_w_reruns, mock_session_no_reruns):
-        """Test filtering by rerun presence."""
-        query = Query().with_reruns(True)
-        results = query.execute([mock_session_w_reruns, mock_session_no_reruns])
-        assert len(results) == 1
-        assert results[0].rerun_test_groups
+    def test_query_result_properties(self, base_session, target_session):
+        """Test QueryResult properties."""
+        result = Query().execute([base_session, target_session])
 
-    def test_test_contains(self, mock_session_no_reruns):
-        """Test filtering by test name pattern."""
-        mock_session_no_reruns.test_results.append(
-            TestResult(nodeid="test_api.py::test_endpoint", outcome="PASSED", start_time=datetime.now(), duration=1.0)
-        )
-
-        query = Query().test_contains("api")
-        results = query.execute([mock_session_no_reruns])
-        assert len(results) == 1
-        assert any("api" in t.nodeid for t in results[0].test_results)
-
-    def test_chained_filters(self, static_test_session_list):
-        """Test combining multiple filters."""
-        query = Query().for_sut("test_sut").in_last_days(7).with_reruns(False)
-        results = query.execute(static_test_session_list)
-        assert len(results) == 7
+        assert not result.empty
+        assert result.total_count == 2
+        assert len(result.matched_nodeids) == 2
+        assert isinstance(result.execution_time, float)
 
     def test_execution_error_handling(self):
-        """Test query execution error handling."""
-        query = Query().for_sut("test_sut")
+        """Test error handling during query execution."""
+        with pytest.raises(QueryExecutionError):
+            Query().execute("not a list")
+        with pytest.raises(QueryExecutionError):
+            Query().execute([{"not": "a session"}])
 
-        # Mock storage to raise an error
-        mock_storage = Mock()
-        mock_storage.load_sessions.side_effect = Exception("Storage error")
+    def test_query_validation(self):
+        """Test query parameter validation."""
+        with pytest.raises(InvalidQueryParameterError):
+            Query().for_sut("")
+        with pytest.raises(InvalidQueryParameterError):
+            Query().in_last_days(-1)
 
-        with patch("pytest_insight.query.query_builder.get_storage_instance", return_value=mock_storage):
-            # Test storage failure
-            with pytest.raises(QueryExecutionError, match="Failed to load sessions"):
-                query.execute()
+    def test_query_result_properties(self, base_session, target_session):
+        """Test QueryResult properties and methods."""
+        result = Query().execute([base_session, target_session])
+        assert not result.empty
+        assert result.total_count == 2
+        assert len(result.matched_nodeids) == 2
+        assert isinstance(result.execution_time, float)
 
-            # Test invalid session type
-            with pytest.raises(QueryExecutionError, match="Invalid session type"):
-                query.execute([{"not": "a session"}])
+    def test_query_chaining_no_matches(self, mock_sessions):
+        """Test query method chaining and execution with no matching sessions."""
+        query = (
+            Query()
+            .for_sut("api-service")
+            .in_last_days(7)
+            .with_outcome("PASSED")
+        )
+        result = query.execute(mock_sessions)
+        assert result.empty
+        assert result.total_count == 0
+        assert result.matched_nodeids == set()
 
-            # Test non-list input (other than None)
-            with pytest.raises(QueryExecutionError, match="must be provided as a list"):
-                query.execute("not a list")
+    def test_query_chaining_with_matches(self, base_session, target_session):
+        """Test query method chaining and execution with matching sessions."""
+        query = (
+            Query()
+            .for_sut("api-service")
+            .in_last_days(7)
+            .with_outcome("PASSED")
+        )
+        result = query.execute([base_session, target_session])
 
-    def test_execute_default_loads_sessions(self):
-        """Test that execute() loads sessions from storage by default."""
-        mock_storage = Mock()
-        mock_storage.load_sessions.return_value = []
+        assert not result.empty
+        assert result.total_count == 1
+        assert any(
+            any(t.outcome == "PASSED" for t in s.test_results)
+            for s in result.sessions
+        )
 
-        with patch("pytest_insight.query.query_builder.get_storage_instance", return_value=mock_storage):
-            Query().execute()
-            mock_storage.load_sessions.assert_called_once()
-
-    def test_execute_storage_error(self):
-        """Test error handling when storage fails."""
-        mock_storage = Mock()
-        mock_storage.load_sessions.side_effect = Exception("Storage error")
-
-        with patch("pytest_insight.query.query_builder.get_storage_instance", return_value=mock_storage):
-            with pytest.raises(QueryExecutionError, match="Failed to load sessions"):
-                Query().execute()
-
-    def test_execute_with_custom_sessions(self):
-        """Test that execute() uses provided sessions instead of loading from storage."""
-        mock_storage = Mock()
-
-        with patch("pytest_insight.query.query_builder.get_storage_instance", return_value=mock_storage):
-            Query().execute([])  # Pass empty list explicitly
-            mock_storage.load_sessions.assert_not_called()
-
-    def test_execute_integration(self, mock_session_no_reruns):
-        """Test full query execution with default session loading."""
-        mock_storage = Mock()
-        mock_storage.load_sessions.return_value = [mock_session_no_reruns]
-
-        with patch("pytest_insight.query.query_builder.get_storage_instance", return_value=mock_storage):
-            results = (
-                Query().for_sut("test_sut").in_last_days(7).execute()  # Use default session loading
-            )
-
-            assert len(results) == 1
-            assert results[0].sut_name == "test_sut"
-            mock_storage.load_sessions.assert_called_once()
+    def test_query_with_reruns(self, mock_session_with_reruns):
+        """Test filtering sessions with reruns."""
+        query = Query().with_reruns(True)
+        result = query.execute([mock_session_with_reruns])
+        assert not result.empty
+        assert result.total_count == 1
