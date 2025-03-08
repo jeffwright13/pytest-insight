@@ -52,7 +52,7 @@ def pytest_addoption(parser):
         "--insight-json-path",
         action="store",
         default=None,  # Make path optional, use default from JSONStorage if not specified
-        help="Path to JSON storage file for test sessions (use 'none' to disable saving results)",
+        help="Path to JSON storage file for test sessions (REQUIRED; use 'none' to disable saving results)",
     )
 
 
@@ -129,7 +129,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 test_results.append(
                     TestResult(
                         nodeid=report.nodeid,
-                        outcome=TestOutcome.from_str(outcome.upper()),  # Convert string to enum
+                        outcome=TestOutcome.from_str(outcome) if outcome else TestOutcome.SKIPPED,
                         start_time=report_time,
                         duration=report.duration,
                         caplog=getattr(report, "caplog", ""),

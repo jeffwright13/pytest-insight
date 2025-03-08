@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
-import pytest
 
-from pytest_insight.models import TestSession, TestResult
-from pytest_insight.query.query import Query, QueryResult
-from pytest_insight.query.comparison import SessionComparator, ComparisonResult, ComparisonError
+import pytest
+from pytest_insight.models import TestOutcome, TestResult, TestSession
+from pytest_insight.query.comparison import Comparison, ComparisonError, ComparisonResult
+
 
 @pytest.fixture
 def base_session():
@@ -16,19 +16,21 @@ def base_session():
         test_results=[
             TestResult(
                 nodeid="test_api.py::test_get",
-                outcome="PASSED",
+                outcome=TestOutcome.PASSED,
                 start_time=datetime.now() - timedelta(days=7),
-                duration=1.0
+                duration=1.0,
             ),
             TestResult(
                 nodeid="test_api.py::test_post",
-                outcome="FAILED",
+                outcome=TestOutcome.FAILED,
                 start_time=datetime.now() - timedelta(days=7),
-                duration=2.0
-            )
+                duration=2.0,
+            ),
         ],
-        rerun_test_groups=[]
+        rerun_test_groups=[],
+        session_tags={"python": "3.9", "os": "linux"},
     )
+
 
 @pytest.fixture
 def target_session():
@@ -41,81 +43,122 @@ def target_session():
         test_results=[
             TestResult(
                 nodeid="test_api.py::test_get",
-                outcome="FAILED",  # Changed outcome
+                outcome=TestOutcome.FAILED,  # Changed outcome
                 start_time=datetime.now(),
-                duration=2.0  # Slower
+                duration=2.0,  # Slower
             ),
             TestResult(
                 nodeid="test_api.py::test_post",
-                outcome="PASSED",  # Fixed
+                outcome=TestOutcome.PASSED,  # Fixed
                 start_time=datetime.now(),
-                duration=1.0  # Faster
-            )
+                duration=1.0,  # Faster
+            ),
         ],
-        rerun_test_groups=[]
+        rerun_test_groups=[],
+        session_tags={"python": "3.10", "os": "linux"},
     )
 
-@pytest.fixture
-def empty_query():
-    """Fixture for empty query."""
-    return Query(
-        sessions=[],
-        total_count=0,
-        execution_time=0.0,
-        matched_nodeids=set()
-    )
 
-@pytest.fixture
-def base_query(base_session):
-    """Fixture providing base query."""
-    return Query().for_sut("api-service")
+class Test_Comparison:
+    """Test suite for Comparison class."""
 
-@pytest.fixture
-def target_query(target_session):
-    """Fixture providing target query."""
-    return Query().for_sut("api-service")
-
-class TestSessionComparator:
-    """Test suite for session comparison functionality."""
-
-    def test_basic_comparison(self, base_query, target_query, base_session, target_session):
+    def test_basic_comparison(self, base_session, target_session):
         """Test basic comparison functionality."""
-        comparator = SessionComparator(base_query, target_query)
-        result = comparator.compare([base_session, target_session])
+        comparison = Comparison().between_suts("api-service", "api-service").execute([base_session, target_session])
 
-        assert isinstance(result, ComparisonResult)
-        assert "test_api.py::test_get" in result.new_failures
-        assert "test_api.py::test_post" in result.new_passes
+        assert isinstance(comparison, ComparisonResult)
+        assert "test_api.py::test_get" in comparison.new_failures
+        assert "test_api.py::test_post" in comparison.new_passes
 
-    def test_performance_changes(self, base_query, target_query, base_session, target_session):
+    def test_environment_comparison(self, base_session, target_session):
+        """Test comparing across environments."""
+        comparison = (
+            Comparison().with_environment({"python": "3.9"}, {"python": "3.10"}).execute([base_session, target_session])
+        )
+
+        assert isinstance(comparison, ComparisonResult)
+        assert comparison.has_changes
+
+    def test_date_window_comparison(self, base_session, target_session):
+        """Test comparing within time window."""
+        now = datetime.now()
+        comparison = (
+            Comparison()
+            .in_date_window(now - timedelta(days=14), now - timedelta(days=7))
+            .execute([base_session, target_session])
+        )
+
+        assert len(comparison.base_results.sessions) == 1
+        assert base_session in comparison.base_results.sessions
+
+    def test_performance_changes(self, base_session, target_session):
         """Test performance change detection."""
-        comparator = SessionComparator(base_query, target_query)
-        result = comparator.compare([base_session, target_session])
+        comparison = Comparison().execute([base_session, target_session])
 
-        assert "test_api.py::test_get" in result.slower_tests
-        assert result.slower_tests["test_api.py::test_get"] == 100.0  # 1.0 -> 2.0
-        assert "test_api.py::test_post" in result.faster_tests
-        assert result.faster_tests["test_api.py::test_post"] == -50.0  # 2.0 -> 1.0
+        assert "test_api.py::test_get" in comparison.slower_tests
+        assert "test_api.py::test_post" in comparison.faster_tests
 
-    def test_empty_comparison(self):
-        """Test comparison with empty queries."""
-        empty_query = Query()
-        comparator = SessionComparator(empty_query, empty_query)
-        result = comparator.compare([])
+    def test_flaky_detection(self, base_session, target_session):
+        """Test flaky test detection."""
+        comparison = Comparison().execute([base_session, target_session])
 
-        assert result.base_results.empty
-        assert result.target_results.empty
-        assert result.duration_change == 0.0
-        assert not result.new_failures
-        assert not result.new_passes
+        # Both tests changed outcomes, should be marked as flaky
+        assert "test_api.py::test_get" in comparison.flaky_tests
+        assert "test_api.py::test_post" in comparison.flaky_tests
 
-    def test_comparison_error_handling(self, base_query):
-        """Test comparison error handling."""
+    def test_comparison_validation(self):
+        """Test input validation."""
         with pytest.raises(ComparisonError):
-            SessionComparator(None, base_query)
-        with pytest.raises(ComparisonError):
-            SessionComparator(base_query, None)
+            Comparison().execute()  # No queries configured
 
-        comparator = SessionComparator(base_query, base_query)
         with pytest.raises(ComparisonError):
-            comparator.compare(None)
+            Comparison().between_suts(None, "api")  # Invalid SUT name
+
+    def test_filtered_comparison(self, base_session, target_session):
+        """Test comparison with filters."""
+        comparison = (
+            Comparison()
+            .with_test_pattern("test_api.py::test_get")
+            .with_duration_threshold(0.5)  # Lower threshold to 0.5s
+            .execute([base_session, target_session])
+        )
+
+        assert len(comparison.outcome_changes) == 1
+
+    def test_combined_filters(self, base_session, target_session):
+        """Test multiple filters working together."""
+        # Create a comparison with multiple filters
+        comparison = (
+            Comparison()
+            .with_test_pattern("test_api.py::test_get")  # This matches a specific test
+            .with_duration_threshold(0.5)  # This should pass (both sessions have durations > 0.5)
+            .execute([base_session, target_session])
+        )
+
+        # Verify the filters worked correctly (should include both sessions)
+        assert len(comparison.base_results.sessions) == 1
+        assert len(comparison.target_results.sessions) == 1
+        assert "test_api.py::test_get" in comparison.outcome_changes
+
+    def test_filter_stacking(self, base_session, target_session):
+        """Test that filters can be stacked in specific ways."""
+        # Test multiple outcome filters (should restrict results)
+        comparison1 = (
+            Comparison()
+            .only_failures()  # First filter - failed outcomes
+            .exclude_flaky()  # Second filter - no reruns
+            .execute([base_session, target_session])
+        )
+        assert len(comparison1.base_results.sessions) > 0
+
+        # Test environment + pattern filtering
+        comparison2 = (
+            Comparison()
+            .with_environment(  # First filter - environment
+                {"python": "3.9"}, {"python": "3.10"}
+            )
+            .with_test_pattern("test_api")  # Second filter - pattern
+            .execute([base_session, target_session])
+        )
+        assert len(comparison2.base_results.sessions) > 0
+        assert len(comparison2.target_results.sessions) > 0

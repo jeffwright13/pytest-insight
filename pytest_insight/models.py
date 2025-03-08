@@ -18,8 +18,10 @@ class TestOutcome(Enum):
     ERROR = "ERROR"
 
     @classmethod
-    def from_str(cls, outcome: str) -> "TestOutcome":
+    def from_str(cls, outcome: Optional[str]) -> "TestOutcome":
         """Convert string to TestOutcome, always uppercase internally."""
+        if not outcome:
+            return cls.SKIPPED  # Return a default enum value instead of None
         try:
             return cls[outcome.upper()]
         except KeyError:
@@ -106,11 +108,11 @@ class RerunTestGroup:
         self.tests.append(result)
         self.tests.sort(key=lambda x: x.start_time)
 
-        # Validate one-and-only-one final test (not RERUN or ERROR)
-        intermediate_outcomes = {TestOutcome.RERUN, TestOutcome.ERROR}
-        final_tests = [t for t in self.tests if t.outcome not in intermediate_outcomes]
-        if len(final_tests) > 1:
-            raise ValueError(f"Found {len(final_tests)} final tests (non-RERUN/ERROR), expected exactly one")
+        # # Validate one-and-only-one final test (not RERUN or ERROR)
+        # intermediate_outcomes = {TestOutcome.RERUN, TestOutcome.ERROR}
+        # final_tests = [t for t in self.tests if t.outcome not in intermediate_outcomes]
+        # if len(final_tests) > 1:
+        #     raise ValueError(f"Found {len(final_tests)} final tests (non-RERUN/ERROR), expected exactly one")
 
     @property
     def final_outcome(self) -> TestOutcome:

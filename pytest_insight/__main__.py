@@ -1,4 +1,5 @@
 import json
+import os
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -10,14 +11,16 @@ from fastapi.testclient import TestClient
 from pytest_insight.analytics import SUTAnalytics
 from pytest_insight.cli.commands import get_api
 from pytest_insight.cli.display import ResultsDisplay
-from pytest_insight.dimensional_comparator import DimensionalComparator
-from pytest_insight.dimensions import DurationDimension, ModuleDimension, OutcomeDimension, SUTDimension, TimeDimension
+
 # from pytest_insight.filters import TestFilter  # Old
 from pytest_insight.compat import FilterAdapter as TestFilter  # New
+from pytest_insight.dimensional_comparator import DimensionalComparator
+from pytest_insight.dimensions import DurationDimension, ModuleDimension, OutcomeDimension, SUTDimension, TimeDimension
 from pytest_insight.storage import get_storage_instance
 from pytest_insight.time_utils import TimeSpanParser
 
-from .server import app
+# Import FastAPI app
+# from .server import app as fastapi_app
 
 # Create typer apps with rich help enabled and showing help on ambiguous commands
 app = typer.Typer(
@@ -27,6 +30,31 @@ app = typer.Typer(
     add_completion=True,  # Enable completion support
     context_settings={"help_option_names": ["-h", "--help"]},  # Enable -h as help alias
 )
+
+# Initialize storage first - before the callback
+storage = get_storage_instance()
+
+
+# Use the Typer app for the callback
+# This callback runs before any command
+@app.callback()
+def common_options(
+    db_path: Optional[str] = typer.Option(
+        None,
+        "--db-path",
+        help="Path to custom pytest-insight database file",
+        envvar="PYTEST_INSIGHT_DB_PATH",  # Also support environment variable
+    ),
+):
+    """Common options for all pytest-insight commands."""
+    global storage
+    if db_path:
+        typer.echo(f"Using custom database path: {db_path}")
+        # Allow using ~ for home directory
+        expanded_path = os.path.expanduser(db_path)
+        # Re-initialize storage with custom path
+        storage = get_storage_instance(file_path=expanded_path)
+
 
 # Update all sub-apps to use the same context settings
 session_app = typer.Typer(
@@ -68,8 +96,6 @@ app.add_typer(history_app, name="history")
 app.add_typer(sut_app, name="sut")
 app.add_typer(analytics_app, name="analytics")
 app.add_typer(metrics_app, name="metrics")
-
-storage = get_storage_instance()
 
 cli = typer.Typer()
 client = TestClient(app)

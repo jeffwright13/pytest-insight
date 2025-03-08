@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
-import pytest
 from typing import List
 
-from pytest_insight.models import TestOutcome, TestSession, TestResult, RerunTestGroup
-from pytest_insight.query.query import Query, InvalidQueryParameterError, QueryExecutionError
-from pytest_insight.storage import get_storage_instance
+import pytest
+from freezegun import freeze_time  # Add this import
+from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+from pytest_insight.query.query import InvalidQueryParameterError, Query, QueryExecutionError
 
 
 @pytest.fixture
@@ -16,15 +16,11 @@ def mock_session_now() -> TestSession:
         session_start_time=datetime.now(),
         session_stop_time=datetime.now(),
         test_results=[
-            TestResult(
-                nodeid="test_api.py::test_endpoint",
-                outcome="PASSED",
-                start_time=datetime.now(),
-                duration=1.0
-            )
+            TestResult(nodeid="test_api.py::test_endpoint", outcome="PASSED", start_time=datetime.now(), duration=1.0)
         ],
-        rerun_test_groups=[]
+        rerun_test_groups=[],
     )
+
 
 @pytest.fixture
 def mock_session_1_day_1_hour_ago() -> TestSession:
@@ -39,11 +35,12 @@ def mock_session_1_day_1_hour_ago() -> TestSession:
                 nodeid="test_api.py::test_endpoint",
                 outcome="PASSED",
                 start_time=datetime.now() - timedelta(days=1, hours=1),
-                duration=1.0
+                duration=1.0,
             )
         ],
-        rerun_test_groups=[]
+        rerun_test_groups=[],
     )
+
 
 @pytest.fixture
 def mock_session_1_hour_1_minute_ago() -> TestSession:
@@ -58,11 +55,12 @@ def mock_session_1_hour_1_minute_ago() -> TestSession:
                 nodeid="test_api.py::test_endpoint",
                 outcome="PASSED",
                 start_time=datetime.now() - timedelta(days=1, minutes=1),
-                duration=1.0
+                duration=1.0,
             )
         ],
-        rerun_test_groups=[]
+        rerun_test_groups=[],
     )
+
 
 @pytest.fixture
 def mock_session_1_minute_1_second_ago() -> TestSession:
@@ -77,16 +75,28 @@ def mock_session_1_minute_1_second_ago() -> TestSession:
                 nodeid="test_api.py::test_endpoint",
                 outcome="PASSED",
                 start_time=datetime.now() - timedelta(minutes=1, seconds=1),
-                duration=1.0
+                duration=1.0,
             )
         ],
-        rerun_test_groups=[]
+        rerun_test_groups=[],
     )
 
+
 @pytest.fixture
-def mock_sessions(mock_session_now, mock_session_1_day_1_hour_ago, mock_session_1_hour_1_minute_ago, mock_session_1_minute_1_second_ago) -> List[TestSession]:
+def mock_sessions(
+    mock_session_now,
+    mock_session_1_day_1_hour_ago,
+    mock_session_1_hour_1_minute_ago,
+    mock_session_1_minute_1_second_ago,
+) -> List[TestSession]:
     """Fixture providing a list of test sessions."""
-    return [mock_session_now, mock_session_1_day_1_hour_ago, mock_session_1_hour_1_minute_ago, mock_session_1_minute_1_second_ago]
+    return [
+        mock_session_now,
+        mock_session_1_day_1_hour_ago,
+        mock_session_1_hour_1_minute_ago,
+        mock_session_1_minute_1_second_ago,
+    ]
+
 
 @pytest.fixture
 def base_session():
@@ -101,17 +111,18 @@ def base_session():
                 nodeid="test_api.py::test_get",
                 outcome="PASSED",
                 start_time=datetime.now() - timedelta(days=7),
-                duration=1.0
+                duration=1.0,
             ),
             TestResult(
                 nodeid="test_api.py::test_post",
                 outcome="FAILED",
                 start_time=datetime.now() - timedelta(days=7),
-                duration=2.0
-            )
+                duration=2.0,
+            ),
         ],
-        rerun_test_groups=[]
+        rerun_test_groups=[],
     )
+
 
 @pytest.fixture
 def target_session():
@@ -126,27 +137,24 @@ def target_session():
                 nodeid="test_api.py::test_get",
                 outcome="FAILED",  # Changed outcome
                 start_time=datetime.now(),
-                duration=2.0  # Slower
+                duration=2.0,  # Slower
             ),
             TestResult(
                 nodeid="test_api.py::test_post",
                 outcome="PASSED",  # Fixed
                 start_time=datetime.now(),
-                duration=1.0  # Faster
-            )
+                duration=1.0,  # Faster
+            ),
         ],
-        rerun_test_groups=[]
+        rerun_test_groups=[],
     )
+
 
 @pytest.fixture
 def empty_query():
     """Fixture for empty query."""
-    return Query(
-        sessions=[],
-        total_count=0,
-        execution_time=0.0,
-        matched_nodeids=set()
-    )
+    return Query(sessions=[], total_count=0, execution_time=0.0, matched_nodeids=set())
+
 
 @pytest.fixture
 def mock_session_with_reruns() -> TestSession:
@@ -157,33 +165,26 @@ def mock_session_with_reruns() -> TestSession:
         session_start_time=datetime.now(),
         session_stop_time=datetime.now(),
         test_results=[
-            TestResult(
-                nodeid="test_api.py::test_endpoint",
-                outcome="PASSED",
-                start_time=datetime.now(),
-                duration=1.0
-            )
+            TestResult(nodeid="test_api.py::test_endpoint", outcome="PASSED", start_time=datetime.now(), duration=1.0)
         ],
         rerun_test_groups=[
             RerunTestGroup(
                 nodeid="test_api.py::test_endpoint",
                 tests=[
                     TestResult(
-                        nodeid="test_api.py::test_endpoint",
-                        outcome="FAILED",
-                        start_time=datetime.now(),
-                        duration=0.6
+                        nodeid="test_api.py::test_endpoint", outcome="FAILED", start_time=datetime.now(), duration=0.6
                     ),
                     TestResult(
                         nodeid="test_api.py::test_endpoint",
                         outcome="RERUN",
                         start_time=datetime.now() - timedelta(seconds=0.5),
-                        duration=0.3
-                    )
-                ]
+                        duration=0.3,
+                    ),
+                ],
             )
-        ]
+        ],
     )
+
 
 class Test_Query:
     """Test suite for Query functionality."""
@@ -191,7 +192,7 @@ class Test_Query:
     def test_query_initialization(self):
         """Test basic Query initialization."""
         query = Query()
-        assert hasattr(query, '_filters')
+        assert hasattr(query, "_filters")
         assert len(query._filters) == 0
 
     def test_for_sut_filter(self, mock_sessions):
@@ -223,7 +224,7 @@ class Test_Query:
             session_start_time=datetime.now() - timedelta(days=2),
             session_stop_time=datetime.now() - timedelta(days=2),
             test_results=[],
-            rerun_test_groups=[]
+            rerun_test_groups=[],
         )
         result = query.execute([old_session])
         assert result.empty
@@ -242,7 +243,7 @@ class Test_Query:
             session_start_time=datetime.now() - timedelta(hours=2),
             session_stop_time=datetime.now() - timedelta(hours=2),
             test_results=[],
-            rerun_test_groups=[]
+            rerun_test_groups=[],
         )
         result = query.execute([old_session])
         assert result.empty
@@ -262,7 +263,7 @@ class Test_Query:
             session_start_time=datetime.now() - timedelta(minutes=30),
             session_stop_time=datetime.now() - timedelta(minutes=30),
             test_results=[],
-            rerun_test_groups=[]
+            rerun_test_groups=[],
         )
         result = query.execute([old_session])
         assert result.empty
@@ -273,8 +274,7 @@ class Test_Query:
         result = query.execute(mock_sessions)
 
         assert not result.empty
-        assert all(any(t.outcome == "PASSED" for t in s.test_results)
-                  for s in result.sessions)
+        assert all(any(t.outcome == "PASSED" for t in s.test_results) for s in result.sessions)
 
     def test_having_warnings(self, mock_session_now):
         """Test warning presence filtering."""
@@ -283,14 +283,13 @@ class Test_Query:
             outcome="PASSED",
             start_time=datetime.now(),
             duration=1.0,
-            has_warning=True
+            has_warning=True,
         )
         mock_session_now.test_results.append(warning_result)
         query = Query().having_warnings(True)
         result = query.execute([mock_session_now])
         assert not result.empty
-        assert any(t.has_warning for s in result.sessions
-                  for t in s.test_results)
+        assert any(t.has_warning for s in result.sessions for t in s.test_results)
 
     def test_query_result_properties(self, base_session, target_session):
         """Test QueryResult properties."""
@@ -325,12 +324,7 @@ class Test_Query:
 
     def test_query_chaining_no_matches(self, mock_sessions):
         """Test query method chaining and execution with no matching sessions."""
-        query = (
-            Query()
-            .for_sut("api-service")
-            .in_last_days(7)
-            .with_outcome("PASSED")
-        )
+        query = Query().for_sut("api-service").in_last_days(7).with_outcome("PASSED")
         result = query.execute(mock_sessions)
         assert result.empty
         assert result.total_count == 0
@@ -338,20 +332,12 @@ class Test_Query:
 
     def test_query_chaining_with_matches(self, base_session, target_session):
         """Test query method chaining and execution with matching sessions."""
-        query = (
-            Query()
-            .for_sut("api-service")
-            .in_last_days(7)
-            .with_outcome("PASSED")
-        )
+        query = Query().for_sut("api-service").in_last_days(7).with_outcome("PASSED")
         result = query.execute([base_session, target_session])
 
         assert not result.empty
         assert result.total_count == 1
-        assert any(
-            any(t.outcome == "PASSED" for t in s.test_results)
-            for s in result.sessions
-        )
+        assert any(any(t.outcome == "PASSED" for t in s.test_results) for s in result.sessions)
 
     def test_query_with_reruns(self, mock_session_with_reruns):
         """Test filtering sessions with reruns."""
@@ -359,6 +345,7 @@ class Test_Query:
         result = query.execute([mock_session_with_reruns])
         assert not result.empty
         assert result.total_count == 1
+
 
 class Test_Query_TimeOperations:
     """Test suite for Query time-based operations."""
@@ -377,28 +364,28 @@ class Test_Query_TimeOperations:
                 session_id="7d-exact",
                 session_start_time=now - timedelta(days=7),
                 session_duration=1.0,
-                test_results=[]
+                test_results=[],
             ),
             TestSession(  # Just inside 7 days
                 sut_name="api-service",
                 session_id="7d-minus-1min",
                 session_start_time=now - timedelta(days=7, minutes=-1),
                 session_duration=1.0,
-                test_results=[]
+                test_results=[],
             ),
             TestSession(  # Just outside 7 days
                 sut_name="api-service",
                 session_id="7d-plus-1min",
                 session_start_time=now - timedelta(days=7, minutes=1),
                 session_duration=1.0,
-                test_results=[]
-            )
+                test_results=[],
+            ),
         ]
 
     def test_in_last_days_boundary(self, now, sessions_at_boundaries, mocker):
         """Test exact boundary conditions for in_last_days."""
-        mocker.patch('pytest_insight.query.query.datetime')
-        mocker.patch('pytest_insight.query.query.datetime.now', return_value=now)
+        mocker.patch("pytest_insight.query.query.datetime")
+        mocker.patch("pytest_insight.query.query.datetime.now", return_value=now)
 
         query = Query().in_last_days(7)
         result = query.execute(sessions_at_boundaries)
@@ -417,20 +404,23 @@ class Test_Query_TimeOperations:
             Query().date_range(now, now - timedelta(days=1))
 
         # Zero-duration range
-        result = query.execute([
-            TestSession(
-                sut_name="api-service",
-                session_id="exact-time",
-                session_start_time=now,
-                session_duration=0.0,
-                test_results=[]
-            )
-        ])
+        result = query.execute(
+            [
+                TestSession(
+                    sut_name="api-service",
+                    session_id="exact-time",
+                    session_start_time=now,
+                    session_duration=0.0,
+                    test_results=[],
+                )
+            ]
+        )
         assert len(result.sessions) == 1
 
     def test_timezone_handling(self):
         """Test handling of timezone-aware datetimes."""
         from datetime import timezone
+
         utc_now = datetime.now(timezone.utc)
         est_now = datetime.now(timezone(timedelta(hours=-5)))
 
@@ -438,17 +428,29 @@ class Test_Query_TimeOperations:
         with pytest.raises(InvalidQueryParameterError):
             Query().date_range(utc_now, est_now)
 
-    def test_combined_time_filters(self, now, mocker):
+    @freeze_time("2025-03-04 12:00:00")
+    def test_combined_time_filters(self, now):
         """Test multiple time-based filters together."""
-        mocker.patch('pytest_insight.query.query.datetime.now', return_value=now)
+        query = Query().in_last_days(7).in_last_hours(24)
 
-        query = (
-            Query()
-            .in_last_days(7)
-            .in_last_hours(24)
-        )
         # Should use most restrictive filter (24 hours)
-        assert len(query._filters) == 2
+        cutoff_days = now - timedelta(days=7)
+        cutoff_hours = now - timedelta(hours=24)
+
+        session_old = TestSession(
+            sut_name="test-sut", session_id="old", session_start_time=cutoff_days, session_duration=2.0, test_results=[]
+        )
+        session_recent = TestSession(
+            sut_name="test-sut",
+            session_id="recent",
+            session_start_time=cutoff_hours + timedelta(minutes=1),
+            session_duration=2.0,
+            test_results=[],
+        )
+
+        result = query.execute([session_old, session_recent])
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "recent"
 
     def test_time_filter_validation(self):
         """Test validation of time filter parameters."""
@@ -465,18 +467,14 @@ class Test_Query_TimeOperations:
             Query().date_range("not-a-date", datetime.now())
 
 
-
-
-
-
 class Test_QueryQodoGen:
     def test_for_sut_filters_sessions(self, mocker):
         query = Query()
         sessions = [
             TestSession(sut_name="sut1", session_id="1", session_start_time=datetime.now(), session_duration=10),
-            TestSession(sut_name="sut2", session_id="2", session_start_time=datetime.now(), session_duration=10)
+            TestSession(sut_name="sut2", session_id="2", session_start_time=datetime.now(), session_duration=10),
         ]
-        storage_mock = mocker.patch('pytest_insight.query.query.get_storage_instance')
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
         storage_mock.return_value.load_sessions.return_value = sessions
         result = query.for_sut("sut1").execute()
         assert len(result.sessions) == 1
@@ -491,9 +489,15 @@ class Test_QueryQodoGen:
 
     def test_date_range_filter(self):
         now = datetime.now()
-        session1 = TestSession(sut_name="SUT1", session_id="1", session_start_time=now - timedelta(days=5), session_duration=10)
-        session2 = TestSession(sut_name="SUT2", session_id="2", session_start_time=now - timedelta(days=3), session_duration=10)
-        session3 = TestSession(sut_name="SUT3", session_id="3", session_start_time=now - timedelta(days=1), session_duration = 10)
+        session1 = TestSession(
+            sut_name="SUT1", session_id="1", session_start_time=now - timedelta(days=5), session_duration=10
+        )
+        session2 = TestSession(
+            sut_name="SUT2", session_id="2", session_start_time=now - timedelta(days=3), session_duration=10
+        )
+        session3 = TestSession(
+            sut_name="SUT3", session_id="3", session_start_time=now - timedelta(days=1), session_duration=10
+        )
         sessions = [session1, session2, session3]
         query = Query().date_range(now - timedelta(days=4), now)
         result = query.execute(sessions)
@@ -504,18 +508,8 @@ class Test_QueryQodoGen:
     def test_outcome_filter(self):
         """Test filtering by test outcome."""
         # Create test data with enum outcomes
-        result_passed = TestResult(
-            nodeid="test_1",
-            outcome=TestOutcome.PASSED,
-            start_time=datetime.now(),
-            duration=1.0
-        )
-        result_failed = TestResult(
-            nodeid="test_2",
-            outcome=TestOutcome.FAILED,
-            start_time=datetime.now(),
-            duration=1.0
-        )
+        result_passed = TestResult(nodeid="test_1", outcome=TestOutcome.PASSED, start_time=datetime.now(), duration=1.0)
+        result_failed = TestResult(nodeid="test_2", outcome=TestOutcome.FAILED, start_time=datetime.now(), duration=1.0)
 
         # Create test sessions
         session1 = TestSession(
@@ -523,14 +517,14 @@ class Test_QueryQodoGen:
             session_id="1",
             session_start_time=datetime.now(),
             session_duration=1.5,
-            test_results=[result_passed]
+            test_results=[result_passed],
         )
         session2 = TestSession(
             sut_name="SUT2",
             session_id="2",
             session_start_time=datetime.now(),
             session_duration=1.5,
-            test_results=[result_failed]
+            test_results=[result_failed],
         )
 
         # Test with both string and enum
@@ -548,8 +542,12 @@ class Test_QueryQodoGen:
 
     def test_query_executes_with_provided_sessions(self):
         session = TestSession(
-            sut_name="SUT1", session_id="1", session_start_time=datetime.now() - timedelta(days=1),
-            session_stop_time=datetime.now(), session_duration=86400, test_results=[]
+            sut_name="SUT1",
+            session_id="1",
+            session_start_time=datetime.now() - timedelta(days=1),
+            session_stop_time=datetime.now(),
+            session_duration=86400,
+            test_results=[],
         )
         query = Query()
         result = query.execute([session])
@@ -561,7 +559,7 @@ class Test_QueryQodoGen:
         # mock_storage = mocker.patch('pytest_insight.storage.get_storage_instance')
         # A classic example of the need to patch it where it's being used, not where it's defined!
         # "PLAY IT WHERE IT LIES!"
-        mock_storage = mocker.patch('pytest_insight.query.query.get_storage_instance')
+        mock_storage = mocker.patch("pytest_insight.query.query.get_storage_instance")
         mock_storage_instance = mock_storage.return_value
         mock_storage_instance.load_sessions.return_value = []
 
@@ -613,13 +611,14 @@ class Test_QueryQodoGen:
         result2 = query.execute(sessions=[mock_session])
         assert result2.total_count == 1
 
-class Test_BeforeAfter:
 
+class Test_BeforeAfter:
     # Valid datetime parameter filters sessions before given timestamp
     def test_before_filters_sessions_by_timestamp(self):
-        from pytest_insight.query.query import Query
-        from pytest_insight.models import TestSession
         from datetime import datetime, timedelta
+
+        from pytest_insight.models import TestSession
+        from pytest_insight.query.query import Query
 
         # Setup
         query = Query()
@@ -628,8 +627,18 @@ class Test_BeforeAfter:
         # Create test sessions before and after timestamp
         sut_name = "larry"
         session_id = "session-12345"
-        session_before = TestSession(sut_name=sut_name, session_id=session_id, session_start_time=timestamp - timedelta(hours=1), session_duration=10)
-        session_after = TestSession(sut_name=sut_name, session_id=session_id, session_start_time=timestamp + timedelta(hours=1), session_duration=10)
+        session_before = TestSession(
+            sut_name=sut_name,
+            session_id=session_id,
+            session_start_time=timestamp - timedelta(hours=1),
+            session_duration=10,
+        )
+        session_after = TestSession(
+            sut_name=sut_name,
+            session_id=session_id,
+            session_start_time=timestamp + timedelta(hours=1),
+            session_duration=10,
+        )
 
         # Apply filter
         query.before(timestamp)
@@ -641,8 +650,8 @@ class Test_BeforeAfter:
 
     # Passing None as timestamp parameter raises InvalidQueryParameterError
     def test_before_raises_on_invalid_timestamp(self):
-        from pytest_insight.query.query import Query, InvalidQueryParameterError
         import pytest
+        from pytest_insight.query.query import InvalidQueryParameterError, Query
 
         query = Query()
 
@@ -654,6 +663,7 @@ class Test_BeforeAfter:
     # Method returns Query instance for method chaining
     def test_method_returns_query_instance(self):
         from datetime import datetime
+
         from pytest_insight.query.query import Query
 
         query_instance = Query()
@@ -664,6 +674,7 @@ class Test_BeforeAfter:
     # Filter function correctly added to _filters list
     def test_filter_function_added_to_filters_list(self):
         from datetime import datetime
+
         from pytest_insight.query.query import Query
 
         query_instance = Query()
@@ -675,8 +686,9 @@ class Test_BeforeAfter:
     # Filter lambda correctly compares session_start_time with timestamp
     def test_filter_lambda_compares_session_start_time(self, mocker):
         from datetime import datetime
-        from pytest_insight.query.query import Query
+
         from pytest_insight.models import TestSession
+        from pytest_insight.query.query import Query
 
         query_instance = Query()
         timestamp = datetime(2023, 10, 1)
@@ -693,9 +705,10 @@ class Test_BeforeAfter:
 
     # Filter sessions with timestamp after given datetime returns filtered Query instance
     def test_after_filters_sessions_by_timestamp(self):
-        from pytest_insight.query.query import Query
-        from pytest_insight.models import TestSession
         from datetime import datetime, timedelta
+
+        from pytest_insight.models import TestSession
+        from pytest_insight.query.query import Query
 
         query = Query()
         timestamp = datetime(2023, 1, 1)
@@ -703,8 +716,18 @@ class Test_BeforeAfter:
         # Create test sessions before and after timestamp
         sut_name = "larry"
         session_id = "session-12345"
-        session1 = TestSession(sut_name=sut_name, session_id=session_id, session_start_time=timestamp - timedelta(days=1), session_duration=10)
-        session2 = TestSession(sut_name=sut_name, session_id=session_id, session_start_time=timestamp + timedelta(days=1), session_duration=10)
+        session1 = TestSession(
+            sut_name=sut_name,
+            session_id=session_id,
+            session_start_time=timestamp - timedelta(days=1),
+            session_duration=10,
+        )
+        session2 = TestSession(
+            sut_name=sut_name,
+            session_id=session_id,
+            session_start_time=timestamp + timedelta(days=1),
+            session_duration=10,
+        )
 
         filtered_query = query.after(timestamp)
 
@@ -718,8 +741,8 @@ class Test_BeforeAfter:
 
     # Raise InvalidQueryParameterError when timestamp is not datetime object
     def test_after_raises_error_for_invalid_timestamp(self):
-        from pytest_insight.query.query import Query, InvalidQueryParameterError
         import pytest
+        from pytest_insight.query.query import InvalidQueryParameterError, Query
 
         query = Query()
         invalid_timestamp = "2023-01-01"
@@ -732,6 +755,7 @@ class Test_BeforeAfter:
     # Method adds lambda filter function to _filters list
     def test_adds_lambda_filter_to_filters_list(self):
         from datetime import datetime
+
         from pytest_insight.query.query import Query
 
         query_instance = Query()
@@ -742,8 +766,9 @@ class Test_BeforeAfter:
     # Filter correctly compares session_start_time with provided timestamp
     def test_filter_compares_session_start_time_correctly(self, mocker):
         from datetime import datetime, timedelta
-        from pytest_insight.query.query import Query
+
         from pytest_insight.models import TestSession
+        from pytest_insight.query.query import Query
 
         query_instance = Query()
         timestamp = datetime.now()
@@ -760,8 +785,212 @@ class Test_BeforeAfter:
     # Method supports method chaining by returning self
     def test_method_chaining_support(self):
         from datetime import datetime
+
         from pytest_insight.query.query import Query
 
         query_instance = Query()
         result = query_instance.after(datetime.now())
         assert result is query_instance
+
+
+from datetime import datetime
+
+import pytest
+from pytest_insight.models import TestSession
+
+
+@pytest.fixture
+def test_sessions():
+    """Create a set of test sessions for filtering tests."""
+    now = datetime.now()
+
+    # Session 1: Mixed tests with different durations and outcomes
+    session1 = TestSession(
+        sut_name="api-service",
+        session_id="session1",
+        session_start_time=now - timedelta(days=1),
+        session_stop_time=now - timedelta(days=1) + timedelta(seconds=30),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_get",
+                outcome=TestOutcome.PASSED,
+                start_time=now - timedelta(days=1),
+                duration=1.5,  # Medium duration
+            ),
+            TestResult(
+                nodeid="test_api.py::test_post",
+                outcome=TestOutcome.FAILED,
+                start_time=now - timedelta(days=1),
+                duration=0.5,  # Fast
+            ),
+            TestResult(
+                nodeid="test_db.py::test_connection",
+                outcome=TestOutcome.PASSED,
+                start_time=now - timedelta(days=1),
+                duration=5.0,  # Slow
+            ),
+        ],
+        rerun_test_groups=[],
+        session_tags={"env": "dev", "python": "3.9"},
+    )
+
+    # Session 2: All tests passed but different patterns
+    session2 = TestSession(
+        sut_name="web-service",
+        session_id="session2",
+        session_start_time=now - timedelta(hours=12),
+        session_stop_time=now - timedelta(hours=12) + timedelta(seconds=20),
+        test_results=[
+            TestResult(
+                nodeid="test_web.py::test_login",
+                outcome=TestOutcome.PASSED,
+                start_time=now - timedelta(hours=12),
+                duration=1.0,
+            ),
+            TestResult(
+                nodeid="test_web.py::test_logout",
+                outcome=TestOutcome.PASSED,
+                start_time=now - timedelta(hours=12),
+                duration=0.8,
+            ),
+            TestResult(
+                nodeid="test_auth.py::test_session",
+                outcome=TestOutcome.SKIPPED,
+                start_time=now - timedelta(hours=12),
+                duration=0.1,
+            ),
+        ],
+        rerun_test_groups=[],
+        session_tags={"env": "prod", "python": "3.8"},
+    )
+
+    return [session1, session2]
+
+
+class Test_QueryTestFilter:
+    """Test suite for test-level filtering in Query."""
+
+    def test_filter_by_pattern(self, test_sessions):
+        """Test filtering tests by pattern."""
+        query = Query()
+        result = query.filter_tests().with_pattern("test_api").apply().execute(test_sessions)
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_filter_by_duration(self, test_sessions):
+        """Test filtering tests by duration."""
+        query = Query()
+        # Find sessions with tests taking >= 3 seconds
+        result = query.filter_tests().with_duration(3.0, 10.0).apply().execute(test_sessions)
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_filter_by_outcome(self, test_sessions):
+        """Test filtering tests by outcome."""
+        query = Query()
+        # Find sessions with failed tests
+        result = query.filter_tests().with_outcome(TestOutcome.FAILED).apply().execute(test_sessions)
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_filter_by_skipped(self, test_sessions):
+        """Test filtering tests by skipped outcome."""
+        query = Query()
+        # Find sessions with skipped tests
+        result = query.filter_tests().with_outcome(TestOutcome.SKIPPED).apply().execute(test_sessions)
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session2"
+
+    def test_combined_test_filters(self, test_sessions):
+        """Test combining multiple test-level filters (AND logic within a single test)."""
+        query = Query()
+        # Find sessions with tests that:
+        # 1. Contain "test_api" AND
+        # 2. Have failed outcome
+        result = (
+            query.filter_tests()
+            .with_pattern("test_api")
+            .with_outcome(TestOutcome.FAILED)
+            .apply()
+            .execute(test_sessions)
+        )
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_combined_test_and_session_filters(self, test_sessions):
+        """Test combining test-level and session-level filters."""
+        query = Query()
+        # Find sessions that:
+        # 1. Are from "api-service" (session-level) AND
+        # 2. Have tests containing "test_api" (test-level)
+        result = query.for_sut("api-service").filter_tests().with_pattern("test_api").apply().execute(test_sessions)
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_no_matches(self, test_sessions):
+        """Test when no sessions match the filters."""
+        query = Query()
+        # Look for a pattern that doesn't exist
+        result = query.filter_tests().with_pattern("nonexistent").apply().execute(test_sessions)
+
+        assert len(result.sessions) == 0
+        assert result.empty
+
+    def test_validation_errors(self):
+        """Test validation errors in test filters."""
+        query = Query()
+
+        with pytest.raises(InvalidQueryParameterError):
+            query.filter_tests().with_duration(5.0, 1.0).apply()  # min > max
+
+        with pytest.raises(InvalidQueryParameterError):
+            query.filter_tests().with_outcome("INVALID_OUTCOME").apply()  # Invalid outcome
+
+        with pytest.raises(InvalidQueryParameterError):
+            query.filter_tests().with_pattern(123).apply()  # Pattern is not a string
+
+    def test_empty_conditions(self, test_sessions):
+        """Test applying an empty test filter."""
+        query = Query()
+        # No conditions specified before apply()
+        result = query.filter_tests().apply().execute(test_sessions)
+
+        # Should return all sessions (no filtering applied)
+        assert len(result.sessions) == 2
+
+    def test_multiple_apply_calls(self, test_sessions):
+        """Test applying multiple test filter groups."""
+        query = Query()
+
+        # First find sessions with failed tests
+        query.filter_tests().with_outcome(TestOutcome.FAILED).apply()
+
+        # Then further filter to only include those with slow tests
+        query.filter_tests().with_duration(4.0, 10.0).apply()
+
+        result = query.execute(test_sessions)
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_only_matching_one_test_keeps_session(self, test_sessions):
+        """Test that a session is kept if at least one test matches all conditions."""
+        query = Query()
+
+        # This only matches test_api.py::test_post in session1
+        result = (
+            query.filter_tests()
+            .with_pattern("test_api")
+            .with_outcome(TestOutcome.FAILED)
+            .with_duration(0.0, 1.0)
+            .apply()
+            .execute(test_sessions)
+        )
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
