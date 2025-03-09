@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, Set
 
 from pytest_insight.models import TestOutcome, TestSession
 from pytest_insight.query.query import Query, QueryResult
@@ -8,12 +8,14 @@ from pytest_insight.query.query import Query, QueryResult
 
 class ComparisonError(Exception):
     """Exception raised for comparison errors."""
+
     pass
 
 
 @dataclass
 class ComparisonResult:
     """Results of a comparison between test sessions."""
+
     base_results: QueryResult
     target_results: QueryResult
     outcome_changes: Dict[str, Dict[str, str]]
@@ -75,6 +77,9 @@ class Comparison:
         if not isinstance(pattern, str) or not pattern.strip():
             raise ComparisonError("Test pattern must be a non-empty string")
 
+        # Store the pattern for direct session filtering
+        self._test_pattern = pattern
+
         # Split the base and target queries to handle them separately
         self._base_query = self._create_pattern_filtered_query(self._base_query, pattern)
         self._target_query = self._create_pattern_filtered_query(self._target_query, pattern)
@@ -91,19 +96,20 @@ class Comparison:
 
         # Add a filter that keeps only sessions with the matching test
         # AND filters the test results to only include the matching test
-        pattern_filter = lambda s: TestSession(
-            sut_name=s.sut_name,
-            session_id=s.session_id,
-            session_start_time=s.session_start_time,
-            session_stop_time=s.session_stop_time,
-            session_duration=s.session_duration,
-            test_results=[t for t in s.test_results if pattern == t.nodeid or pattern in t.nodeid],
-            rerun_test_groups=s.rerun_test_groups,
-            session_tags=s.session_tags
-        )
+        def pattern_filter(s):
+            return TestSession(
+                sut_name=s.sut_name,
+                session_id=s.session_id,
+                session_start_time=s.session_start_time,
+                session_stop_time=s.session_stop_time,
+                session_duration=s.session_duration,
+                test_results=[t for t in s.test_results if pattern == t.nodeid or pattern in t.nodeid],
+                rerun_test_groups=s.rerun_test_groups,
+                session_tags=s.session_tags,
+            )
 
         # Add this as a session transform, not just a filter
-        new_query._transforms = getattr(new_query, '_transforms', []) + [pattern_filter]
+        new_query._transforms = getattr(new_query, "_transforms", []) + [pattern_filter]
 
         # Add a filter that removes sessions with no matching tests
         new_query._filters.append(lambda s: any(pattern == t.nodeid or pattern in t.nodeid for t in s.test_results))
@@ -138,31 +144,65 @@ class Comparison:
 
     def execute(self, sessions=None):
         """Execute comparison between base and target results."""
-        if sessions is None and not (hasattr(self._base_query, '_filters') and hasattr(self._target_query, '_filters')):
+        if sessions is None and not (hasattr(self._base_query, "_filters") and hasattr(self._target_query, "_filters")):
             raise ComparisonError("No sessions provided and no filters configured")
 
         try:
             # When sessions are directly provided, split them for base and target
-            # The first session is considered base, all others are target
             if sessions:
-                # If sessions are provided directly, create simple QueryResults
                 # Take first session as base, other sessions as target
                 base_sessions = [sessions[0]]
                 target_sessions = sessions[1:] if len(sessions) > 1 else []
 
+                # Create QueryResults with the sessions
                 base_results = QueryResult(
                     sessions=base_sessions,
                     total_count=len(base_sessions),
                     execution_time=0,
-                    matched_nodeids={t.nodeid for s in base_sessions for t in s.test_results}
+                    matched_nodeids={t.nodeid for s in base_sessions for t in s.test_results},
                 )
 
                 target_results = QueryResult(
                     sessions=target_sessions,
                     total_count=len(target_sessions),
                     execution_time=0,
-                    matched_nodeids={t.nodeid for s in target_sessions for t in s.test_results}
+                    matched_nodeids={t.nodeid for s in target_sessions for t in s.test_results},
                 )
+
+                # If we have a test pattern filter, apply it to both result sets
+                if hasattr(self, "_test_pattern") and self._test_pattern:
+                    # Filter test results to only include matching tests
+                    pattern = self._test_pattern
+
+                    # Apply filter to base sessions
+                    for i, session in enumerate(base_results.sessions):
+                        filtered_tests = [t for t in session.test_results if pattern == t.nodeid or pattern in t.nodeid]
+                        # Replace with filtered version
+                        base_results.sessions[i] = TestSession(
+                            sut_name=session.sut_name,
+                            session_id=session.session_id,
+                            session_start_time=session.session_start_time,
+                            session_stop_time=session.session_stop_time,
+                            session_duration=session.session_duration,
+                            test_results=filtered_tests,
+                            rerun_test_groups=session.rerun_test_groups,
+                            session_tags=session.session_tags,
+                        )
+
+                    # Apply filter to target sessions
+                    for i, session in enumerate(target_results.sessions):
+                        filtered_tests = [t for t in session.test_results if pattern == t.nodeid or pattern in t.nodeid]
+                        # Replace with filtered version
+                        target_results.sessions[i] = TestSession(
+                            sut_name=session.sut_name,
+                            session_id=session.session_id,
+                            session_start_time=session.session_start_time,
+                            session_stop_time=session.session_stop_time,
+                            session_duration=session.session_duration,
+                            test_results=filtered_tests,
+                            rerun_test_groups=session.rerun_test_groups,
+                            session_tags=session.session_tags,
+                        )
             else:
                 # Execute queries to get results
                 base_results = self._base_query.execute(None)
@@ -175,13 +215,13 @@ class Comparison:
             # Extract outcomes from base sessions
             for session in base_results.sessions:
                 for test in session.test_results:
-                    outcome = test.outcome.value if hasattr(test.outcome, 'value') else str(test.outcome)
+                    outcome = test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome)
                     base_outcomes[test.nodeid] = outcome
 
             # Extract outcomes from target sessions
             for session in target_results.sessions:
                 for test in session.test_results:
-                    outcome = test.outcome.value if hasattr(test.outcome, 'value') else str(test.outcome)
+                    outcome = test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome)
                     target_outcomes[test.nodeid] = outcome
 
             # Calculate outcome changes
@@ -200,10 +240,7 @@ class Comparison:
 
                 # If outcome changed, record it
                 if base_outcome != target_outcome:
-                    outcome_changes[nodeid] = {
-                        'base': base_outcome,
-                        'target': target_outcome
-                    }
+                    outcome_changes[nodeid] = {"base": base_outcome, "target": target_outcome}
 
                     # Specifically check for failures
                     if base_outcome == "PASSED" and target_outcome == "FAILED":
@@ -233,17 +270,17 @@ class Comparison:
                     if abs(diff) >= self.duration_threshold:
                         if diff > 0:  # Got slower
                             slower_tests[nodeid] = {
-                                'base': base_duration,
-                                'target': target_duration,
-                                'diff': diff,
-                                'percent': (diff / base_duration * 100) if base_duration > 0 else float('inf')
+                                "base": base_duration,
+                                "target": target_duration,
+                                "diff": diff,
+                                "percent": (diff / base_duration * 100) if base_duration > 0 else float("inf"),
                             }
                         else:  # Got faster
                             faster_tests[nodeid] = {
-                                'base': base_duration,
-                                'target': target_duration,
-                                'diff': -diff,  # Make positive
-                                'percent': (-diff / base_duration * 100) if base_duration > 0 else float('inf')
+                                "base": base_duration,
+                                "target": target_duration,
+                                "diff": -diff,  # Make positive
+                                "percent": (-diff / base_duration * 100) if base_duration > 0 else float("inf"),
                             }
 
             # Calculate overall duration change
@@ -260,7 +297,7 @@ class Comparison:
                 flaky_tests=flaky_tests,
                 slower_tests=slower_tests,
                 faster_tests=faster_tests,
-                duration_change=duration_change
+                duration_change=duration_change,
             )
         except Exception as e:
             if isinstance(e, ComparisonError):
@@ -331,10 +368,7 @@ class Comparison:
 
             # Only consider tests that appear in both sets
             if base_outcome and target_outcome and base_outcome != target_outcome:
-                changes[nodeid] = {
-                    'base': base_outcome,
-                    'target': target_outcome
-                }
+                changes[nodeid] = {"base": base_outcome, "target": target_outcome}
 
         return changes
 
@@ -356,8 +390,9 @@ class Comparison:
 
         # Filter for tests that changed from PASSED to FAILED
         return {
-            nodeid for nodeid, change in outcome_changes.items()
-            if change['base'] == "PASSED" and change['target'] == "FAILED"
+            nodeid
+            for nodeid, change in outcome_changes.items()
+            if change["base"] == "PASSED" and change["target"] == "FAILED"
         }
 
     def _find_new_passes(self, base_results: QueryResult, target_results: QueryResult) -> Set[str]:
@@ -367,8 +402,9 @@ class Comparison:
 
         # Filter for tests that changed from FAILED to PASSED
         return {
-            nodeid for nodeid, change in outcome_changes.items()
-            if change['base'] == "FAILED" and change['target'] == "PASSED"
+            nodeid
+            for nodeid, change in outcome_changes.items()
+            if change["base"] == "FAILED" and change["target"] == "PASSED"
         }
 
     def _identify_flaky_tests(self, base_results: QueryResult, target_results: QueryResult) -> Set[str]:
@@ -382,17 +418,9 @@ class Comparison:
         result = {}
 
         # Get duration maps
-        base_durations = {
-            t.nodeid: t.duration
-            for s in base_results.sessions
-            for t in s.test_results
-        }
+        base_durations = {t.nodeid: t.duration for s in base_results.sessions for t in s.test_results}
 
-        target_durations = {
-            t.nodeid: t.duration
-            for s in target_results.sessions
-            for t in s.test_results
-        }
+        target_durations = {t.nodeid: t.duration for s in target_results.sessions for t in s.test_results}
 
         # Find tests that exist in both sets
         common_tests = set(base_durations.keys()) & set(target_durations.keys())
@@ -408,10 +436,10 @@ class Comparison:
                 # Only include if difference exceeds threshold
                 if diff >= self.duration_threshold:
                     result[nodeid] = {
-                        'base': base_duration,
-                        'target': target_duration,
-                        'diff': diff,
-                        'percent': (diff / base_duration * 100) if base_duration > 0 else float('inf')
+                        "base": base_duration,
+                        "target": target_duration,
+                        "diff": diff,
+                        "percent": (diff / base_duration * 100) if base_duration > 0 else float("inf"),
                     }
 
         return result
