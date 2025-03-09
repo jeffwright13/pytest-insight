@@ -52,7 +52,7 @@ def pytest_addoption(parser):
         "--insight-json-path",
         action="store",
         default=None,  # Make path optional, use default from JSONStorage if not specified
-        help="Path to JSON storage file for test sessions (REQUIRED; use 'none' to disable saving results)",
+        help="Path to JSON storage file for test sessions (use 'none' to disable saving results)",
     )
 
 
@@ -107,6 +107,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
     # Process all test reports
     for outcome, reports in stats.items():
+        if not outcome: # looking for empty string "", only populated with 'setup' and 'teardown' reports
+            continue
+
         if outcome == "warnings":
             continue  # Handle warnings separately
 

@@ -2,7 +2,7 @@ from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
 from pytest_insight.plugin import pytest_addoption
 
 
-class TestPytestPlugin:
+class Test_qPytestPlugin:
     def test_invalid_storage_type_value(self, mocker):
         mock_parser = mocker.Mock()
         mock_group = mocker.Mock()

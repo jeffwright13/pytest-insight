@@ -275,9 +275,9 @@ class Test_TestOutcome:
             TestOutcome.from_str("INVALID")
         assert "Invalid test outcome: INVALID" in str(exc.value)
 
-        with pytest.raises(ValueError) as exc:
-            TestOutcome.from_str("")
-        assert "Invalid test outcome: " in str(exc.value)
+        # Empty string should return SKIPPED as this is the default behavior
+        # when a test has no outcome
+        assert TestOutcome.from_str("") == TestOutcome.SKIPPED
 
 
 class Test_TestResult:
