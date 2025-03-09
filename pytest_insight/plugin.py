@@ -211,9 +211,13 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     terminalreporter.write_line("")  # Add spacing
 
     # Main sections
-    write_section_header(terminalreporter, "Test Session Metadata")
+    write_section_header(terminalreporter, "Test Session Info")
     write_stat_line(terminalreporter, "SUT Name", sut_name)
     write_stat_line(terminalreporter, "Session ID", session_id)
+    write_stat_line(terminalreporter, "Storage Path", storage.file_path)
+
+    write_section_header(terminalreporter, "Test Session Metadata")
+    write_stat_line(terminalreporter, "Metadata", terminalreporter.config._metadata)
 
     write_section_header(terminalreporter, "Test Execution Summary")
     write_stat_line(terminalreporter, "Total Tests", str(total_tests), green=True)
