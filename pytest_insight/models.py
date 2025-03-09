@@ -78,6 +78,9 @@ class TestResult:
     @classmethod
     def from_dict(cls, data: Dict) -> "TestResult":
         """Create a TestResult from a dictionary."""
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid data for TestResult. Expected dict, got {type(data)}")
+
         start_time = datetime.fromisoformat(data["start_time"])
         stop_time = datetime.fromisoformat(data["stop_time"])
 
@@ -98,16 +101,20 @@ class TestResult:
 class RerunTestGroup:
     """Groups test results for tests that were rerun, chronologically ordered with final result last."""
 
-    __test__ = False
+    __test__ = False # Tell Pytest this is NOT a test class
 
     nodeid: str
     tests: List[TestResult] = field(default_factory=list)
 
     def add_test(self, result: TestResult) -> None:
         """Add a test result and maintain chronological order."""
+        if not isinstance(result, TestResult):
+            raise ValueError(f"Invalid test result {result}; must be a TestResult object, instead was type {type(result)}")
+
         self.tests.append(result)
         self.tests.sort(key=lambda x: x.start_time)
 
+        # TODO: Add validation for final test in RerunTestGroup (fails at end of gems-qa-auto session?)
         # # Validate one-and-only-one final test (not RERUN or ERROR)
         # intermediate_outcomes = {TestOutcome.RERUN, TestOutcome.ERROR}
         # final_tests = [t for t in self.tests if t.outcome not in intermediate_outcomes]
@@ -126,6 +133,9 @@ class RerunTestGroup:
     @classmethod
     def from_dict(cls, data: Dict) -> "RerunTestGroup":
         """Create RerunTestGroup from dictionary."""
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid data for RerunTestGroup. Expected dict, got {type(data)}")
+
         group = cls(nodeid=data["nodeid"])
         group.tests = [TestResult.from_dict(t) for t in data["tests"]]
         return group
@@ -175,6 +185,9 @@ class TestSession:
     @classmethod
     def from_dict(cls, data: Dict) -> "TestSession":
         """Create a TestSession from a dictionary."""
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid data for TestSession. Expected dict, got {type(data)}")
+
         session = cls(
             sut_name=data["sut_name"],
             session_id=data["session_id"],
@@ -196,12 +209,17 @@ class TestSession:
 
     def add_test_result(self, result: TestResult) -> None:
         """Add a test result to this session."""
+        if not isinstance(result, TestResult):
+            raise ValueError(f"Invalid test result {result}; must be a TestResult object, nistead was type {type(result)}")
+
         self.test_results.append(result)
 
     def add_rerun_group(self, group: RerunTestGroup) -> None:
         """Add a rerun test group to this session."""
-        self.rerun_test_groups.append(group)
+        if not isinstance(group, RerunTestGroup):
+            raise ValueError(f"Invalid rerun group {group}; must be a RerunTestGroup object, instead was type {type(group)}")
 
+        self.rerun_test_groups.append(group)
 
 @dataclass
 class TestHistory:
@@ -219,6 +237,9 @@ class TestHistory:
 
     def add_test_session(self, session: TestSession) -> None:
         """Add a test session to the appropriate SUT group."""
+        if not isinstance(session, TestSession):
+            raise ValueError(f"Invalid test session {session}; must be a TestSession object, instead was type {type(session)}")
+
         # Initialize SUT list if needed
         if session.sut_name not in self._sessions_by_sut:
             self._sessions_by_sut[session.sut_name] = []

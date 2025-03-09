@@ -178,7 +178,7 @@ def get_storage_instance(storage_type: str = None, file_path: str = None) -> Bas
     """Get storage instance based on configuration."""
     storage_type = storage_type or os.environ.get("PYTEST_INSIGHT_STORAGE_TYPE", StorageType.JSON.value)
 
-    if storage_type == StorageType.JSON.value:
+    if storage_type.lower() == StorageType.JSON.value:
         return JSONStorage(file_path)
     elif storage_type == StorageType.LOCAL.value:
         return InMemoryStorage()

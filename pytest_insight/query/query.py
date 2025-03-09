@@ -186,7 +186,7 @@ class Query:
         )
         return self
 
-    def having_warnings(self, has_warnings: bool) -> "Query":
+    def having_warnings(self, has_warnings: bool = True) -> "Query":
         """Filter sessions based on presence of warnings."""
         self._filters.append(lambda s: any(t.has_warning == has_warnings for t in s.test_results))
         return self
@@ -229,7 +229,18 @@ class Query:
         return self
 
     def execute(self, sessions: Optional[List[TestSession]] = None) -> QueryResult:
-        """Execute query and return results."""
+        """Execute query and return results.
+
+        Returns: QueryResult object with matching sessions and metadata.
+
+        Raises:
+            QueryExecutionError: If query execution fails
+
+        Example:
+            query = Query().for_sut("api-service").in_last_days(7).with_outcome(TestOutcome.FAILED)
+            result = query.execute()
+
+        """
         start_time = datetime.now()
 
         if sessions is None:
