@@ -1,10 +1,10 @@
 import fcntl
 import json
 import os
-import shutil
 from pathlib import Path
 from typing import List, Optional
 
+from pytest_insight.config import get_config
 from pytest_insight.constants import StorageType
 from pytest_insight.models import TestSession
 
@@ -108,59 +108,78 @@ class JSONStorage(BaseStorage):
     def load_sessions(self) -> List[TestSession]:
         """Load all test sessions, recovering from backup if needed."""
         if not self.file_path.exists():
+            print(f"[INFO] Database file not found: {self.file_path}")
             return []
 
         # Handle empty file case
         if self.file_path.stat().st_size == 0:
+            print(f"[INFO] Empty database file: {self.file_path}")
             self.file_path.unlink()
             return []
 
-        with self.file_path.open("r") as f:
-            fcntl.flock(f, fcntl.LOCK_SH)
-            data = json.load(f)
-            fcntl.flock(f, fcntl.LOCK_UN)
+        try:
+            with self.file_path.open("r") as f:
+                fcntl.flock(f, fcntl.LOCK_SH)
+                try:
+                    print(f"[INFO] Loading sessions from {self.file_path}")
+                    data = json.load(f)
+                    print(f"[INFO] Successfully loaded {len(data)} sessions")
+                except json.JSONDecodeError as e:
+                    print(f"[ERROR] Failed to parse JSON ({self.file_path}): {e}")
+                    print("[INFO] Looking for backup file...")
+                    fcntl.flock(f, fcntl.LOCK_UN)
+                    return self._recover_from_backup()
+                finally:
+                    fcntl.flock(f, fcntl.LOCK_UN)
 
-        if not isinstance(data, list):
+            # Process valid data
+            if not isinstance(data, list):
+                print("[ERROR] Invalid data format (not a list)")
+                return []
+
+            sessions = []
+            for item in data:
+                if isinstance(item, dict):
+                    try:
+                        session = TestSession.from_dict(item)
+                        sessions.append(session)
+                    except (KeyError, ValueError) as e:
+                        print(f"[WARN] Skipping invalid session: {e}")
+                        continue
+
+            return sessions
+        except Exception as e:
+            print(f"[ERROR] Failed to load sessions: {e}")
             return []
 
-        sessions = []
-        for item in data:
-            if isinstance(item, dict):
-                try:
-                    session = TestSession.from_dict(item)
-                    sessions.append(session)
-                except (KeyError, ValueError):
-                    continue
-
-        return sessions
-
     def _recover_from_backup(self) -> List[TestSession]:
-        """Recover data from backup file and replace main file if possible."""
-        try:
-            if not self.backup_path.exists():
-                print("[pytest-insight] No backup found. Recovery failed.")
-                return []
+        """Try to recover from a backup file."""
+        backup_path = self.file_path.with_suffix(".json.bak")
+        if backup_path.exists():
+            print(f"[INFO] Trying to recover from backup: {backup_path}")
+            try:
+                with backup_path.open("r") as f:
+                    data = json.load(f)
+                    # Process backup data like normal data
+                    if not isinstance(data, list):
+                        return []
 
-            with self.backup_path.open("r") as f:
-                fcntl.flock(f, fcntl.LOCK_SH)
-                raw_data = json.load(f)
-                fcntl.flock(f, fcntl.LOCK_UN)
+                    sessions = []
+                    for item in data:
+                        if isinstance(item, dict):
+                            try:
+                                session = TestSession.from_dict(item)
+                                sessions.append(session)
+                            except (KeyError, ValueError):
+                                continue
 
-            if not isinstance(raw_data, list):
-                print("[pytest-insight] Backup file is not in the correct format.")
-                return []
+                    print(f"[INFO] Successfully recovered {len(sessions)} sessions from backup")
+                    return sessions
+            except Exception as e:
+                print(f"[ERROR] Backup recovery failed: {e}")
+        else:
+            print(f"[INFO] No backup file found: {backup_path}")
 
-            valid_sessions = [TestSession.from_dict(item) for item in raw_data if isinstance(item, dict)]
-
-            if valid_sessions:
-                print("[pytest-insight] Restoring from backup...")
-                shutil.copy(self.backup_path, self.file_path)  # Replace corrupted file
-                return valid_sessions
-
-        except (json.JSONDecodeError, OSError) as e:
-            print(f"[pytest-insight] ERROR: Could not recover from backup: {e}")
-
-        print("[pytest-insight] Both primary and backup JSON files are corrupt. Starting fresh.")
         return []
 
     def get_session_by_id(self, session_id: str) -> Optional[TestSession]:
@@ -176,6 +195,17 @@ class JSONStorage(BaseStorage):
 
 def get_storage_instance(storage_type: str = None, file_path: str = None) -> BaseStorage:
     """Get storage instance based on configuration."""
+    # Check config for file path first
+    config = get_config()
+    if config.get("db_path"):
+        file_path = config["db_path"]
+        print(f"[STORAGE] Using DB path from config: {file_path}")
+    elif file_path:
+        print(f"[STORAGE] Using provided DB path: {file_path}")
+    else:
+        print("[STORAGE] Using default DB path")
+
+    # Process storage type
     storage_type = storage_type or os.environ.get("PYTEST_INSIGHT_STORAGE_TYPE", StorageType.JSON.value)
 
     if storage_type.lower() == StorageType.JSON.value:
