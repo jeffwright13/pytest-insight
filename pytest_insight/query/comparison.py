@@ -144,8 +144,10 @@ class Comparison:
 
     def execute(self, sessions=None):
         """Execute comparison between base and target results."""
-        if sessions is None and not (hasattr(self._base_query, "_filters") and hasattr(self._target_query, "_filters")):
-            raise ComparisonError("No sessions provided and no filters configured")
+        if sessions is None:
+            # No sessions provided directly, check if we have configured queries
+            if not self._base_query._filters or not self._target_query._filters:
+                raise ComparisonError("No sessions provided and no query filters configured to fetch sessions")
 
         try:
             # When sessions are directly provided, split them for base and target

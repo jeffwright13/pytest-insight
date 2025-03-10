@@ -71,7 +71,6 @@ class Test_Comparison:
     #     assert "test_api.py::test_get" in comparison.new_failures
     #     assert "test_api.py::test_post" in comparison.new_passes
 
-
     def test_basic_comparison(self, base_session, target_session):
         """Test basic comparison functionality."""
         comparison = Comparison().between_suts("api-service", "api-service").execute([base_session, target_session])
@@ -97,7 +96,6 @@ class Test_Comparison:
         # Assertions
         assert "test_api.py::test_get" in comparison.new_failures
         assert "test_api.py::test_post" in comparison.new_passes
-
 
     def test_environment_comparison(self, base_session, target_session):
         """Test comparing across environments."""
@@ -143,7 +141,7 @@ class Test_Comparison:
     #     with pytest.raises(ComparisonError):
     #         Comparison().between_suts(None, "api")  # Invalid SUT name
 
-    def test_comparison_validation(self, monkeypatch):
+    def test_comparison_validation_no_sessions_no_filters(self):
         """Test input validation."""
         # Create a comparison with no sessions list
         comparison = Comparison()
@@ -152,9 +150,9 @@ class Test_Comparison:
         comparison._base_query = Query()
         comparison._target_query = Query()
 
-        # This should raise an error when execute() is called with no sessions
+        # This should raise an error when execute() is called with no sessions and no filters
         with pytest.raises(ComparisonError):
-            comparison.execute()  # No sessions and no queries
+            comparison.execute()
 
     def test_filtered_comparison(self, base_session, target_session):
         """Test comparison with filters."""

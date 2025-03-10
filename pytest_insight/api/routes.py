@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Query, Request
@@ -82,6 +82,59 @@ def format_comparison_result(result: ComparisonResult) -> Dict:
             "faster_count": len(result.faster_tests),
         },
     }
+
+
+def calculate_test_stability(tests) -> Dict:
+    """Calculate stability metrics for a set of tests."""
+    test_map = {}
+
+    # Group by nodeid
+    for test in tests:
+        nodeid = test["nodeid"]
+        if nodeid not in test_map:
+            test_map[nodeid] = []
+        test_map[nodeid].append(test)
+
+    # Calculate stability metrics
+    stability_data = []
+    for nodeid, occurrences in test_map.items():
+        if len(occurrences) < 2:
+            continue  # Need at least 2 occurrences to calculate stability
+
+        outcomes = {}
+        for test in occurrences:
+            outcome = test["outcome"]
+            if outcome not in outcomes:
+                outcomes[outcome] = 0
+            outcomes[outcome] += 1
+
+        # Calculate stability score (0-100)
+        total = len(occurrences)
+        dominant_outcome_count = max(outcomes.values())
+        stability_score = (dominant_outcome_count / total) * 100
+
+        # Calculate duration stability
+        durations = [test["duration"] for test in occurrences]
+        avg_duration = sum(durations) / len(durations)
+        duration_variance = sum((d - avg_duration) ** 2 for d in durations) / len(durations)
+        duration_stability = 100 - min(100, (duration_variance * 10))  # Higher variance = lower stability
+
+        stability_data.append(
+            {
+                "nodeid": nodeid,
+                "runs": total,
+                "outcomes": outcomes,
+                "stability_score": stability_score,
+                "avg_duration": avg_duration,
+                "duration_stability": duration_stability,
+                "overall_stability": (stability_score + duration_stability) / 2,
+            }
+        )
+
+    # Sort by stability (least stable first)
+    stability_data.sort(key=lambda x: x["overall_stability"])
+
+    return stability_data
 
 
 @router.get("/sessions")
@@ -536,3 +589,489 @@ async def get_suts() -> JSONResponse:
     sut_list.sort(key=lambda x: x["session_count"], reverse=True)
 
     return JSONResponse(content={"data": sut_list, "meta": {"total": len(sut_list)}})
+
+
+@router.get("/analytics/trends")
+async def get_test_trends(
+    sut: str = Query(..., description="Filter by SUT name"),
+    days: int = Query(30, description="Number of days of history to analyze"),
+    test_pattern: Optional[str] = Query(None, description="Filter tests by pattern"),
+) -> JSONResponse:
+    """Get trend analysis for tests over time."""
+    storage = get_storage_instance()
+    sessions = storage.load_sessions()
+
+    # Filter by SUT and time range
+    cutoff_date = datetime.now() - timedelta(days=days)
+    filtered_sessions = [s for s in sessions if s.sut_name == sut and s.session_start_time >= cutoff_date]
+
+    # Sort sessions by time (oldest first for trending)
+    filtered_sessions.sort(key=lambda x: x.session_start_time)
+
+    # Apply test pattern if provided
+    if test_pattern:
+        for session in filtered_sessions:
+            session.test_results = [
+                t for t in session.test_results if test_pattern in t.nodeid or test_pattern == t.nodeid
+            ]
+
+    # Group sessions by time period (day, week depending on range)
+    time_groups = {}
+    for session in filtered_sessions:
+        # Use date as key for grouping
+        date_key = session.session_start_time.date().isoformat()
+        if date_key not in time_groups:
+            time_groups[date_key] = []
+        time_groups[date_key].append(session)
+
+    # Calculate metrics for each time period
+    trend_data = []
+    test_metrics = {}  # Track metrics by test nodeid
+
+    for date_key, date_sessions in time_groups.items():
+        # Aggregate test results for this date
+        date_outcomes = {outcome.value: 0 for outcome in TestOutcome}
+        date_tests = {}
+
+        for session in date_sessions:
+            for test in session.test_results:
+                test_id = test.nodeid
+                outcome = test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome)
+                date_outcomes[outcome] = date_outcomes.get(outcome, 0) + 1
+
+                # Track individual test metrics
+                if test_id not in date_tests:
+                    date_tests[test_id] = {"count": 0, "pass_count": 0, "fail_count": 0, "skip_count": 0, "duration": 0}
+
+                date_tests[test_id]["count"] += 1
+                if outcome == TestOutcome.PASSED.value:
+                    date_tests[test_id]["pass_count"] += 1
+                elif outcome == TestOutcome.FAILED.value:
+                    date_tests[test_id]["fail_count"] += 1
+                elif outcome == TestOutcome.SKIPPED.value:
+                    date_tests[test_id]["skip_count"] += 1
+
+                date_tests[test_id]["duration"] += test.duration
+
+        # Update global test metrics
+        for test_id, metrics in date_tests.items():
+            if test_id not in test_metrics:
+                test_metrics[test_id] = {"history": []}
+
+            test_metrics[test_id]["history"].append(
+                {
+                    "date": date_key,
+                    "pass_rate": metrics["pass_count"] / max(metrics["count"], 1) * 100,
+                    "avg_duration": metrics["duration"] / max(metrics["count"], 1),
+                    "run_count": metrics["count"],
+                }
+            )
+
+        total_tests = sum(date_outcomes.values())
+        trend_data.append(
+            {
+                "date": date_key,
+                "session_count": len(date_sessions),
+                "test_count": total_tests,
+                "outcomes": date_outcomes,
+                "pass_rate": date_outcomes.get(TestOutcome.PASSED.value, 0) / max(total_tests, 1) * 100,
+                "avg_duration": sum(s.session_duration for s in date_sessions) / len(date_sessions)
+                if date_sessions
+                else 0,
+            }
+        )
+
+    # Find tests with most significant changes
+    changed_tests = []
+    for test_id, data in test_metrics.items():
+        if len(data["history"]) > 1:
+            # Calculate rate of change
+            first = data["history"][0]
+            last = data["history"][-1]
+            pass_rate_change = last["pass_rate"] - first["pass_rate"]
+            duration_change = last["avg_duration"] - first["avg_duration"]
+
+            if abs(pass_rate_change) > 5 or abs(duration_change) > 0.5:
+                changed_tests.append(
+                    {
+                        "nodeid": test_id,
+                        "pass_rate_change": pass_rate_change,
+                        "duration_change": duration_change,
+                        "history": data["history"],
+                    }
+                )
+
+    # Sort by largest change
+    changed_tests.sort(key=lambda x: abs(x["pass_rate_change"]), reverse=True)
+
+    return JSONResponse(
+        content={
+            "data": {
+                "trends": trend_data,
+                "significant_changes": changed_tests[:20],  # Top 20 most changed tests
+            },
+            "meta": {"sut": sut, "days": days, "test_pattern": test_pattern, "session_count": len(filtered_sessions)},
+        }
+    )
+
+
+@router.get("/analytics/test/{test_id}")
+async def get_test_details(
+    test_id: str,
+    sut: Optional[str] = Query(None, description="Filter by SUT name"),
+    limit: int = Query(50, description="Maximum number of test occurrences to return"),
+) -> JSONResponse:
+    """Get detailed history for a specific test."""
+    storage = get_storage_instance()
+    sessions = storage.load_sessions()
+
+    # Filter by SUT if provided
+    if sut:
+        sessions = [s for s in sessions if s.sut_name == sut]
+
+    # Sort sessions by time (newest first)
+    sessions.sort(key=lambda x: x.session_start_time, reverse=True)
+
+    # Extract all occurrences of the test
+    test_occurrences = []
+    for session in sessions:
+        for test in session.test_results:
+            if test.nodeid == test_id:
+                test_occurrences.append(
+                    {
+                        "session_id": session.session_id,
+                        "sut": session.sut_name,
+                        "start_time": format_datetime(test.start_time),
+                        "duration": test.duration,
+                        "outcome": test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome),
+                        "has_warning": test.has_warning,
+                    }
+                )
+
+    # Calculate statistics
+    total = len(test_occurrences)
+    if total > 0:
+        outcomes = {}
+        for occurrence in test_occurrences:
+            outcome = occurrence["outcome"]
+            if outcome not in outcomes:
+                outcomes[outcome] = 0
+            outcomes[outcome] += 1
+
+        # Calculate pass rate and other metrics
+        pass_count = outcomes.get(TestOutcome.PASSED.value, 0)
+        pass_rate = pass_count / total * 100 if total > 0 else 0
+
+        # Calculate duration statistics
+        durations = [o["duration"] for o in test_occurrences]
+        avg_duration = sum(durations) / len(durations) if durations else 0
+        min_duration = min(durations) if durations else 0
+        max_duration = max(durations) if durations else 0
+
+        # Detect if test is flaky
+        is_flaky = len(outcomes) > 1 and pass_count > 0 and pass_count < total
+
+        # Build test history with limited entries
+        test_history = test_occurrences[:limit]
+
+        statistics = {
+            "total_runs": total,
+            "outcomes": outcomes,
+            "pass_rate": pass_rate,
+            "avg_duration": avg_duration,
+            "min_duration": min_duration,
+            "max_duration": max_duration,
+            "is_flaky": is_flaky,
+        }
+    else:
+        statistics = {
+            "total_runs": 0,
+            "outcomes": {},
+            "pass_rate": 0,
+            "avg_duration": 0,
+            "min_duration": 0,
+            "max_duration": 0,
+            "is_flaky": False,
+        }
+        test_history = []
+
+    return JSONResponse(
+        content={
+            "data": {"nodeid": test_id, "statistics": statistics, "history": test_history},
+            "meta": {"sut": sut, "total_occurrences": total, "shown_occurrences": min(total, limit)},
+        }
+    )
+
+
+@router.get("/analytics/stacked")
+async def get_stacked_analytics(
+    sut: str = Query(..., description="Filter by SUT name"),
+    stack_by: str = Query("folder", description="Group results by: folder, module, class, day, outcome"),
+    days: int = Query(30, description="Number of days of history to analyze"),
+) -> JSONResponse:
+    """Get stacked analytics to visualize test patterns."""
+    storage = get_storage_instance()
+    sessions = storage.load_sessions()
+
+    # Filter by SUT and time range
+    cutoff_date = datetime.now() - timedelta(days=days)
+    filtered_sessions = [s for s in sessions if s.sut_name == sut and s.session_start_time >= cutoff_date]
+
+    # Sort sessions by time (newest first)
+    filtered_sessions.sort(key=lambda x: x.session_start_time, reverse=True)
+
+    # Extract all test results
+    all_tests = []
+    for session in filtered_sessions:
+        for test in session.test_results:
+            all_tests.append(
+                {
+                    "nodeid": test.nodeid,
+                    "outcome": test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome),
+                    "duration": test.duration,
+                    "session_id": session.session_id,
+                    "session_date": session.session_start_time.date().isoformat(),
+                }
+            )
+
+    # Group tests based on stack_by parameter
+    grouped_tests = {}
+
+    if stack_by == "folder":
+        # Group by top-level folder/directory
+        for test in all_tests:
+            nodeid = test["nodeid"]
+            parts = nodeid.split("/")
+            if len(parts) > 1:
+                folder = parts[0]
+            else:
+                folder = "root"
+
+            if folder not in grouped_tests:
+                grouped_tests[folder] = []
+            grouped_tests[folder].append(test)
+
+    elif stack_by == "module":
+        # Group by module (filename)
+        for test in all_tests:
+            nodeid = test["nodeid"]
+            module = nodeid.split("::")[0]
+
+            if module not in grouped_tests:
+                grouped_tests[module] = []
+            grouped_tests[module].append(test)
+
+    elif stack_by == "class":
+        # Group by test class if available
+        for test in all_tests:
+            nodeid = test["nodeid"]
+            parts = nodeid.split("::")
+
+            if len(parts) > 1 and parts[1].startswith("Test"):
+                class_name = parts[1]
+            else:
+                class_name = "functions"  # Non-class tests
+
+            if class_name not in grouped_tests:
+                grouped_tests[class_name] = []
+            grouped_tests[class_name].append(test)
+
+    elif stack_by == "day":
+        # Group by day
+        for test in all_tests:
+            day = test["session_date"]
+
+            if day not in grouped_tests:
+                grouped_tests[day] = []
+            grouped_tests[day].append(test)
+
+    elif stack_by == "outcome":
+        # Group by outcome
+        for test in all_tests:
+            outcome = test["outcome"]
+
+            if outcome not in grouped_tests:
+                grouped_tests[outcome] = []
+            grouped_tests[outcome].append(test)
+
+    # Calculate metrics for each group
+    stacked_data = []
+    for group_name, tests in grouped_tests.items():
+        # Count tests by outcome
+        outcomes = {}
+        for test in tests:
+            outcome = test["outcome"]
+            if outcome not in outcomes:
+                outcomes[outcome] = 0
+            outcomes[outcome] += 1
+
+        # Calculate pass rate and other metrics
+        total = len(tests)
+        pass_count = outcomes.get(TestOutcome.PASSED.value, 0)
+        pass_rate = pass_count / total * 100 if total > 0 else 0
+
+        # Calculate average duration
+        avg_duration = sum(test["duration"] for test in tests) / total if total > 0 else 0
+
+        stacked_data.append(
+            {
+                "name": group_name,
+                "test_count": total,
+                "outcomes": outcomes,
+                "pass_rate": pass_rate,
+                "avg_duration": avg_duration,
+            }
+        )
+
+    # Sort by test count (largest first)
+    stacked_data.sort(key=lambda x: x["test_count"], reverse=True)
+
+    return JSONResponse(
+        content={
+            "data": stacked_data,
+            "meta": {
+                "sut": sut,
+                "stack_by": stack_by,
+                "days": days,
+                "total_tests": len(all_tests),
+                "total_groups": len(stacked_data),
+            },
+        }
+    )
+
+
+@router.post("/analytics/filter-complex")
+async def filter_tests_complex(request: Request) -> JSONResponse:
+    """Apply complex filtering and aggregation to test results."""
+    # Parse request JSON
+    data = await request.json()
+
+    # Extract filter criteria
+    sut = data.get("sut")
+    test_patterns = data.get("test_patterns", [])
+    outcomes = data.get("outcomes", [])  # e.g. ["passed", "failed"]
+    tags = data.get("tags", {})  # e.g. {"environment": "test"}
+    min_duration = data.get("min_duration")
+    max_duration = data.get("max_duration")
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
+    group_by = data.get("group_by")  # How to group results (optional)
+
+    # Convert date strings to datetime
+    if start_date:
+        start_date = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+    if end_date:
+        end_date = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+
+    storage = get_storage_instance()
+    sessions = storage.load_sessions()
+
+    # Apply SUT filter
+    if sut:
+        sessions = [s for s in sessions if s.sut_name == sut]
+
+    # Apply date filters
+    if start_date:
+        sessions = [s for s in sessions if s.session_start_time >= start_date]
+    if end_date:
+        sessions = [s for s in sessions if s.session_start_time <= end_date]
+
+    # Apply tag filters
+    for key, value in tags.items():
+        sessions = [s for s in sessions if s.session_tags.get(key) == value]
+
+    # Extract matching tests from all sessions
+    matching_tests = []
+    for session in sessions:
+        for test in session.test_results:
+            # Apply test pattern filters
+            pattern_match = not test_patterns  # If no patterns, all tests match
+            for pattern in test_patterns:
+                if pattern in test.nodeid:
+                    pattern_match = True
+                    break
+
+            if not pattern_match:
+                continue
+
+            # Apply outcome filters
+            outcome = test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome)
+            if outcomes and outcome not in outcomes:
+                continue
+
+            # Apply duration filters
+            if min_duration is not None and test.duration < min_duration:
+                continue
+            if max_duration is not None and test.duration > max_duration:
+                continue
+
+            # Test matches all filters, add to results
+            matching_tests.append(
+                {
+                    "nodeid": test.nodeid,
+                    "outcome": outcome,
+                    "duration": test.duration,
+                    "session_id": session.session_id,
+                    "sut": session.sut_name,
+                    "start_time": format_datetime(test.start_time),
+                    "has_warning": test.has_warning,
+                }
+            )
+
+    # Group results if requested
+    if group_by:
+        grouped_results = {}
+
+        if group_by == "outcome":
+            # Group by test outcome
+            for test in matching_tests:
+                outcome = test["outcome"]
+                if outcome not in grouped_results:
+                    grouped_results[outcome] = []
+                grouped_results[outcome].append(test)
+
+        elif group_by == "module":
+            # Group by module file
+            for test in matching_tests:
+                module = test["nodeid"].split("::")[0]
+                if module not in grouped_results:
+                    grouped_results[module] = []
+                grouped_results[module].append(test)
+
+        elif group_by == "session":
+            # Group by test session
+            for test in matching_tests:
+                session_id = test["session_id"]
+                if session_id not in grouped_results:
+                    grouped_results[session_id] = []
+                grouped_results[session_id].append(test)
+
+        # Convert groups to list format
+        result_data = [
+            {"group": group_key, "tests": tests, "count": len(tests)} for group_key, tests in grouped_results.items()
+        ]
+
+        # Sort groups by count (largest first)
+        result_data.sort(key=lambda x: x["count"], reverse=True)
+    else:
+        # No grouping, return flat list
+        result_data = matching_tests
+
+    return JSONResponse(
+        content={
+            "data": result_data,
+            "meta": {
+                "total_matches": len(matching_tests),
+                "filters": {
+                    "sut": sut,
+                    "test_patterns": test_patterns,
+                    "outcomes": outcomes,
+                    "tags": tags,
+                    "min_duration": min_duration,
+                    "max_duration": max_duration,
+                    "start_date": data.get("start_date"),
+                    "end_date": data.get("end_date"),
+                },
+            },
+        }
+    )
