@@ -1,52 +1,25 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from fnmatch import fnmatch
 from typing import Callable, List, Optional, Set, Union
 
 from pytest_insight.models import TestOutcome, TestSession
-from pytest_insight.storage import get_storage_instance
+from pytest_insight.storage import JSONStorage
 
 
 class QueryError(Exception):
     """Base exception for Query-related errors."""
-
     pass
 
 
 class InvalidQueryParameterError(QueryError):
     """Raised when query parameters are invalid."""
-
-    pass
-
-
-class QueryExecutionError(QueryError):
-    """Raised when query execution fails."""
-
     pass
 
 
 @dataclass
 class QueryResult:
-    """Results of executing a query.
-
-    This class provides the raw results of a query execution, allowing users
-    to process the sessions as needed. Common patterns for working with results:
-
-    Getting most recent session:
-        most_recent = max(results.sessions, key=lambda s: s.session_start_time)
-
-    Getting oldest session:
-        oldest = min(results.sessions, key=lambda s: s.session_start_time)
-
-    Getting session with most failures:
-        most_failures = max(
-            results.sessions,
-            key=lambda s: sum(1 for t in s.test_results if t.outcome == "FAILED")
-        )
-
-    Getting longest running session:
-        longest = max(results.sessions, key=lambda s: s.session_duration)
-    """
-
+    """Results of executing a query."""
     sessions: List[TestSession]
     total_count: int
     execution_time: float
@@ -66,12 +39,10 @@ class QueryTestFilter:
         self.query = query
         self._conditions = []
 
-    def with_pattern(self, pattern):
+    def with_pattern(self, pattern: str) -> "QueryTestFilter":
         """Filter tests by pattern match."""
         if not isinstance(pattern, str) or not pattern.strip():
             raise InvalidQueryParameterError("Test pattern must be a non-empty string")
-
-        # Save pattern for later application
         self._conditions.append(("pattern", pattern))
         return self
 
@@ -81,7 +52,6 @@ class QueryTestFilter:
             raise InvalidQueryParameterError("Duration bounds must be numbers")
         if min_secs > max_secs:
             raise InvalidQueryParameterError("Min duration must be less than max duration")
-        # Change this to use the named tuple approach
         self._conditions.append(("duration", (min_secs, max_secs)))
         return self
 
@@ -105,47 +75,47 @@ class QueryTestFilter:
         for condition_type, value in named_conditions:
             if condition_type == "pattern":
                 pattern = value
-                # Capture pattern in closure
-                pattern_value = pattern  # Important to avoid late binding issues
                 self.query._filters.append(
-                    lambda s, p=pattern_value: any(p == t.nodeid or p in t.nodeid for t in s.test_results)
+                    lambda s: any(pattern == t.nodeid or pattern in t.nodeid for t in s.test_results)
                 )
             elif condition_type == "duration":
                 min_secs, max_secs = value
-                # Capture values in closure
-                min_val, max_val = min_secs, max_secs
                 self.query._filters.append(
-                    lambda s, mn=min_val, mx=max_val: any(mn <= t.duration <= mx for t in s.test_results)
+                    lambda s: any(min_secs <= t.duration <= max_secs for t in s.test_results)
                 )
             elif condition_type == "outcome":
                 outcome_str = value
-                # Capture outcome in closure
-                out_val = outcome_str
                 self.query._filters.append(
-                    lambda s, o=out_val: any(
-                        (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == o
+                    lambda s: any(
+                        (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == outcome_str
                         for t in s.test_results
                     )
                 )
 
         # Handle any legacy lambda-based conditions
         if lambda_conditions:
-            # Capture conditions in closure
             conditions_copy = lambda_conditions.copy()
             self.query._filters.append(
-                lambda s, conditions=conditions_copy: any(
-                    all(condition(t) for condition in conditions) for t in s.test_results
+                lambda s: any(
+                    all(condition(t) for condition in conditions_copy) for t in s.test_results
                 )
             )
 
-        return self.query  # Return the parent query for method chaining
+        return self.query
+
 
 class Query:
     """Defines criteria for finding test sessions."""
 
-    def __init__(self):
+    def __init__(self, sessions: Optional[List[TestSession]] = None):
+        """Initialize query with optional test sessions.
+
+        Args:
+            sessions: Optional list of test sessions to search through.
+                     If not provided, loads sessions from default storage.
+        """
+        self._sessions = sessions if sessions is not None else JSONStorage().load_sessions()
         self._filters: List[Callable[[TestSession], bool]] = []
-        self._transforms: List[Callable[[TestSession], TestSession]] = []  # Add this line
         self._last_result: Optional[QueryResult] = None
 
     def for_sut(self, name: str) -> "Query":
@@ -183,7 +153,6 @@ class Query:
         """Filter sessions between two dates."""
         if not isinstance(start, datetime) or not isinstance(end, datetime):
             raise InvalidQueryParameterError("Start and end must be datetime objects")
-        # Check timezone consistency
         if bool(start.tzinfo) != bool(end.tzinfo):
             raise InvalidQueryParameterError("Start and end dates must both be naive or both be timezone-aware")
         if start.tzinfo and end.tzinfo and start.tzinfo != end.tzinfo:
@@ -203,9 +172,8 @@ class Query:
         return self
 
     def with_outcome(self, outcome: Union[str, TestOutcome]) -> "Query":
-        """Filter sessions containing tests with specific outcome (test outcome as string or TestOutcome enum)."""
-        # Convert enum to string if needed
-        outcome_str = outcome.value if isinstance(outcome, TestOutcome) else outcome
+        """Filter sessions containing tests with specific outcome."""
+        outcome_str = outcome.value if hasattr(outcome, "value") else str(outcome)
         valid_outcomes = {o.value for o in TestOutcome}
         if outcome_str not in valid_outcomes:
             raise InvalidQueryParameterError(
@@ -213,7 +181,7 @@ class Query:
             )
         self._filters.append(
             lambda s: any(
-                (t.outcome.value if isinstance(t.outcome, TestOutcome) else t.outcome) == outcome_str
+                (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == outcome_str
                 for t in s.test_results
             )
         )
@@ -221,29 +189,19 @@ class Query:
 
     def having_warnings(self, has_warnings: bool = True) -> "Query":
         """Filter sessions based on presence of warnings."""
-        self._filters.append(lambda s: any(t.has_warning == has_warnings for t in s.test_results))
+        self._filters.append(lambda s: bool(s.warnings) == has_warnings)
         return self
 
     def with_reruns(self, has_reruns: bool) -> "Query":
         """Filter sessions based on presence of test reruns."""
-        if not isinstance(has_reruns, bool):
-            raise InvalidQueryParameterError("has_reruns must be a boolean")
         self._filters.append(lambda s: bool(s.rerun_test_groups) == has_reruns)
         return self
 
     def test_contains(self, pattern: str) -> "Query":
-        """Filter sessions containing tests matching pattern.
-
-        Args:
-            pattern: Exact test nodeid to match (e.g., "test_api.py::test_get")
-
-        Returns:
-            Self for method chaining
-        """
+        """Filter sessions containing tests matching pattern."""
         if not isinstance(pattern, str) or not pattern.strip():
             raise InvalidQueryParameterError("Test pattern must be a non-empty string")
-
-        self._filters.append(lambda s: any(t.nodeid == pattern for t in s.test_results))
+        self._filters.append(lambda s: any(pattern == t.nodeid or pattern in t.nodeid for t in s.test_results))
         return self
 
     def before(self, timestamp: datetime) -> "Query":
@@ -264,72 +222,32 @@ class Query:
         """Filter test sessions by tag."""
         if not isinstance(key, str) or not isinstance(value, str):
             raise InvalidQueryParameterError("Tag key and value must be strings")
-
-        def tag_filter(session: TestSession) -> bool:
-            return session.session_tags.get(key) == value
-
-        self._filters.append(tag_filter)
+        self._filters.append(lambda s: s.session_tags.get(key) == value)
         return self
 
     def with_session_id_pattern(self, pattern: str) -> "Query":
         """Filter sessions by ID pattern using glob matching.
 
-        Args:
-            pattern: Glob pattern to match session IDs (e.g., "base-*")
-
-        Returns:
-            Self for method chaining
-
-        Raises:
-            InvalidQueryParameterError: If pattern is invalid
+        This is particularly useful for finding base vs target sessions:
+            query.with_session_id_pattern("base-*")  # Find base sessions
+            query.with_session_id_pattern("target-*")  # Find target sessions
         """
         if not isinstance(pattern, str) or not pattern.strip():
             raise InvalidQueryParameterError("Session ID pattern must be a non-empty string")
-
-        from fnmatch import fnmatch
         self._filters.append(lambda s: fnmatch(s.session_id, pattern))
         return self
 
-    def execute(self, sessions: Optional[List[TestSession]] = None) -> QueryResult:
+    def execute(self) -> QueryResult:
         """Execute query and return results."""
         start_time = datetime.now()
 
-        if sessions is None:
-            try:
-                storage = get_storage_instance()
-                sessions = storage.load_sessions()
-            except Exception as e:
-                raise QueryExecutionError(f"Failed to load sessions: {str(e)}") from e
+        # Load sessions from storage if not provided
+        if self._sessions is None:
+            storage = JSONStorage()
+            self._sessions = storage.load_sessions()
 
-        # Validate input types with improved error message matching test expectations
-        if sessions is not None:
-            for i, session in enumerate(sessions):
-                if not isinstance(session, TestSession):
-                    # Use the exact message pattern that the test is expecting
-                    raise QueryExecutionError(
-                        f"Invalid session type: {type(session).__name__}, expected TestSession"
-                    )
-
-        # Apply filters to get matching sessions
-        filtered_sessions = [s for s in sessions if all(f(s) for f in self._filters)]
-
-        # Apply transforms to modify matching sessions
-        if hasattr(self, '_transforms') and self._transforms:
-            transformed_sessions = []
-            for session in filtered_sessions:
-                transformed = session
-                for transform in self._transforms:
-                    transformed = transform(transformed)
-                    # Validate transform output
-                    if not isinstance(transformed, TestSession):
-                        raise QueryExecutionError(
-                            f"Transform returned non-TestSession object: {type(transformed).__name__}"
-                        )
-
-                # Only keep sessions that still have test results after transforms
-                if transformed.test_results:
-                    transformed_sessions.append(transformed)
-            filtered_sessions = transformed_sessions
+        # Apply filters
+        filtered_sessions = [s for s in self._sessions if all(f(s) for f in self._filters)]
 
         # Extract all unique test nodeids
         all_nodeids = set()

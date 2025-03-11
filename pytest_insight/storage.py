@@ -1,11 +1,9 @@
 import fcntl
 import json
-import os
 from pathlib import Path
 from typing import List, Optional
 
-from pytest_insight.config import get_config
-from pytest_insight.constants import StorageType
+from pytest_insight.constants import DEFAULT_STORAGE_PATH
 from pytest_insight.models import TestSession
 
 
@@ -55,7 +53,7 @@ class BaseStorage:
 class InMemoryStorage(BaseStorage):
     """In-memory storage implementation."""
 
-    def __init__(self, sessions=None):
+    def __init__(self, sessions: Optional[List[TestSession]] = None):
         """Initialize storage with optional sessions."""
         super().__init__()
         self._sessions = sessions if sessions is not None else []
@@ -74,149 +72,74 @@ class InMemoryStorage(BaseStorage):
 
 
 class JSONStorage(BaseStorage):
-    """Store test sessions in a JSON file for persistence with safe writes and corruption recovery."""
-
-    FILE_PATH = Path.home() / ".pytest_insight" / "test_sessions.json"
+    """Storage for test sessions using JSON files."""
 
     def __init__(self, file_path: Optional[Path] = None):
-        """Initialize storage with optional custom file path."""
-        self.file_path = Path(file_path) if file_path else self.FILE_PATH
-        self.backup_path = self.file_path.with_suffix(".backup")
+        """Initialize storage with optional custom file path.
 
-        # Create parent directories immediately
-        if self.file_path:
-            self.file_path.parent.mkdir(parents=True, exist_ok=True)
-
-    def save_session(self, session: TestSession) -> None:
-        """Save a test session to JSON storage."""
-        # Load existing data or create new
-        data = []
-        if self.file_path.exists():
-            with open(self.file_path) as f:
-                data = json.load(f)
-
-        # Add new session and save
-        data.append(session.to_dict())
-
-        # Ensure parent directories exist before writing
+        Args:
+            file_path: Optional custom path for session storage.
+                      If not provided, uses ~/.pytest_insight/sessions.json
+        """
+        self.file_path = Path(file_path) if file_path else DEFAULT_STORAGE_PATH
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write to file
-        with open(self.file_path, "w") as f:
-            json.dump(data, f, indent=2)
+        # Initialize file if it doesn't exist
+        if not self.file_path.exists():
+            self.file_path.write_text("[]")
 
     def load_sessions(self) -> List[TestSession]:
-        """Load all test sessions, recovering from backup if needed."""
-        if not self.file_path.exists():
-            print(f"[INFO] Database file not found: {self.file_path}")
-            return []
-
-        # Handle empty file case
-        if self.file_path.stat().st_size == 0:
-            print(f"[INFO] Empty database file: {self.file_path}")
-            self.file_path.unlink()
-            return []
+        """Load all test sessions from storage."""
+        import json  # Import here to avoid startup cost
 
         try:
-            with self.file_path.open("r") as f:
-                fcntl.flock(f, fcntl.LOCK_SH)
-                try:
-                    print(f"[INFO] Loading sessions from {self.file_path}")
-                    data = json.load(f)
-                    print(f"[INFO] Successfully loaded {len(data)} sessions")
-                except json.JSONDecodeError as e:
-                    print(f"[ERROR] Failed to parse JSON ({self.file_path}): {e}")
-                    print("[INFO] Looking for backup file...")
-                    fcntl.flock(f, fcntl.LOCK_UN)
-                    return self._recover_from_backup()
-                finally:
-                    fcntl.flock(f, fcntl.LOCK_UN)
-
-            # Process valid data
-            if not isinstance(data, list):
-                print("[ERROR] Invalid data format (not a list)")
-                return []
-
-            sessions = []
-            for item in data:
-                if isinstance(item, dict):
-                    try:
-                        session = TestSession.from_dict(item)
-                        sessions.append(session)
-                    except (KeyError, ValueError) as e:
-                        print(f"[WARN] Skipping invalid session: {e}")
-                        continue
-
-            return sessions
+            data = json.loads(self.file_path.read_text())
+            return [TestSession.from_dict(s) for s in data]
         except Exception as e:
-            print(f"[ERROR] Failed to load sessions: {e}")
+            print(f"Warning: Failed to load sessions from {self.file_path}: {e}")
             return []
 
-    def _recover_from_backup(self) -> List[TestSession]:
-        """Try to recover from a backup file."""
-        backup_path = self.file_path.with_suffix(".json.bak")
-        if backup_path.exists():
-            print(f"[INFO] Trying to recover from backup: {backup_path}")
-            try:
-                with backup_path.open("r") as f:
-                    data = json.load(f)
-                    # Process backup data like normal data
-                    if not isinstance(data, list):
-                        return []
+    def save_session(self, session: TestSession) -> None:
+        """Save a single test session to storage.
 
-                    sessions = []
-                    for item in data:
-                        if isinstance(item, dict):
-                            try:
-                                session = TestSession.from_dict(item)
-                                sessions.append(session)
-                            except (KeyError, ValueError):
-                                continue
+        Args:
+            session: Test session to save
+        """
+        import json  # Import here to avoid startup cost
 
-                    print(f"[INFO] Successfully recovered {len(sessions)} sessions from backup")
-                    return sessions
-            except Exception as e:
-                print(f"[ERROR] Backup recovery failed: {e}")
-        else:
-            print(f"[INFO] No backup file found: {backup_path}")
+        try:
+            # Load existing sessions
+            sessions = self.load_sessions()
 
-        return []
+            # Add new session
+            sessions.append(session)
 
-    def get_session_by_id(self, session_id: str) -> Optional[TestSession]:
-        """Retrieve a test session by ID, ensuring index is populated."""
-        sessions = self.load_sessions()
-        return next((s for s in sessions if s.session_id == session_id), None)
+            # Save all sessions
+            self.file_path.write_text(
+                json.dumps([s.to_dict() for s in sessions], indent=2)
+            )
+        except Exception as e:
+            print(f"Warning: Failed to save session to {self.file_path}: {e}")
+
+    def save_sessions(self, sessions: List[TestSession]) -> None:
+        """Save multiple test sessions to storage.
+
+        Args:
+            sessions: List of test sessions to save
+        """
+        import json  # Import here to avoid startup cost
+
+        try:
+            self.file_path.write_text(
+                json.dumps([s.to_dict() for s in sessions], indent=2)
+            )
+        except Exception as e:
+            print(f"Warning: Failed to save sessions to {self.file_path}: {e}")
+
+    def clear(self) -> None:
+        """Clear all sessions from storage."""
+        self.file_path.write_text("[]")
 
     def clear_sessions(self) -> None:
-        """Delete all stored test sessions safely."""
-        if self.file_path.exists():
-            self.file_path.unlink()
-
-
-def get_storage_instance(storage_type: str = None, file_path: str = None) -> BaseStorage:
-    """Get storage instance based on configuration."""
-    # Check config for file path first
-    config = get_config()
-    if config.get("db_path"):
-        file_path = config["db_path"]
-        print(f"[STORAGE] Using DB path from config: {file_path}")
-    elif file_path:
-        print(f"[STORAGE] Using provided DB path: {file_path}")
-    else:
-        print("[STORAGE] Using default DB path")
-
-    # Process storage type
-    storage_type = storage_type or os.environ.get("PYTEST_INSIGHT_STORAGE_TYPE", StorageType.JSON.value)
-
-    if storage_type.lower() == StorageType.JSON.value:
-        return JSONStorage(file_path)
-    elif storage_type == StorageType.LOCAL.value:
-        return InMemoryStorage()
-    elif storage_type == StorageType.REMOTE.value:
-        # Future: Return RemoteStorage implementation
-        raise NotImplementedError("Remote storage not yet implemented")
-    elif storage_type == StorageType.DATABASE.value:
-        # Future: Return DatabaseStorage implementation
-        raise NotImplementedError("Database storage not yet implemented")
-    else:
-        raise ValueError(f"Unknown storage type: {storage_type}")
+        """Remove all stored sessions."""
+        self.clear()
