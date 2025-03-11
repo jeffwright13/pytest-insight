@@ -1,5 +1,4 @@
 from pathlib import Path
-from datetime import datetime, timedelta
 
 from pytest_insight.models import TestOutcome
 from pytest_insight.query.comparison import Comparison
@@ -8,23 +7,20 @@ from pytest_insight.storage import JSONStorage
 
 # Example: Simple query using default storage as set in constants.py
 query = Query()  # Automatically uses ~/.pytest_insight/practice.json by default
-base_sessions = query.for_sut("ref-sut-python39") \
-                    .with_session_id_pattern("base-*") \
-                    .execute()
+print()
+
+
+base_sessions = query.for_sut("ref-sut-python39").with_session_id_pattern("base-*").execute()
 print(f"\nFound {base_sessions.total_count} base sessions")
 
 # Example: Search for sessions without any reruns in the past 3 days
-no_reruns = query.with_reruns(False) \
-                 .in_last_days(3) \
-                 .execute()
+no_reruns = query.with_reruns(False).in_last_days(3).execute()
 print(f"\nFound {no_reruns.total_count} sessions with no reruns in the last 3 days")
 print(f"They were: {', '.join(s.session_id for s in no_reruns.sessions)}")
 
 # Example 2: Simple comparison between SUTs
 comparison = Comparison()  # Uses same default storage as Example 1
-result = comparison.between_suts("ref-sut-python39", "ref-sut-python311") \
-                  .in_last_days(1) \
-                  .execute()
+result = comparison.between_suts("ref-sut-python39", "ref-sut-python311").in_last_days(1).execute()
 
 print("\nComparison Results:")
 print(f"Base SUT: {result.base_session.sut_name}")
@@ -47,10 +43,7 @@ storage = JSONStorage(Path.home() / ".pytest_insight" / "custom.json")
 sessions = storage.load_sessions()
 
 query = Query(sessions)  # Explicitly provide sessions
-slow_tests = query.filter_tests() \
-                 .with_duration(10.0, float('inf')) \
-                 .apply() \
-                 .execute()
+slow_tests = query.filter_tests().with_duration(10.0, float("inf")).apply().execute()
 print(f"\nFound {slow_tests.total_count} sessions with slow tests")
 
 # Example 5: Direct session comparison (optional)
@@ -70,7 +63,5 @@ if base_sessions.sessions:
 
 # Example 6: Find failed tests in the last day
 query = Query()  # Uses default storage
-recent_failures = query.in_last_days(1) \
-                      .with_outcome(TestOutcome.FAILED) \
-                      .execute()
+recent_failures = query.in_last_days(1).with_outcome(TestOutcome.FAILED).execute()
 print(f"\nFound {recent_failures.total_count} sessions with failures in the last day")

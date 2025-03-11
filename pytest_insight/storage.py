@@ -1,5 +1,5 @@
-import fcntl
 import json
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -90,7 +90,6 @@ class JSONStorage(BaseStorage):
 
     def load_sessions(self) -> List[TestSession]:
         """Load all test sessions from storage."""
-        import json  # Import here to avoid startup cost
 
         try:
             data = json.loads(self.file_path.read_text())
@@ -105,7 +104,6 @@ class JSONStorage(BaseStorage):
         Args:
             session: Test session to save
         """
-        import json  # Import here to avoid startup cost
 
         try:
             # Load existing sessions
@@ -115,9 +113,7 @@ class JSONStorage(BaseStorage):
             sessions.append(session)
 
             # Save all sessions
-            self.file_path.write_text(
-                json.dumps([s.to_dict() for s in sessions], indent=2)
-            )
+            self.file_path.write_text(json.dumps([s.to_dict() for s in sessions], indent=2))
         except Exception as e:
             print(f"Warning: Failed to save session to {self.file_path}: {e}")
 
@@ -127,12 +123,9 @@ class JSONStorage(BaseStorage):
         Args:
             sessions: List of test sessions to save
         """
-        import json  # Import here to avoid startup cost
 
         try:
-            self.file_path.write_text(
-                json.dumps([s.to_dict() for s in sessions], indent=2)
-            )
+            self.file_path.write_text(json.dumps([s.to_dict() for s in sessions], indent=2))
         except Exception as e:
             print(f"Warning: Failed to save sessions to {self.file_path}: {e}")
 
@@ -143,3 +136,19 @@ class JSONStorage(BaseStorage):
     def clear_sessions(self) -> None:
         """Remove all stored sessions."""
         self.clear()
+
+
+def get_storage_instance(storage_type: str = None, file_path: str = None) -> BaseStorage:
+    """Get storage instance based on configuration."""
+    # Get storage type from args, env, or default
+    storage_type = storage_type or os.environ.get("PYTEST_INSIGHT_STORAGE_TYPE", "json")
+
+    # Get file path from args, env, or default
+    if not file_path:
+        file_path = os.environ.get("PYTEST_INSIGHT_DB_PATH")
+
+    # Create appropriate storage instance
+    if storage_type.lower() == "json":
+        return JSONStorage(file_path)
+    else:
+        raise ValueError(f"Unsupported storage type: {storage_type}")

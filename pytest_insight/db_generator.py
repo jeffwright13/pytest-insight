@@ -4,36 +4,87 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+import typer
+
 from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
-from pytest_insight.storage import JSONStorage
+
+app = typer.Typer(
+    name="insight-gen",
+    help="Generate practice test data for pytest-insight",
+    no_args_is_help=True,
+)
+
+"""Generate practice test data for pytest-insight with configurable parameters.
+
+This module provides a CLI tool for generating realistic test data that matches
+established test outcome distributions:
+
+- PASSED: ~45% (configurable via --pass-rate)
+- RERUN: ~17% (configurable via --flaky-rate)
+- XFAILED: ~15%
+- ERROR: ~9%
+- FAILED: ~6.5%
+- XPASSED: ~5%
+- SKIPPED: ~2.5%
+
+Usage:
+    insight-gen --days 30 --targets 5
+    insight-gen --pass-rate 0.6 --flaky-rate 0.1
+    insight-gen --sut-filter qa- --categories api,integration
+"""
 
 
 class PracticeDataGenerator:
     """Generates practice test data with variations for learning and exploration."""
 
-    def __init__(self, target_path: Optional[Path] = None):
-        """Initialize generator with optional target path.
+    def __init__(
+        self,
+        target_path: Optional[Path] = None,
+        days: int = 7,
+        targets_per_base: int = 3,
+        start_date: Optional[datetime] = None,
+        pass_rate: float = 0.45,  # Default from established distribution
+        flaky_rate: float = 0.17,
+        warning_rate: float = 0.085,
+        sut_filter: Optional[str] = None,  # Filter SUTs by prefix (qa-, prod-, etc.)
+        test_categories: Optional[list[str]] = None,  # Filter test categories
+    ):
+        """Initialize generator with optional parameters.
 
         Args:
             target_path: Optional path for practice database.
                         If not provided, uses ~/.pytest_insight/practice.json
+            days: Number of days to generate data for (min: 1, max: 90)
+            targets_per_base: Maximum number of target sessions per base session (min: 1, max: 10)
+            start_date: Start date for data generation (format: YYYY-MM-DD). Default: 7 days ago
+            pass_rate: Base pass rate for normal tests (default: 0.45)
+            flaky_rate: Rate of flaky tests (default: 0.17)
+            warning_rate: Base rate for test warnings (default: 0.085)
+            sut_filter: Optional prefix to filter SUTs (e.g., 'qa-', 'prod-')
+            test_categories: Optional list of test categories to include
+                           ['api', 'integration', 'performance', 'flaky', 'data']
         """
-        self.target_path = (
-            target_path or Path.home() / ".pytest_insight" / "practice.json"
-        )
+        self.target_path = target_path or Path.home() / ".pytest_insight" / "practice.json"
+        self.days = days
+        self.targets_per_base = targets_per_base
+        self.start_date = start_date
+        self.pass_rate = max(0.1, min(0.9, pass_rate))  # Clamp between 0.1 and 0.9
+        self.flaky_rate = max(0.05, min(0.3, flaky_rate))
+        self.warning_rate = max(0.01, min(0.2, warning_rate))
 
         # Define variations for generating data
         self.sut_variations = [
             "ref-sut-openjdk11",
             "ref-sut-openjdk17",
+            "ref-sut-openjdk21",
             "ref-sut-python39",
+            "ref-sut-python310",
             "ref-sut-python311",
+            "ref-sut-python312",
             "perf-sut-600",
             "perf-sut-100",
             "perf-sut-200",
             "perf-sut-400",
-            "perf-sut-load-test-1000",
-            "perf-sut-load-test-1500",
             "prod-service-a",
             "prod-service-b",
             "prod-service-c",
@@ -44,6 +95,12 @@ class PracticeDataGenerator:
             "qa-service-b",
             "qa-service-c",
         ]
+
+        # Filter SUTs if specified
+        if sut_filter:
+            self.sut_variations = [sut for sut in self.sut_variations if sut.startswith(sut_filter)]
+            if not self.sut_variations:
+                raise ValueError(f"No SUTs found matching prefix '{sut_filter}'")
 
         # Test patterns with different categories
         self.test_patterns = {
@@ -87,6 +144,13 @@ class PracticeDataGenerator:
             ],
         }
 
+        # Filter test categories if specified
+        if test_categories:
+            invalid_categories = set(test_categories) - set(self.test_patterns.keys())
+            if invalid_categories:
+                raise ValueError(f"Invalid test categories: {invalid_categories}")
+            self.test_patterns = {k: v for k, v in self.test_patterns.items() if k in test_categories}
+
         # Define common test failure patterns with more realistic messages
         self.error_patterns = {
             "assertion": "AssertionError: Expected {expected}, but got {actual}",
@@ -120,13 +184,9 @@ class PracticeDataGenerator:
         if error_type == "assertion":
             expected = random.choice(["200", "True", "User created", "[]"])
             actual = random.choice(["404", "False", "Permission denied", "None"])
-            return self.error_patterns["assertion"].format(
-                expected=expected, actual=actual
-            )
+            return self.error_patterns["assertion"].format(expected=expected, actual=actual)
         elif error_type == "timeout":
-            return self.error_patterns["timeout"].format(
-                timeout=random.randint(30, 120)
-            )
+            return self.error_patterns["timeout"].format(timeout=random.randint(30, 120))
         elif error_type == "connection":
             service = random.choice(["database", "cache", "auth-service", "api"])
             return self.error_patterns["connection"].format(service=service)
@@ -137,25 +197,17 @@ class PracticeDataGenerator:
             txn = random.choice(["read", "write", "update", "delete"])
             return self.error_patterns["concurrency"].format(txn=txn)
         elif error_type == "memory":
-            operation = random.choice(
-                ["loading", "processing", "saving", "transforming"]
-            )
+            operation = random.choice(["loading", "processing", "saving", "transforming"])
             return self.error_patterns["memory"].format(operation=operation)
         elif error_type == "race":
-            operation = random.choice(
-                ["loading", "processing", "saving", "transforming"]
-            )
+            operation = random.choice(["loading", "processing", "saving", "transforming"])
             return self.error_patterns["race"].format(operation=operation)
         elif error_type == "resource":
             action = random.choice(["allocate", "deallocate", "update"])
-            reason = random.choice(
-                ["insufficient resources", "invalid request", "timeout"]
-            )
+            reason = random.choice(["insufficient resources", "invalid request", "timeout"])
             return self.error_patterns["resource"].format(action=action, reason=reason)
         else:
-            error = random.choice(
-                ["deadlock detected", "connection lost", "invalid state"]
-            )
+            error = random.choice(["deadlock detected", "connection lost", "invalid state"])
             return self.error_patterns["database"].format(error=error)
 
     def _create_test_result(
@@ -198,9 +250,7 @@ class PracticeDataGenerator:
                     TestOutcome.PASSED,  # 30%
                 ]
             )
-            error_type = (
-                "timeout" if outcome in [TestOutcome.ERROR, TestOutcome.RERUN] else None
-            )
+            error_type = "timeout" if outcome in [TestOutcome.ERROR, TestOutcome.RERUN] else None
         elif make_flaky:
             # Pure flaky tests (not marked for expected failure)
             outcome = random.choice(
@@ -238,11 +288,7 @@ class PracticeDataGenerator:
                     TestOutcome.PASSED,  # 20%
                 ]
             )
-            error_type = (
-                random.choice(["assertion", "validation"])
-                if outcome == TestOutcome.XFAILED
-                else None
-            )
+            error_type = random.choice(["assertion", "validation"]) if outcome == TestOutcome.XFAILED else None
         elif test_type == "performance":
             # Performance tests have higher failure rates and more skips under load
             outcome = random.choice(
@@ -296,8 +342,8 @@ class PracticeDataGenerator:
             "performance": 0.15,  # Higher chance for performance tests
             "flaky": 0.12,  # Elevated for flaky tests
             "integration": 0.08,  # Medium for integration
-            None: 0.05,  # Base rate for others
-        }.get(test_type, 0.05)
+            None: self.warning_rate,  # Base rate for others
+        }.get(test_type, self.warning_rate)
 
         has_warning = random.random() < warning_chance
 
@@ -358,11 +404,7 @@ class PracticeDataGenerator:
 
         # Determine environment and tags based on SUT name prefix
         env_type = next(
-            (
-                k
-                for k in ["qa", "prod", "beta", "ref", "perf"]
-                if sut_name.startswith(f"{k}-")
-            ),
+            (k for k in ["qa", "prod", "beta", "ref", "perf"] if sut_name.startswith(f"{k}-")),
             "qa",
         )
         session_tags = self.session_tags[env_type].copy()
@@ -389,27 +431,21 @@ class PracticeDataGenerator:
         # Generate test results for each category
         for category in selected_categories:
             tests = self.test_patterns[category]
-            selected_tests = random.sample(
-                tests, min(len(tests), random.randint(2, len(tests)))
-            )
+            selected_tests = random.sample(tests, min(len(tests), random.randint(2, len(tests))))
 
             for test in selected_tests:
-                if category == "flaky" or (include_flaky and random.random() < 0.3):
+                if category == "flaky" or (include_flaky and random.random() < self.flaky_rate):
                     # Create a rerun group for flaky tests
                     runs = []
                     for _ in range(random.randint(2, 4)):
-                        result = self._create_test_result(
-                            test, current_time, make_flaky=True, test_type=category
-                        )
+                        result = self._create_test_result(test, current_time, make_flaky=True, test_type=category)
                         runs.append(result)
                         current_time += timedelta(seconds=result.duration + 0.5)
 
                     test_results.extend(runs)
                     rerun_groups.append(RerunTestGroup(nodeid=test, tests=runs))
                 else:
-                    result = self._create_test_result(
-                        test, current_time, test_type=category
-                    )
+                    result = self._create_test_result(test, current_time, test_type=category)
                     test_results.append(result)
                     current_time += timedelta(seconds=result.duration + 0.5)
 
@@ -427,11 +463,11 @@ class PracticeDataGenerator:
     def generate_practice_data(self) -> None:
         """Generate practice data with various test scenarios."""
         all_sessions = []
-        base_time = datetime.now() - timedelta(days=7)  # Start from a week ago
+        base_time = self.start_date or datetime.now() - timedelta(days=7)  # Start from a week ago
 
         for sut_name in self.sut_variations:
             # Generate multiple session pairs (base/target) over time
-            for day_offset in range(14):
+            for day_offset in range(self.days):
                 session_time = base_time + timedelta(days=day_offset)
 
                 # Create base session
@@ -444,7 +480,7 @@ class PracticeDataGenerator:
                 all_sessions.append(base_session)
 
                 # Create 1-3 target sessions for each base
-                for _ in range(random.randint(1, 3)):
+                for _ in range(random.randint(1, self.targets_per_base)):
                     target_time = session_time + timedelta(hours=random.randint(1, 8))
                     target_session = self._create_session(
                         sut_name=sut_name,
@@ -486,12 +522,147 @@ class PracticeDataGenerator:
             percentage = (count / total_tests * 100) if total_tests > 0 else 0
             print(f"  {outcome}: {count} tests ({percentage:.1f}%)")
 
-        print(f"\nAdditional Statistics:")
+        print("\nAdditional Statistics:")
         print(f"  Tests with Warnings: {warning_count}")
         print(f"  Rerun Groups: {rerun_count}")
 
 
+@app.command()
+def main(
+    days: int = typer.Option(
+        7,
+        "--days",
+        "-d",
+        help="Number of days to generate data for (min: 1, max: 90)",
+        min=1,
+        max=90,
+    ),
+    targets: int = typer.Option(
+        3,
+        "--targets",
+        "-t",
+        help="Maximum number of target sessions per base session (min: 1, max: 10)",
+        min=1,
+        max=10,
+    ),
+    output: str = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output path for practice database (default: ~/.pytest_insight/practice.json)",
+    ),
+    start_date: str = typer.Option(
+        None,
+        "--start-date",
+        "-s",
+        help="Start date for data generation (format: YYYY-MM-DD). Default: 7 days ago",
+    ),
+    pass_rate: float = typer.Option(
+        0.45,
+        "--pass-rate",
+        "-p",
+        help="Base pass rate for normal tests (0.1-0.9)",
+        min=0.1,
+        max=0.9,
+    ),
+    flaky_rate: float = typer.Option(
+        0.17,
+        "--flaky-rate",
+        "-f",
+        help="Rate of flaky tests (0.05-0.3)",
+        min=0.05,
+        max=0.3,
+    ),
+    warning_rate: float = typer.Option(
+        0.085,
+        "--warning-rate",
+        "-w",
+        help="Base rate for test warnings (0.01-0.2)",
+        min=0.01,
+        max=0.2,
+    ),
+    sut_filter: str = typer.Option(
+        None,
+        "--sut-filter",
+        help="Filter SUTs by prefix (qa-, prod-, beta-, ref-, perf-)",
+    ),
+    categories: str = typer.Option(
+        None,
+        "--categories",
+        "-c",
+        help="Comma-separated list of test categories to include (api,integration,performance,flaky,data,python312,java21)",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Suppress detailed output, only show essential information",
+    ),
+) -> None:
+    """Generate practice test data with configurable parameters.
+
+    Examples:
+        # Generate 30 days of data with up to 5 target sessions per base
+        insight-gen --days 30 --targets 5
+
+        # Generate data with custom outcome rates
+        insight-gen --pass-rate 0.6 --flaky-rate 0.1 --warning-rate 0.05
+
+        # Generate data for specific SUT type and test categories
+        insight-gen --sut-filter qa- --categories api,integration
+
+        # Generate minimal data quickly
+        insight-gen --days 3 --targets 2 --quiet
+
+    The generated data will maintain realistic test outcome distributions while
+    respecting the configured parameters. Test categories include:
+    - api: API endpoint tests
+    - integration: Database, cache, and external service tests
+    - performance: Load, memory, and resource tests
+    - flaky: Tests with non-deterministic behavior
+    - data: Data validation and integrity tests
+    - python312: Python 3.12 specific feature tests
+    - java21: Java 21 specific feature tests
+    """
+    try:
+        if days < 1 or days > 90:
+            raise ValueError("Days must be between 1 and 90")
+        if targets < 1 or targets > 10:
+            raise ValueError("Targets must be between 1 and 10")
+
+        target_path = Path(output) if output else None
+        start = None
+        if start_date:
+            try:
+                start = datetime.strptime(start_date, "%Y-%m-%d")
+                if start > datetime.now():
+                    raise ValueError("Start date cannot be in the future")
+            except ValueError as e:
+                if "format" in str(e):
+                    raise ValueError("Start date must be in YYYY-MM-DD format")
+                raise
+
+        # Parse categories if provided
+        test_categories = None
+        if categories:
+            test_categories = [c.strip() for c in categories.split(",")]
+
+        generator = PracticeDataGenerator(
+            target_path=target_path,
+            days=days,
+            targets_per_base=targets,
+            start_date=start,
+            pass_rate=pass_rate,
+            flaky_rate=flaky_rate,
+            warning_rate=warning_rate,
+            sut_filter=sut_filter,
+            test_categories=test_categories,
+        )
+        generator.generate_practice_data()
+    except Exception as e:
+        print(f"Error: {e}")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
-    # Use default path unless specified
-    generator = PracticeDataGenerator()
-    generator.generate_practice_data()
+    app()

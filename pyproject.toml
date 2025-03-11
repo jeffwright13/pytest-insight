@@ -30,6 +30,7 @@ insight = "pytest_insight.plugin"
 
 [project.scripts]
 insight = "pytest_insight.__main__:app"
+insight-gen = "pytest_insight.db_generator:app"
 
 [build-system]
 requires = ["hatchling"]

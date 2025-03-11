@@ -9,17 +9,20 @@ from pytest_insight.storage import JSONStorage
 
 class QueryError(Exception):
     """Base exception for Query-related errors."""
+
     pass
 
 
 class InvalidQueryParameterError(QueryError):
     """Raised when query parameters are invalid."""
+
     pass
 
 
 @dataclass
 class QueryResult:
     """Results of executing a query."""
+
     sessions: List[TestSession]
     total_count: int
     execution_time: float
@@ -80,9 +83,7 @@ class QueryTestFilter:
                 )
             elif condition_type == "duration":
                 min_secs, max_secs = value
-                self.query._filters.append(
-                    lambda s: any(min_secs <= t.duration <= max_secs for t in s.test_results)
-                )
+                self.query._filters.append(lambda s: any(min_secs <= t.duration <= max_secs for t in s.test_results))
             elif condition_type == "outcome":
                 outcome_str = value
                 self.query._filters.append(
@@ -96,9 +97,7 @@ class QueryTestFilter:
         if lambda_conditions:
             conditions_copy = lambda_conditions.copy()
             self.query._filters.append(
-                lambda s: any(
-                    all(condition(t) for condition in conditions_copy) for t in s.test_results
-                )
+                lambda s: any(all(condition(t) for condition in conditions_copy) for t in s.test_results)
             )
 
         return self.query
@@ -107,15 +106,15 @@ class QueryTestFilter:
 class Query:
     """Defines criteria for finding test sessions."""
 
-    def __init__(self, sessions: Optional[List[TestSession]] = None):
-        """Initialize query with optional test sessions.
+    def __init__(self, storage: Optional[JSONStorage] = None):
+        """Initialize query with optional storage.
 
         Args:
-            sessions: Optional list of test sessions to search through.
-                     If not provided, loads sessions from default storage.
+            storage: Optional storage to use. If not provided, uses default.
         """
-        self._sessions = sessions if sessions is not None else JSONStorage().load_sessions()
+        self.storage = storage or JSONStorage()
         self._filters: List[Callable[[TestSession], bool]] = []
+        self._sessions: List[TestSession] = []
         self._last_result: Optional[QueryResult] = None
 
     def for_sut(self, name: str) -> "Query":
@@ -242,8 +241,10 @@ class Query:
         start_time = datetime.now()
 
         # Load sessions from storage if not provided
-        if self._sessions is None:
-            storage = JSONStorage()
+        if self._sessions:
+            from pytest_insight.storage import get_storage_instance
+
+            storage = get_storage_instance()
             self._sessions = storage.load_sessions()
 
         # Apply filters
@@ -260,7 +261,7 @@ class Query:
             sessions=filtered_sessions,
             total_count=len(filtered_sessions),
             execution_time=execution_time,
-            matched_nodeids=all_nodeids
+            matched_nodeids=all_nodeids,
         )
 
         self._last_result = result
