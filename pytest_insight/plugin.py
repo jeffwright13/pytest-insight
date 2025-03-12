@@ -233,7 +233,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         if outcome not in ["warnings", ""]:
             count = len(reports)
             percentage = (count / total_tests) * 100 if total_tests > 0 else 0
-            value = f"{count} ({percentage:.1f}%)" if outcome != "rerun" else str(count)
+            value = f"{count} ({percentage:.1f}%)" if outcome.lower() not in ["rerun", "deselected"] else str(count)
             color_kwargs = {
                 "passed": {"green": True},
                 "failed": {"red": True},
@@ -277,6 +277,8 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 f"{test.duration:.2f}s ({test.outcome.to_str().capitalize()})",
                 **color_kwargs,
             )
+
+    # if
 
     if "warnings" in terminalreporter.stats:
         write_section_header(terminalreporter, "Warnings Summary")

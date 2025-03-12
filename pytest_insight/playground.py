@@ -1,67 +1,160 @@
-from pathlib import Path
+"""
+Quick Start Guide for pytest-insight
+
+This playground demonstrates common use cases and best practices for using pytest-insight.
+Run this file directly to see the examples in action.
+"""
+from datetime import datetime, timedelta
 
 from pytest_insight.models import TestOutcome
 from pytest_insight.query.comparison import Comparison
 from pytest_insight.query.query import Query
-from pytest_insight.storage import JSONStorage
 
-# Example: Simple query using default storage as set in constants.py
-query = Query()  # Automatically uses ~/.pytest_insight/practice.json by default
-print()
+print("pytest-insight Quick Start Guide\n")
 
+# Example 1: Basic test health analysis
+query = Query()  # Uses default storage (~/.pytest_insight/practice.json)
 
-base_sessions = query.for_sut("ref-sut-python39").with_session_id_pattern("base-*").execute()
-print(f"\nFound {base_sessions.total_count} base sessions")
+all_sessions = query.execute()
 
-# Example: Search for sessions without any reruns in the past 3 days
-no_reruns = query.with_reruns(False).in_last_days(3).execute()
-print(f"\nFound {no_reruns.total_count} sessions with no reruns in the last 3 days")
-print(f"They were: {', '.join(s.session_id for s in no_reruns.sessions)}")
+health = (query
+    .for_sut("my-service")
+    .in_last_days(7)
+    .execute())
 
-# Example 2: Simple comparison between SUTs
-comparison = Comparison()  # Uses same default storage as Example 1
-result = comparison.between_suts("ref-sut-python39", "ref-sut-python311").in_last_days(1).execute()
+print("Test Health Metrics:")
+print(f"Total tests: {len(health.sessions[0].test_results)}")
+print(f"Pass rate: {health.pass_rate:.1%}")  # Typically ~45%
+print(f"Flaky rate: {health.flaky_rate:.1%}")  # Typically ~17%
+print(f"Warning rate: {health.warning_rate:.1%}")  # Typically ~8.5%
 
-print("\nComparison Results:")
-print(f"Base SUT: {result.base_session.sut_name}")
-print(f"Target SUT: {result.target_session.sut_name}")
-print(f"- New failures: {len(result.new_failures)}")
-print(f"- Fixed tests: {len(result.fixed_tests)}")
-print(f"- Flaky tests: {len(result.flaky_tests)}")
+# Example 2: Finding ````````````````flaky tests with session context
+print("\nAnalyzing flaky tests with session context:")
+flaky_tests = (query
+    .with_reruns(True)  # Session-level filter: has reruns
+    .filter_by_test()   # Start filtering by test properties
+    .with_outcome(TestOutcome.PASSED)  # Test-level: eventually passed
+    .apply()            # Back to session context
+    .execute())
 
-# Example 3: Find flaky tests that are also new failures
-flaky_failures = {t.nodeid for t in result.flaky_tests} & {t.nodeid for t in result.new_failures}
-if flaky_failures:
-    print("\nTests that are both flaky and new failures:")
-    for nodeid in flaky_failures:
+print(f"Found {flaky_tests.total_count} sessions with flaky tests")
+for session in flaky_tests.sessions:
+    print(f"\nSession {session.session_id}:")
+    # Show ALL tests in the session for context
+    print("  All tests in session:")
+    for test in session.test_results:
+        status = []
+        if test.rerun_count > 0:
+            status.append(f"FLAKY ({test.rerun_count} attempts)")
+        if test.duration > 10.0:
+            status.append("SLOW")
+        if test.outcome != TestOutcome.PASSED:
+            status.append(test.outcome.value)
+        status_str = f" ({', '.join(status)})" if status else ""
+        print(f"    - {test.nodeid}{status_str}")
+
+    # Show session-level warnings
+    if session.warnings:
+        print("\n  Session warnings:")
+        for warning in session.warnings:
+            print(f"    - {warning.message}")
+
+# Example 3: Cross-version comparison with proper session filtering
+print("\nAnalyzing Python version compatibility:")
+comparison = Comparison()
+result = (comparison
+    .between_suts("ref-sut-python39", "ref-sut-python311")
+    .with_session_id_pattern("base-*", "target-*")  # Critical for accurate comparison!
+    .in_last_days(7)
+    .execute())
+
+# Show non-exclusive test categories
+print("\nTest Categories (NOT mutually exclusive):")
+all_failures = {t.nodeid for t in result.new_failures}
+all_flaky = {t.nodeid for t in result.flaky_tests}
+all_warnings = {t.nodeid for t in result.tests_with_warnings}
+
+print("\nCategory counts:")
+print(f"- New failures: {len(all_failures)}")
+print(f"- Flaky tests: {len(all_flaky)}")
+print(f"- Tests with warnings: {len(all_warnings)}")
+
+# Show overlapping categories
+flaky_failures = all_failures & all_flaky
+warning_failures = all_failures & all_warnings
+flaky_warnings = all_flaky & all_warnings
+all_issues = all_failures & all_flaky & all_warnings
+
+print("\nOverlapping categories:")
+print(f"- Both flaky and failing: {len(flaky_failures)}")
+print(f"- Both failing with warnings: {len(warning_failures)}")
+print(f"- Both flaky with warnings: {len(flaky_warnings)}")
+print(f"- All three categories: {len(all_issues)}")
+
+if all_issues:
+    print("\nTests with all issues:")
+    for nodeid in all_issues:
         print(f"  - {nodeid}")
-        old_outcome, new_outcome = result.outcome_changes[nodeid]
-        print(f"    Changed from {old_outcome.value} to {new_outcome.value}")
 
-# Example 4: Using custom storage location (optional)
-storage = JSONStorage(Path.home() / ".pytest_insight" / "custom.json")
-sessions = storage.load_sessions()
+# Example 4: Performance analysis with full context
+print("\nAnalyzing slow tests with context:")
+slow_tests = (query
+    .having_warnings(True)  # Session-level: has warnings
+    .filter_by_test()      # Start test filtering
+    .with_duration(10.0, float("inf"))  # Test-level: >10s runtime
+    .apply()               # Back to session context
+    .execute())
 
-query = Query(sessions)  # Explicitly provide sessions
-slow_tests = query.filter_tests().with_duration(10.0, float("inf")).apply().execute()
-print(f"\nFound {slow_tests.total_count} sessions with slow tests")
+print(f"Found {slow_tests.total_count} sessions with slow tests")
+for session in slow_tests.sessions:
+    print(f"\nSession {session.session_id}:")
+    # Show all tests in session for context
+    print("  All tests in session:")
+    total_duration = 0
+    for test in session.test_results:
+        total_duration += test.duration
+        duration_note = " (SLOW!)" if test.duration > 10.0 else ""
+        print(f"    - {test.nodeid}: {test.duration:.1f}s{duration_note}")
+    print(f"\n  Total session duration: {total_duration:.1f}s")
 
-# Example 5: Direct session comparison (optional)
-if base_sessions.sessions:
-    # Get most recent base and target sessions
-    base = max(base_sessions.sessions, key=lambda s: s.session_start_time)
-    target = max(result.target_session.test_results, key=lambda s: s.session_start_time)
+    # Show session-level warnings
+    if session.warnings:
+        print("\n  Session warnings:")
+        for warning in session.warnings:
+            print(f"    - {warning.message}")
 
-    comparison = Comparison()
-    result = comparison.execute([base, target])  # Direct comparison
-    print("\nDirect Comparison Results:")
-    print(f"- New failures: {len(result.new_failures)}")
-    print(f"- Fixed tests: {len(result.fixed_tests)}")
-    print(f"- Flaky tests: {len(result.flaky_tests)}")
-    print(f"- Missing tests: {len(result.missing_tests)}")
-    print(f"- New tests: {len(result.new_tests)}")
+# Example 5: Test stability analysis
+print("\nAnalyzing test stability patterns:")
+last_month = datetime.now() - timedelta(days=30)
+stability = (query
+    .date_range(last_month, datetime.now())
+    .filter_by_test()      # Filter by test properties
+    .with_outcome(TestOutcome.FAILED)  # Looking for failures
+    .apply()               # Back to session context
+    .execute())
 
-# Example 6: Find failed tests in the last day
-query = Query()  # Uses default storage
-recent_failures = query.in_last_days(1).with_outcome(TestOutcome.FAILED).execute()
-print(f"\nFound {recent_failures.total_count} sessions with failures in the last day")
+failure_counts = {}
+test_outcomes = {}  # Track all outcomes for each test
+for session in stability.sessions:
+    for test in session.test_results:
+        if test.outcome == TestOutcome.FAILED:
+            failure_counts[test.nodeid] = failure_counts.get(test.nodeid, 0) + 1
+
+        # Track all outcomes to identify inconsistent tests
+        if test.nodeid not in test_outcomes:
+            test_outcomes[test.nodeid] = set()
+        test_outcomes[test.nodeid].add(test.outcome)
+
+# Show tests that failed more than 3 times
+frequent_failures = {
+    nodeid: count for nodeid, count in failure_counts.items()
+    if count > 3
+}
+
+print(f"\nTests with frequent failures (>3 times in 30 days):")
+for nodeid, count in sorted(frequent_failures.items(), key=lambda x: x[1], reverse=True):
+    outcomes = test_outcomes[nodeid]
+    outcome_str = ", ".join(o.value for o in outcomes)
+    print(f"  - {nodeid}:")
+    print(f"    - Failed {count} times")
+    print(f"    - All outcomes seen: {outcome_str}")  # Shows outcome instability

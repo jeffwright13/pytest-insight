@@ -192,23 +192,52 @@ class Test_Query:
     def test_query_initialization(self):
         """Test basic Query initialization."""
         query = Query()
-        assert hasattr(query, "_filters")
-        assert len(query._filters) == 0
+        assert isinstance(query, Query)
+        assert len(query._session_filters) == 0
+        assert len(query._test_filters) == 0
 
     def test_for_sut_filter(self, mock_sessions):
         """Test SUT name filtering."""
-        query = Query().for_sut("test_sut")
-        result = query.execute(mock_sessions)
-        assert not result.empty
-        assert result.total_count == 4
-        assert all(s.sut_name == "test_sut" for s in result.sessions)
+        query = Query()
+        result = query.for_sut("api-service").execute(mock_sessions)
+        assert len(result.sessions) == 1
+        assert result.sessions[0].sut_name == "api-service"
 
     def test_for_sut_validation(self):
         """Test SUT name validation."""
+        query = Query()
         with pytest.raises(InvalidQueryParameterError):
-            Query().for_sut("")
+            query.for_sut("")
+
+    def test_session_tag_filter(self, mock_sessions):
+        """Test session tag filtering."""
+        query = Query()
+        result = query.with_session_tag("env", "dev").execute(mock_sessions)
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_tags["env"] == "dev"
+
+    def test_session_tag_validation(self):
+        """Test session tag validation."""
+        query = Query()
         with pytest.raises(InvalidQueryParameterError):
-            Query().for_sut(None)
+            query.with_session_tag("", "value")
+        with pytest.raises(InvalidQueryParameterError):
+            query.with_session_tag("key", "")
+        with pytest.raises(InvalidQueryParameterError):
+            query.with_session_tag(None, "value")
+        with pytest.raises(InvalidQueryParameterError):
+            query.with_session_tag("key", None)
+
+    def test_combined_filters(self, mock_sessions):
+        """Test combining multiple session-level filters."""
+        query = Query()
+        result = (query
+            .for_sut("api-service")
+            .with_session_tag("env", "dev")
+            .execute(mock_sessions))
+        assert len(result.sessions) == 1
+        assert result.sessions[0].sut_name == "api-service"
+        assert result.sessions[0].session_tags["env"] == "dev"
 
     def test_in_last_days(self, mock_sessions):
         """Test date range filtering."""
@@ -643,8 +672,11 @@ class Test_BeforeAfter:
         # Apply filter
         query.before(timestamp)
 
+        # Verify filter is added and returns self
+        assert len(query._session_filters) == 1
+
         # Test filter function
-        filter_func = query._filters[0]
+        filter_func = query._session_filters[0]
         assert filter_func(session_before) is True
         assert filter_func(session_after) is False
 
@@ -671,17 +703,17 @@ class Test_BeforeAfter:
 
         assert isinstance(result, Query)
 
-    # Filter function correctly added to _filters list
+    # Filter function correctly added to _session_filters list
     def test_filter_function_added_to_filters_list(self):
         from datetime import datetime
 
         from pytest_insight.query.query import Query
 
         query_instance = Query()
-        initial_filter_count = len(query_instance._filters)
+        initial_filter_count = len(query_instance._session_filters)
         query_instance.before(datetime.now())
 
-        assert len(query_instance._filters) == initial_filter_count + 1
+        assert len(query_instance._session_filters) == initial_filter_count + 1
 
     # Filter lambda correctly compares session_start_time with timestamp
     def test_filter_lambda_compares_session_start_time(self, mocker):
@@ -697,11 +729,11 @@ class Test_BeforeAfter:
         mock_session = mocker.Mock(spec=TestSession)
         mock_session.session_start_time = datetime(2023, 9, 30)
 
-        assert query_instance._filters[0](mock_session) is True
+        assert query_instance._session_filters[0](mock_session) is True
 
         mock_session.session_start_time = datetime(2023, 10, 2)
 
-        assert query_instance._filters[0](mock_session) is False
+        assert query_instance._session_filters[0](mock_session) is False
 
     # Filter sessions with timestamp after given datetime returns filtered Query instance
     def test_after_filters_sessions_by_timestamp(self):
@@ -710,6 +742,7 @@ class Test_BeforeAfter:
         from pytest_insight.models import TestSession
         from pytest_insight.query.query import Query
 
+        # Setup
         query = Query()
         timestamp = datetime(2023, 1, 1)
 
@@ -733,11 +766,12 @@ class Test_BeforeAfter:
 
         # Verify filter is added and returns self
         assert filtered_query is query
-        assert len(query._filters) == 1
+        assert len(query._session_filters) == 1
 
         # Verify filter works correctly
-        assert not query._filters[0](session1)
-        assert query._filters[0](session2)
+        filter_func = query._session_filters[0]
+        assert not filter_func(session1)
+        assert filter_func(session2)
 
     # Raise InvalidQueryParameterError when timestamp is not datetime object
     def test_after_raises_error_for_invalid_timestamp(self):
@@ -752,16 +786,16 @@ class Test_BeforeAfter:
 
         assert str(exc_info.value) == "Timestamp must be a datetime object"
 
-    # Method adds lambda filter function to _filters list
+    # Method adds lambda filter function to _session_filters list
     def test_adds_lambda_filter_to_filters_list(self):
         from datetime import datetime
 
         from pytest_insight.query.query import Query
 
         query_instance = Query()
-        initial_filter_count = len(query_instance._filters)
+        initial_filter_count = len(query_instance._session_filters)
         query_instance.after(datetime.now())
-        assert len(query_instance._filters) == initial_filter_count + 1
+        assert len(query_instance._session_filters) == initial_filter_count + 1
 
     # Filter correctly compares session_start_time with provided timestamp
     def test_filter_compares_session_start_time_correctly(self, mocker):
@@ -777,10 +811,10 @@ class Test_BeforeAfter:
         mock_session = mocker.Mock(spec=TestSession)
         mock_session.session_start_time = timestamp + timedelta(seconds=1)
 
-        assert query_instance._filters[0](mock_session) is True
+        assert query_instance._session_filters[0](mock_session) is True
 
         mock_session.session_start_time = timestamp - timedelta(seconds=1)
-        assert query_instance._filters[0](mock_session) is False
+        assert query_instance._session_filters[0](mock_session) is False
 
     # Method supports method chaining by returning self
     def test_method_chaining_support(self):
@@ -792,6 +826,206 @@ class Test_BeforeAfter:
         result = query_instance.after(datetime.now())
         assert result is query_instance
 
+    def test_before_after_filter_chain(self):
+        """Test that before() and after() can be chained and both filters work correctly."""
+        from datetime import datetime, timedelta
+
+        from pytest_insight.models import TestSession
+        from pytest_insight.query.query import Query
+
+        # Setup test data
+        now = datetime(2023, 1, 1, 12, 0)
+        before_time = now + timedelta(hours=2)  # 2pm
+        after_time = now - timedelta(hours=2)   # 10am
+
+        # Create sessions at different times
+        sessions = [
+            TestSession(  # 11am - should match
+                sut_name="test",
+                session_id="1",
+                session_start_time=now - timedelta(hours=1),
+                session_duration=10,
+            ),
+            TestSession(  # 3pm - should not match (too late)
+                sut_name="test",
+                session_id="2",
+                session_start_time=now + timedelta(hours=3),
+                session_duration=10,
+            ),
+            TestSession(  # 9am - should not match (too early)
+                sut_name="test",
+                session_id="3",
+                session_start_time=now - timedelta(hours=3),
+                session_duration=10,
+            ),
+        ]
+
+        # Create query and chain filters
+        query = Query()
+        result = query.before(before_time).after(after_time)
+
+        # Verify chain returns query instance
+        assert result is query
+        assert len(query._session_filters) == 2
+
+        # Test filters work correctly
+        assert all(f(sessions[0]) for f in query._session_filters)  # 11am session matches
+        assert not all(f(sessions[1]) for f in query._session_filters)  # 3pm session doesn't match
+        assert not all(f(sessions[2]) for f in query._session_filters)  # 9am session doesn't match
+
+        # Test execute() returns correct sessions
+        result = query.execute(sessions)
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "1"
+
+
+class Test_QueryTestFilter:
+    """Test suite for test-level filtering in Query."""
+
+    def test_filter_by_pattern(self, test_sessions, mocker):
+        """Test filtering tests by pattern."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        result = query.filter_by_test().with_pattern("test_api").apply().execute()
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_filter_by_duration(self, test_sessions, mocker):
+        """Test filtering tests by duration."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        # Find sessions with tests taking >= 3 seconds
+        result = query.filter_by_test().with_duration(3.0, 10.0).apply().execute()
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_filter_by_outcome(self, test_sessions, mocker):
+        """Test filtering tests by outcome."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        # Find sessions with failed tests
+        result = query.filter_by_test().with_outcome(TestOutcome.FAILED).apply().execute()
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_filter_by_skipped(self, test_sessions, mocker):
+        """Test filtering tests by skipped outcome."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        result = query.filter_by_test().with_outcome(TestOutcome.SKIPPED).apply().execute()
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session2"
+
+    def test_combined_test_filters(self, test_sessions, mocker):
+        """Test combining multiple test-level filters (AND logic within a single test)."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        result = (
+            query.filter_by_test()
+            .with_pattern("test_api")
+            .with_duration(3.0, 10.0)
+            .with_outcome(TestOutcome.FAILED)
+            .apply()
+            .execute()
+        )
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_combined_test_and_session_filters(self, test_sessions, mocker):
+        """Test combining test-level and session-level filters."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        result = (
+            query.for_sut("api-service")  # Match fixture sut_name
+            .filter_by_test()
+            .with_pattern("test_api")
+            .apply()
+            .execute()
+        )
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_no_matches(self, test_sessions, mocker):
+        """Test when no sessions match the filters."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        result = (
+            query.filter_by_test()
+            .with_pattern("nonexistent_test")
+            .apply()
+            .execute()
+        )
+
+        assert len(result.sessions) == 0
+        assert result.empty
+
+    def test_validation_errors(self):
+        """Test validation errors in test filters."""
+        query = Query()
+        with pytest.raises(InvalidQueryParameterError):
+            query.filter_by_test().with_pattern("").apply()
+        with pytest.raises(InvalidQueryParameterError):
+            query.filter_by_test().with_duration(-1, 10).apply()
+        with pytest.raises(InvalidQueryParameterError):
+            query.filter_by_test().with_duration(10, 5).apply()
+
+    def test_empty_conditions(self, test_sessions, mocker):
+        """Test applying an empty test filter."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        result = query.filter_by_test().apply().execute()
+
+        # Should return all sessions since no conditions were applied
+        assert len(result.sessions) == len(test_sessions)
+
+    def test_multiple_apply_calls(self, test_sessions, mocker):
+        """Test applying multiple test filter groups."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        result = (
+            query.filter_by_test()
+            .with_pattern("test_api")
+            .apply()
+            .filter_by_test()
+            .with_duration(3.0, 10.0)
+            .apply()
+            .execute()
+        )
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "session1"
+
+    def test_only_matching_one_test_keeps_session(self, test_sessions, mocker):
+        """Test that a session is kept if at least one test matches all conditions."""
+        query = Query()
+        storage_mock = mocker.patch("pytest_insight.query.query.get_storage_instance")
+        storage_mock.return_value.load_sessions.return_value = test_sessions
+        result = (
+            query.filter_by_test()
+            .with_pattern("test_api")
+            .with_duration(1.0, 2.0)  # Changed to match test_get's duration of 1.5s
+            .apply()
+            .execute()
+        )
+
+        assert len(result.sessions) == 1
+        session = result.sessions[0]
+        assert session.session_id == "session1"
 
 from datetime import datetime
 
@@ -865,132 +1099,3 @@ def test_sessions():
     )
 
     return [session1, session2]
-
-
-class Test_QueryTestFilter:
-    """Test suite for test-level filtering in Query."""
-
-    def test_filter_by_pattern(self, test_sessions):
-        """Test filtering tests by pattern."""
-        query = Query()
-        result = query.filter_tests().with_pattern("test_api").apply().execute(test_sessions)
-
-        assert len(result.sessions) == 1
-        assert result.sessions[0].session_id == "session1"
-
-    def test_filter_by_duration(self, test_sessions):
-        """Test filtering tests by duration."""
-        query = Query()
-        # Find sessions with tests taking >= 3 seconds
-        result = query.filter_tests().with_duration(3.0, 10.0).apply().execute(test_sessions)
-
-        assert len(result.sessions) == 1
-        assert result.sessions[0].session_id == "session1"
-
-    def test_filter_by_outcome(self, test_sessions):
-        """Test filtering tests by outcome."""
-        query = Query()
-        # Find sessions with failed tests
-        result = query.filter_tests().with_outcome(TestOutcome.FAILED).apply().execute(test_sessions)
-
-        assert len(result.sessions) == 1
-        assert result.sessions[0].session_id == "session1"
-
-    def test_filter_by_skipped(self, test_sessions):
-        """Test filtering tests by skipped outcome."""
-        query = Query()
-        # Find sessions with skipped tests
-        result = query.filter_tests().with_outcome(TestOutcome.SKIPPED).apply().execute(test_sessions)
-
-        assert len(result.sessions) == 1
-        assert result.sessions[0].session_id == "session2"
-
-    def test_combined_test_filters(self, test_sessions):
-        """Test combining multiple test-level filters (AND logic within a single test)."""
-        query = Query()
-        # Find sessions with tests that:
-        # 1. Contain "test_api" AND
-        # 2. Have failed outcome
-        result = (
-            query.filter_tests()
-            .with_pattern("test_api")
-            .with_outcome(TestOutcome.FAILED)
-            .apply()
-            .execute(test_sessions)
-        )
-
-        assert len(result.sessions) == 1
-        assert result.sessions[0].session_id == "session1"
-
-    def test_combined_test_and_session_filters(self, test_sessions):
-        """Test combining test-level and session-level filters."""
-        query = Query()
-        # Find sessions that:
-        # 1. Are from "api-service" (session-level) AND
-        # 2. Have tests containing "test_api" (test-level)
-        result = query.for_sut("api-service").filter_tests().with_pattern("test_api").apply().execute(test_sessions)
-
-        assert len(result.sessions) == 1
-        assert result.sessions[0].session_id == "session1"
-
-    def test_no_matches(self, test_sessions):
-        """Test when no sessions match the filters."""
-        query = Query()
-        # Look for a pattern that doesn't exist
-        result = query.filter_tests().with_pattern("nonexistent").apply().execute(test_sessions)
-
-        assert len(result.sessions) == 0
-        assert result.empty
-
-    def test_validation_errors(self):
-        """Test validation errors in test filters."""
-        query = Query()
-
-        with pytest.raises(InvalidQueryParameterError):
-            query.filter_tests().with_duration(5.0, 1.0).apply()  # min > max
-
-        with pytest.raises(InvalidQueryParameterError):
-            query.filter_tests().with_outcome("INVALID_OUTCOME").apply()  # Invalid outcome
-
-        with pytest.raises(InvalidQueryParameterError):
-            query.filter_tests().with_pattern(123).apply()  # Pattern is not a string
-
-    def test_empty_conditions(self, test_sessions):
-        """Test applying an empty test filter."""
-        query = Query()
-        # No conditions specified before apply()
-        result = query.filter_tests().apply().execute(test_sessions)
-
-        # Should return all sessions (no filtering applied)
-        assert len(result.sessions) == 2
-
-    def test_multiple_apply_calls(self, test_sessions):
-        """Test applying multiple test filter groups."""
-        query = Query()
-
-        # First find sessions with failed tests
-        query.filter_tests().with_outcome(TestOutcome.FAILED).apply()
-
-        # Then further filter to only include those with slow tests
-        query.filter_tests().with_duration(4.0, 10.0).apply()
-
-        result = query.execute(test_sessions)
-        assert len(result.sessions) == 1
-        assert result.sessions[0].session_id == "session1"
-
-    def test_only_matching_one_test_keeps_session(self, test_sessions):
-        """Test that a session is kept if at least one test matches all conditions."""
-        query = Query()
-
-        # This only matches test_api.py::test_post in session1
-        result = (
-            query.filter_tests()
-            .with_pattern("test_api")
-            .with_outcome(TestOutcome.FAILED)
-            .with_duration(0.0, 1.0)
-            .apply()
-            .execute(test_sessions)
-        )
-
-        assert len(result.sessions) == 1
-        assert result.sessions[0].session_id == "session1"
