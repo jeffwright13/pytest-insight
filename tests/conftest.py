@@ -1,11 +1,12 @@
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from importlib.metadata import version
 from pathlib import Path
 
 import pytest
 from pytest_insight.models import (
     RerunTestGroup,
+    TestOutcome,
     TestResult,
     TestSession,
 )
@@ -315,16 +316,27 @@ def temp_storage(tmp_path):
 @pytest.fixture
 def random_test_result():
     """Create a random test result."""
+    nodeid = f"test_file_{random.randint(1, 1000)}.py::test_case_{random.randint(1, 1000)}"
+    outcome = random.choice(TestOutcome.to_list())
+    start_time = datetime.now(timezone.utc)
+    duration = random.uniform(0.1, 10.0)
+    caplog = random.choice([None, "", "Some log message"])
+    error_outcomes = [TestOutcome.FAILED.value.lower(), TestOutcome.ERROR.value.lower()]
+    capstderr = "Some error message" if outcome in error_outcomes else None
+    capstdout = random.choice([None, "", "Some system output"])
+    longreprtext = random.choice([None, "", "Some long representation text"])
+    has_warning = random.choice([True, False])
+
     return TestResult(
-        nodeid=f"test_file_{random.randint(1, 1000)}.py::test_case_{random.randint(1, 1000)}",
-        outcome=random.choice(TestResult.OUTCOMES),
-        start_time=datetime.now(datetime.timezone.utc)(),
-        duration=random.uniform(0.1, 10.0),
-        caplog=random.choice([None, "", "Some log message"]),
-        capstderr=random.choice([None, "", "Some error message"]),
-        capstdout=random.choice([None, "", "Some system output"]),
-        longrepretxt=random.choice([None, "", "Some long representation text"]),
-        has_warning=random.choice([True, False]),
+        nodeid=nodeid,
+        outcome=TestOutcome.from_str(outcome),
+        start_time=start_time,
+        duration=duration,
+        caplog=caplog,
+        capstderr=capstderr,
+        capstdout=capstdout,
+        longreprtext=longreprtext,
+        has_warning=has_warning,
     )
 
 
@@ -334,8 +346,8 @@ def random_test_session(random_test_result):
     return TestSession(
         sut_name=f"test_sut_{random.randint(1, 1000)}",
         session_id=f"{random.randint(1, 1000)}",
-        session_start_time=datetime.now(datetime.timezone.utc)(),
-        session_stop_time=datetime.now(datetime.timezone.utc)(),
+        session_start_time=datetime.now(timezone.utc),
+        session_stop_time=datetime.now(timezone.utc),
         test_results=[random_test_result],
         rerun_test_groups=[],
         session_tags=[f"tag_{random.randint(1, 100)}"],
@@ -343,20 +355,9 @@ def random_test_session(random_test_result):
 
 
 @pytest.fixture
-def random_test_sessions(random_test_result):
+def random_test_sessions(random_test_session):
     """Create a list of random test sessions."""
-    return [
-        TestSession(
-            sut_name=f"test_sut_{random.randint(1, 1000)}",
-            session_id=f"{random.randint(1, 1000)}",
-            session_start_time=datetime.now(datetime.timezone.utc)(),
-            session_stop_time=datetime.now(datetime.timezone.utc)(),
-            test_results=[random_test_result],
-            rerun_test_groups=[],
-            session_tags=[f"tag_{random.randint(1, 100)}"],
-        )
-        for _ in range(10)
-    ]
+    return [random_test_session for _ in range(random.randint(1, 10))]
 
 
 @pytest.fixture
