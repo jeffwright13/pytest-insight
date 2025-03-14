@@ -45,8 +45,6 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "smoke: Smoke tests")
 
 
-# Add common fixtures
-# ------------------------------vvv Fixtures vvv ---------------------------- #
 class TextGenerator:
     """Generate random text content for testing."""
 
@@ -89,14 +87,10 @@ def random_test_session(text_gen):
     def _create():
         # Generate new random values each time the factory is called
         num_tests = random.randint(2, 6)  # More realistic test count
-        include_rerun = random.choice(
-            [True, False, False, False]
-        )  # 25% chance of having reruns
+        include_rerun = random.choice([True, False, False, False])  # 25% chance of having reruns
 
         # Create base session time window for consistent timing
-        base_time = datetime.now(timezone.utc) - timedelta(
-            minutes=random.randint(1, 60)
-        )
+        base_time = datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 60))
         session_start_time = base_time
         session_stop_time = base_time + timedelta(seconds=random.randint(30, 300))
 
@@ -119,17 +113,9 @@ def random_test_session(text_gen):
 
             outcome = random.choice(list(TestOutcome))
             caplog = text_gen.sentence()
-            capstderr = (
-                text_gen.sentence()
-                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-                else ""
-            )
+            capstderr = text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
             capstdout = text_gen.sentence()
-            longreprtext = (
-                text_gen.paragraph()
-                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-                else ""
-            )
+            longreprtext = text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
             has_warning = random.choice([True, False])
 
             result = TestResult(
@@ -175,14 +161,11 @@ def random_test_session(text_gen):
                     result = TestResult(
                         nodeid=rerun_nodeid,
                         outcome=final_outcome,
-                        start_time=current_time
-                        + timedelta(seconds=random.randint(1, 10)),
+                        start_time=current_time + timedelta(seconds=random.randint(1, 10)),
                         duration=random.uniform(0.1, 5.0),
                         caplog=f"Attempt {i+1}" if not is_final else "Final attempt",
                         capstderr=(
-                            ""
-                            if not is_final or final_outcome == TestOutcome.PASSED
-                            else "Test failed after reruns"
+                            "" if not is_final or final_outcome == TestOutcome.PASSED else "Test failed after reruns"
                         ),
                         capstdout=f"Running test (attempt {i+1})",
                         longreprtext=(
@@ -221,24 +204,10 @@ def random_test_session(text_gen):
     return _create
 
 
-# @pytest.fixture
-# def random_test_result(text_gen):
-#     """Generate a random TestResult instance."""
-#     outcome = random.choice(list(TestOutcome))
-#     start_time = datetime.utcnow()
-#     duration = random.uniform(0.1, 5.0)
-#
-#     return TestResult(
-#         nodeid="test_nodeid",
-#         outcome=outcome,
-#         start_time=start_time,
-#         duration=duration,
-#         caplog=text_gen.sentence(),
-#         capstderr=text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else "",
-#         capstdout=text_gen.sentence(),
-#         longreprtext=text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else "",
-#         has_warning=random.choice([True, False]),
-#     )
+@pytest.fixture
+def random_test_sessions():
+    """Create a list of random TestSession instances."""
+    return [random_test_session() for _ in range(random.randint(1, 10))]
 
 
 @pytest.fixture
@@ -258,9 +227,6 @@ def sample_session(sut_name="test-sut", session_id="session-1"):
         session_stop_time=now + timedelta(seconds=10),
         test_results=[],
     )
-
-
-# ------------------------------^^^ Fixtures ^^^------------------------------ #
 
 
 @pytest.fixture
@@ -805,17 +771,9 @@ def random_test_result_legacy(nodeid, text_gen):
             start_time=start_time,
             duration=duration,
             caplog=text_gen.sentence(),
-            capstderr=(
-                text_gen.sentence()
-                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-                else ""
-            ),
+            capstderr=(text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""),
             capstdout=text_gen.sentence(),
-            longreprtext=(
-                text_gen.paragraph()
-                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-                else ""
-            ),
+            longreprtext=(text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""),
             has_warning=random.choice([True, False]),
         )
 

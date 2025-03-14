@@ -1,22 +1,276 @@
+"""Query system for filtering and retrieving test sessions.
+
+This module implements a two-level filtering design:
+1. Session-Level: Filter entire test sessions (SUT, time range, warnings)
+2. Test-Level: Filter by individual test properties while preserving session context
+
+Both levels return full TestSession objects to preserve session context (warnings,
+reruns, relationships). Test-level filtering returns sessions containing matching
+tests, never isolated TestResult objects.
+"""
+
 import fnmatch
 import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import List, Optional, Union
+from enum import Enum, auto
+from typing import (
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Union,
+)
 
-from pytest_insight.models import TestOutcome, TestSession
+from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.storage import BaseStorage, get_storage_instance
 
 
 class InvalidQueryParameterError(Exception):
     """Raised when query parameters are invalid."""
 
-    pass
-
 
 class QueryExecutionError(Exception):
     """Raised when query execution fails."""
 
-    pass
+
+class FilterType(Enum):
+    """Types of filters supported by the query system."""
+
+    GLOB_PATTERN = auto()
+    REGEX_PATTERN = auto()
+    DURATION = auto()
+    OUTCOME = auto()
+    CUSTOM = auto()
+
+
+class TestFilter(Protocol):
+    """Protocol defining the interface for test filters."""
+
+    def matches(self, test: TestResult) -> bool:
+        """Check if a test matches this filter."""
+        ...
+
+    def to_dict(self) -> Dict:
+        """Convert filter to dictionary for serialization."""
+        ...
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "TestFilter":
+        """Create filter from dictionary."""
+        ...
+
+
+@dataclass
+class BasePatternFilter(ABC):
+    """Base class for pattern-based test filters."""
+
+    pattern: str
+
+    def __post_init__(self):
+        """Validate pattern."""
+        if not isinstance(self.pattern, str) or not self.pattern.strip():
+            raise InvalidQueryParameterError("Pattern must be a non-empty string")
+
+    @abstractmethod
+    def matches(self, test: TestResult) -> bool:
+        """Check if test matches the pattern."""
+        ...
+
+    @abstractmethod
+    def to_dict(self) -> Dict:
+        """Convert to dictionary."""
+        ...
+
+
+@dataclass
+class GlobPatternFilter(BasePatternFilter):
+    """Filter tests using glob pattern matching.
+
+    Pattern matching rules:
+    - Pattern is wrapped with wildcards: *{pattern}*
+    - Test nodeid is split on :: into parts
+    - For module part (parts[0]):
+      - .py extension is stripped before matching
+      - Pattern is matched against stripped module name
+    - For test name part (parts[1:]):
+      - Pattern is matched directly against each part
+    - Test matches if ANY part matches the pattern
+    """
+
+    def matches(self, test: TestResult) -> bool:
+        """Check if test matches the glob pattern.
+
+        Pattern matching rules:
+        - Pattern is wrapped with wildcards: *{pattern}*
+        - Test nodeid is split on :: into parts
+        - For module part (parts[0]):
+          - .py extension is stripped before matching
+          - Pattern is matched against stripped module name
+        - For test name part (parts[1:]):
+          - Pattern is matched directly against each part
+        - Test matches if ANY part matches the pattern
+        """
+        parts = test.nodeid.split("::")
+        if not parts:  # Must have at least one part
+            return False
+
+        # Match module part (strip .py extension)
+        module_part = parts[0].replace(".py", "")
+        if fnmatch.fnmatch(module_part, f"*{self.pattern}*"):
+            return True
+
+        # Match all other parts directly
+        return any(fnmatch.fnmatch(part, f"*{self.pattern}*") for part in parts[1:])
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary."""
+        return {
+            "type": FilterType.GLOB_PATTERN.name,
+            "pattern": self.pattern,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "GlobPatternFilter":
+        """Create from dictionary."""
+        return cls(pattern=data["pattern"])
+
+
+@dataclass
+class RegexPatternFilter(BasePatternFilter):
+    """Filter tests using regex pattern matching.
+
+    Pattern matching rules:
+    - Pattern is used as-is (no wildcards added)
+    - Pattern is matched against full nodeid using re.search()
+    - Test matches if pattern matches anywhere in nodeid
+    """
+
+    _compiled_regex: Optional[re.Pattern] = field(default=None, init=False)
+
+    def __post_init__(self):
+        """Validate and compile pattern."""
+        super().__post_init__()
+        try:
+            self._compiled_regex = re.compile(self.pattern)
+        except re.error as e:
+            raise InvalidQueryParameterError(f"Invalid regex pattern: {e}")
+
+    def matches(self, test: TestResult) -> bool:
+        """Check if test matches the regex pattern.
+
+        Pattern matching rules:
+        - Pattern is used as-is (no wildcards added)
+        - Pattern is matched against full nodeid using re.search()
+        - Test matches if pattern matches anywhere in nodeid
+        """
+        # Apply regex pattern to full nodeid
+        return bool(self._compiled_regex.search(test.nodeid))
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary."""
+        return {
+            "type": FilterType.REGEX_PATTERN.name,
+            "pattern": self.pattern,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "RegexPatternFilter":
+        """Create from dictionary."""
+        return cls(pattern=data["pattern"])
+
+
+@dataclass
+class DurationFilter:
+    """Filter tests by duration range."""
+
+    min_seconds: float
+    max_seconds: float
+
+    def __post_init__(self):
+        """Validate duration bounds."""
+        if self.min_seconds < 0:
+            raise InvalidQueryParameterError("min_seconds must be >= 0")
+        if self.max_seconds < self.min_seconds:
+            raise InvalidQueryParameterError("max_seconds must be >= min_seconds")
+
+    def matches(self, test: TestResult) -> bool:
+        """Check if test duration is within range."""
+        return self.min_seconds <= test.duration <= self.max_seconds
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary."""
+        return {
+            "type": FilterType.DURATION.name,
+            "min_seconds": self.min_seconds,
+            "max_seconds": self.max_seconds,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "DurationFilter":
+        """Create from dictionary."""
+        return cls(
+            min_seconds=data["min_seconds"],
+            max_seconds=data["max_seconds"],
+        )
+
+
+@dataclass
+class OutcomeFilter:
+    """Filter tests by outcome."""
+
+    outcome: TestOutcome
+
+    def __post_init__(self):
+        """Validate outcome."""
+        if not isinstance(self.outcome, TestOutcome):
+            try:
+                self.outcome = TestOutcome.from_str(str(self.outcome))
+            except ValueError as e:
+                raise InvalidQueryParameterError(f"Invalid outcome: {e}")
+
+    def matches(self, test: TestResult) -> bool:
+        """Check if test outcome matches."""
+        return test.outcome == self.outcome
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary."""
+        return {
+            "type": FilterType.OUTCOME.name,
+            "outcome": self.outcome.value,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "OutcomeFilter":
+        """Create from dictionary."""
+        return cls(outcome=TestOutcome.from_str(data["outcome"]))
+
+
+@dataclass
+class CustomFilter:
+    """Filter tests using a custom predicate."""
+
+    predicate: Callable[[TestResult], bool]
+    name: str
+
+    def matches(self, test: TestResult) -> bool:
+        """Apply custom predicate."""
+        return self.predicate(test)
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary."""
+        return {
+            "type": FilterType.CUSTOM.name,
+            "name": self.name,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "CustomFilter":
+        """Create from dictionary."""
+        raise NotImplementedError("Custom filters cannot be serialized/deserialized")
 
 
 class QueryResult:
@@ -25,25 +279,13 @@ class QueryResult:
     QueryResult always contains full TestSession objects to preserve session context
     (warnings, reruns, relationships). When test-level filters are applied, it
     returns sessions containing matching tests, NOT simply isolated TestResult objects.
-
-    Properties:
-        sessions (List[TestSession]): List of TestSession objects matching the query filters.
-        empty (bool): True if no sessions matched the filters.
-        total_count (int): Total number of matching sessions.
-        matched_nodeids (set): Set of unique test nodeids from matching sessions.
-        execution_time (float): Time taken to execute the query in seconds.
     """
 
     def __init__(self, sessions: List[TestSession], execution_time: float = 0.0):
-        """Initialize query result.
-
-        Args:
-            sessions: List of TestSession objects matching the query.
-            execution_time: Time taken to execute the query in seconds.
-        """
-        self.sessions: List[TestSession] = sessions
-        self.execution_time: float = execution_time
-        self._matched_nodeids: Optional[set] = None
+        """Initialize query result."""
+        self.sessions = sessions
+        self.execution_time = execution_time
+        self._matched_nodeids: Optional[Set[str]] = None
 
     @property
     def empty(self) -> bool:
@@ -56,12 +298,10 @@ class QueryResult:
         return len(self.sessions)
 
     @property
-    def matched_nodeids(self) -> set:
+    def matched_nodeids(self) -> Set[str]:
         """Get set of unique test nodeids from matching sessions."""
         if self._matched_nodeids is None:
-            self._matched_nodeids = set()
-            for session in self.sessions:
-                self._matched_nodeids.update(test.nodeid for test in session.test_results)
+            self._matched_nodeids = {test.nodeid for session in self.sessions for test in session.test_results}
         return self._matched_nodeids
 
     def __iter__(self):
@@ -74,7 +314,7 @@ class QueryResult:
 
     def __bool__(self):
         """Convert to boolean (True if has results)."""
-        return not self.empty
+        return bool(self.sessions)
 
 
 class QueryTestFilter:
@@ -87,175 +327,68 @@ class QueryTestFilter:
     IMPORTANT: QueryTestFilter returns full TestSession objects, never isolated
     TestResult objects. This preserves session context (warnings, reruns, relationships)
     for analysis.
-
-    Example:
-        query.filter_by_test()  # Start test filtering
-            .with_pattern("test_api")  # Filter by test name
-            .with_duration_between(3.0, 10.0)  # Filter by duration
-            .with_outcome(TestOutcome.FAILED)  # Filter by outcome
-            .apply()  # Back to session context
-            .execute()  # Get matching sessions
-
-    Properties:
-        query (Query): Parent Query instance.
-        _test_conditions (list): List of test conditions.
-        _lambda_conditions (list): List of lambda conditions.
-
-    Methods:
-        with_pattern(pattern: str, use_regex: bool = False): Filter by pattern.
-        with_duration_between(min_seconds: float, max_seconds: float): Filter by duration range.
-        with_outcome(outcome: Union[str, TestOutcome]): Filter by outcome.
-        apply(): Apply test filters and return to session context.
-
-    Raises:
-        InvalidQueryParameterError: If pattern is empty.
-        InvalidQueryParameterError: If duration bounds are invalid.
-        InvalidQueryParameterError: If outcome is invalid.
     """
 
     def __init__(self, query: "Query"):
-        """Initialize test filter builder.
-
-        Args:
-            query: Parent Query instance.
-        """
-        self.query: Query = query
-        self._test_conditions: List[Tuple[str, Union[str, float, TestOutcome]]] = []  # Store test-level conditions
-        self._lambda_conditions: List[Callable[[TestResult], bool]] = []  # Store lambda-based conditions
+        """Initialize test filter builder."""
+        self.query = query
+        self.filters: List[TestFilter] = []
 
     def with_pattern(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
-        """Filter tests by pattern.
-
-        Args:
-            pattern: Pattern to match against test nodeids
-            use_regex: If True, treat pattern as a regular expression.
-                      If False (default), treat pattern as a glob pattern.
-
-        Returns:
-            QueryTestFilter instance for chaining
-
-        Raises:
-            InvalidQueryParameterError: If pattern is empty.
-        """
-        if not isinstance(pattern, str) or not pattern.strip():
-            raise InvalidQueryParameterError("Test pattern must be a non-empty string")
-        self._test_conditions.append(("pattern", (pattern, use_regex)))
+        """Filter tests by pattern."""
+        filter_class = RegexPatternFilter if use_regex else GlobPatternFilter
+        self.filters.append(filter_class(pattern))
         return self
 
     def with_duration_between(self, min_seconds: float, max_seconds: float) -> "QueryTestFilter":
-        """Filter tests by duration range.
-
-        Args:
-            min_seconds: Minimum duration in seconds (inclusive)
-            max_seconds: Maximum duration in seconds (inclusive)
-
-        Returns:
-            Self for method chaining
-        """
-        if min_seconds < 0:
-            raise InvalidQueryParameterError("min_seconds must be >= 0")
-        if max_seconds < min_seconds:
-            raise InvalidQueryParameterError("max_seconds must be >= min_seconds")
-
-        self._test_conditions.append(("duration", (min_seconds, max_seconds)))
+        """Filter tests by duration range."""
+        self.filters.append(DurationFilter(min_seconds, max_seconds))
         return self
 
-    def with_duration(self, min_seconds: float, max_seconds: float) -> "QueryTestFilter":
-        """DEPRECATED: Use with_duration_between instead.
-
-        Filter tests by duration range.
-
-        Args:
-            min_seconds: Minimum duration in seconds (inclusive)
-            max_seconds: Maximum duration in seconds (inclusive)
-
-        Returns:
-            Self for method chaining
-        """
-        # TODO: Remove thisi deprecated method in the future
-
-        import warnings
-
-        warnings.warn(
-            "with_duration is deprecated and will be removed in a future version. "
-            "Use with_duration_between instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.with_duration_between(min_seconds, max_seconds)
-
     def with_outcome(self, outcome: Union[str, TestOutcome]) -> "QueryTestFilter":
-        """Filter tests by outcome.
+        """Filter tests by outcome."""
+        self.filters.append(OutcomeFilter(outcome))
+        return self
 
-        Args:
-            outcome: Test outcome to filter by.
-
-        Returns:
-            QueryTestFilter instance for chaining.
-
-        Raises:
-            InvalidQueryParameterError: If outcome is invalid.
-        """
-        outcome_str: str = outcome.value if hasattr(outcome, "value") else str(outcome)
-        valid_outcomes: Set[str] = {o.value for o in TestOutcome}
-        if outcome_str not in valid_outcomes:
-            raise InvalidQueryParameterError(
-                f"Invalid outcome: {outcome_str}. Must be one of: {', '.join(valid_outcomes)}"
-            )
-        self._test_conditions.append(("outcome", outcome_str))
+    def with_custom_filter(self, predicate: Callable[[TestResult], bool], name: str) -> "QueryTestFilter":
+        """Add custom test filter."""
+        self.filters.append(CustomFilter(predicate, name))
         return self
 
     def apply(self) -> "Query":
-        """Apply test filters and return to session context.
+        """Apply test filters and return to session context."""
+        if not self.filters:
+            return self.query
 
-        This method converts test-level conditions into filters that operate on
-        individual tests while preserving session context. A session is included
-        if it contains at least one test that matches all test filters.
-
-        Returns:
-            Parent Query instance for chaining session-level filters.
-        """
-        test_filters = []
-
-        for condition_type, value in self._test_conditions:
-            if condition_type == "pattern":
-                pattern, use_regex = value
-                if use_regex:
-                    regex = re.compile(pattern)
-                    test_filters.append(lambda t, r=regex: r.search(t.nodeid) is not None)
-                else:
-
-                    def pattern_filter(test, p=pattern):
-                        parts = test.nodeid.split("::")
-                        file_part = parts[0].replace(".py", "")
-                        if fnmatch.fnmatch(file_part, f"*{p}*"):
-                            return True
-                        return any(p in part for part in parts[1:])
-
-                    test_filters.append(pattern_filter)
-            elif condition_type == "duration":
-                min_seconds, max_seconds = value
-                test_filters.append(lambda t, min=min_seconds, max=max_seconds: min <= t.duration <= max)
-            elif condition_type == "outcome":
-                outcome_str = value
-                test_filters.append(
-                    lambda t, o=outcome_str: (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == o
-                )
-            else:
-                raise InvalidQueryParameterError(f"Unknown condition type: {condition_type}")
-
-        if self._lambda_conditions:
-            test_filters.extend(self._lambda_conditions)
-
-        def session_filter(session):
+        def session_filter(session: TestSession) -> bool:
+            """Check if session contains any matching tests."""
             if not session.test_results:
                 return False
-            return any(all(f(test) for f in test_filters) for test in session.test_results)
+            return any(all(f.matches(test) for f in self.filters) for test in session.test_results)
 
-        if test_filters:
-            self.query._test_filters.append(session_filter)
-
+        self.query._session_filters.append(session_filter)
         return self.query
+
+    def to_dict(self) -> Dict:
+        """Convert filters to dictionary."""
+        return {"filters": [f.to_dict() for f in self.filters if not isinstance(f, CustomFilter)]}
+
+    @classmethod
+    def from_dict(cls, data: Dict, query: "Query") -> "QueryTestFilter":
+        """Create filters from dictionary."""
+        filter_types = {
+            FilterType.GLOB_PATTERN.name: GlobPatternFilter,
+            FilterType.REGEX_PATTERN.name: RegexPatternFilter,
+            FilterType.DURATION.name: DurationFilter,
+            FilterType.OUTCOME.name: OutcomeFilter,
+        }
+
+        instance = cls(query)
+        for filter_data in data["filters"]:
+            filter_type = filter_data["type"]
+            filter_class = filter_types[filter_type]
+            instance.filters.append(filter_class.from_dict(filter_data))
+        return instance
 
 
 class Query:
@@ -278,8 +411,6 @@ class Query:
             .with_duration_between(10.0, float("inf"))
             .apply()  # Back to session context
             .execute()
-
-    Returns: QueryResult containing filtered sessions.
     """
 
     def __init__(self, storage: Optional[BaseStorage] = None):
@@ -457,6 +588,7 @@ class Query:
             raise InvalidQueryParameterError(
                 f"Invalid outcome: {outcome_str}. Must be one of: {', '.join(valid_outcomes)}"
             )
+
         self._session_filters.append(
             lambda s: any(
                 (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == outcome_str
@@ -604,3 +736,19 @@ class Query:
 
         self._session_filters.append(lambda s: s.session_tags.get(tag_key) == tag_value)
         return self
+
+    def to_dict(self) -> Dict:
+        """Convert query to dictionary."""
+        data = {"version": 1}
+        if self._test_filter:
+            data["test_filter"] = self._test_filter.to_dict()
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict, storage: Optional[BaseStorage] = None) -> "Query":
+        """Create query from dictionary."""
+        query = cls(storage)
+        if "test_filter" in data:
+            query._test_filter = QueryTestFilter.from_dict(data["test_filter"], query)
+            query._test_filter.apply()
+        return query

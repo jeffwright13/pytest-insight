@@ -1,14 +1,15 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
-from pytest_insight.models import TestOutcome, TestResult, TestSession
+from pytest_insight.models import TestOutcome, TestSession
 from pytest_insight.query.query import Query
 from pytest_insight.storage import JSONStorage
 
 
 class ComparisonError(Exception):
     """Base exception for Comparison-related errors."""
+
     pass
 
 
@@ -43,30 +44,31 @@ class ComparisonResult:
         3. Analyze patterns across categories
         4. Identify correlated issues
     """
+
     base_results: "QueryResult"
     target_results: "QueryResult"
     base_session: TestSession
     target_session: TestSession
     new_failures: List[str]  # Test nodeids that failed in target but passed in base
-    fixed_tests: List[str]   # Test nodeids that passed in target but failed in base
-    flaky_tests: List[str]   # Test nodeids that changed outcome between sessions
+    fixed_tests: List[str]  # Test nodeids that passed in target but failed in base
+    flaky_tests: List[str]  # Test nodeids that changed outcome between sessions
     slower_tests: List[str]  # Test nodeids that took longer in target
     faster_tests: List[str]  # Test nodeids that ran faster in target
     missing_tests: List[str]  # Test nodeids present in base but missing in target
-    new_tests: List[str]     # Test nodeids present in target but missing in base
+    new_tests: List[str]  # Test nodeids present in target but missing in base
     outcome_changes: Dict[str, Tuple[TestOutcome, TestOutcome]]  # All outcome changes
 
     @property
     def has_changes(self) -> bool:
         """Check if any differences were found between sessions."""
         return bool(
-            self.new_failures or
-            self.fixed_tests or
-            self.flaky_tests or
-            self.slower_tests or
-            self.faster_tests or
-            self.missing_tests or
-            self.new_tests
+            self.new_failures
+            or self.fixed_tests
+            or self.flaky_tests
+            or self.slower_tests
+            or self.faster_tests
+            or self.missing_tests
+            or self.new_tests
         )
 
     @property
@@ -136,12 +138,8 @@ class Comparison:
             raise ComparisonError("Start date must be before end date")
 
         # Apply date window to both base and target queries
-        self._base_query._session_filters.append(
-            lambda s: start_date <= s.session_start_time <= end_date
-        )
-        self._target_query._session_filters.append(
-            lambda s: start_date <= s.session_start_time <= end_date
-        )
+        self._base_query._session_filters.append(lambda s: start_date <= s.session_start_time <= end_date)
+        self._target_query._session_filters.append(lambda s: start_date <= s.session_start_time <= end_date)
         return self
 
     def with_test_pattern(self, pattern: str) -> "Comparison":
@@ -166,8 +164,8 @@ class Comparison:
         Returns:
             Comparison instance for chaining.
         """
-        self._base_query.filter_by_test().with_duration(min_secs, float("inf")).apply()
-        self._target_query.filter_by_test().with_duration(min_secs, float("inf")).apply()
+        self._base_query.filter_by_test().with_duration_between(min_secs, float("inf")).apply()
+        self._target_query.filter_by_test().with_duration_between(min_secs, float("inf")).apply()
         return self
 
     def only_failures(self) -> "Comparison":
@@ -309,5 +307,5 @@ class Comparison:
             faster_tests=faster_tests,
             missing_tests=missing_tests,
             new_tests=new_tests,
-            outcome_changes=outcome_changes
+            outcome_changes=outcome_changes,
         )
