@@ -82,61 +82,6 @@ def text_gen():
     return TextGenerator()
 
 
-# class NodeId:
-#     """Generate and manage pytest NodeIds for testing."""
-#
-#     def __init__(self):
-#         self.path_parts = self._generate_path_parts()
-#         self.filename = self._generate_filename()
-#         self.test_name = self._generate_test_name()
-#         self.params = self._generate_params()
-#
-#     @staticmethod
-#     def _random_word(length=6):
-#         """Generate a random word using lowercase letters."""
-#         return "".join(random.choices(string.ascii_lowercase, k=length))
-#
-#     def _generate_path_parts(self):
-#         """Generate random path components."""
-#         num_folders = random.randint(1, 3)
-#         return [self._random_word() for _ in range(num_folders)]
-#
-#     def _generate_filename(self):
-#         """Generate random Python filename."""
-#         return f"{self._random_word()}.py"
-#
-#     def _generate_test_name(self):
-#         """Generate random test function name."""
-#         return f"test_{self._random_word()}"
-#
-#     def _generate_params(self):
-#         """Generate random parameter string."""
-#         if random.choice([True, False]):
-#             num_params = random.randint(1, 3)
-#             params = [self._random_word() for _ in range(num_params)]
-#             return f"[{'-'.join(params)}]"
-#         return ""
-#
-#     @property
-#     def path(self):
-#         """Get the full path including filename."""
-#         return "/".join(self.path_parts + [self.filename])
-#
-#     @property
-#     def full_name(self):
-#         """Get the complete NodeId."""
-#         return f"{self.path}::{self.test_name}{self.params}"
-#
-#     def __str__(self):
-#         return self.full_name
-
-
-# @pytest.fixture
-# def nodeid():
-#     """Fixture that returns a NodeId instance."""
-#     return NodeId()
-
-
 @pytest.fixture
 def random_test_session(text_gen):
     """A factory fixture to create a random TestSession instance."""
@@ -144,10 +89,14 @@ def random_test_session(text_gen):
     def _create():
         # Generate new random values each time the factory is called
         num_tests = random.randint(2, 6)  # More realistic test count
-        include_rerun = random.choice([True, False, False, False])  # 25% chance of having reruns
+        include_rerun = random.choice(
+            [True, False, False, False]
+        )  # 25% chance of having reruns
 
         # Create base session time window for consistent timing
-        base_time = datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 60))
+        base_time = datetime.now(timezone.utc) - timedelta(
+            minutes=random.randint(1, 60)
+        )
         session_start_time = base_time
         session_stop_time = base_time + timedelta(seconds=random.randint(30, 300))
 
@@ -170,9 +119,17 @@ def random_test_session(text_gen):
 
             outcome = random.choice(list(TestOutcome))
             caplog = text_gen.sentence()
-            capstderr = text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+            capstderr = (
+                text_gen.sentence()
+                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+                else ""
+            )
             capstdout = text_gen.sentence()
-            longreprtext = text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+            longreprtext = (
+                text_gen.paragraph()
+                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+                else ""
+            )
             has_warning = random.choice([True, False])
 
             result = TestResult(
@@ -218,11 +175,14 @@ def random_test_session(text_gen):
                     result = TestResult(
                         nodeid=rerun_nodeid,
                         outcome=final_outcome,
-                        start_time=current_time + timedelta(seconds=random.randint(1, 10)),
+                        start_time=current_time
+                        + timedelta(seconds=random.randint(1, 10)),
                         duration=random.uniform(0.1, 5.0),
                         caplog=f"Attempt {i+1}" if not is_final else "Final attempt",
                         capstderr=(
-                            "" if not is_final or final_outcome == TestOutcome.PASSED else "Test failed after reruns"
+                            ""
+                            if not is_final or final_outcome == TestOutcome.PASSED
+                            else "Test failed after reruns"
                         ),
                         capstdout=f"Running test (attempt {i+1})",
                         longreprtext=(
@@ -845,9 +805,17 @@ def random_test_result_legacy(nodeid, text_gen):
             start_time=start_time,
             duration=duration,
             caplog=text_gen.sentence(),
-            capstderr=(text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""),
+            capstderr=(
+                text_gen.sentence()
+                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+                else ""
+            ),
             capstdout=text_gen.sentence(),
-            longreprtext=(text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""),
+            longreprtext=(
+                text_gen.paragraph()
+                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+                else ""
+            ),
             has_warning=random.choice([True, False]),
         )
 

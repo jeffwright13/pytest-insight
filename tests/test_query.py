@@ -1,9 +1,12 @@
+from typing import List
+
 import pytest
 from pytest_insight.models import TestOutcome, TestSession
 from pytest_insight.query.query import (
     InvalidQueryParameterError,
     Query,
     QueryResult,
+    QueryTestFilter,
 )
 
 # @pytest.fixture
@@ -81,6 +84,45 @@ from pytest_insight.query.query import (
 
 class Test_Query:
     """Test suite for Query."""
+
+    def test_query_with_random_sessions_via_execute_and_with_query_deconstructed(self, random_test_sessions):
+        """Test using Query with random but realistic sessions via execute().
+
+        This demonstrates using QueryTestFilter to filter by test.
+        """
+        query: Query = Query()
+
+        # Create one step at a time
+        query_test_filter: QueryTestFilter = query.filter_by_test()
+        query_test_filter_applied: Query = query_test_filter.with_pattern("test_file").apply()
+        executed_result: QueryResult = query_test_filter_applied.execute(sessions=random_test_sessions)
+        sessions: List[TestSession] = executed_result.sessions
+
+        # Verify we got results
+        assert sessions
+
+        # Verify session context is preserved
+        for session in sessions:
+            # Session metadata preserved
+            assert session.session_id.isdigit()  # Should be a number from 1-1000
+            assert session.sut_name.startswith("test_sut_")
+            assert session.session_tags[0].startswith("tag_")
+
+            # All tests preserved in matching sessions
+            assert len(session.test_results) > 0
+            for test in session.test_results:
+                assert test.nodeid.startswith("test_file_")
+                assert "test_case_" in test.nodeid
+                assert test.outcome in [
+                    TestOutcome.PASSED,
+                    TestOutcome.FAILED,
+                    TestOutcome.SKIPPED,
+                ]
+                assert test.duration > 0
+                assert test.start_time is not None
+                assert test.duration is not None
+                assert test.rerun_test_groups == []
+                assert test.session_tags == session.session_tags
 
     def test_query_with_random_sessions_via_execute(self, random_test_sessions):
         """Test using Query with random but realistic sessions via execute().
