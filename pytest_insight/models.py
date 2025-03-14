@@ -31,6 +31,11 @@ class TestOutcome(Enum):
         """Convert TestOutcome to string, always lowercase externally."""
         return self.value.lower()
 
+    @classmethod
+    def to_list(cls) -> List[str]:
+        """Convert entire TestOutcome enum to a list of possible string values."""
+        return [outcome.value.lower() for outcome in cls]
+
 
 @dataclass
 class TestResult:
@@ -55,10 +60,16 @@ class TestResult:
         """Validate and process initialization data."""
         if self.stop_time is None and self.duration is None:
             raise ValueError("Either stop_time or duration must be provided")
+
         if self.stop_time is None:
+            # Only duration provided - calculate stop_time
             self.stop_time = self.start_time + timedelta(seconds=self.duration)
         elif self.duration is None:
+            # Only stop_time provided - calculate duration
             self.duration = (self.stop_time - self.start_time).total_seconds()
+        # If both are provided, trust the duration value and adjust stop_time
+        else:
+            self.stop_time = self.start_time + timedelta(seconds=self.duration)
 
     def to_dict(self) -> Dict:
         """Convert test result to a dictionary for JSON serialization."""
@@ -101,7 +112,7 @@ class TestResult:
 class RerunTestGroup:
     """Groups test results for tests that were rerun, chronologically ordered with final result last."""
 
-    __test__ = False # Tell Pytest this is NOT a test class
+    __test__ = False  # Tell Pytest this is NOT a test class
 
     nodeid: str
     tests: List[TestResult] = field(default_factory=list)
@@ -109,7 +120,9 @@ class RerunTestGroup:
     def add_test(self, result: TestResult) -> None:
         """Add a test result and maintain chronological order."""
         if not isinstance(result, TestResult):
-            raise ValueError(f"Invalid test result {result}; must be a TestResult object, instead was type {type(result)}")
+            raise ValueError(
+                f"Invalid test result {result}; must be a TestResult object, instead was type {type(result)}"
+            )
 
         self.tests.append(result)
         self.tests.sort(key=lambda x: x.start_time)
@@ -210,16 +223,21 @@ class TestSession:
     def add_test_result(self, result: TestResult) -> None:
         """Add a test result to this session."""
         if not isinstance(result, TestResult):
-            raise ValueError(f"Invalid test result {result}; must be a TestResult object, nistead was type {type(result)}")
+            raise ValueError(
+                f"Invalid test result {result}; must be a TestResult object, nistead was type {type(result)}"
+            )
 
         self.test_results.append(result)
 
     def add_rerun_group(self, group: RerunTestGroup) -> None:
         """Add a rerun test group to this session."""
         if not isinstance(group, RerunTestGroup):
-            raise ValueError(f"Invalid rerun group {group}; must be a RerunTestGroup object, instead was type {type(group)}")
+            raise ValueError(
+                f"Invalid rerun group {group}; must be a RerunTestGroup object, instead was type {type(group)}"
+            )
 
         self.rerun_test_groups.append(group)
+
 
 @dataclass
 class TestHistory:
@@ -238,7 +256,9 @@ class TestHistory:
     def add_test_session(self, session: TestSession) -> None:
         """Add a test session to the appropriate SUT group."""
         if not isinstance(session, TestSession):
-            raise ValueError(f"Invalid test session {session}; must be a TestSession object, instead was type {type(session)}")
+            raise ValueError(
+                f"Invalid test session {session}; must be a TestSession object, instead was type {type(session)}"
+            )
 
         # Initialize SUT list if needed
         if session.sut_name not in self._sessions_by_sut:

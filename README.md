@@ -4,6 +4,12 @@ A powerful analytics tool for pytest that helps you understand test behavior, id
 
 ## Overview
 
+pytest-insight is a pytest plugin that helps you understand your test suite's behavior over time. Unlike traditional test reporting tools that treat each test in isolation, pytest-insight preserves the full context of test sessions, allowing you to see how tests interact and evolve together.
+
+With its intuitive query system, you can easily filter test sessions by time range, system under test, system-specific tags, or other test criteria while maintaining relationships between tests that ran together. This unique approach enables you to spot performance trends, identify correlated failures, and track rerun patterns — giving you deeper insight into your test suite's health and behavior.
+
+Whether you're debugging flaky tests, optimizing performance, or analyzing test patterns across different environments, pytest-insight helps you make data-driven decisions about your testing strategy.
+
 pytest-insight transforms your test results into actionable insights by:
 - Tracking test outcomes and performance metrics over time
 - Detecting flaky tests and recurring failure patterns
@@ -18,17 +24,26 @@ pytest-insight uses a powerful two-level query system that preserves full test c
 ### 1. Session-Level Filtering
 Filter entire test sessions based on properties like:
 - System under test (SUT) name
-- Time range
+- Date/time range
 - Presence of warnings or reruns
 - Session ID patterns (critical for comparisons)
+- System-specific tags
 
 ```python
-# Find recent sessions with warnings
+# Find a specific SUT's recent sessions with warnings
 query = Query()
 results = (query
     .for_sut("my-service")
     .in_last_days(7)
     .having_warnings(True)
+    .execute())
+```
+
+```python
+# Find sessions with specific tags
+results = (query
+    .for_sut("my-service")
+    .with_tag("env", "prod")
     .execute())
 ```
 

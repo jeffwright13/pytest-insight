@@ -1,17 +1,21 @@
-from datetime import datetime, timedelta
-from typing import List, Union, Optional
 import fnmatch
+import re
+from datetime import datetime, timedelta
+from typing import List, Optional, Union
+
 from pytest_insight.models import TestOutcome, TestSession
-from pytest_insight.storage import get_storage_instance
+from pytest_insight.storage import BaseStorage, get_storage_instance
 
 
 class InvalidQueryParameterError(Exception):
     """Raised when query parameters are invalid."""
+
     pass
 
 
 class QueryExecutionError(Exception):
     """Raised when query execution fails."""
+
     pass
 
 
@@ -20,14 +24,14 @@ class QueryResult:
 
     QueryResult always contains full TestSession objects to preserve session context
     (warnings, reruns, relationships). When test-level filters are applied, it
-    returns sessions containing matching tests, never isolated TestResult objects.
+    returns sessions containing matching tests, NOT simply isolated TestResult objects.
 
     Properties:
-        sessions: List of TestSession objects matching the query filters.
-        empty: True if no sessions matched the filters.
-        total_count: Total number of matching sessions.
-        matched_nodeids: Set of unique test nodeids from matching sessions.
-        execution_time: Time taken to execute the query in seconds.
+        sessions (List[TestSession]): List of TestSession objects matching the query filters.
+        empty (bool): True if no sessions matched the filters.
+        total_count (int): Total number of matching sessions.
+        matched_nodeids (set): Set of unique test nodeids from matching sessions.
+        execution_time (float): Time taken to execute the query in seconds.
     """
 
     def __init__(self, sessions: List[TestSession], execution_time: float = 0.0):
@@ -37,9 +41,9 @@ class QueryResult:
             sessions: List of TestSession objects matching the query.
             execution_time: Time taken to execute the query in seconds.
         """
-        self.sessions = sessions
-        self.execution_time = execution_time
-        self._matched_nodeids = None
+        self.sessions: List[TestSession] = sessions
+        self.execution_time: float = execution_time
+        self._matched_nodeids: Optional[set] = None
 
     @property
     def empty(self) -> bool:
@@ -87,10 +91,26 @@ class QueryTestFilter:
     Example:
         query.filter_by_test()  # Start test filtering
             .with_pattern("test_api")  # Filter by test name
-            .with_duration(3.0, 10.0)  # Filter by duration
+            .with_duration_between(3.0, 10.0)  # Filter by duration
             .with_outcome(TestOutcome.FAILED)  # Filter by outcome
             .apply()  # Back to session context
             .execute()  # Get matching sessions
+
+    Properties:
+        query (Query): Parent Query instance.
+        _test_conditions (list): List of test conditions.
+        _lambda_conditions (list): List of lambda conditions.
+
+    Methods:
+        with_pattern(pattern: str, use_regex: bool = False): Filter by pattern.
+        with_duration_between(min_seconds: float, max_seconds: float): Filter by duration range.
+        with_outcome(outcome: Union[str, TestOutcome]): Filter by outcome.
+        apply(): Apply test filters and return to session context.
+
+    Raises:
+        InvalidQueryParameterError: If pattern is empty.
+        InvalidQueryParameterError: If duration bounds are invalid.
+        InvalidQueryParameterError: If outcome is invalid.
     """
 
     def __init__(self, query: "Query"):
@@ -99,48 +119,68 @@ class QueryTestFilter:
         Args:
             query: Parent Query instance.
         """
-        self.query = query
-        self._test_conditions = []  # Store test-level conditions
-        self._lambda_conditions = []  # Store lambda-based conditions
+        self.query: Query = query
+        self._test_conditions: List[Tuple[str, Union[str, float, TestOutcome]]] = []  # Store test-level conditions
+        self._lambda_conditions: List[Callable[[TestResult], bool]] = []  # Store lambda-based conditions
 
-    def with_pattern(self, pattern: str) -> "QueryTestFilter":
-        """Filter tests by pattern match.
+    def with_pattern(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
+        """Filter tests by pattern.
 
         Args:
-            pattern: Pattern to match against test nodeid.
+            pattern: Pattern to match against test nodeids
+            use_regex: If True, treat pattern as a regular expression.
+                      If False (default), treat pattern as a glob pattern.
 
         Returns:
-            QueryTestFilter instance for chaining.
+            QueryTestFilter instance for chaining
 
         Raises:
             InvalidQueryParameterError: If pattern is empty.
         """
         if not isinstance(pattern, str) or not pattern.strip():
             raise InvalidQueryParameterError("Test pattern must be a non-empty string")
-        self._test_conditions.append(("pattern", pattern))
+        self._test_conditions.append(("pattern", (pattern, use_regex)))
         return self
 
-    def with_duration(self, min_secs: float, max_secs: float) -> "QueryTestFilter":
+    def with_duration_between(self, min_seconds: float, max_seconds: float) -> "QueryTestFilter":
         """Filter tests by duration range.
 
         Args:
-            min_secs: Minimum duration in seconds.
-            max_secs: Maximum duration in seconds.
+            min_seconds: Minimum duration in seconds (inclusive)
+            max_seconds: Maximum duration in seconds (inclusive)
 
         Returns:
-            QueryTestFilter instance for chaining.
-
-        Raises:
-            InvalidQueryParameterError: If duration bounds are invalid.
+            Self for method chaining
         """
-        if not isinstance(min_secs, (int, float)) or not isinstance(max_secs, (int, float)):
-            raise InvalidQueryParameterError("Duration bounds must be numbers")
-        if min_secs < 0:
-            raise InvalidQueryParameterError("Duration cannot be negative")
-        if min_secs > max_secs:
-            raise InvalidQueryParameterError("Min duration must be less than max duration")
-        self._test_conditions.append(("duration", (min_secs, max_secs)))
+        if min_seconds < 0:
+            raise InvalidQueryParameterError("min_seconds must be >= 0")
+        if max_seconds < min_seconds:
+            raise InvalidQueryParameterError("max_seconds must be >= min_seconds")
+
+        self._test_conditions.append(("duration", (min_seconds, max_seconds)))
         return self
+
+    def with_duration(self, min_seconds: float, max_seconds: float) -> "QueryTestFilter":
+        """DEPRECATED: Use with_duration_between instead.
+
+        Filter tests by duration range.
+
+        Args:
+            min_seconds: Minimum duration in seconds (inclusive)
+            max_seconds: Maximum duration in seconds (inclusive)
+
+        Returns:
+            Self for method chaining
+        """
+        import warnings
+
+        warnings.warn(
+            "with_duration is deprecated and will be removed in a future version. "
+            "Use with_duration_between instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.with_duration_between(min_seconds, max_seconds)
 
     def with_outcome(self, outcome: Union[str, TestOutcome]) -> "QueryTestFilter":
         """Filter tests by outcome.
@@ -154,8 +194,8 @@ class QueryTestFilter:
         Raises:
             InvalidQueryParameterError: If outcome is invalid.
         """
-        outcome_str = outcome.value if hasattr(outcome, "value") else str(outcome)
-        valid_outcomes = {o.value for o in TestOutcome}
+        outcome_str: str = outcome.value if hasattr(outcome, "value") else str(outcome)
+        valid_outcomes: Set[str] = {o.value for o in TestOutcome}
         if outcome_str not in valid_outcomes:
             raise InvalidQueryParameterError(
                 f"Invalid outcome: {outcome_str}. Must be one of: {', '.join(valid_outcomes)}"
@@ -173,34 +213,44 @@ class QueryTestFilter:
         Returns:
             Parent Query instance for chaining session-level filters.
         """
-        # Convert named conditions to test filters
         test_filters = []
+
         for condition_type, value in self._test_conditions:
             if condition_type == "pattern":
-                pattern = value
-                # Add wildcards to match pattern anywhere in nodeid
-                test_filters.append(lambda t, p=pattern: fnmatch.fnmatch(t.nodeid, f"*{p}*"))
+                pattern, use_regex = value
+                if use_regex:
+                    regex = re.compile(pattern)
+                    test_filters.append(lambda t, r=regex: r.search(t.nodeid) is not None)
+                else:
+
+                    def pattern_filter(test, p=pattern):
+                        parts = test.nodeid.split("::")
+                        file_part = parts[0].replace(".py", "")
+                        if fnmatch.fnmatch(file_part, f"*{p}*"):
+                            return True
+                        return any(p in part for part in parts[1:])
+
+                    test_filters.append(pattern_filter)
             elif condition_type == "duration":
-                min_secs, max_secs = value
-                test_filters.append(lambda t, min=min_secs, max=max_secs: min <= t.duration <= max)
+                min_seconds, max_seconds = value
+                test_filters.append(lambda t, min=min_seconds, max=max_seconds: min <= t.duration <= max)
             elif condition_type == "outcome":
                 outcome_str = value
                 test_filters.append(
                     lambda t, o=outcome_str: (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == o
                 )
+            else:
+                raise InvalidQueryParameterError(f"Unknown condition type: {condition_type}")
 
-        # Add lambda-based conditions if any
         if self._lambda_conditions:
             test_filters.extend(self._lambda_conditions)
 
-        # Create a single filter function that checks if any test matches all conditions
         def session_filter(session):
             if not session.test_results:
                 return False
             return any(all(f(test) for f in test_filters) for test in session.test_results)
 
-        # Add the filter to the parent query's test filters
-        if test_filters:  # Only add if we have conditions
+        if test_filters:
             self.query._test_filters.append(session_filter)
 
         return self.query
@@ -223,12 +273,14 @@ class Query:
 
         # Test-level with context
         query.filter_by_test()  # Filters sessions by test criteria
-            .with_duration(10.0, float("inf"))
+            .with_duration_between(10.0, float("inf"))
             .apply()  # Back to session context
             .execute()
+
+    Returns: QueryResult containing filtered sessions.
     """
 
-    def __init__(self, storage=None):
+    def __init__(self, storage: Optional[BaseStorage] = None):
         """Initialize a new Query instance.
 
         Args:
@@ -236,8 +288,8 @@ class Query:
                    This is primarily used for testing to inject mock storage.
         """
         self._session_filters = []  # Session-level filters (SUT, time range, warnings)
-        self._test_filters = []    # Test-level filters (pattern, duration, outcome)
-        self._sessions = []        # Cached sessions from storage
+        self._test_filters = []  # Test-level filters (pattern, duration, outcome)
+        self._sessions = []  # Cached sessions from storage
         self.storage = storage or get_storage_instance()
 
     def execute(self, sessions: Optional[List[TestSession]] = None) -> QueryResult:
@@ -245,7 +297,7 @@ class Query:
 
         Args:
             sessions: Optional list of sessions to query. If not provided,
-                     loads sessions from storage.
+                     loads (all) sessions from storage.
 
         Returns:
             QueryResult containing filtered sessions.
@@ -253,28 +305,25 @@ class Query:
         Raises:
             QueryExecutionError: If sessions are invalid.
         """
-        start_time = datetime.now()
+        start_time: datetime = datetime.now()
 
-        # Get sessions from storage or use provided list
         if sessions is None:
             sessions = self.storage.load_sessions()
         elif not isinstance(sessions, list) or not all(isinstance(s, TestSession) for s in sessions):
             raise QueryExecutionError("Invalid session type")
 
-        # Apply session-level filters first
-        filtered_sessions = sessions
+        filtered_sessions: List[TestSession] = sessions
         for filter_func in self._session_filters:
             filtered_sessions = [s for s in filtered_sessions if filter_func(s)]
 
-        # Apply test-level filters - a session passes if ANY test passes ALL filters
         if self._test_filters:
             filtered_sessions = [
-                session for session in filtered_sessions
+                session
+                for session in filtered_sessions
                 if all(filter_func(session) for filter_func in self._test_filters)
             ]
 
-        # Create QueryResult with execution time
-        execution_time = (datetime.now() - start_time).total_seconds()
+        execution_time: float = (datetime.now() - start_time).total_seconds()
         return QueryResult(filtered_sessions, execution_time)
 
     def filter_by_test(self) -> QueryTestFilter:
@@ -286,7 +335,7 @@ class Query:
         Example:
             query.filter_by_test()
                 .with_pattern("test_api")
-                .with_duration(3.0, 10.0)
+                .with_duration_between(3.0, 10.0)
                 .with_outcome(TestOutcome.FAILED)
                 .apply()
                 .execute()
@@ -423,9 +472,7 @@ class Query:
         Returns:
             Query instance for chaining.
         """
-        self._session_filters.append(
-            lambda s: any(t.has_warning for t in s.test_results) == has_warnings
-        )
+        self._session_filters.append(lambda s: any(t.has_warning for t in s.test_results) == has_warnings)
         return self
 
     def with_reruns(self, has_reruns: bool = True) -> "Query":
@@ -553,7 +600,5 @@ class Query:
         if not tag_value or not isinstance(tag_value, str):
             raise InvalidQueryParameterError("Tag value must be a non-empty string")
 
-        self._session_filters.append(
-            lambda s: s.session_tags.get(tag_key) == tag_value
-        )
+        self._session_filters.append(lambda s: s.session_tags.get(tag_key) == tag_value)
         return self
