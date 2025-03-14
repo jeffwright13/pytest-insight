@@ -85,44 +85,67 @@ from pytest_insight.query.query import (
 class Test_Query:
     """Test suite for Query."""
 
-    def test_query_with_random_sessions_via_execute_and_with_query_deconstructed(self, random_test_sessions):
+    def test_query_with_random_sessions_via_execute_and_with_query_deconstructed(
+        self, random_test_sessions
+    ):
         """Test using Query with random but realistic sessions via execute().
 
-        This demonstrates using QueryTestFilter to filter by test.
+        This demonstrates using QueryTestFilter to filter by test criteria.
+        Pattern matching rules:
+        1. For non-regex patterns:
+           - Matches are done using fnmatch with wildcards (*pattern*)
+           - Pattern is matched against both file parts and test names separately
+           - File part has .py extension removed before matching
+           - Any part matching the pattern counts as a match
         """
         query: Query = Query()
 
-        # Create one step at a time
+        # Create one step at a time to test each component
         query_test_filter: QueryTestFilter = query.filter_by_test()
-        query_test_filter_applied: Query = query_test_filter.with_pattern("test_file").apply()
-        executed_result: QueryResult = query_test_filter_applied.execute(sessions=random_test_sessions)
+        query_test_filter_applied: Query = query_test_filter.with_pattern("api").apply()
+        executed_result: QueryResult = query_test_filter_applied.execute(
+            sessions=random_test_sessions
+        )
         sessions: List[TestSession] = executed_result.sessions
 
         # Verify we got results
-        assert sessions
+        assert sessions, "Expected sessions containing 'api' pattern"
 
-        # Verify session context is preserved
+        # Verify pattern matching rules
         for session in sessions:
-            # Session metadata preserved
-            assert session.session_id.isdigit()  # Should be a number from 1-1000
-            assert session.sut_name.startswith("test_sut_")
-            assert session.session_tags[0].startswith("tag_")
+            matched = False
+            for test in session.test_results:
+                # Pattern should match either module part (after .py strip) or test name
+                module_part = test.nodeid.split("::")[0].replace(".py", "")
+                test_part = test.nodeid.split("::")[1]
+                if "api" in module_part or "api" in test_part:
+                    matched = True
+                    break
+            assert matched, f"Session {session.session_id} had no tests matching 'api' pattern"
+
+            # Verify session metadata preserved
+            assert session.session_id.startswith("session_")
+            assert session.sut_name.endswith("_service")
+            assert len(session.session_tags) == 3  # module, type, env tags
+            assert any(tag.startswith("module_") for tag in session.session_tags)
+            assert any(tag.startswith("type_") for tag in session.session_tags)
+            assert any(tag.startswith("env_") for tag in session.session_tags)
 
             # All tests preserved in matching sessions
             assert len(session.test_results) > 0
             for test in session.test_results:
-                assert test.nodeid.startswith("test_file_")
-                assert "test_case_" in test.nodeid
-                assert test.outcome in [
-                    TestOutcome.PASSED,
-                    TestOutcome.FAILED,
-                    TestOutcome.SKIPPED,
-                ]
+                # Verify nodeid format: test_{module}.py::test_{action}_{module}
+                parts = test.nodeid.split("::")
+                assert len(parts) == 2, f"Invalid nodeid format: {test.nodeid}"
+                assert parts[0].startswith("test_"), f"Invalid module format: {parts[0]}"
+                assert parts[0].endswith(".py"), f"Invalid module format: {parts[0]}"
+                assert parts[1].startswith("test_"), f"Invalid test format: {parts[1]}"
+
+                # Verify test attributes
+                assert test.outcome.to_str() in TestOutcome.to_list()
                 assert test.duration > 0
                 assert test.start_time is not None
-                assert test.duration is not None
-                assert test.rerun_test_groups == []
-                assert test.session_tags == session.session_tags
+                assert test.stop_time is not None
 
     def test_query_with_random_sessions_via_execute(self, random_test_sessions):
         """Test using Query with random but realistic sessions via execute().
@@ -171,10 +194,12 @@ class Test_Query:
         """Test using Query with predefined sessions via InMemoryStorage.
 
         This demonstrates using InMemoryStorage to hold predefined sessions.
-        Session context rules:
-        1. Sessions containing ANY matching test are included
-        2. ALL tests in matching sessions are preserved
-        3. Session metadata (tags, IDs) is preserved
+        Pattern matching rules:
+        1. For non-regex patterns:
+           - Matches are done using fnmatch with wildcards (*pattern*)
+           - Pattern is matched against both file parts and test names separately
+           - File part has .py extension removed before matching
+           - Any part matching the pattern counts as a match
         """
         # Create InMemoryStorage with predefined sessions
         from pytest_insight.storage import InMemoryStorage
@@ -184,24 +209,47 @@ class Test_Query:
         # Create Query with custom storage
         query = Query(storage=storage)
 
-        # Run query - match test_case pattern
-        result = query.filter_by_test().with_pattern("test_case").apply().execute()
+        # Run query - match test type pattern (get, post, etc.)
+        result = query.filter_by_test().with_pattern("get").apply().execute()
 
         # Verify we got results
-        assert result.sessions
+        assert result.sessions, "Expected sessions containing 'get' in test name"
 
-        # Verify session context is preserved
+        # Verify pattern matching rules
         for session in result.sessions:
-            # Session metadata preserved
-            assert session.session_id.isdigit()  # Should be a number from 1-1000
-            assert session.sut_name.startswith("test_sut_")
-            assert session.session_tags[0].startswith("tag_")
+            matched = False
+            for test in session.test_results:
+                # Pattern should match either module part (after .py strip) or test name
+                module_part = test.nodeid.split("::")[0].replace(".py", "")
+                test_part = test.nodeid.split("::")[1]
+                if "get" in module_part or "get" in test_part:
+                    matched = True
+                    break
+            assert matched, f"Session {session.session_id} had no tests matching 'get' pattern"
+
+            # Verify session metadata preserved
+            assert session.session_id.startswith("session_")
+            assert session.sut_name.endswith("_service")
+            assert len(session.session_tags) == 3  # module, type, env tags
+            assert any(tag.startswith("module_") for tag in session.session_tags)
+            assert any(tag.startswith("type_") for tag in session.session_tags)
+            assert any(tag.startswith("env_") for tag in session.session_tags)
 
             # All tests preserved in matching sessions
             assert len(session.test_results) > 0
             for test in session.test_results:
-                assert test.nodeid.startswith("test_file_")
-                assert "test_case_" in test.nodeid
+                # Verify nodeid format: test_{module}.py::test_{action}_{module}
+                parts = test.nodeid.split("::")
+                assert len(parts) == 2, f"Invalid nodeid format: {test.nodeid}"
+                assert parts[0].startswith("test_"), f"Invalid module format: {parts[0]}"
+                assert parts[0].endswith(".py"), f"Invalid module format: {parts[0]}"
+                assert parts[1].startswith("test_"), f"Invalid test format: {parts[1]}"
+
+                # Verify test attributes
+                assert test.outcome.to_str() in TestOutcome.to_list()
+                assert test.duration > 0
+                assert test.start_time is not None
+                assert test.stop_time is not None
 
 
 class Test_QueryTestFilter:

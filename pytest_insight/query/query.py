@@ -172,6 +172,8 @@ class QueryTestFilter:
         Returns:
             Self for method chaining
         """
+        # TODO: Remove thisi deprecated method in the future
+
         import warnings
 
         warnings.warn(
