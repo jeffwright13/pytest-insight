@@ -6,7 +6,6 @@ Run this file directly to see the examples in action.
 """
 from datetime import datetime, timedelta
 
-from pytest_insight.analytics import SUTAnalytics
 from pytest_insight.models import TestOutcome
 from pytest_insight.query.comparison import Comparison
 from pytest_insight.query.query import Query
@@ -18,10 +17,7 @@ query = Query()  # Uses default storage (~/.pytest_insight/practice.json)
 
 all_sessions = query.execute()
 
-health = (query
-    .for_sut("ref-sut-openjdk11")
-    .in_last_days(7)
-    .execute())
+health = query.for_sut("ref-sut-openjdk11").in_last_days(7).execute()
 
 print("Test Health Metrics:")
 print(f"Total tests: {len(health.sessions[0].test_results)}")
@@ -31,12 +27,13 @@ print(f"Warning rate: {health.warning_rate:.1%}")  # Typically ~8.5%
 
 # Example 2: Finding ````````````````flaky tests with session context
 print("\nAnalyzing flaky tests with session context:")
-flaky_tests = (query
-    .with_reruns(True)  # Session-level filter: has reruns
-    .filter_by_test()   # Start filtering by test properties
+flaky_tests = (
+    query.with_reruns(True)  # Session-level filter: has reruns
+    .filter_by_test()  # Start filtering by test properties
     .with_outcome(TestOutcome.PASSED)  # Test-level: eventually passed
-    .apply()            # Back to session context
-    .execute())
+    .apply()  # Back to session context
+    .execute()
+)
 
 print(f"Found {flaky_tests.total_count} sessions with flaky tests")
 for session in flaky_tests.sessions:
@@ -63,11 +60,12 @@ for session in flaky_tests.sessions:
 # Example 3: Cross-version comparison with proper session filtering
 print("\nAnalyzing Python version compatibility:")
 comparison = Comparison()
-result = (comparison
-    .between_suts("ref-sut-python39", "ref-sut-python311")
+result = (
+    comparison.between_suts("ref-sut-python39", "ref-sut-python311")
     .with_session_id_pattern("base-*", "target-*")  # Critical for accurate comparison!
     .in_last_days(7)
-    .execute())
+    .execute()
+)
 
 # Show non-exclusive test categories
 print("\nTest Categories (NOT mutually exclusive):")
@@ -99,12 +97,13 @@ if all_issues:
 
 # Example 4: Performance analysis with full context
 print("\nAnalyzing slow tests with context:")
-slow_tests = (query
-    .having_warnings(True)  # Session-level: has warnings
-    .filter_by_test()      # Start test filtering
+slow_tests = (
+    query.having_warnings(True)  # Session-level: has warnings
+    .filter_by_test()  # Start test filtering
     .with_duration(10.0, float("inf"))  # Test-level: >10s runtime
-    .apply()               # Back to session context
-    .execute())
+    .apply()  # Back to session context
+    .execute()
+)
 
 print(f"Found {slow_tests.total_count} sessions with slow tests")
 for session in slow_tests.sessions:
@@ -127,12 +126,13 @@ for session in slow_tests.sessions:
 # Example 5: Test stability analysis
 print("\nAnalyzing test stability patterns:")
 last_month = datetime.now() - timedelta(days=30)
-stability = (query
-    .date_range(last_month, datetime.now())
-    .filter_by_test()      # Filter by test properties
+stability = (
+    query.date_range(last_month, datetime.now())
+    .filter_by_test()  # Filter by test properties
     .with_outcome(TestOutcome.FAILED)  # Looking for failures
-    .apply()               # Back to session context
-    .execute())
+    .apply()  # Back to session context
+    .execute()
+)
 
 failure_counts = {}
 test_outcomes = {}  # Track all outcomes for each test
@@ -147,12 +147,9 @@ for session in stability.sessions:
         test_outcomes[test.nodeid].add(test.outcome)
 
 # Show tests that failed more than 3 times
-frequent_failures = {
-    nodeid: count for nodeid, count in failure_counts.items()
-    if count > 3
-}
+frequent_failures = {nodeid: count for nodeid, count in failure_counts.items() if count > 3}
 
-print(f"\nTests with frequent failures (>3 times in 30 days):")
+print("\nTests with frequent failures (>3 times in 30 days):")
 for nodeid, count in sorted(frequent_failures.items(), key=lambda x: x[1], reverse=True):
     outcomes = test_outcomes[nodeid]
     outcome_str = ", ".join(o.value for o in outcomes)

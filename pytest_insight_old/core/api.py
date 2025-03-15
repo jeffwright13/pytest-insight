@@ -1,7 +1,9 @@
-from typing import Dict, Any, Optional, List
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
 from pytest_insight.core.analyzer import InsightAnalyzer, SessionFilter
 from pytest_insight.storage import BaseStorage
+
 
 class InsightAPI:
     """Public API for UI-agnostic test analytics."""
@@ -18,33 +20,29 @@ class InsightAPI:
         return {
             "metrics": self._analyzer.calculate_test_metrics(session.test_results),
             "trends": self._analyzer.detect_trends(session.test_results),
-            "patterns": self._analyzer.detect_patterns(session.test_results)
+            "patterns": self._analyzer.detect_patterns(session.test_results),
         }
 
     def get_trend_analysis(self, timespan: timedelta) -> Dict[str, Any]:
         """Get trend analysis for a time period."""
-        results = self._analyzer.get_test_results(
-            SessionFilter(timespan=timespan)
-        )
+        results = self._analyzer.get_test_results(SessionFilter(timespan=timespan))
 
         if not results:
             return {
                 "duration_trend": {"trend": "insufficient_data", "data_points": []},
                 "outcome_trend": {"trend": "insufficient_data", "data_points": []},
-                "failure_rate": 0.0
+                "failure_rate": 0.0,
             }
 
         return {
             "duration_trend": self._analyzer.detect_trends(results, metric="duration"),
             "outcome_trend": self._analyzer.detect_trends(results, metric="outcome"),
-            "failure_rate": self._analyzer.calculate_failure_rate(results)
+            "failure_rate": self._analyzer.calculate_failure_rate(results),
         }
 
     def get_failure_patterns(self, filters: SessionFilter) -> Dict[str, Any]:
         """Get failure pattern analysis."""
-        return self._analyzer.detect_patterns(
-            self._analyzer.get_test_results(filters)
-        )
+        return self._analyzer.detect_patterns(self._analyzer.get_test_results(filters))
 
     def get_sessions(self, filters: Optional[SessionFilter] = None) -> List[Dict[str, Any]]:
         """Get filtered session summaries."""
@@ -55,7 +53,7 @@ class InsightAPI:
                 "sut_name": session.sut_name,
                 "metrics": self._analyzer.calculate_test_metrics(session.test_results),
                 "trends": self._analyzer.detect_trends(session.test_results),
-                "patterns": self._analyzer.detect_patterns(session.test_results)
+                "patterns": self._analyzer.detect_patterns(session.test_results),
             }
             for session in sessions
         ]
@@ -77,7 +75,7 @@ class InsightAPI:
         return {
             "health_scores": self._analyzer.calculate_health_scores(results),
             "warning_patterns": self._analyzer.analyze_warnings(results),
-            "failure_rate": self._analyzer.calculate_failure_rate(results)
+            "failure_rate": self._analyzer.calculate_failure_rate(results),
         }
 
     def get_test_history(self, nodeid: str) -> Dict[str, Any]:
@@ -87,7 +85,7 @@ class InsightAPI:
             "total_runs": len(results),
             "failure_rate": self._analyzer.calculate_failure_rate(results),
             "duration_trend": self._analyzer.detect_trends(results, metric="duration"),
-            "warnings": [r for r in results if r.has_warning]
+            "warnings": [r for r in results if r.has_warning],
         }
 
     def compare_suts(self, sut1: str, sut2: str) -> Dict[str, Any]:
@@ -101,24 +99,13 @@ class InsightAPI:
         return {
             "metrics": self._analyzer.compare_metrics(results1, results2),
             "stability": self._analyzer.compare_stability(results1, results2),
-            "duration": self._analyzer.compare_durations(results1, results2)
+            "duration": self._analyzer.compare_durations(results1, results2),
         }
 
-    def compare_periods(
-        self,
-        base_date: datetime,
-        target_date: datetime,
-        days: int
-    ) -> Dict[str, Any]:
+    def compare_periods(self, base_date: datetime, target_date: datetime, days: int) -> Dict[str, Any]:
         """Compare test results between two time periods."""
-        base_filter = SessionFilter(
-            timespan=timedelta(days=days),
-            end_time=base_date
-        )
-        target_filter = SessionFilter(
-            timespan=timedelta(days=days),
-            end_time=target_date
-        )
+        base_filter = SessionFilter(timespan=timedelta(days=days), end_time=base_date)
+        target_filter = SessionFilter(timespan=timedelta(days=days), end_time=target_date)
 
         base_results = self._analyzer.get_test_results(base_filter)
         target_results = self._analyzer.get_test_results(target_filter)
@@ -129,9 +116,10 @@ class InsightAPI:
             "duration": self._analyzer.compare_durations(base_results, target_results),
             "timespan": {
                 "base": {"start": base_date - timedelta(days=days), "end": base_date},
-                "target": {"start": target_date - timedelta(days=days), "end": target_date}
-            }
+                "target": {"start": target_date - timedelta(days=days), "end": target_date},
+            },
         }
+
 
 """
 # Test Analytics API

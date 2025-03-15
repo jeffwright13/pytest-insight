@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 import pytest
 import typer
 from fastapi.testclient import TestClient
-
 from pytest_insight.analytics import SUTAnalytics
 from pytest_insight.cli.commands import get_api
 from pytest_insight.cli.display import ResultsDisplay

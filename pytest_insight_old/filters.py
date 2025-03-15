@@ -3,7 +3,6 @@ from functools import wraps
 from typing import Callable, List, Optional
 
 import typer
-
 from pytest_insight.models import TestResult, TestSession
 
 
@@ -64,27 +63,13 @@ def common_filter_options(f: Callable) -> Callable:
     @wraps(f)
     def wrapper(
         *args,
-        sut: Optional[str] = typer.Option(
-            None, "--sut", help="Filter by System Under Test name"
-        ),
-        days: Optional[int] = typer.Option(
-            None, "--days", help="Filter to last N days", min=0
-        ),
-        hours: Optional[int] = typer.Option(
-            None, "--hours", help="Filter to last N hours", min=0
-        ),
-        minutes: Optional[int] = typer.Option(
-            None, "--minutes", help="Filter to last N minutes", min=0
-        ),
-        outcome: Optional[str] = typer.Option(
-            None, "--outcome", help="Filter by test outcome (PASSED, FAILED, etc.)"
-        ),
-        warnings: Optional[bool] = typer.Option(
-            None, "--warnings", help="Filter tests with warnings"
-        ),
-        reruns: Optional[bool] = typer.Option(
-            None, "--reruns", help="Filter tests that were rerun"
-        ),
+        sut: Optional[str] = typer.Option(None, "--sut", help="Filter by System Under Test name"),
+        days: Optional[int] = typer.Option(None, "--days", help="Filter to last N days", min=0),
+        hours: Optional[int] = typer.Option(None, "--hours", help="Filter to last N hours", min=0),
+        minutes: Optional[int] = typer.Option(None, "--minutes", help="Filter to last N minutes", min=0),
+        outcome: Optional[str] = typer.Option(None, "--outcome", help="Filter by test outcome (PASSED, FAILED, etc.)"),
+        warnings: Optional[bool] = typer.Option(None, "--warnings", help="Filter tests with warnings"),
+        reruns: Optional[bool] = typer.Option(None, "--reruns", help="Filter tests that were rerun"),
         contains: Optional[str] = typer.Option(
             None, "--contains", help="Filter tests whose nodeid contains this string"
         ),

@@ -1,12 +1,14 @@
-from typing import Dict, List, Optional, Union, Pattern, Any
-from datetime import datetime, timedelta
 from dataclasses import dataclass
-import re
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Pattern, Union
+
 from pytest_insight.models import TestResult, TestSession
+
 
 @dataclass
 class SessionFilter:
     """Filter criteria for session searches."""
+
     sut: Optional[str] = None
     timespan: Optional[timedelta] = None
     limit: Optional[int] = None
@@ -15,16 +17,14 @@ class SessionFilter:
     has_warnings: Optional[bool] = None
     tags: Optional[Dict[str, str]] = None
 
+
 class InsightAnalyzer:
     """Core analytics engine with no UI dependencies."""
 
     def __init__(self, storage):
         self.storage = storage
 
-    def get_sessions(
-        self,
-        filters: Optional[SessionFilter] = None
-    ) -> List[TestSession]:
+    def get_sessions(self, filters: Optional[SessionFilter] = None) -> List[TestSession]:
         """Get filtered test sessions."""
         sessions = self.storage.load_sessions()
         if not filters:
@@ -37,43 +37,29 @@ class InsightAnalyzer:
             filtered = [s for s in filtered if s.session_start_time >= cutoff]
 
         if filters.sut:
-            filtered = [s for s in filtered
-                       if s.sut_name == filters.sut]
+            filtered = [s for s in filtered if s.sut_name == filters.sut]
 
         if filters.nodeid:
             if isinstance(filters.nodeid, Pattern):
-                filtered = [s for s in filtered
-                          if any(filters.nodeid.match(t.nodeid)
-                                for t in s.test_results)]
+                filtered = [s for s in filtered if any(filters.nodeid.match(t.nodeid) for t in s.test_results)]
             else:
-                filtered = [s for s in filtered
-                          if any(filters.nodeid in t.nodeid
-                                for t in s.test_results)]
+                filtered = [s for s in filtered if any(filters.nodeid in t.nodeid for t in s.test_results)]
 
         if filters.outcome:
-            filtered = [s for s in filtered
-                       if any(t.outcome == filters.outcome
-                             for t in s.test_results)]
+            filtered = [s for s in filtered if any(t.outcome == filters.outcome for t in s.test_results)]
 
         if filters.has_warnings is not None:
-            filtered = [s for s in filtered
-                       if any(t.has_warning == filters.has_warnings
-                             for t in s.test_results)]
+            filtered = [s for s in filtered if any(t.has_warning == filters.has_warnings for t in s.test_results)]
 
         if filters.tags:
-            filtered = [s for s in filtered
-                       if all(s.session_tags.get(k) == v
-                             for k, v in filters.tags.items())]
+            filtered = [s for s in filtered if all(s.session_tags.get(k) == v for k, v in filters.tags.items())]
 
         if filters.limit:
-            filtered = filtered[:filters.limit]
+            filtered = filtered[: filters.limit]
 
         return filtered
 
-    def get_test_results(
-        self,
-        filters: Optional[SessionFilter] = None
-    ) -> List[TestResult]:
+    def get_test_results(self, filters: Optional[SessionFilter] = None) -> List[TestResult]:
         """Get filtered test results across all sessions."""
         results = []
         sessions = self.get_sessions(filters)
@@ -94,10 +80,7 @@ class InsightAnalyzer:
         return results
 
     # Core Analysis Primitives
-    def calculate_failure_rate(
-        self,
-        test_results: List[TestResult]
-    ) -> float:
+    def calculate_failure_rate(self, test_results: List[TestResult]) -> float:
         """Calculate failure rate for given test results."""
         if not test_results:
             return 0.0
@@ -110,10 +93,7 @@ class InsightAnalyzer:
         failures = sum(1 for r in relevant_tests if r.outcome == "failed")
         return failures / len(relevant_tests)
 
-    def calculate_test_metrics(
-        self,
-        test_results: List[TestResult]
-    ) -> Dict[str, float]:
+    def calculate_test_metrics(self, test_results: List[TestResult]) -> Dict[str, float]:
         """
         Calculate basic test metrics.
 
@@ -131,7 +111,7 @@ class InsightAnalyzer:
                 "failure_rate": 0.0,
                 "avg_duration": 0.0,
                 "min_duration": 0.0,
-                "max_duration": 0.0
+                "max_duration": 0.0,
             }
 
         durations = [r.duration for r in test_results]
@@ -140,14 +120,10 @@ class InsightAnalyzer:
             "failure_rate": self.calculate_failure_rate(test_results),
             "avg_duration": sum(durations) / len(durations),
             "min_duration": min(durations),
-            "max_duration": max(durations)
+            "max_duration": max(durations),
         }
 
-    def detect_trends(
-        self,
-        test_results: List[TestResult],
-        metric: str = "duration"
-    ) -> Dict[str, any]:
+    def detect_trends(self, test_results: List[TestResult], metric: str = "duration") -> Dict[str, any]:
         """
         Detect trends in specified metric over time.
 
@@ -162,11 +138,7 @@ class InsightAnalyzer:
                 - data_points: Time series data for plotting
         """
         if not test_results or len(test_results) < 2:
-            return {
-                "trend": "insufficient_data",
-                "volatility": 0.0,
-                "data_points": []
-            }
+            return {"trend": "insufficient_data", "volatility": 0.0, "data_points": []}
 
         # Sort by time
         sorted_results = sorted(test_results, key=lambda r: r.start_time)
@@ -193,15 +165,12 @@ class InsightAnalyzer:
         # Calculate volatility (standard deviation / mean)
         mean = sum(values) / len(values)
         variance = sum((v - mean) ** 2 for v in values) / len(values)
-        volatility = (variance ** 0.5) / mean if mean != 0 else 0.0
+        volatility = (variance**0.5) / mean if mean != 0 else 0.0
 
         return {
             "trend": trend,
             "volatility": volatility,
-            "data_points": [
-                {"time": t.isoformat(), "value": v}
-                for t, v in zip(times, values)
-            ]
+            "data_points": [{"time": t.isoformat(), "value": v} for t, v in zip(times, values)],
         }
 
     def calculate_metrics(self, results: List[TestResult]) -> Dict[str, Any]:
@@ -214,7 +183,7 @@ class InsightAnalyzer:
             "total_duration": sum(r.duration for r in results),
             "success_rate": 1.0 - base_metrics["failure_rate"],
             "skipped_rate": len([r for r in results if r.outcome == "skipped"]) / len(results) if results else 0.0,
-            "warning_rate": len([r for r in results if r.has_warning]) / len(results) if results else 0.0
+            "warning_rate": len([r for r in results if r.has_warning]) / len(results) if results else 0.0,
         }
 
     def analyze_trends(self, results: List[TestResult]) -> Dict[str, Any]:
@@ -223,7 +192,7 @@ class InsightAnalyzer:
             "duration_trend": self.detect_trends(results, metric="duration"),
             "outcome_trend": self.detect_trends(results, metric="outcome"),
             "total_executions": len(results),
-            "unique_tests": len(set(r.nodeid for r in results))
+            "unique_tests": len(set(r.nodeid for r in results)),
         }
 
     def detect_patterns(self, results: List[TestResult]) -> Dict[str, Any]:
@@ -234,10 +203,10 @@ class InsightAnalyzer:
             "failure_patterns": {
                 "by_nodeid": self._group_failures_by_nodeid(failed_results),
                 "by_time": self._group_failures_by_time(failed_results),
-                "by_duration": self._group_failures_by_duration(failed_results)
+                "by_duration": self._group_failures_by_duration(failed_results),
             },
             "total_failures": len(failed_results),
-            "failure_rate_over_time": self.detect_trends(failed_results, metric="outcome")
+            "failure_rate_over_time": self.detect_trends(failed_results, metric="outcome"),
         }
 
     def _group_failures_by_nodeid(self, failed_results: List[TestResult]) -> Dict[str, Any]:
@@ -245,11 +214,7 @@ class InsightAnalyzer:
         grouped = {}
         for result in failed_results:
             if result.nodeid not in grouped:
-                grouped[result.nodeid] = {
-                    "count": 0,
-                    "durations": [],
-                    "timestamps": []
-                }
+                grouped[result.nodeid] = {"count": 0, "durations": [], "timestamps": []}
 
             data = grouped[result.nodeid]
             data["count"] += 1
@@ -261,7 +226,7 @@ class InsightAnalyzer:
                 "failure_count": data["count"],
                 "avg_duration": sum(data["durations"]) / len(data["durations"]),
                 "first_failure": min(data["timestamps"]),
-                "last_failure": max(data["timestamps"])
+                "last_failure": max(data["timestamps"]),
             }
             for nodeid, data in grouped.items()
         }
@@ -272,20 +237,14 @@ class InsightAnalyzer:
         for result in failed_results:
             key = result.start_time.replace(second=0, microsecond=0)
             if key not in grouped:
-                grouped[key] = {
-                    "count": 0,
-                    "nodeids": set()
-                }
+                grouped[key] = {"count": 0, "nodeids": set()}
 
             data = grouped[key]
             data["count"] += 1
             data["nodeids"].add(result.nodeid)
 
         return {
-            time.isoformat(): {
-                "failure_count": data["count"],
-                "unique_failures": len(data["nodeids"])
-            }
+            time.isoformat(): {"failure_count": data["count"], "unique_failures": len(data["nodeids"])}
             for time, data in grouped.items()
         }
 
@@ -295,38 +254,29 @@ class InsightAnalyzer:
         for result in failed_results:
             key = int(result.duration / 10) * 10
             if key not in grouped:
-                grouped[key] = {
-                    "count": 0,
-                    "nodeids": set()
-                }
+                grouped[key] = {"count": 0, "nodeids": set()}
 
             data = grouped[key]
             data["count"] += 1
             data["nodeids"].add(result.nodeid)
 
         return {
-            f"{key}s": {
-                "failure_count": data["count"],
-                "unique_failures": len(data["nodeids"])
-            }
+            f"{key}s": {"failure_count": data["count"], "unique_failures": len(data["nodeids"])}
             for key, data in grouped.items()
         }
 
     def calculate_health_scores(self, results: List[TestResult]) -> Dict[str, float]:
         """Calculate health scores for each test."""
         metrics = self.calculate_metrics(results)
-        trends = self.analyze_trends(results)
-        patterns = self.detect_patterns(results)
+        self.analyze_trends(results)
+        self.detect_patterns(results)
 
         scores = {}
         for result in results:
             scores[result.nodeid] = (
-                (1 - metrics["failure_rate"])
-                * 0.4  # Failure weight
-                + (1 - min(metrics["avg_duration"] / 10.0, 1.0))
-                * 0.3  # Duration weight
-                + (1 - (len([r for r in results if r.has_warning]) / len(results)))
-                * 0.3  # Warning weight
+                (1 - metrics["failure_rate"]) * 0.4  # Failure weight
+                + (1 - min(metrics["avg_duration"] / 10.0, 1.0)) * 0.3  # Duration weight
+                + (1 - (len([r for r in results if r.has_warning]) / len(results))) * 0.3  # Warning weight
             ) * 100
 
         return scores
@@ -336,7 +286,7 @@ class InsightAnalyzer:
         warnings = [r for r in results if r.has_warning]
         return {
             "warning_freq": len(warnings) / len(results) if results else 0.0,
-            "warning_patterns": self._group_warnings_by_nodeid(warnings)
+            "warning_patterns": self._group_warnings_by_nodeid(warnings),
         }
 
     def _group_warnings_by_nodeid(self, warning_results: List[TestResult]) -> Dict[str, Any]:
@@ -344,10 +294,7 @@ class InsightAnalyzer:
         grouped = {}
         for result in warning_results:
             if result.nodeid not in grouped:
-                grouped[result.nodeid] = {
-                    "count": 0,
-                    "timestamps": []
-                }
+                grouped[result.nodeid] = {"count": 0, "timestamps": []}
 
             data = grouped[result.nodeid]
             data["count"] += 1
@@ -357,7 +304,7 @@ class InsightAnalyzer:
             nodeid: {
                 "warning_count": data["count"],
                 "first_warning": min(data["timestamps"]),
-                "last_warning": max(data["timestamps"])
+                "last_warning": max(data["timestamps"]),
             }
             for nodeid, data in grouped.items()
         }

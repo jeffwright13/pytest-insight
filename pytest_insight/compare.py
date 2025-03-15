@@ -1,262 +1,311 @@
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set, Tuple
-from collections import defaultdict
-from statistics import mean
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
-from pytest_insight.models import TestResult, TestSession
+from pytest_insight.models import TestOutcome, TestSession
+from pytest_insight.query.query import Query
+from pytest_insight.storage import JSONStorage
 
-class ComparisonAnalyzer:
-    """Compare test results between sessions or time periods."""
 
-    @staticmethod
-    def compare_sessions(
-        sessions: List[TestSession],
-        base_id: str,
-        target_id: str,
-        time_window: Optional[timedelta] = None
-    ) -> Dict:
-        """Compare two sessions within specified time windows."""
-        now = datetime.now()
-        cutoff = now - time_window if time_window else None
+class ComparisonError(Exception):
+    """Base exception for Comparison-related errors."""
 
-        # Filter both sessions by time window if specified
-        filtered_sessions = sessions
-        if cutoff:
-            filtered_sessions = [s for s in sessions if s.session_start_time > cutoff]
+    pass
 
-        base_session = next((s for s in filtered_sessions if s.session_id == base_id), None)
-        target_session = next((s for s in filtered_sessions if s.session_id == target_id), None)
 
-        if not base_session or not target_session:
-            raise ValueError(
-                f"Sessions not found within the last {time_window}: "
-                f"{'' if base_session else 'base session'}"
-                f"{'' if target_session else 'target session'}"
-            )
+@dataclass
+class ComparisonResult:
+    """Results of comparing test sessions.
 
-        base_results = {t.nodeid: t for t in base_session.test_results}
-        target_results = {t.nodeid: t for t in target_session.test_results}
+    Properties:
+        base_results: QueryResult for base sessions
+        target_results: QueryResult for target sessions
+        base_session: Selected base session for comparison
+        target_session: Selected target session for comparison
+        new_failures: Test nodeids that failed in target but passed in base
+        fixed_tests: Test nodeids that passed in target but failed in base
+        flaky_tests: Test nodeids that changed outcome between sessions
+        slower_tests: Test nodeids that took longer in target
+        faster_tests: Test nodeids that ran faster in target
+        missing_tests: Test nodeids present in base but missing in target
+        new_tests: Test nodeids present in target but missing in base
+        outcome_changes: All outcome changes with (base_outcome, target_outcome)
+        new_passes: Alias for fixed_tests (nodeids that passed in target but failed in base)
 
-        all_tests = set(base_results.keys()) | set(target_results.keys())
-        changes = []
+    Note:
+        Categories are NOT mutually exclusive. A test can belong to multiple categories:
+        1. New failure + Flaky test (failed in target but not base)
+        2. Performance regression + Warning (slow test with resource warning)
+        3. Fixed test + Rerun (passed after multiple attempts)
 
-        for test in all_tests:
-            base = base_results.get(test)
-            target = target_results.get(test)
+        The Query system preserves full session context to make it easy to:
+        1. Track all test outcomes, not just failures
+        2. See relationships between test results
+        3. Analyze patterns across categories
+        4. Identify correlated issues
+    """
 
-            if not base:
-                changes.append(("added", test, None, target.outcome))
-            elif not target:
-                changes.append(("removed", test, base.outcome, None))
-            elif base.outcome != target.outcome:
-                changes.append(("changed", test, base.outcome, target.outcome))
+    base_results: "QueryResult"
+    target_results: "QueryResult"
+    base_session: TestSession
+    target_session: TestSession
+    new_failures: List[str]  # Test nodeids that failed in target but passed in base
+    fixed_tests: List[str]  # Test nodeids that passed in target but failed in base
+    flaky_tests: List[str]  # Test nodeids that changed outcome between sessions
+    slower_tests: List[str]  # Test nodeids that took longer in target
+    faster_tests: List[str]  # Test nodeids that ran faster in target
+    missing_tests: List[str]  # Test nodeids present in base but missing in target
+    new_tests: List[str]  # Test nodeids present in target but missing in base
+    outcome_changes: Dict[str, Tuple[TestOutcome, TestOutcome]]  # All outcome changes
 
-        return {
-            "changes": changes,
-            "total_tests": len(all_tests),
-            "changed_tests": len(changes),
-            "performance_changes": ComparisonAnalyzer._analyze_performance_changes(
-                base_results, target_results
-            )
-        }
-
-    @staticmethod
-    def _analyze_performance_changes(
-        base_results: Dict,
-        target_results: Dict,
-        threshold: float = 0.2
-    ) -> List[Tuple[str, float, float]]:
-        """Identify significant performance changes."""
-        changes = []
-        common_tests = set(base_results.keys()) & set(target_results.keys())
-
-        for test in common_tests:
-            base_duration = base_results[test].duration
-            target_duration = target_results[test].duration
-            if base_duration > 0 and abs(target_duration - base_duration) / base_duration > threshold:
-                changes.append((test, base_duration, target_duration))
-
-        return sorted(changes, key=lambda x: abs(x[2] - x[1]), reverse=True)
-
-    @staticmethod
-    def compare_periods(
-        sessions: List[TestSession],
-        period1_end: datetime,
-        period2_end: datetime,
-        days: int = 7
-    ) -> Dict:
-        """Compare test results between two time periods."""
-        period1_start = period1_end - timedelta(days=days)
-        period2_start = period2_end - timedelta(days=days)
-
-        period1_sessions = [
-            s for s in sessions
-            if period1_start <= s.session_start_time <= period1_end
-        ]
-        period2_sessions = [
-            s for s in sessions
-            if period2_start <= s.session_start_time <= period2_end
-        ]
-
-        return ComparisonAnalyzer._compare_session_groups(
-            period1_sessions,
-            period2_sessions
+    @property
+    def has_changes(self) -> bool:
+        """Check if any differences were found between sessions."""
+        return bool(
+            self.new_failures
+            or self.fixed_tests
+            or self.flaky_tests
+            or self.slower_tests
+            or self.faster_tests
+            or self.missing_tests
+            or self.new_tests
         )
 
-    @staticmethod
-    def _compare_session_groups(
-        group1: List[TestSession],
-        group2: List[TestSession]
-    ) -> Dict:
-        """Compare two groups of sessions."""
-        # Implementation for period comparison
-        # ... add period comparison logic here ...
-        return {}
+    @property
+    def new_passes(self) -> List[str]:
+        """Alias for fixed_tests (nodeids that passed in target but failed in base)."""
+        return self.fixed_tests
 
-class SUTComparator:
-    """Compare test results between different SUTs."""
 
-    @staticmethod
-    def compare_suts(
-        sessions: List[TestSession],
-        sut1: str,
-        sut2: str,
-        days: Optional[int] = None
-    ) -> Dict:
-        """Compare test execution between two SUTs."""
-        # Filter sessions by SUT and optionally by time
-        sut1_sessions = [s for s in sessions if s.sut_name == sut1]
-        sut2_sessions = [s for s in sessions if s.sut_name == sut2]
+class Comparison:
+    """Builder for test comparison operations."""
 
-        if days:
-            cutoff = datetime.now() - timedelta(days=days)
-            sut1_sessions = [s for s in sut1_sessions if s.session_start_time > cutoff]
-            sut2_sessions = [s for s in sut2_sessions if s.session_start_time > cutoff]
+    def __init__(self, sessions: Optional[List[TestSession]] = None):
+        """Initialize comparison with optional test sessions.
 
-        # Get unique tests for each SUT
-        sut1_tests = {t.nodeid for s in sut1_sessions for t in s.test_results}
-        sut2_tests = {t.nodeid for s in sut2_sessions for t in s.test_results}
+        Args:
+            sessions: Optional list of test sessions to search through.
+                     If not provided, loads sessions from default storage.
+        """
+        if sessions is None:
+            storage = JSONStorage()
+            sessions = storage.load_sessions()
 
-        return {
-            "test_coverage": {
-                "unique_to_sut1": sorted(sut1_tests - sut2_tests),
-                "unique_to_sut2": sorted(sut2_tests - sut1_tests),
-                "common": sorted(sut1_tests & sut2_tests),
-                "total_sut1": len(sut1_tests),
-                "total_sut2": len(sut2_tests)
-            },
-            "performance": SUTComparator._compare_performance(
-                sut1_sessions, sut2_sessions, sut1_tests & sut2_tests
-            ),
-            "stability": SUTComparator._compare_stability(
-                sut1_sessions, sut2_sessions, sut1_tests & sut2_tests
-            ),
-            "session_stats": {
-                "sut1": SUTComparator._get_session_stats(sut1_sessions),
-                "sut2": SUTComparator._get_session_stats(sut2_sessions)
-            }
-        }
+        self._base_query = Query(sessions)
+        self._target_query = Query(sessions)
 
-    @staticmethod
-    def _compare_performance(
-        sut1_sessions: List[TestSession],
-        sut2_sessions: List[TestSession],
-        common_tests: Set[str]
-    ) -> Dict:
-        """Compare test performance between SUTs with safety checks."""
-        sut1_durations = defaultdict(list)
-        sut2_durations = defaultdict(list)
+    def between_suts(self, base_sut: str, target_sut: str) -> "Comparison":
+        """Compare between two SUTs.
 
-        for session in sut1_sessions:
-            for test in session.test_results:
-                if test.nodeid in common_tests:
-                    sut1_durations[test.nodeid].append(test.duration)
+        This automatically applies proper base/target session patterns
+        to ensure consistent test categorization.
 
-        for session in sut2_sessions:
-            for test in session.test_results:
-                if test.nodeid in common_tests:
-                    sut2_durations[test.nodeid].append(test.duration)
+        Args:
+            base_sut: Name of the base SUT
+            target_sut: Name of the target SUT
 
-        differences = []
-        for test in common_tests:
-            if test in sut1_durations and test in sut2_durations:
-                avg1 = mean(sut1_durations[test]) if sut1_durations[test] else 0
-                avg2 = mean(sut2_durations[test]) if sut2_durations[test] else 0
-                if avg1 > 0:  # Prevent division by zero
-                    diff_pct = ((avg2 - avg1) / avg1) * 100
-                    differences.append((test, avg1, avg2, diff_pct))
+        Example:
+            comparison = Comparison()
+            result = comparison.between_suts("service-v1", "service-v2").execute()
+        """
+        self._base_query.for_sut(base_sut).with_session_id_pattern("base-*")
+        self._target_query.for_sut(target_sut).with_session_id_pattern("target-*")
+        return self
 
-        return {
-            "significant_differences": sorted(
-                differences,
-                key=lambda x: abs(x[3]),
-                reverse=True
-            )[:10]
-        }
+    def in_last_days(self, days: int) -> "Comparison":
+        """Filter both base and target sessions from last N days."""
+        self._base_query.in_last_days(days)
+        self._target_query.in_last_days(days)
+        return self
 
-    @staticmethod
-    def _compare_stability(
-        sut1_sessions: List[TestSession],
-        sut2_sessions: List[TestSession],
-        common_tests: Set[str]
-    ) -> Dict:
-        """Compare test stability between SUTs with safety checks."""
-        def get_failure_rates(sessions):
-            failures = defaultdict(int)
-            totals = defaultdict(int)
-            failure_rates = {}
+    def in_date_window(self, start_date: datetime, end_date: datetime) -> "Comparison":
+        """Filter sessions within a specific date window.
 
-            for session in sessions:
-                for test in session.test_results:
-                    if test.nodeid in common_tests:
-                        totals[test.nodeid] += 1
-                        if test.outcome == "FAILED":
-                            failures[test.nodeid] += 1
+        This is a session-level filter that operates on session_start_time.
+        It preserves full session context while filtering by date range.
 
-            # Safe division
-            for test in common_tests:
-                if test in totals and totals[test] > 0:
-                    failure_rates[test] = failures[test] / totals[test]
-                else:
-                    failure_rates[test] = 0.0
+        Args:
+            start_date: Start of date window (inclusive)
+            end_date: End of date window (inclusive)
 
-            return failure_rates
+        Returns:
+            Comparison instance for chaining.
 
-        sut1_rates = get_failure_rates(sut1_sessions)
-        sut2_rates = get_failure_rates(sut2_sessions)
+        Raises:
+            ComparisonError: If start_date is after end_date.
+        """
+        if start_date > end_date:
+            raise ComparisonError("Start date must be before end date")
 
-        differences = []
-        for test in common_tests:
-            rate1 = sut1_rates.get(test, 0.0)
-            rate2 = sut2_rates.get(test, 0.0)
-            diff = rate2 - rate1
-            if abs(diff) > 0.05:  # 5% threshold
-                differences.append((test, rate1, rate2, diff * 100))
+        # Apply date window to both base and target queries
+        self._base_query._session_filters.append(lambda s: start_date <= s.session_start_time <= end_date)
+        self._target_query._session_filters.append(lambda s: start_date <= s.session_start_time <= end_date)
+        return self
 
-        return {
-            "stability_differences": sorted(
-                differences,
-                key=lambda x: abs(x[3]),
-                reverse=True
-            )
-        }
+    def with_test_pattern(self, pattern: str) -> "Comparison":
+        """Filter tests by pattern match.
 
-    @staticmethod
-    def _get_session_stats(sessions: List[TestSession]) -> Dict:
-        """Calculate aggregate session statistics."""
-        if not sessions:
-            return {}
+        Args:
+            pattern: Pattern to match against test nodeid.
 
-        total_duration = sum(
-            (s.session_stop_time - s.session_start_time).total_seconds()
-            for s in sessions
+        Returns:
+            Comparison instance for chaining.
+        """
+        self._base_query.filter_by_test().with_pattern(pattern).apply()
+        self._target_query.filter_by_test().with_pattern(pattern).apply()
+        return self
+
+    def with_duration_threshold(self, min_secs: float) -> "Comparison":
+        """Filter tests by minimum duration.
+
+        Args:
+            min_secs: Minimum duration in seconds.
+
+        Returns:
+            Comparison instance for chaining.
+        """
+        self._base_query.filter_by_test().with_duration_between(min_secs, float("inf")).apply()
+        self._target_query.filter_by_test().with_duration_between(min_secs, float("inf")).apply()
+        return self
+
+    def only_failures(self) -> "Comparison":
+        """Filter to show only failed tests.
+
+        Returns:
+            Comparison instance for chaining.
+        """
+        self._base_query.filter_by_test().with_outcome(TestOutcome.FAILED).apply()
+        self._target_query.filter_by_test().with_outcome(TestOutcome.FAILED).apply()
+        return self
+
+    def exclude_flaky(self) -> "Comparison":
+        """Filter out flaky tests (tests with reruns).
+
+        Returns:
+            Comparison instance for chaining.
+        """
+        self._base_query.with_reruns(False)
+        self._target_query.with_reruns(False)
+        return self
+
+    def with_environment(self, base_env: Dict[str, str], target_env: Dict[str, str]) -> "Comparison":
+        """Filter sessions by environment tags.
+
+        Args:
+            base_env: Environment tags to match in base sessions.
+            target_env: Environment tags to match in target sessions.
+
+        Returns:
+            Comparison instance for chaining.
+        """
+        for key, value in base_env.items():
+            self._base_query.with_session_tag(key, value)
+        for key, value in target_env.items():
+            self._target_query.with_session_tag(key, value)
+        return self
+
+    def execute(self, sessions: Optional[List[TestSession]] = None) -> ComparisonResult:
+        """Execute comparison between base and target sessions.
+
+        Args:
+            sessions: Optional list of exactly two sessions to compare directly.
+                     If provided, ignores any previously configured filters.
+
+        Returns:
+            ComparisonResult containing categorized test differences.
+            Tests can belong to multiple categories (e.g., both flaky and new failure).
+
+        Raises:
+            ComparisonError: If no sessions match or if validation fails.
+
+        Example:
+            # Using queries (recommended):
+            comparison = Comparison()
+            result = comparison.between_suts("service-v1", "service-v2").execute()
+
+            # Direct comparison:
+            result = comparison.execute([base_session, target_session])
+        """
+        if not sessions and not (self._base_query._session_filters or self._target_query._session_filters):
+            raise ComparisonError("No sessions provided and no filters configured")
+
+        if sessions:
+            if len(sessions) != 2:
+                raise ComparisonError("Must provide exactly 2 sessions to compare")
+            base_session, target_session = sessions
+
+            # Validate session ID patterns
+            if not base_session.session_id.startswith("base-"):
+                raise ComparisonError(f"Base session ID must start with 'base-', got: {base_session.session_id}")
+            if not target_session.session_id.startswith("target-"):
+                raise ComparisonError(f"Target session ID must start with 'target-', got: {target_session.session_id}")
+
+            # Create QueryResults for direct session comparison
+            base_results = Query().execute([base_session])
+            target_results = Query().execute([target_session])
+        else:
+            # Use queries to find sessions
+            base_results = self._base_query.execute()
+            target_results = self._target_query.execute()
+
+            if not base_results.sessions or not target_results.sessions:
+                raise ComparisonError("No matching base and target sessions found")
+
+            # Use most recent sessions if multiple matches
+            base_session = max(base_results.sessions, key=lambda s: s.session_start_time)
+            target_session = max(target_results.sessions, key=lambda s: s.session_start_time)
+
+        # Build nodeid maps for efficient lookup
+        base_tests = {t.nodeid: t for t in base_session.test_results}
+        target_tests = {t.nodeid: t for t in target_session.test_results}
+
+        # Find all test changes
+        new_failures = []
+        fixed_tests = []
+        flaky_tests = []
+        slower_tests = []
+        faster_tests = []
+        outcome_changes = {}
+
+        # Track missing and new tests
+        missing_tests = list(set(base_tests.keys()) - set(target_tests.keys()))
+        new_tests = list(set(target_tests.keys()) - set(base_tests.keys()))
+
+        # Compare common tests
+        common_tests = set(base_tests.keys()) & set(target_tests.keys())
+        for nodeid in common_tests:
+            base_test = base_tests[nodeid]
+            target_test = target_tests[nodeid]
+
+            # Track all outcome changes
+            if base_test.outcome != target_test.outcome:
+                outcome_changes[nodeid] = (base_test.outcome, target_test.outcome)
+
+                # A test can be both flaky and a new failure/fixed test
+                flaky_tests.append(nodeid)
+
+                if base_test.outcome == TestOutcome.PASSED and target_test.outcome == TestOutcome.FAILED:
+                    new_failures.append(nodeid)
+                elif base_test.outcome == TestOutcome.FAILED and target_test.outcome == TestOutcome.PASSED:
+                    fixed_tests.append(nodeid)
+
+            # Track performance changes (independent of outcome changes)
+            if target_test.duration > base_test.duration * 1.2:  # 20% slower
+                slower_tests.append(nodeid)
+            elif target_test.duration < base_test.duration * 0.8:  # 20% faster
+                faster_tests.append(nodeid)
+
+        return ComparisonResult(
+            base_results=base_results,
+            target_results=target_results,
+            base_session=base_session,
+            target_session=target_session,
+            new_failures=new_failures,
+            fixed_tests=fixed_tests,
+            flaky_tests=flaky_tests,
+            slower_tests=slower_tests,
+            faster_tests=faster_tests,
+            missing_tests=missing_tests,
+            new_tests=new_tests,
+            outcome_changes=outcome_changes,
         )
-        return {
-            "total_sessions": len(sessions),
-            "avg_duration": total_duration / len(sessions),
-            "total_tests": sum(len(s.test_results) for s in sessions),
-            "date_range": (
-                min(s.session_start_time for s in sessions),
-                max(s.session_start_time for s in sessions)
-            )
-        }

@@ -2,7 +2,6 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from pytest_insight.api.routes import router
 
 app = FastAPI(

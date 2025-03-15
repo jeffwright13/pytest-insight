@@ -1,41 +1,25 @@
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
-from click import Choice  # Add this import
-from colorama import Fore, Style
-from pytest_insight.core.analyzer import InsightAnalyzer
-from pytest_insight.models import TestResult
-from pytest_insight.cli.formatters import format_metrics, format_trend_direction
-from pytest_insight.core.api import InsightAPI
-from pytest_insight.core.analyzer import SessionFilter
-from pytest_insight.storage import get_storage_instance
-import typer
-from rich.console import Console
-from pytest_insight.cli.display import ResultsDisplay
-from enum import Enum, auto  # Updated import
-import uvicorn
+from enum import Enum  # Updated import
+from pathlib import Path
+from typing import Optional
+
 import requests
+import typer
+import uvicorn
+from pytest_insight.cli.display import ResultsDisplay
+from pytest_insight.core.analyzer import SessionFilter
+from pytest_insight.core.api import InsightAPI
+from pytest_insight.storage import get_storage_instance
+from rich.console import Console
 
 # Define the command groups with proper settings
-app = typer.Typer(
-    help="Test history and analytics tool for pytest",
-    no_args_is_help=True
-)
+app = typer.Typer(help="Test history and analytics tool for pytest", no_args_is_help=True)
 
-analytics_app = typer.Typer(
-    help="Generate test analytics and reports",
-    no_args_is_help=True
-)
+analytics_app = typer.Typer(help="Generate test analytics and reports", no_args_is_help=True)
 
-setup_app = typer.Typer(
-    help="Setup and configure components",
-    no_args_is_help=True
-)
+setup_app = typer.Typer(help="Setup and configure components", no_args_is_help=True)
 
-server_app = typer.Typer(
-    help="Manage metrics server",
-    no_args_is_help=True
-)
+server_app = typer.Typer(help="Manage metrics server", no_args_is_help=True)
 
 # Register sub-commands with explicit names
 app.add_typer(analytics_app, name="analytics")
@@ -45,15 +29,17 @@ app.add_typer(server_app, name="server")
 console = Console()
 display = ResultsDisplay()
 
+
 def get_api() -> InsightAPI:
     """Get API instance with configured storage."""
     return InsightAPI(get_storage_instance())
+
 
 @analytics_app.command("session")
 def show_session(
     session_id: Optional[str] = typer.Option(None, "--id", help="Show specific session"),
     sut: Optional[str] = typer.Option(None, "--sut", help="Filter by SUT name"),
-    days: int = typer.Option(1, "--days", "-d", help="Days to look back")
+    days: int = typer.Option(1, "--days", "-d", help="Days to look back"),
 ):
     """Show session analytics."""
     api = get_api()
@@ -64,10 +50,7 @@ def show_session(
             typer.echo(f"Session {session_id} not found")
             raise typer.Exit(1)
     else:
-        filters = SessionFilter(
-            sut=sut,
-            timespan=timedelta(days=days)
-        )
+        filters = SessionFilter(sut=sut, timespan=timedelta(days=days))
         sessions = api.get_sessions(filters)
         if not sessions:
             typer.echo("No matching sessions found")
@@ -76,21 +59,23 @@ def show_session(
 
     display.show_session_summary(summary)
 
+
 @analytics_app.command("trends")
 def show_trends(
     days: int = typer.Option(7, "--days", "-d", help="Days to analyze"),
-    sut: Optional[str] = typer.Option(None, "--sut", help="Filter by SUT")
+    sut: Optional[str] = typer.Option(None, "--sut", help="Filter by SUT"),
 ):
     """Show test execution trends."""
     api = get_api()
     analysis = api.get_trend_analysis(timedelta(days=days))
     display.show_trend_analysis(analysis)
 
+
 @analytics_app.command("compare")
 def compare_tests(
     base: str = typer.Argument(..., help="Base SUT or date (YYYY-MM-DD)"),
     target: str = typer.Argument(..., help="Target SUT or date (YYYY-MM-DD)"),
-    mode: str = typer.Option("sut", "--mode", "-m", help="Compare mode: sut or date")
+    mode: str = typer.Option("sut", "--mode", "-m", help="Compare mode: sut or date"),
 ):
     """Compare test results."""
     api = get_api()
@@ -108,6 +93,7 @@ def compare_tests(
             typer.echo("Invalid date format. Use YYYY-MM-DD")
             raise typer.Exit(1)
 
+
 @analytics_app.command("health")
 def show_health(sut: str = typer.Argument(..., help="SUT to analyze")):
     """Show test suite health metrics."""
@@ -115,14 +101,16 @@ def show_health(sut: str = typer.Argument(..., help="SUT to analyze")):
     health = api.analyze_health(sut)
     display.show_health_analysis(health)
 
+
 @server_app.command()
 def start(
     port: int = typer.Option(8000, "--port", "-p", help="Port to serve metrics on"),
-    reload: bool = typer.Option(True, "--reload", help="Enable auto-reload")
+    reload: bool = typer.Option(True, "--reload", help="Enable auto-reload"),
 ):
     """Start the metrics server."""
     typer.echo(f"Starting metrics server on port {port}")
     uvicorn.run("pytest_insight.server:app", port=port, reload=reload)
+
 
 @server_app.command()
 def status():
@@ -136,14 +124,17 @@ def status():
     except requests.ConnectionError:
         typer.echo("✗ Server is not running")
 
+
 # Move ComponentType enum before commands
 class ComponentType(str, Enum):
     GRAFANA = "grafana"
+
 
 # Update setup command to use setup_app
 @setup_app.callback()
 def setup():
     """Setup pytest-insight components."""
+
 
 # Make sure the Grafana command is properly registered
 @setup_app.command("grafana")
@@ -151,10 +142,10 @@ def setup_grafana():
     """Install Grafana dashboard and configuration."""
     setup_grafana_dashboard()
 
+
 def setup_grafana_dashboard():
     """Setup Grafana dashboards and configuration."""
     import shutil
-    import os
     from pathlib import Path
 
     # Define paths
@@ -187,6 +178,7 @@ def setup_grafana_dashboard():
         typer.echo(f"Error: {str(e)}", err=True)
         raise typer.Exit(1)
 
+
 def create_default_dashboard(dashboard_path: Path) -> None:
     """Create default Grafana dashboard configuration."""
     default_dashboard = {
@@ -196,10 +188,7 @@ def create_default_dashboard(dashboard_path: Path) -> None:
         "links": [],
         "panels": [
             {
-                "datasource": {
-                    "type": "simpod-json-datasource",
-                    "uid": "json"
-                },
+                "datasource": {"type": "simpod-json-datasource", "uid": "json"},
                 "fieldConfig": {
                     "defaults": {
                         "color": {"mode": "palette-classic"},
@@ -214,19 +203,21 @@ def create_default_dashboard(dashboard_path: Path) -> None:
                             "lineInterpolation": "linear",
                             "lineWidth": 2,
                             "pointSize": 5,
-                            "showPoints": "auto"
-                        }
+                            "showPoints": "auto",
+                        },
                     }
                 },
                 "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
                 "id": 1,
-                "targets": [{
-                    "datasource": {"type": "simpod-json-datasource", "uid": "json"},
-                    "target": "test.duration",
-                    "type": "timeseries"
-                }],
+                "targets": [
+                    {
+                        "datasource": {"type": "simpod-json-datasource", "uid": "json"},
+                        "target": "test.duration",
+                        "type": "timeseries",
+                    }
+                ],
                 "title": "Test Duration Trends",
-                "type": "timeseries"
+                "type": "timeseries",
             }
         ],
         "refresh": "5s",
@@ -235,13 +226,11 @@ def create_default_dashboard(dashboard_path: Path) -> None:
         "tags": ["pytest-insight"],
         "title": "Test Metrics Dashboard",
         "version": 1,
-        "time": {
-            "from": "now-6h",
-            "to": "now"
-        }
+        "time": {"from": "now-6h", "to": "now"},
     }
 
     import json
+
     dashboard_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(dashboard_path, 'w') as f:
+    with open(dashboard_path, "w") as f:
         json.dump(default_dashboard, f, indent=2)
