@@ -99,7 +99,7 @@ class Test_Query:
 
         # Use execute() with predefined sessions - match test_file pattern
         result: QueryResult = (
-            query.filter_by_test().with_pattern("test_file").apply().execute(sessions=random_test_sessions)
+            query.filter_by_test().with_pattern("test_list").apply().execute(sessions=random_test_sessions)
         )
         result_sessions: List[TestSession] = result.sessions
 

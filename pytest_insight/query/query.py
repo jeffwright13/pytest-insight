@@ -622,7 +622,7 @@ class Query:
         return self
 
     def test_contains(self, pattern: str) -> "Query":
-        """Filter sessions containing tests matching pattern.
+        """Filter sessions containing tests with nodeid matching pattern.
 
         Args:
             pattern: Pattern to match against test nodeid.
