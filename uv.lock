@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.9.16"
 
 [[package]]
@@ -70,15 +71,6 @@ wheels = [
     { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/ac/b6/98f832e7a6c49aa3a464760c67c7856363aa644f2f3c74cf7d624168607e/black-25.1.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d9e6827d563a2c820772b32ce8a42828dc6790f095f441beef18f96aa6f8294e" },
     { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/ce/e9/2cb0a017eb7024f70e0d2e9bdb8c5a5b078c5740c7f8816065d06f04c557/black-25.1.0-cp39-cp39-win_amd64.whl", hash = "sha256:bacabb307dca5ebaf9c118d2d2f6903da0d62c9faa82bd21a33eecc319559355" },
     { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/09/71/54e999902aed72baf26bca0d50781b01838251a462612966e9fc4891eadd/black-25.1.0-py3-none-any.whl", hash = "sha256:95e8176dae143ba9097f351d174fdaf0ccd29efb414b362ae3fd72bf0f710717" },
-]
-
-[[package]]
-name = "bulletprompt"
-version = "2.2.3"
-source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }
-sdist = { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/1b/74/71c28c44651c0906ca72283a60dc8d5193a4798eb82a211ec0ab7fc417e0/bulletprompt-2.2.3.tar.gz", hash = "sha256:e1625f986ccfb2ccc94ec4dd9beb8b386e47e526c70103701368bdc6eaf18c5e" }
-wheels = [
-    { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/2e/48/2ca432bcf3030e5eb5fef5732629451c021c8bef909bd3943f33e11a7617/BulletPrompt-2.2.3-py3-none-any.whl", hash = "sha256:300decb0167c01b0c73ed9f7e5c5c30bbf39bdf1093ed31cf5785ea6c487312c" },
 ]
 
 [[package]]
@@ -922,7 +914,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "black" },
-    { name = "bulletprompt" },
     { name = "colorama" },
     { name = "fastapi" },
     { name = "freezegun" },
@@ -931,6 +922,7 @@ dependencies = [
     { name = "pre-commit" },
     { name = "pyflakes" },
     { name = "pytest" },
+    { name = "pytest-mock" },
     { name = "pytest-rerunfailures" },
     { name = "python-multipart" },
     { name = "requests" },
@@ -948,7 +940,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "black", specifier = ">=25.1.0" },
-    { name = "bulletprompt", specifier = ">=2.2.3" },
     { name = "colorama", specifier = ">=0.4.6" },
     { name = "fastapi", specifier = ">=0.115.8" },
     { name = "freezegun", specifier = ">=1.5.1" },
@@ -957,6 +948,7 @@ requires-dist = [
     { name = "pre-commit", specifier = ">=4.1.0" },
     { name = "pyflakes", specifier = ">=3.2.0" },
     { name = "pytest", specifier = ">=6.2" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "pytest-rerunfailures", specifier = ">=15.0" },
     { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "requests", specifier = ">=2.32.3" },
