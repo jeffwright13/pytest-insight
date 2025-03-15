@@ -12,7 +12,9 @@ class Test_qPytestPlugin:
 
         # Verify the choices passed to addoption
         calls = mock_group.addoption.call_args_list
-        storage_type_call = next(call for call in calls if call[0][0] == "--insight-storage-type")
+        storage_type_call = next(
+            call for call in calls if call[0][0] == "--insight-storage-type"
+        )
         choices = storage_type_call[1]["choices"]
 
         assert "invalid_type" not in choices
@@ -28,7 +30,9 @@ class Test_qPytestPlugin:
 
         mock_parser.getgroup.assert_called_once_with("pytest-insight")
         assert mock_group.addoption.call_count == 4
-        mock_group.addoption.assert_any_call("--insight", action="store_true", help="Enable pytest-insight")
+        mock_group.addoption.assert_any_call(
+            "--insight", action="store_true", help="Enable pytest-insight"
+        )
 
     # Empty string passed as '--insight-sut' value
     def test_empty_insight_sut_value(self, mocker):
@@ -39,7 +43,10 @@ class Test_qPytestPlugin:
         pytest_addoption(mock_parser)
 
         mock_group.addoption.assert_any_call(
-            "--insight-sut", action="store", default="default_sut", help="Name of the system under test"
+            "--insight-sut",
+            action="store",
+            default="default_sut",
+            help="Name of the system under test",
         )
 
     # '--insight' flag is added as a boolean option
@@ -51,7 +58,9 @@ class Test_qPytestPlugin:
         pytest_addoption(mock_parser)
 
         mock_parser.getgroup.assert_called_once_with("pytest-insight")
-        mock_group.addoption.assert_any_call("--insight", action="store_true", help="Enable pytest-insight")
+        mock_group.addoption.assert_any_call(
+            "--insight", action="store_true", help="Enable pytest-insight"
+        )
 
     # '--insight-sut' option accepts string value with default 'default_sut'
     def test_insight_sut_option_default_value(self, mocker):
@@ -62,7 +71,10 @@ class Test_qPytestPlugin:
         pytest_addoption(mock_parser)
 
         mock_group.addoption.assert_any_call(
-            "--insight-sut", action="store", default="default_sut", help="Name of the system under test"
+            "--insight-sut",
+            action="store",
+            default="default_sut",
+            help="Name of the system under test",
         )
 
     # '--insight-storage-type' option accepts valid storage type values
@@ -156,7 +168,10 @@ class Test_qPytestPlugin:
         pytest_addoption(mock_parser)
 
         mock_group.addoption.assert_any_call(
-            "--insight-sut", action="store", default="default_sut", help="Name of the system under test"
+            "--insight-sut",
+            action="store",
+            default="default_sut",
+            help="Name of the system under test",
         )
         mock_group.addoption.assert_any_call(
             "--insight-storage-type",
@@ -190,7 +205,12 @@ class Test_qPytestPlugin:
 
         pytest_addoption(mock_parser)
 
-        expected_options = ["--insight", "--insight-sut", "--insight-storage-type", "--insight-json-path"]
+        expected_options = [
+            "--insight",
+            "--insight-sut",
+            "--insight-storage-type",
+            "--insight-json-path",
+        ]
 
         actual_options = [call[0][0] for call in mock_group.addoption.call_args_list]
         assert all(option.startswith("--insight") for option in actual_options)

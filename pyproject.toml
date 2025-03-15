@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "Jeffrey Wright", email = "jeffrey.wright@wartsila.com" }
+    { name = "Jeff Wright", email = "jeff.washcloth@gmail.com" }
 ]
 requires-python = ">=3.9.16"
 dependencies = [
@@ -22,7 +22,7 @@ dependencies = [
     "requests>=2.32.3",
     "freezegun>=1.5.1",
     "python-multipart>=0.0.20",
-    "bulletprompt>=2.2.3",
+    "pytest-mock>=3.14.0",
 ]
 
 [project.entry-points.pytest11]

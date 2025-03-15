@@ -81,16 +81,18 @@ def text_gen():
 
 
 @pytest.fixture
-def random_test_session(text_gen):
+def random_test_session(text_gen, get_test_time):
     """A factory fixture to create a random TestSession instance."""
 
     def _create():
         # Generate new random values each time the factory is called
         num_tests = random.randint(2, 6)  # More realistic test count
-        include_rerun = random.choice([True, False, False, False])  # 25% chance of having reruns
+        include_rerun = random.choice(
+            [True, False, False, False]
+        )  # 25% chance of having reruns
 
         # Create base session time window for consistent timing
-        base_time = datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 60))
+        base_time = get_test_time()  # Use get_test_time for timezone-aware datetime
         session_start_time = base_time
         session_stop_time = base_time + timedelta(seconds=random.randint(30, 300))
 
@@ -113,9 +115,17 @@ def random_test_session(text_gen):
 
             outcome = random.choice(list(TestOutcome))
             caplog = text_gen.sentence()
-            capstderr = text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+            capstderr = (
+                text_gen.sentence()
+                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+                else ""
+            )
             capstdout = text_gen.sentence()
-            longreprtext = text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+            longreprtext = (
+                text_gen.paragraph()
+                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+                else ""
+            )
             has_warning = random.choice([True, False])
 
             result = TestResult(
@@ -161,11 +171,14 @@ def random_test_session(text_gen):
                     result = TestResult(
                         nodeid=rerun_nodeid,
                         outcome=final_outcome,
-                        start_time=current_time + timedelta(seconds=random.randint(1, 10)),
+                        start_time=current_time
+                        + timedelta(seconds=random.randint(1, 10)),
                         duration=random.uniform(0.1, 5.0),
                         caplog=f"Attempt {i+1}" if not is_final else "Final attempt",
                         capstderr=(
-                            "" if not is_final or final_outcome == TestOutcome.PASSED else "Test failed after reruns"
+                            ""
+                            if not is_final or final_outcome == TestOutcome.PASSED
+                            else "Test failed after reruns"
                         ),
                         capstdout=f"Running test (attempt {i+1})",
                         longreprtext=(
@@ -351,6 +364,7 @@ def mock_rerun_group1(mock_test_result):
 
 @pytest.fixture
 def mock_session_no_reruns(
+    get_test_time,
     mock_test_result_pass,
     mock_test_result_fail,
     mock_test_result_skip,
@@ -363,8 +377,8 @@ def mock_session_no_reruns(
     return TestSession(
         sut_name="test_sut",
         session_id="123",
-        session_start_time=datetime.utcnow(),
-        session_stop_time=datetime.utcnow() + timedelta(minutes=1),
+        session_start_time=get_test_time(),
+        session_stop_time=get_test_time(60),  # 1 minute later
         test_results=[
             mock_test_result_pass,
             mock_test_result_fail,
@@ -556,7 +570,7 @@ def random_test_result():
 
 
 @pytest.fixture
-def random_rerun_test_group(random_test_result):
+def random_rerun_test_group(random_test_result, text_gen, get_test_time):
     """A factory fixture to create a random RerunTestGroup instance.
 
     Maintains session context by:
@@ -565,47 +579,76 @@ def random_rerun_test_group(random_test_result):
     3. Following proper outcome progression (RERUN → PASSED/FAILED)
 
     Supports pattern matching with nodeids:
-    - "test_api.py::test_get_api"      # Matches 'api' in both parts
-    - "test_api.py::test_post_api"     # Matches 'api' in both parts
-    - "test_ui.py::test_get_ui"        # Matches 'get' in test name
+    - "test_api.py::test_get_api"      # Module pattern
+    - "test_api.py::test_post_api"     # Test name pattern
+    - "test_api.py::TestApi::test_get" # Full path with class
     """
 
     def _create():
-        # Use consistent nodeid for all tests in the group to maintain relationships
+        # Generate test nodeids that support pattern matching rules
         module_types = ["api", "ui", "db", "auth"]
         module_name = random.choice(module_types)
         test_types = ["get", "post", "update", "delete", "list", "create"]
-        test_name = random.choice(test_types)
 
-        # Format: test_{module}.py::test_{action}_{module}
-        # This format supports our pattern matching rules:
-        # - Non-regex: Splits on :: into parts
-        # - Module part: Strips .py before matching
-        # - Test name part: Direct pattern match
-        nodeid = f"test_{module_name}.py::test_{test_name}_{module_name}"
+        # Create test nodeid with optional class
+        test_name = f"test_{random.choice(test_types)}_{module_name}"
+        test_file = f"test_{module_name}.py"
 
+        # 30% chance to include a class in the nodeid
+        if random.random() < 0.3:
+            class_name = f"Test{random.choice(['Api', 'Ui', 'Db', 'Auth'])}"
+            nodeid = f"{test_file}::{class_name}::{test_name}"
+        else:
+            nodeid = f"{test_file}::{test_name}"
+
+        # Create rerun group
+        group = RerunTestGroup(nodeid=nodeid)
         num_reruns = random.randint(1, 3)  # Random number of reruns
+        current_time = get_test_time()  # Start time for first test
 
-        # Create rerun results - all with RERUN outcome
-        rerun_results = []
-        for _ in range(num_reruns):
-            result = random_test_result()
-            result.nodeid = nodeid  # Override with consistent nodeid
-            result.outcome = TestOutcome.RERUN
-            rerun_results.append(result)
+        # Generate rerun sequence with proper timing and outcomes
+        for i in range(num_reruns):
+            is_final = i == num_reruns - 1
 
-        # Create final result with PASSED/FAILED
-        final_result = random_test_result()
-        final_result.nodeid = nodeid  # Override with consistent nodeid
-        final_result.outcome = TestOutcome.from_str(random.choice(["PASSED", "FAILED"]))
+            # For final attempt, more likely to pass than fail
+            final_outcome = (
+                random.choices(
+                    [TestOutcome.PASSED, TestOutcome.FAILED],
+                    weights=[0.8, 0.2],  # 80% chance to pass on final attempt
+                )[0]
+                if is_final
+                else TestOutcome.RERUN
+            )
 
-        # Combine all results in chronological order
-        all_results = rerun_results + [final_result]
+            # Generate test output based on outcome
+            caplog = text_gen.sentence()
+            capstderr = (
+                text_gen.sentence() if final_outcome == TestOutcome.FAILED else ""
+            )
+            capstdout = text_gen.sentence()
+            longreprtext = (
+                text_gen.paragraph() if final_outcome == TestOutcome.FAILED else ""
+            )
+            has_warning = random.choice([True, False]) if is_final else False
 
-        return RerunTestGroup(
-            nodeid=nodeid,
-            tests=all_results,  # Contains all results in order, with final result last
-        )
+            result = TestResult(
+                nodeid=nodeid,
+                outcome=final_outcome,
+                start_time=current_time,
+                duration=random.uniform(0.1, 5.0),
+                caplog=caplog,
+                capstderr=capstderr,
+                capstdout=capstdout,
+                longreprtext=longreprtext,
+                has_warning=has_warning,
+            )
+
+            group.add_test(result)
+            current_time = result.stop_time + timedelta(
+                seconds=1
+            )  # 1 second gap between reruns
+
+        return group
 
     return _create
 
@@ -771,10 +814,35 @@ def random_test_result_legacy(nodeid, text_gen):
             start_time=start_time,
             duration=duration,
             caplog=text_gen.sentence(),
-            capstderr=(text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""),
+            capstderr=(
+                text_gen.sentence()
+                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+                else ""
+            ),
             capstdout=text_gen.sentence(),
-            longreprtext=(text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""),
+            longreprtext=(
+                text_gen.paragraph()
+                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+                else ""
+            ),
             has_warning=random.choice([True, False]),
         )
 
     return _create
+
+
+@pytest.fixture
+def get_test_time():
+    """Get a test timestamp with optional offset.
+
+    Returns:
+        A UTC datetime starting from 2023-01-01 plus the given offset in seconds.
+        This provides consistent timestamps for test cases while avoiding any
+        timezone issues.
+    """
+
+    def _get_test_time(offset_seconds: int = 0) -> datetime:
+        base = datetime(2023, 1, 1, tzinfo=timezone.utc)
+        return base + timedelta(seconds=offset_seconds)
+
+    return _get_test_time

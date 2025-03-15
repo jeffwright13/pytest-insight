@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from pytest_insight.models import TestOutcome, TestSession
-from pytest_insight.query.query import Query
+from pytest_insight.query import Query
 from pytest_insight.storage import JSONStorage
 
 

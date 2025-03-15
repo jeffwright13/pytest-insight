@@ -175,7 +175,7 @@ class PracticeDataGenerator:
 
     def _generate_session_id(self, sut_name: str, is_base: bool = False) -> str:
         """Generate a session ID following the proper pattern."""
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         prefix = "base" if is_base else "target"
         return f"{prefix}-{sut_name}-{timestamp}-{random.randint(10000000, 99999999):x}"
 
@@ -240,6 +240,7 @@ class PracticeDataGenerator:
                 [
                     TestOutcome.XFAILED,
                     TestOutcome.XFAILED,
+                    TestOutcome.XFAILED,
                     TestOutcome.XFAILED,  # 30%
                     TestOutcome.XPASSED,  # 10%
                     TestOutcome.RERUN,
@@ -255,6 +256,7 @@ class PracticeDataGenerator:
             # Pure flaky tests (not marked for expected failure)
             outcome = random.choice(
                 [
+                    TestOutcome.PASSED,
                     TestOutcome.PASSED,
                     TestOutcome.PASSED,
                     TestOutcome.PASSED,
@@ -276,6 +278,7 @@ class PracticeDataGenerator:
             # Pure xfail tests (not flaky)
             outcome = random.choice(
                 [
+                    TestOutcome.XFAILED,
                     TestOutcome.XFAILED,
                     TestOutcome.XFAILED,
                     TestOutcome.XFAILED,

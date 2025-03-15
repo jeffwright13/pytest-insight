@@ -19,8 +19,8 @@ from collections import Counter
 from datetime import datetime, timedelta
 
 from pytest_insight.models import TestOutcome
-from pytest_insight.query.comparison import Comparison
-from pytest_insight.query.query import Query
+from pytest_insight.comparison import Comparison
+from pytest_insight.query import Query
 
 # %% [markdown]
 # ## 1. Test Health Analysis with Session Context

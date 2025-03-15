@@ -4,7 +4,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from pytest_insight.models import TestOutcome, TestResult, TestSession
-from pytest_insight.query.comparison import Comparison, ComparisonResult
+from pytest_insight.comparison import Comparison, ComparisonResult
 from pytest_insight.storage import get_storage_instance
 
 router = APIRouter(prefix="/api/v1")

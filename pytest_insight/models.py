@@ -75,9 +75,9 @@ class TestResult:
         """Convert test result to a dictionary for JSON serialization."""
         return {
             "nodeid": self.nodeid,
-            "outcome": self.outcome.to_str(),  # Use to_str() instead of str()
+            "outcome": self.outcome.to_str(),  # Use to_str() for consistent lowercase serialization
             "start_time": self.start_time.isoformat(),
-            "stop_time": self.stop_time.isoformat(),
+            "stop_time": self.stop_time.isoformat() if self.stop_time else None,
             "duration": self.duration,
             "caplog": self.caplog,
             "capstderr": self.capstderr,

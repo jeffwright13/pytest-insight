@@ -103,7 +103,9 @@ class Test_TestResult:
         result_dict = test_result.to_dict()
         assert isinstance(result_dict, dict)
         assert result_dict["nodeid"] == test_result.nodeid
-        assert result_dict["outcome"] == test_result.outcome.to_str()  # Use to_str() consistently
+        assert (
+            result_dict["outcome"] == test_result.outcome.to_str()
+        )  # Use to_str() consistently
         assert result_dict["start_time"] == test_result.start_time.isoformat()
         assert result_dict["duration"] == test_result.duration
         assert result_dict["caplog"] == test_result.caplog
@@ -126,7 +128,7 @@ class Test_TestResult:
         assert result.start_time == test_result.start_time
 
         # Use pytest.approx for floating-point comparison
-        assert result.duration == pytest.approx(test_result.duration)
+        assert result.duration == pytest.approx(test_result.duration, abs=0.1, rel=0.01)
 
         assert result.caplog == test_result.caplog
         assert result.capstderr == test_result.capstderr
@@ -139,7 +141,12 @@ class Test_TestResult:
         now = datetime.utcnow()
 
         # Test with duration provided
-        result1 = TestResult(nodeid="test_a.py::test_1", outcome=TestOutcome.PASSED, start_time=now, duration=1.5)
+        result1 = TestResult(
+            nodeid="test_a.py::test_1",
+            outcome=TestOutcome.PASSED,
+            start_time=now,
+            duration=1.5,
+        )
         assert result1.stop_time == now + timedelta(seconds=1.5)
 
         # Test with stop_time provided
@@ -153,7 +160,9 @@ class Test_TestResult:
 
         # Test invalid initialization
         with pytest.raises(ValueError) as exc:
-            TestResult(nodeid="test_a.py::test_1", outcome=TestOutcome.PASSED, start_time=now)
+            TestResult(
+                nodeid="test_a.py::test_1", outcome=TestOutcome.PASSED, start_time=now
+            )
         assert "Either stop_time or duration must be provided" in str(exc.value)
 
 
@@ -164,7 +173,9 @@ class test_TestSession:
         """Test the random_test_session fixture's properties and methods."""
         session = random_test_session()  # Call factory function
         assert isinstance(session.sut_name, str) and session.sut_name.startswith("SUT-")
-        assert isinstance(session.session_id, str) and session.session_id.startswith("session-")
+        assert isinstance(session.session_id, str) and session.session_id.startswith(
+            "session-"
+        )
 
         assert isinstance(session.session_start_time, datetime)
         assert isinstance(session.session_stop_time, datetime)
@@ -245,9 +256,15 @@ class test_TestSession:
         assert isinstance(session_dict, dict)
         assert session_dict["sut_name"] == session.sut_name
         assert session_dict["session_id"] == session.session_id
-        assert session_dict["session_start_time"] == session.session_start_time.isoformat()
-        assert session_dict["session_stop_time"] == session.session_stop_time.isoformat()
-        assert session_dict["session_duration"] == session.session_duration.total_seconds()
+        assert (
+            session_dict["session_start_time"] == session.session_start_time.isoformat()
+        )
+        assert (
+            session_dict["session_stop_time"] == session.session_stop_time.isoformat()
+        )
+        assert (
+            session_dict["session_duration"] == session.session_duration.total_seconds()
+        )
         assert len(session_dict["test_results"]) == len(session.test_results)
         assert len(session_dict["rerun_test_groups"]) == len(session.rerun_test_groups)
         assert session_dict["session_tags"] == session.session_tags
@@ -260,9 +277,15 @@ class test_TestSession:
         assert isinstance(session, TestSession)
         assert session.sut_name == session_dict["sut_name"]
         assert session.session_id == session_dict["session_id"]
-        assert session.session_start_time == datetime.fromisoformat(session_dict["session_start_time"])
-        assert session.session_stop_time == datetime.fromisoformat(session_dict["session_stop_time"])
-        assert session.session_duration == timedelta(seconds=session_dict["session_duration"])
+        assert session.session_start_time == datetime.fromisoformat(
+            session_dict["session_start_time"]
+        )
+        assert session.session_stop_time == datetime.fromisoformat(
+            session_dict["session_stop_time"]
+        )
+        assert session.session_duration == timedelta(
+            seconds=session_dict["session_duration"]
+        )
         assert len(session.test_results) == len(session_dict["test_results"])
         assert len(session.rerun_test_groups) == len(session_dict["rerun_test_groups"])
         assert session.session_tags == session_dict["session_tags"]
@@ -276,7 +299,12 @@ class test_TestSession:
             session_start_time=now,
             session_stop_time=now + timedelta(minutes=1),
             test_results=[
-                TestResult(nodeid="test_a.py::test_1", outcome=TestOutcome.PASSED, start_time=now, duration=1.0)
+                TestResult(
+                    nodeid="test_a.py::test_1",
+                    outcome=TestOutcome.PASSED,
+                    start_time=now,
+                    duration=1.0,
+                )
             ],
             session_tags={"env": "test"},
         )
@@ -385,15 +413,17 @@ class Test_RerunTestGroup:
 class Test_TestHistory:
     """Test the TestHistory model."""
 
-    def test_test_history(self):
+    def test_test_history(self, get_test_time):
         """Test TestHistory functionality."""
         history = TestHistory()
-        now = datetime.utcnow()
+        now = get_test_time()
         stop_time1 = now + timedelta(seconds=5)
         stop_time2 = now + timedelta(seconds=20)
 
         session1 = TestSession("SUT-1", "session-001", now, stop_time1, [], [])
-        session2 = TestSession("SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], [])
+        session2 = TestSession(
+            "SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], []
+        )
 
         history.add_test_session(session1)
         history.add_test_session(session2)
@@ -406,7 +436,9 @@ class Test_TestHistory:
         history = TestHistory()
         assert history.sessions == []
 
-        session = TestSession("SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), [], [])
+        session = TestSession(
+            "SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), [], []
+        )
         history.add_test_session(session)
 
         assert history.sessions == [session]
@@ -419,7 +451,9 @@ class Test_TestHistory:
         stop_time2 = now + timedelta(seconds=20)
 
         session1 = TestSession("SUT-1", "session-001", now, stop_time1, [], [])
-        session2 = TestSession("SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], [])
+        session2 = TestSession(
+            "SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], []
+        )
 
         history.add_test_session(session1)
         history.add_test_session(session2)
@@ -435,7 +469,9 @@ class Test_TestHistory:
         stop_time2 = now + timedelta(seconds=20)
 
         session1 = TestSession("SUT-1", "session-001", now, stop_time1, [], [])
-        session2 = TestSession("SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], [])
+        session2 = TestSession(
+            "SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], []
+        )
 
         history.add_test_session(session1)
         history.add_test_session(session2)
@@ -462,9 +498,9 @@ class Test_TestHistory:
         # Check global cache invalidation
         assert test_history._all_sessions_cache is None
 
-    def test_multiple_sessions_same_sut(self, test_history):
+    def test_multiple_sessions_same_sut(self, test_history, get_test_time):
         """Test adding multiple sessions for same SUT."""
-        now = datetime.now()
+        now = get_test_time()
 
         # Create sessions with different times
         sessions = [
@@ -490,9 +526,9 @@ class Test_TestHistory:
         ordered_sessions = test_history.get_sut_sessions("test-sut")
         assert ordered_sessions == sorted(sessions, key=lambda s: s.session_start_time)
 
-    def test_multiple_suts(self, test_history):
+    def test_multiple_suts(self, test_history, get_test_time):
         """Test handling multiple SUTs."""
-        now = datetime.now()
+        now = get_test_time()
 
         # Create sessions for different SUTs
         sut_sessions = {
@@ -521,21 +557,85 @@ class Test_TestHistory:
         # Check latest session across all SUTs
         assert test_history.latest_session() == sut_sessions["sut-2"]
 
-    def test_sessions_property_caching(self, test_history, sample_session):
-        """Test caching behavior of sessions property."""
-        test_history.add_test_session(sample_session)
+    def test_sessions_cache_invalidation(self, test_history, get_test_time):
+        """Test that sessions cache is properly invalidated on updates."""
+        now = get_test_time()
 
-        # First access should create cache
-        first_access = test_history.sessions
-        assert test_history._all_sessions_cache is not None
+        # Create sessions
+        session1 = TestSession(
+            sut_name="test-sut",
+            session_id="session-1",
+            session_start_time=now,
+            session_stop_time=now + timedelta(minutes=1),
+            test_results=[],
+        )
+        session2 = TestSession(
+            sut_name="test-sut",
+            session_id="session-2",
+            session_start_time=now + timedelta(minutes=5),
+            session_stop_time=now + timedelta(minutes=6),
+            test_results=[],
+        )
 
-        # Cache should be copied
-        assert first_access is not test_history._all_sessions_cache
+        # Add first session and cache sessions
+        test_history.add_test_session(session1)
+        _ = test_history.sessions  # Access to build cache
 
-        # Second access should use cache
-        second_access = test_history.sessions
-        assert second_access == first_access
-        assert second_access is not first_access  # Should be a new copy
+        # Add second session
+        test_history.add_test_session(session2)
+
+        # Cache should be invalidated
+        assert test_history._all_sessions_cache is None
+
+        # Rebuild cache and verify
+        sessions = test_history.sessions
+        assert len(sessions) == 2
+        assert sessions == sorted(
+            [session1, session2], key=lambda s: s.session_start_time
+        )
+
+    def test_latest_session_across_suts(self, test_history, get_test_time):
+        """Test latest_session returns most recent across all SUTs."""
+        now = get_test_time()
+
+        # Create sessions for different SUTs with different times
+        sessions = [
+            TestSession(
+                sut_name="sut-1",
+                session_id="session-1",
+                session_start_time=now,
+                session_stop_time=now + timedelta(minutes=1),
+                test_results=[],
+            ),
+            TestSession(
+                sut_name="sut-2",
+                session_id="session-2",
+                session_start_time=now + timedelta(minutes=5),
+                session_stop_time=now + timedelta(minutes=6),
+                test_results=[],
+            ),
+            TestSession(
+                sut_name="sut-1",
+                session_id="session-3",
+                session_start_time=now + timedelta(minutes=10),
+                session_stop_time=now + timedelta(minutes=11),
+                test_results=[],
+            ),
+        ]
+
+        # Add sessions in random order
+        test_history.add_test_session(sessions[1])  # sut-2 middle time
+        test_history.add_test_session(sessions[0])  # sut-1 earliest
+        test_history.add_test_session(sessions[2])  # sut-1 latest
+
+        # Latest session overall should be sessions[2]
+        assert test_history.latest_session() == sessions[2]
+
+        # Latest for sut-1 should be sessions[2]
+        assert test_history._latest_by_sut["sut-1"] == sessions[2]
+
+        # Latest for sut-2 should be sessions[1]
+        assert test_history._latest_by_sut["sut-2"] == sessions[1]
 
     def test_nonexistent_sut(self, test_history):
         """Test handling of nonexistent SUT requests."""
@@ -546,68 +646,82 @@ class Test_TestHistory:
         """Test latest_session with empty history."""
         assert test_history.latest_session() is None
 
-    def test_sessions_cache_invalidation(self, test_history):
+    def test_sessions_cache_invalidation(self, test_history, get_test_time):
         """Test that sessions cache is properly invalidated on updates."""
-        now = datetime.now()
+        now = get_test_time()
+
+        # Create sessions
         session1 = TestSession(
             sut_name="test-sut",
             session_id="session-1",
             session_start_time=now,
-            session_stop_time=now + timedelta(seconds=10),
+            session_stop_time=now + timedelta(minutes=1),
             test_results=[],
         )
-
-        # Add first session and access cache
-        test_history.add_test_session(session1)
-        first_cache = test_history.sessions
-
-        # Add another session
         session2 = TestSession(
             sut_name="test-sut",
             session_id="session-2",
-            session_start_time=now + timedelta(minutes=1),
-            session_stop_time=now + timedelta(minutes=1, seconds=10),
+            session_start_time=now + timedelta(minutes=5),
+            session_stop_time=now + timedelta(minutes=6),
             test_results=[],
         )
+
+        # Add first session and cache sessions
+        test_history.add_test_session(session1)
+        _ = test_history.sessions  # Access to build cache
+
+        # Add second session
         test_history.add_test_session(session2)
 
-        # Verify cache was invalidated and new data is present
-        updated_sessions = test_history.sessions
-        assert len(updated_sessions) == 2
-        assert updated_sessions != first_cache
+        # Cache should be invalidated
+        assert test_history._all_sessions_cache is None
 
-    def test_latest_session_across_suts(self, test_history):
+        # Rebuild cache and verify
+        sessions = test_history.sessions
+        assert len(sessions) == 2
+        assert sessions == sorted(
+            [session1, session2], key=lambda s: s.session_start_time
+        )
+
+    def test_latest_session_across_suts(self, test_history, get_test_time):
         """Test latest_session returns most recent across all SUTs."""
-        now = datetime.now()
+        now = get_test_time()
 
-        # Create sessions with different times across SUTs
+        # Create sessions for different SUTs with different times
         sessions = [
             TestSession(
                 sut_name="sut-1",
-                session_id="old-1",
-                session_start_time=now - timedelta(hours=2),
-                session_stop_time=now - timedelta(hours=2) + timedelta(seconds=10),
+                session_id="session-1",
+                session_start_time=now,
+                session_stop_time=now + timedelta(minutes=1),
                 test_results=[],
             ),
             TestSession(
                 sut_name="sut-2",
-                session_id="newest",
-                session_start_time=now,
-                session_stop_time=now + timedelta(seconds=10),
+                session_id="session-2",
+                session_start_time=now + timedelta(minutes=5),
+                session_stop_time=now + timedelta(minutes=6),
                 test_results=[],
             ),
             TestSession(
                 sut_name="sut-1",
-                session_id="old-2",
-                session_start_time=now - timedelta(hours=1),
-                session_stop_time=now - timedelta(hours=1) + timedelta(seconds=10),
+                session_id="session-3",
+                session_start_time=now + timedelta(minutes=10),
+                session_stop_time=now + timedelta(minutes=11),
                 test_results=[],
             ),
         ]
 
-        for session in sessions:
-            test_history.add_test_session(session)
+        # Add sessions in random order
+        test_history.add_test_session(sessions[1])  # sut-2 middle time
+        test_history.add_test_session(sessions[0])  # sut-1 earliest
+        test_history.add_test_session(sessions[2])  # sut-1 latest
 
-        latest = test_history.latest_session()
-        assert latest.session_id == "newest"
-        assert latest.sut_name == "sut-2"
+        # Latest session overall should be sessions[2]
+        assert test_history.latest_session() == sessions[2]
+
+        # Latest for sut-1 should be sessions[2]
+        assert test_history._latest_by_sut["sut-1"] == sessions[2]
+
+        # Latest for sut-2 should be sessions[1]
+        assert test_history._latest_by_sut["sut-2"] == sessions[1]

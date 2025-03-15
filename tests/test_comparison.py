@@ -1,15 +1,15 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from pytest_insight.models import TestOutcome, TestResult, TestSession
-from pytest_insight.query.comparison import Comparison, ComparisonError, ComparisonResult
-from pytest_insight.query.query import Query
+from pytest_insight.comparison import Comparison, ComparisonError, ComparisonResult
+from pytest_insight.query import Query
 
 
 @pytest.fixture
-def base_session():
+def base_session(get_test_time):
     """Fixture providing a base test session."""
-    base_time = datetime.now() - timedelta(days=7)
+    base_time = get_test_time() - timedelta(days=7)
     return TestSession(
         sut_name="api-service",
         session_id="base-123",
@@ -36,9 +36,9 @@ def base_session():
 
 
 @pytest.fixture
-def target_session():
+def target_session(get_test_time):
     """Fixture providing a target test session with changes."""
-    target_time = datetime.now()
+    target_time = get_test_time()
     return TestSession(
         sut_name="api-service",
         session_id="target-123",
@@ -69,7 +69,11 @@ class Test_Comparison:
 
     def test_basic_comparison(self, base_session, target_session):
         """Test basic comparison functionality."""
-        comparison = Comparison().between_suts("api-service", "api-service").execute([base_session, target_session])
+        comparison = (
+            Comparison()
+            .between_suts("api-service", "api-service")
+            .execute([base_session, target_session])
+        )
 
         assert isinstance(comparison, ComparisonResult)
 
@@ -96,15 +100,17 @@ class Test_Comparison:
     def test_environment_comparison(self, base_session, target_session):
         """Test comparing across environments."""
         comparison = (
-            Comparison().with_environment({"python": "3.9"}, {"python": "3.10"}).execute([base_session, target_session])
+            Comparison()
+            .with_environment({"python": "3.9"}, {"python": "3.10"})
+            .execute([base_session, target_session])
         )
 
         assert isinstance(comparison, ComparisonResult)
         assert comparison.has_changes
 
-    def test_date_window_comparison(self, base_session, target_session):
+    def test_date_window_comparison(self, base_session, target_session, get_test_time):
         """Test comparing within time window."""
-        now = datetime.now()
+        now = get_test_time()
         comparison = (
             Comparison()
             .in_date_window(now - timedelta(days=14), now - timedelta(days=7))
@@ -156,7 +162,9 @@ class Test_Comparison:
         """
         comparison = (
             Comparison()
-            .with_test_pattern("get")  # Will match test_get and test_post (both contain "get")
+            .with_test_pattern(
+                "get"
+            )  # Will match test_get and test_post (both contain "get")
             .with_duration_threshold(0.5)  # Lower threshold to 0.5s
             .execute([base_session, target_session])
         )
@@ -173,8 +181,12 @@ class Test_Comparison:
         # Create a comparison with multiple filters
         comparison = (
             Comparison()
-            .with_test_pattern("get")  # Will match test_get and test_post (both contain "get")
-            .with_duration_threshold(0.5)  # This should pass (both sessions have durations > 0.5)
+            .with_test_pattern(
+                "get"
+            )  # Will match test_get and test_post (both contain "get")
+            .with_duration_threshold(
+                0.5
+            )  # This should pass (both sessions have durations > 0.5)
             .execute([base_session, target_session])
         )
 

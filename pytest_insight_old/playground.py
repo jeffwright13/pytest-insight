@@ -7,8 +7,8 @@ Run this file directly to see the examples in action.
 from datetime import datetime, timedelta
 
 from pytest_insight.models import TestOutcome
-from pytest_insight.query.comparison import Comparison
-from pytest_insight.query.query import Query
+from pytest_insight.comparison import Comparison
+from pytest_insight.query import Query
 
 print("pytest-insight Quick Start Guide\n")
 
