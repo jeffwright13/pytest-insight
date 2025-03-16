@@ -2,14 +2,16 @@
 """Standalone script to manage the pytest-insight metrics server."""
 
 import argparse
-import uvicorn
+
 import requests
-from pathlib import Path
+import uvicorn
+
 
 def start_server(port: int = 8000, reload: bool = True) -> None:
     """Start the FastAPI metrics server."""
     print(f"Starting metrics server on port {port}")
     uvicorn.run("pytest_insight.server:app", port=port, reload=reload)
+
 
 def check_status(port: int = 8000) -> None:
     """Check if server is running and responding."""
@@ -25,6 +27,7 @@ def check_status(port: int = 8000) -> None:
             print("✗ Server is not responding correctly")
     except requests.ConnectionError:
         print("✗ Server is not running")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Manage pytest-insight metrics server")
@@ -47,6 +50,7 @@ def main():
         check_status(args.port)
     else:
         parser.print_help()
+
 
 if __name__ == "__main__":
     main()

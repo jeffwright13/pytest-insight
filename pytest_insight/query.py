@@ -14,7 +14,6 @@ import re
 from dataclasses import dataclass
 from dataclasses import field as datafield
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from enum import Enum, auto
 from typing import (
     Callable,
@@ -25,6 +24,7 @@ from typing import (
     Set,
     Union,
 )
+from zoneinfo import ZoneInfo
 
 from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.storage import BaseStorage, get_storage_instance
@@ -264,11 +264,7 @@ class QueryResult:
     def matched_nodeids(self) -> Set[str]:
         """Get set of unique test nodeids from matching sessions."""
         if self._matched_nodeids is None:
-            self._matched_nodeids = {
-                test.nodeid
-                for session in self.sessions
-                for test in session.test_results
-            }
+            self._matched_nodeids = {test.nodeid for session in self.sessions for test in session.test_results}
         return self._matched_nodeids
 
     def __iter__(self):
@@ -301,9 +297,7 @@ class QueryTestFilter:
         self.query = query
         self.filters: List[TestFilter] = []
 
-    def with_pattern(
-        self, pattern: str, field_name: str = "nodeid", use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_pattern(self, pattern: str, field_name: str = "nodeid", use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern against any string field.
 
         Args:
@@ -315,9 +309,7 @@ class QueryTestFilter:
         self.filters.append(filter_class(pattern=pattern, field_name=field_name))
         return self
 
-    def with_output_containing(
-        self, pattern: str, use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_output_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern in stdout/stderr/log output.
 
         This is a convenience method that checks all output fields.
@@ -333,17 +325,13 @@ class QueryTestFilter:
         )
         return self
 
-    def with_error_containing(
-        self, pattern: str, use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_error_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern in error output (longreprtext)."""
         filter_class = RegexPatternFilter if use_regex else GlobPatternFilter
         self.filters.append(filter_class(pattern=pattern, field_name="longreprtext"))
         return self
 
-    def with_duration_between(
-        self, min_seconds: float, max_seconds: float
-    ) -> "QueryTestFilter":
+    def with_duration_between(self, min_seconds: float, max_seconds: float) -> "QueryTestFilter":
         """Filter tests by duration range."""
         self.filters.append(DurationFilter(min_seconds, max_seconds))
         return self
@@ -353,9 +341,7 @@ class QueryTestFilter:
         self.filters.append(OutcomeFilter(outcome))
         return self
 
-    def with_custom_filter(
-        self, predicate: Callable[[TestResult], bool], name: str
-    ) -> "QueryTestFilter":
+    def with_custom_filter(self, predicate: Callable[[TestResult], bool], name: str) -> "QueryTestFilter":
         """Add custom test filter."""
         self.filters.append(CustomFilter(predicate, name))
         return self
@@ -376,9 +362,11 @@ class QueryTestFilter:
             output_filters = []
             other_filters = []
             for f in self.filters:
-                if isinstance(
-                    f, (GlobPatternFilter, RegexPatternFilter)
-                ) and f.field_name in ["capstdout", "capstderr", "caplog"]:
+                if isinstance(f, (GlobPatternFilter, RegexPatternFilter)) and f.field_name in [
+                    "capstdout",
+                    "capstderr",
+                    "caplog",
+                ]:
                     output_filters.append(f)
                 else:
                     other_filters.append(f)
@@ -401,11 +389,7 @@ class QueryTestFilter:
 
     def to_dict(self) -> Dict:
         """Convert filters to dictionary."""
-        return {
-            "filters": [
-                f.to_dict() for f in self.filters if not isinstance(f, CustomFilter)
-            ]
-        }
+        return {"filters": [f.to_dict() for f in self.filters if not isinstance(f, CustomFilter)]}
 
     @classmethod
     def from_dict(cls, data: Dict, query: "Query") -> "QueryTestFilter":
@@ -476,9 +460,7 @@ class Query:
 
         if sessions is None:
             sessions = self.storage.load_sessions()
-        elif not isinstance(sessions, list) or not all(
-            isinstance(s, TestSession) for s in sessions
-        ):
+        elif not isinstance(sessions, list) or not all(isinstance(s, TestSession) for s in sessions):
             raise QueryExecutionError("Invalid session type")
 
         filtered_sessions: List[TestSession] = sessions
@@ -490,16 +472,12 @@ class Query:
                 session
                 for session in filtered_sessions
                 if any(  # ANY test in session matches...
-                    all(
-                        filter_func(test) for filter_func in self._test_filters
-                    )  # ALL filters
+                    all(filter_func(test) for filter_func in self._test_filters)  # ALL filters
                     for test in session.test_results
                 )
             ]
 
-        execution_time: float = (
-            datetime.now(ZoneInfo("UTC")) - start_time
-        ).total_seconds()
+        execution_time: float = (datetime.now(ZoneInfo("UTC")) - start_time).total_seconds()
         return QueryResult(filtered_sessions, execution_time)
 
     def filter_by_test(self) -> QueryTestFilter:
@@ -605,13 +583,9 @@ class Query:
         if not isinstance(start, datetime) or not isinstance(end, datetime):
             raise InvalidQueryParameterError("Start and end must be datetime objects")
         if bool(start.tzinfo) != bool(end.tzinfo):
-            raise InvalidQueryParameterError(
-                "Start and end dates must both be naive or both be timezone-aware"
-            )
+            raise InvalidQueryParameterError("Start and end dates must both be naive or both be timezone-aware")
         if start.tzinfo and end.tzinfo and start.tzinfo != end.tzinfo:
-            raise InvalidQueryParameterError(
-                "Start and end dates must be in the same timezone"
-            )
+            raise InvalidQueryParameterError("Start and end dates must be in the same timezone")
         if start > end:
             raise InvalidQueryParameterError("Start date must be before end date")
         self._session_filters.append(lambda s: start <= s.session_start_time <= end)
@@ -638,8 +612,7 @@ class Query:
 
         self._session_filters.append(
             lambda s: any(
-                (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome))
-                == outcome_str
+                (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == outcome_str
                 for t in s.test_results
             )
         )
@@ -654,9 +627,7 @@ class Query:
         Returns:
             Query instance for chaining.
         """
-        self._session_filters.append(
-            lambda s: any(t.has_warning for t in s.test_results) == has_warnings
-        )
+        self._session_filters.append(lambda s: any(t.has_warning for t in s.test_results) == has_warnings)
         return self
 
     def with_reruns(self, has_reruns: bool = True) -> "Query":
@@ -685,11 +656,7 @@ class Query:
         """
         if not isinstance(pattern, str) or not pattern.strip():
             raise InvalidQueryParameterError("Test pattern must be a non-empty string")
-        self._session_filters.append(
-            lambda s: any(
-                pattern == t.nodeid or pattern in t.nodeid for t in s.test_results
-            )
-        )
+        self._session_filters.append(lambda s: any(pattern == t.nodeid or pattern in t.nodeid for t in s.test_results))
         return self
 
     def before(self, timestamp: datetime) -> "Query":
@@ -766,9 +733,7 @@ class Query:
             InvalidQueryParameterError: If pattern is empty.
         """
         if not isinstance(pattern, str) or not pattern.strip():
-            raise InvalidQueryParameterError(
-                "Session ID pattern must be a non-empty string"
-            )
+            raise InvalidQueryParameterError("Session ID pattern must be a non-empty string")
         self._session_filters.append(lambda s: fnmatch.fnmatch(s.session_id, pattern))
         return self
 

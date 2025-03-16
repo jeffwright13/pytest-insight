@@ -39,7 +39,12 @@ def pytest_addoption(parser):
     """Add pytest-insight specific command line options."""
     group = parser.getgroup("pytest-insight")  # Use same name as header
     group.addoption("--insight", action="store_true", help="Enable pytest-insight")
-    group.addoption("--insight-sut", action="store", default="default_sut", help="Name of the system under test")
+    group.addoption(
+        "--insight-sut",
+        action="store",
+        default="default_sut",
+        help="Name of the system under test",
+    )
     group.addoption(
         "--insight-storage-type",
         action="store",
@@ -131,7 +136,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 test_results.append(
                     TestResult(
                         nodeid=report.nodeid,
-                        outcome=TestOutcome.from_str(outcome) if outcome else TestOutcome.SKIPPED,
+                        outcome=(TestOutcome.from_str(outcome) if outcome else TestOutcome.SKIPPED),
                         start_time=report_time,
                         duration=report.duration,
                         caplog=getattr(report, "caplog", ""),
@@ -246,7 +251,12 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
     if rerun_groups:
         write_section_header(terminalreporter, "Rerun Analysis")
-        write_stat_line(terminalreporter, "Tests Requiring Reruns", str(len(rerun_groups)), cyan=True)
+        write_stat_line(
+            terminalreporter,
+            "Tests Requiring Reruns",
+            str(len(rerun_groups)),
+            cyan=True,
+        )
         write_stat_line(terminalreporter, "Eventually Passed", str(len(flaky_tests)), green=True)
         write_stat_line(terminalreporter, "Remained Failed", str(len(unstable_tests)), red=True)
 
@@ -281,13 +291,20 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
     if "warnings" in terminalreporter.stats:
         write_section_header(terminalreporter, "Warnings Summary")
-        write_stat_line(terminalreporter, "Total", str(len(terminalreporter.stats["warnings"])), yellow=True)
+        write_stat_line(
+            terminalreporter,
+            "Total",
+            str(len(terminalreporter.stats["warnings"])),
+            yellow=True,
+        )
 
     # Add final spacing
     terminalreporter.write_line("")
 
 
-def group_tests_into_rerun_test_groups(test_results: List[TestResult]) -> List[RerunTestGroup]:
+def group_tests_into_rerun_test_groups(
+    test_results: List[TestResult],
+) -> List[RerunTestGroup]:
     """Group test results by nodeid into RerunTestGroups.
 
     A valid rerun group must have:

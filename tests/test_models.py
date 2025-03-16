@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 import pytest
 from pytest_insight.models import (
     RerunTestGroup,
@@ -7,7 +9,7 @@ from pytest_insight.models import (
     TestResult,
     TestSession,
 )
-from zoneinfo import ZoneInfo
+
 
 # ------------------------------vvv Tests vvv -------------------------------- #
 class Test_TestOutcome:
@@ -54,7 +56,7 @@ class Test_TestResult:
 
     def test_random_test_results(self, random_test_session_factory, get_test_time):
         """Test the random_test_session fixture's properties."""
-        now = get_test_time()
+        get_test_time()
         session = random_test_session_factory()  # Call factory function
         test_result = session.test_results[0]
 
@@ -92,16 +94,14 @@ class Test_TestResult:
 
     def test_test_result_to_dict(self, random_test_session_factory, get_test_time):
         """Test the to_dict method of the TestResult model."""
-        now = get_test_time()
+        get_test_time()
         session = random_test_session_factory()  # Call factory function
         test_result = session.test_results[0]
 
         result_dict = test_result.to_dict()
         assert isinstance(result_dict, dict)
         assert result_dict["nodeid"] == test_result.nodeid
-        assert (
-            result_dict["outcome"] == test_result.outcome.to_str()
-        )  # Use to_str() consistently
+        assert result_dict["outcome"] == test_result.outcome.to_str()  # Use to_str() consistently
         assert result_dict["start_time"] == test_result.start_time.isoformat()
         assert result_dict["duration"] == test_result.duration
         assert result_dict["caplog"] == test_result.caplog
@@ -112,7 +112,7 @@ class Test_TestResult:
 
     def test_test_result_from_dict(self, random_test_session_factory, get_test_time):
         """Test the from_dict method of the TestResult model."""
-        now = get_test_time()
+        get_test_time()
         session = random_test_session_factory()  # Call factory function
         test_result = session.test_results[0]
 
@@ -153,12 +153,10 @@ class Test_TestSession:
 
     def test_random_test_session(self, random_test_session_factory, get_test_time):
         """Test the random_test_session fixture's properties and methods."""
-        now = get_test_time()
+        get_test_time()
         session = random_test_session_factory()  # Call factory function
         assert isinstance(session.sut_name, str) and session.sut_name.startswith("SUT-")
-        assert isinstance(session.session_id, str) and session.session_id.startswith(
-            "session-"
-        )
+        assert isinstance(session.session_id, str) and session.session_id.startswith("session-")
 
         assert isinstance(session.session_start_time, datetime)
         assert isinstance(session.session_stop_time, datetime)
@@ -219,43 +217,31 @@ class Test_TestSession:
 
     def test_test_session_to_dict(self, random_test_session_factory, get_test_time):
         """Test the to_dict method of the TestSession model."""
-        now = get_test_time()
+        get_test_time()
         session = random_test_session_factory()  # Call factory function
         session_dict = session.to_dict()
         assert isinstance(session_dict, dict)
         assert session_dict["sut_name"] == session.sut_name
         assert session_dict["session_id"] == session.session_id
-        assert (
-            session_dict["session_start_time"] == session.session_start_time.isoformat()
-        )
-        assert (
-            session_dict["session_stop_time"] == session.session_stop_time.isoformat()
-        )
-        assert (
-            session_dict["session_duration"] == session.session_duration
-        )
+        assert session_dict["session_start_time"] == session.session_start_time.isoformat()
+        assert session_dict["session_stop_time"] == session.session_stop_time.isoformat()
+        assert session_dict["session_duration"] == session.session_duration
         assert len(session_dict["test_results"]) == len(session.test_results)
         assert len(session_dict["rerun_test_groups"]) == len(session.rerun_test_groups)
         assert session_dict["session_tags"] == session.session_tags
 
     def test_test_session_from_dict(self, random_test_session_factory, get_test_time):
         """Test the from_dict method of the TestSession model."""
-        now = get_test_time()
+        get_test_time()
         session = random_test_session_factory()  # Call factory function
         session_dict = session.to_dict()
         session = TestSession.from_dict(session_dict)
         assert isinstance(session, TestSession)
         assert session.sut_name == session_dict["sut_name"]
         assert session.session_id == session_dict["session_id"]
-        assert session.session_start_time == datetime.fromisoformat(
-            session_dict["session_start_time"]
-        )
-        assert session.session_stop_time == datetime.fromisoformat(
-            session_dict["session_stop_time"]
-        )
-        assert session.session_duration == timedelta(
-            seconds=session_dict["session_duration"]
-        )
+        assert session.session_start_time == datetime.fromisoformat(session_dict["session_start_time"])
+        assert session.session_stop_time == datetime.fromisoformat(session_dict["session_stop_time"])
+        assert session.session_duration == timedelta(seconds=session_dict["session_duration"])
         assert len(session.test_results) == len(session_dict["test_results"])
         assert len(session.rerun_test_groups) == len(session_dict["rerun_test_groups"])
         assert session.session_tags == session_dict["session_tags"]
@@ -400,9 +386,7 @@ class Test_TestHistory:
         stop_time2 = now + timedelta(seconds=20)
 
         session1 = TestSession("SUT-1", "session-001", now, stop_time1, [], [])
-        session2 = TestSession(
-            "SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], []
-        )
+        session2 = TestSession("SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], [])
 
         history.add_test_session(session1)
         history.add_test_session(session2)
@@ -414,9 +398,7 @@ class Test_TestHistory:
         """Test sessions property of TestHistory."""
         history = TestHistory()
         now = get_test_time()
-        session = TestSession(
-            "SUT-1", "session-001", now, now + timedelta(seconds=60), [], []
-        )
+        session = TestSession("SUT-1", "session-001", now, now + timedelta(seconds=60), [], [])
         history.add_test_session(session)
         assert history.sessions == [session]
 
@@ -475,7 +457,7 @@ class Test_TestHistory:
 
     def test_multiple_sessions_same_sut(self, test_history, get_test_time):
         """Test adding multiple sessions for same SUT."""
-        now = get_test_time()
+        get_test_time()
 
         # Create sessions with different times
         sessions = [
@@ -570,9 +552,7 @@ class Test_TestHistory:
         # Rebuild cache and verify
         sessions = test_history.sessions
         assert len(sessions) == 2
-        assert sessions == sorted(
-            [session1, session2], key=lambda s: s.session_start_time
-        )
+        assert sessions == sorted([session1, session2], key=lambda s: s.session_start_time)
 
     def test_latest_session_across_suts(self, test_history, get_test_time):
         """Test latest_session returns most recent across all SUTs."""
@@ -664,9 +644,7 @@ class Test_TestHistory:
         # Rebuild cache and verify
         sessions = test_history.sessions
         assert len(sessions) == 2
-        assert sessions == sorted(
-            [session1, session2], key=lambda s: s.session_start_time
-        )
+        assert sessions == sorted([session1, session2], key=lambda s: s.session_start_time)
 
     def test_latest_session_across_suts(self, test_history, get_test_time):
         """Test latest_session returns most recent across all SUTs."""
@@ -717,7 +695,7 @@ class Test_TestHistory:
     def test_test_history_cache_invalidation(self, get_test_time):
         """Test cache invalidation in TestHistory."""
         history = TestHistory()
-        now = get_test_time()
+        get_test_time()
 
         # Create test sessions with timezone-aware datetimes
         sessions = [
@@ -913,6 +891,7 @@ class Test_TestResultBehavior:
         )
 
         assert test_result.stop_time == now + timedelta(seconds=1.0)
+
 
 class Test_TestSessionBehavior:
     """Test suite for TestSession behavior and relationships."""

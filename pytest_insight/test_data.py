@@ -258,9 +258,13 @@ def random_test_session():
                     start_time=current_time + timedelta(seconds=random.randint(1, 10)),
                     duration=random.uniform(0.1, 5.0),
                     caplog=f"Attempt {i+1}" if not is_final else "Final attempt",
-                    capstderr="" if not is_final or final_outcome == TestOutcome.PASSED else "Test failed after reruns",
+                    capstderr=(
+                        "" if not is_final or final_outcome == TestOutcome.PASSED else "Test failed after reruns"
+                    ),
                     capstdout=f"Running test (attempt {i+1})",
-                    longreprtext="" if not is_final or final_outcome == TestOutcome.PASSED else "Failed after multiple attempts",
+                    longreprtext=(
+                        "" if not is_final or final_outcome == TestOutcome.PASSED else "Failed after multiple attempts"
+                    ),
                     has_warning=random.choice([True, False]) if is_final else False,
                 )
                 group.add_test(result)

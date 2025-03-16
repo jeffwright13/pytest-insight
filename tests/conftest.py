@@ -1,12 +1,11 @@
 """Pytest configuration and fixtures."""
 
-from datetime import datetime, timedelta, timezone
+import random
 from importlib.metadata import version
 from pathlib import Path
-import random
 
 import pytest
-from pytest_insight.models import TestHistory, TestResult, TestSession
+from pytest_insight.models import TestHistory
 from pytest_insight.storage import JSONStorage
 from pytest_insight.test_data import (
     NodeId,
@@ -22,7 +21,6 @@ from pytest_insight.test_data import (
     random_rerun_test_group,
     random_test_result,
     random_test_session,
-    random_test_sessions,
 )
 from pytest_insight.test_data import get_test_time as get_test_time_fn
 from pytest_mock import MockerFixture
@@ -76,6 +74,7 @@ def random_test_session_factory(get_test_time):
             - Proper session context preservation
             - Test results with consistent timing relationships
     """
+
     def _factory():
         # Create base session
         session = random_test_session()
@@ -92,6 +91,7 @@ def random_test_session_factory(get_test_time):
         session.session_stop_time = get_test_time(len(session.test_results) * 5 + 1)
 
         return session
+
     return _factory
 
 
@@ -107,6 +107,7 @@ def random_test_sessions_factory(random_test_session_factory, get_test_time):
     Returns:
         function: Factory function that creates a list of TestSessions
     """
+
     def _factory(num_sessions=None):
         if num_sessions is None:
             num_sessions = random.randint(2, 5)
@@ -122,6 +123,7 @@ def random_test_sessions_factory(random_test_session_factory, get_test_time):
             sessions.append(session)
 
         return sessions
+
     return _factory
 
 

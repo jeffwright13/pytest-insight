@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 
 # Set the environment variable for testing
@@ -8,7 +7,7 @@ print(f"Using test database: {test_path}")
 os.environ["PYTEST_INSIGHT_DB_PATH"] = str(test_path)
 
 # Create a clean file
-with open(test_path, 'w') as f:
+with open(test_path, "w") as f:
     f.write("[]")
 
 # Import after setting environment variable

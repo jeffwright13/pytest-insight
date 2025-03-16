@@ -10,7 +10,12 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind the server to")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind the server to")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload on code changes")
-    parser.add_argument("--db-path", type=str, default=None, help="Path to the test sessions database file")
+    parser.add_argument(
+        "--db-path",
+        type=str,
+        default=None,
+        help="Path to the test sessions database file",
+    )
 
     args = parser.parse_args()
 

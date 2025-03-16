@@ -182,8 +182,8 @@ class InsightAnalyzer:
             **base_metrics,
             "total_duration": sum(r.duration for r in results),
             "success_rate": 1.0 - base_metrics["failure_rate"],
-            "skipped_rate": len([r for r in results if r.outcome == "skipped"]) / len(results) if results else 0.0,
-            "warning_rate": len([r for r in results if r.has_warning]) / len(results) if results else 0.0,
+            "skipped_rate": (len([r for r in results if r.outcome == "skipped"]) / len(results) if results else 0.0),
+            "warning_rate": (len([r for r in results if r.has_warning]) / len(results) if results else 0.0),
         }
 
     def analyze_trends(self, results: List[TestResult]) -> Dict[str, Any]:
@@ -244,7 +244,10 @@ class InsightAnalyzer:
             data["nodeids"].add(result.nodeid)
 
         return {
-            time.isoformat(): {"failure_count": data["count"], "unique_failures": len(data["nodeids"])}
+            time.isoformat(): {
+                "failure_count": data["count"],
+                "unique_failures": len(data["nodeids"]),
+            }
             for time, data in grouped.items()
         }
 
@@ -261,7 +264,10 @@ class InsightAnalyzer:
             data["nodeids"].add(result.nodeid)
 
         return {
-            f"{key}s": {"failure_count": data["count"], "unique_failures": len(data["nodeids"])}
+            f"{key}s": {
+                "failure_count": data["count"],
+                "unique_failures": len(data["nodeids"]),
+            }
             for key, data in grouped.items()
         }
 

@@ -108,7 +108,9 @@ class DurationDimension(ComparisonDimension):
     """Group test sessions by duration ranges."""
 
     def __init__(
-        self, ranges: Optional[List[Tuple[float, str]]] = None, filters: Optional[List[DimensionFilter]] = None
+        self,
+        ranges: Optional[List[Tuple[float, str]]] = None,
+        filters: Optional[List[DimensionFilter]] = None,
     ):
         """Initialize with duration ranges in seconds.
 

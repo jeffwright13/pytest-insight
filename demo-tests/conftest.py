@@ -1,4 +1,5 @@
 """Demo test fixtures."""
+
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -13,7 +14,7 @@ def test_data():
         "id": "TEST-001",
         "timestamp": datetime.now(ZoneInfo("UTC")),
         "value": "test data",
-        "status": "active"
+        "status": "active",
     }
 
 

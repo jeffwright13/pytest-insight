@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
+
 import typer
 from generate_example_data import ExampleDataGenerator
+
 
 def main():
     """Run pytest-insight examples with demo data."""
@@ -28,6 +30,7 @@ def main():
 
     for cmd in examples:
         typer.echo(f"  {cmd}")
+
 
 if __name__ == "__main__":
     main()

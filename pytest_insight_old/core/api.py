@@ -116,7 +116,10 @@ class InsightAPI:
             "duration": self._analyzer.compare_durations(base_results, target_results),
             "timespan": {
                 "base": {"start": base_date - timedelta(days=days), "end": base_date},
-                "target": {"start": target_date - timedelta(days=days), "end": target_date},
+                "target": {
+                    "start": target_date - timedelta(days=days),
+                    "end": target_date,
+                },
             },
         }
 

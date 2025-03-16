@@ -14,7 +14,13 @@ from pytest_insight.cli.display import ResultsDisplay
 # from pytest_insight.filters import TestFilter  # Old
 from pytest_insight.compat import FilterAdapter as TestFilter  # New
 from pytest_insight.dimensional_comparator import DimensionalComparator
-from pytest_insight.dimensions import DurationDimension, ModuleDimension, OutcomeDimension, SUTDimension, TimeDimension
+from pytest_insight.dimensions import (
+    DurationDimension,
+    ModuleDimension,
+    OutcomeDimension,
+    SUTDimension,
+    TimeDimension,
+)
 from pytest_insight.storage import get_storage_instance
 from pytest_insight.time_utils import TimeSpanParser
 
@@ -223,7 +229,12 @@ def list_history(
 
     # Create filter from options
     test_filter = TestFilter(
-        sut=sut, days=days, outcome=outcome, has_warnings=warnings, has_reruns=reruns, nodeid_contains=contains
+        sut=sut,
+        days=days,
+        outcome=outcome,
+        has_warnings=warnings,
+        has_reruns=reruns,
+        nodeid_contains=contains,
     )
 
     # Filter sessions
@@ -338,7 +349,12 @@ def analytics_summary(
 
     # Create filter from options
     test_filter = TestFilter(
-        sut=sut, days=days, outcome=outcome, has_warnings=warnings, has_reruns=reruns, nodeid_contains=contains
+        sut=sut,
+        days=days,
+        outcome=outcome,
+        has_warnings=warnings,
+        has_reruns=reruns,
+        nodeid_contains=contains,
     )
 
     # Get filtered sessions and results
@@ -474,11 +490,17 @@ def compare(
     base: str = typer.Argument(..., help="Base target (SUT name, time, outcome, etc.)"),
     target: str = typer.Argument(..., help="Target to compare against"),
     dimension: str = typer.Option(
-        "sut", "--dimension", "-d", help="Dimension to compare (sut/time/outcome/duration/module)"
+        "sut",
+        "--dimension",
+        "-d",
+        help="Dimension to compare (sut/time/outcome/duration/module)",
     ),
     window: str = typer.Option("1d", "--window", "-w", help="Time window size for time dimension"),
     duration_threshold: float = typer.Option(
-        None, "--duration-threshold", "-t", help="Duration threshold in seconds for duration dimension"
+        None,
+        "--duration-threshold",
+        "-t",
+        help="Duration threshold in seconds for duration dimension",
     ),
 ):
     """Compare test results along a dimension."""

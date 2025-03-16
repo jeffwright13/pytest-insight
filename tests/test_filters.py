@@ -1,10 +1,11 @@
 """Test the query filters."""
+
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from pytest_insight.models import TestHistory, TestOutcome, TestResult, TestSession
+from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.query import Query
-from pytest_insight.storage import InMemoryStorage, JSONStorage
+from pytest_insight.storage import InMemoryStorage
 
 
 @pytest.fixture
@@ -41,9 +42,7 @@ def test_sut_filter(test_session_no_reruns):
     assert len(result.sessions) == 1
 
     # All tests preserved in matching sessions
-    assert len(result.sessions[0].test_results) == len(
-        test_session_no_reruns.test_results
-    )
+    assert len(result.sessions[0].test_results) == len(test_session_no_reruns.test_results)
 
 
 def test_days_filter(test_session_no_reruns, get_test_time):
@@ -58,16 +57,14 @@ def test_days_filter(test_session_no_reruns, get_test_time):
     assert len(result.sessions) == 1
 
     # All tests preserved in matching sessions
-    assert len(result.sessions[0].test_results) == len(
-        test_session_no_reruns.test_results
-    )
+    assert len(result.sessions[0].test_results) == len(test_session_no_reruns.test_results)
 
     # Test old session gets filtered out
     old_session = TestSession(
         sut_name="test_sut",
         session_id="old-session",
         session_start_time=get_test_time(-864000),  # 10 days ago
-        session_stop_time=get_test_time(-777600),   # 9 days ago
+        session_stop_time=get_test_time(-777600),  # 9 days ago
         test_results=[],
     )
     storage.save_session(old_session)
@@ -259,10 +256,10 @@ def test_multiple_filters(test_session_no_reruns, get_test_time):
     query = Query(storage=storage)
     result = (
         query.for_sut("test_sut")  # Session-level filter
-        .in_last_days(7)           # Session-level filter
-        .filter_by_test()          # Switch to test-level filtering
+        .in_last_days(7)  # Session-level filter
+        .filter_by_test()  # Switch to test-level filtering
         .with_outcome(TestOutcome.PASSED)  # Test-level filter
-        .apply()                   # Back to session context
+        .apply()  # Back to session context
         .execute()
     )
 

@@ -35,16 +35,15 @@ Analysis Class:
 - Maintains consistent session context across components
 """
 
-from typing import Dict, Any, List, Optional, Set, Tuple
-from datetime import datetime, timedelta
 from collections import defaultdict
+from datetime import datetime, timedelta
 from statistics import mean, stdev
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
-from pytz import utc
 
-from pytest_insight.storage import BaseStorage
-from pytest_insight.models import TestSession, TestResult, TestOutcome
+from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.query import Query
+from pytest_insight.storage import BaseStorage
 
 
 class SessionAnalysis:
@@ -107,8 +106,7 @@ class SessionAnalysis:
             return 0.0
 
         failed_sessions = sum(
-            1 for session in sessions
-            if any(test.outcome == TestOutcome.FAILED for test in session.test_results)
+            1 for session in sessions if any(test.outcome == TestOutcome.FAILED for test in session.test_results)
         )
 
         return failed_sessions / len(sessions)
@@ -139,7 +137,7 @@ class SessionAnalysis:
                 "total_tests": 0,
                 "unique_tests": 0,
                 "flaky_tests": 0,
-                "avg_tests_per_session": 0.0
+                "avg_tests_per_session": 0.0,
             }
 
         # Track metrics while preserving session context
@@ -170,7 +168,7 @@ class SessionAnalysis:
             "total_tests": total_tests,
             "unique_tests": len(unique_nodeids),
             "flaky_tests": len(flaky_tests),
-            "avg_tests_per_session": total_tests / len(sessions)
+            "avg_tests_per_session": total_tests / len(sessions),
         }
 
     def detect_trends(self, days: Optional[int] = None, window_size: int = 7) -> Dict[str, Any]:
@@ -199,22 +197,16 @@ class SessionAnalysis:
                 - direction: "increasing", "decreasing", or "stable"
                 - common_warnings: Most frequent warning types
         """
-        sessions = sorted(
-            self._get_sessions(days),
-            key=lambda s: s.session_start_time
-        )
+        sessions = sorted(self._get_sessions(days), key=lambda s: s.session_start_time)
         if not sessions:
             return {
                 "duration_trend": {"direction": "stable", "magnitude": 0.0},
                 "failure_trend": {
                     "direction": "stable",
                     "magnitude": 0.0,
-                    "correlated_failures": []
+                    "correlated_failures": [],
                 },
-                "warning_trend": {
-                    "direction": "stable",
-                    "common_warnings": []
-                }
+                "warning_trend": {"direction": "stable", "common_warnings": []},
             }
 
         # Analyze duration trends
@@ -229,14 +221,10 @@ class SessionAnalysis:
         return {
             "duration_trend": duration_trend,
             "failure_trend": failure_trend,
-            "warning_trend": warning_trend
+            "warning_trend": warning_trend,
         }
 
-    def _analyze_duration_trend(
-        self,
-        sessions: List[TestSession],
-        window_size: int
-    ) -> Dict[str, Any]:
+    def _analyze_duration_trend(self, sessions: List[TestSession], window_size: int) -> Dict[str, Any]:
         """Analyze trends in test execution duration."""
         # Calculate average duration per session
         durations = []
@@ -249,24 +237,16 @@ class SessionAnalysis:
 
         # Calculate trend using simple linear regression
         x = list(range(len(durations)))
-        slope = (
-            sum((x[i] - mean(x)) * (y - mean(durations))
-                for i, y in enumerate(durations))
-            / sum((x[i] - mean(x)) ** 2 for i in x)
+        slope = sum((x[i] - mean(x)) * (y - mean(durations)) for i, y in enumerate(durations)) / sum(
+            (x[i] - mean(x)) ** 2 for i in x
         )
 
         return {
-            "direction": "increasing" if slope > 0.1
-                        else "decreasing" if slope < -0.1
-                        else "stable",
-            "magnitude": abs(slope)
+            "direction": ("increasing" if slope > 0.1 else "decreasing" if slope < -0.1 else "stable"),
+            "magnitude": abs(slope),
         }
 
-    def _analyze_failure_trend(
-        self,
-        sessions: List[TestSession],
-        window_size: int
-    ) -> Dict[str, Any]:
+    def _analyze_failure_trend(self, sessions: List[TestSession], window_size: int) -> Dict[str, Any]:
         """Analyze trends in test failures while preserving session context."""
         # Calculate failure rate per session
         failure_rates = []
@@ -280,63 +260,43 @@ class SessionAnalysis:
                     failed_tests.add(test.nodeid)
 
             # Record failure rate
-            failure_rates.append(len(failed_tests) / len(session.test_results)
-                               if session.test_results else 0.0)
+            failure_rates.append(len(failed_tests) / len(session.test_results) if session.test_results else 0.0)
 
             # Track correlated failures within session context
             failed_list = sorted(failed_tests)
             for i, test1 in enumerate(failed_list):
-                for test2 in failed_list[i+1:]:
+                for test2 in failed_list[i + 1 :]:
                     correlated_failures[(test1, test2)] += 1
 
         if len(failure_rates) < 2:
-            return {
-                "direction": "stable",
-                "magnitude": 0.0,
-                "correlated_failures": []
-            }
+            return {"direction": "stable", "magnitude": 0.0, "correlated_failures": []}
 
         # Calculate trend
-        slope = (
-            sum((x - mean(range(len(failure_rates)))) *
-                (y - mean(failure_rates))
-                for x, y in enumerate(failure_rates))
-            / sum((x - mean(range(len(failure_rates)))) ** 2
-                 for x in range(len(failure_rates)))
-        )
+        slope = sum(
+            (x - mean(range(len(failure_rates)))) * (y - mean(failure_rates)) for x, y in enumerate(failure_rates)
+        ) / sum((x - mean(range(len(failure_rates)))) ** 2 for x in range(len(failure_rates)))
 
         # Find most common correlated failures
         correlated = sorted(
             ((pair, count) for pair, count in correlated_failures.items()),
             key=lambda x: x[1],
-            reverse=True
+            reverse=True,
         )[:5]  # Top 5 correlations
 
         return {
-            "direction": "degrading" if slope > 0.05
-                        else "improving" if slope < -0.05
-                        else "stable",
+            "direction": ("degrading" if slope > 0.05 else "improving" if slope < -0.05 else "stable"),
             "magnitude": abs(slope),
-            "correlated_failures": [
-                {"tests": list(pair), "count": count}
-                for pair, count in correlated
-            ]
+            "correlated_failures": [{"tests": list(pair), "count": count} for pair, count in correlated],
         }
 
-    def _analyze_warning_trend(
-        self,
-        sessions: List[TestSession],
-        window_size: int
-    ) -> Dict[str, Any]:
+    def _analyze_warning_trend(self, sessions: List[TestSession], window_size: int) -> Dict[str, Any]:
         """Analyze trends in test warnings."""
         # Track warnings per session
         warning_counts = []
         warning_types = defaultdict(int)
 
         for session in sessions:
-            session_warnings = sum(
-                1 for test in session.test_results if test.has_warning
-            )
+            session_warnings = sum(1 for test in session.test_results if test.has_warning)
             warning_counts.append(session_warnings)
 
             # Track warning types within session context
@@ -345,35 +305,23 @@ class SessionAnalysis:
                     warning_types[test.nodeid] += 1
 
         if len(warning_counts) < 2:
-            return {
-                "direction": "stable",
-                "common_warnings": []
-            }
+            return {"direction": "stable", "common_warnings": []}
 
         # Calculate trend
-        slope = (
-            sum((x - mean(range(len(warning_counts)))) *
-                (y - mean(warning_counts))
-                for x, y in enumerate(warning_counts))
-            / sum((x - mean(range(len(warning_counts)))) ** 2
-                 for x in range(len(warning_counts)))
-        )
+        slope = sum(
+            (x - mean(range(len(warning_counts)))) * (y - mean(warning_counts)) for x, y in enumerate(warning_counts)
+        ) / sum((x - mean(range(len(warning_counts)))) ** 2 for x in range(len(warning_counts)))
 
         # Find most common warning types
         common_warnings = sorted(
             ((test, count) for test, count in warning_types.items()),
             key=lambda x: x[1],
-            reverse=True
+            reverse=True,
         )[:5]  # Top 5 warning types
 
         return {
-            "direction": "increasing" if slope > 0.05
-                        else "decreasing" if slope < -0.05
-                        else "stable",
-            "common_warnings": [
-                {"test": test, "count": count}
-                for test, count in common_warnings
-            ]
+            "direction": ("increasing" if slope > 0.05 else "decreasing" if slope < -0.05 else "stable"),
+            "common_warnings": [{"test": test, "count": count} for test, count in common_warnings],
         }
 
 
@@ -490,11 +438,7 @@ class MetricsAnalysis:
         """
         sessions = self._get_sessions(days)
         if not sessions:
-            return {
-                "overall_score": 0.0,
-                "component_scores": {},
-                "recommendations": []
-            }
+            return {"overall_score": 0.0, "component_scores": {}, "recommendations": []}
 
         # Calculate component scores while preserving session context
         stability_score = self._calculate_stability_score(sessions)
@@ -505,31 +449,26 @@ class MetricsAnalysis:
         weights = {
             "stability": 0.5,  # Most important
             "performance": 0.3,
-            "warnings": 0.2
+            "warnings": 0.2,
         }
 
         overall_score = (
-            stability_score * weights["stability"] +
-            performance_score * weights["performance"] +
-            warning_score * weights["warnings"]
+            stability_score * weights["stability"]
+            + performance_score * weights["performance"]
+            + warning_score * weights["warnings"]
         )
 
         # Generate recommendations based on scores
-        recommendations = self._generate_recommendations(
-            stability_score,
-            performance_score,
-            warning_score,
-            sessions
-        )
+        recommendations = self._generate_recommendations(stability_score, performance_score, warning_score, sessions)
 
         return {
             "overall_score": overall_score,
             "component_scores": {
                 "stability": stability_score,
                 "performance": performance_score,
-                "warnings": warning_score
+                "warnings": warning_score,
             },
-            "recommendations": recommendations
+            "recommendations": recommendations,
         }
 
     def _calculate_stability_score(self, sessions: List[TestSession]) -> float:
@@ -591,10 +530,7 @@ class MetricsAnalysis:
                 session_stddev = stdev(session_durations) if len(session_durations) > 1 else 0
 
                 # Count tests significantly slower than session average
-                slow_tests = sum(
-                    1 for d in session_durations
-                    if d > session_mean + 2 * session_stddev
-                )
+                sum(1 for d in session_durations if d > session_mean + 2 * session_stddev)
 
         if not durations:
             return 0.0
@@ -651,7 +587,7 @@ class MetricsAnalysis:
         stability_score: float,
         performance_score: float,
         warning_score: float,
-        sessions: List[TestSession]
+        sessions: List[TestSession],
     ) -> List[Dict[str, str]]:
         """Generate improvement recommendations based on scores."""
         recommendations = []
@@ -660,34 +596,37 @@ class MetricsAnalysis:
         if stability_score < 80:
             failed_patterns = self._analyze_failure_patterns(sessions)
             if failed_patterns:
-                recommendations.append({
-                    "category": "stability",
-                    "priority": "high",
-                    "message": "High failure rate detected in tests: " +
-                             ", ".join(failed_patterns[:3])
-                })
+                recommendations.append(
+                    {
+                        "category": "stability",
+                        "priority": "high",
+                        "message": "High failure rate detected in tests: " + ", ".join(failed_patterns[:3]),
+                    }
+                )
 
         # Analyze performance issues
         if performance_score < 80:
             slow_tests = self._find_slow_tests(sessions)
             if slow_tests:
-                recommendations.append({
-                    "category": "performance",
-                    "priority": "medium",
-                    "message": "Performance bottlenecks identified in: " +
-                             ", ".join(slow_tests[:3])
-                })
+                recommendations.append(
+                    {
+                        "category": "performance",
+                        "priority": "medium",
+                        "message": "Performance bottlenecks identified in: " + ", ".join(slow_tests[:3]),
+                    }
+                )
 
         # Analyze warning issues
         if warning_score < 80:
             warning_patterns = self._analyze_warning_patterns(sessions)
             if warning_patterns:
-                recommendations.append({
-                    "category": "warnings",
-                    "priority": "low",
-                    "message": "Recurring warnings found in: " +
-                             ", ".join(warning_patterns[:3])
-                })
+                recommendations.append(
+                    {
+                        "category": "warnings",
+                        "priority": "low",
+                        "message": "Recurring warnings found in: " + ", ".join(warning_patterns[:3]),
+                    }
+                )
 
         return recommendations
 
@@ -705,13 +644,7 @@ class MetricsAnalysis:
                     failure_counts[test.nodeid] += 1
 
         # Return tests with highest failure counts
-        return [
-            test for test, count in sorted(
-                failure_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )
-        ]
+        return [test for test, count in sorted(failure_counts.items(), key=lambda x: x[1], reverse=True)]
 
     def _find_slow_tests(self, sessions: List[TestSession]) -> List[str]:
         """Identify consistently slow tests while preserving session context."""
@@ -730,7 +663,7 @@ class MetricsAnalysis:
         for test_id, durations in test_durations.items():
             avg_duration = mean(durations)
             if len(durations) > 1:
-                duration_stddev = stdev(durations)
+                stdev(durations)
                 if avg_duration > mean(d for dur in test_durations.values() for d in dur):
                     slow_tests.append((test_id, avg_duration))
 
@@ -750,13 +683,7 @@ class MetricsAnalysis:
                     warning_counts[test.nodeid] += 1
 
         # Return tests with highest warning counts
-        return [
-            test for test, count in sorted(
-                warning_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )
-        ]
+        return [test for test, count in sorted(warning_counts.items(), key=lambda x: x[1], reverse=True)]
 
 
 class Analysis:

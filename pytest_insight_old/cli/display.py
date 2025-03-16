@@ -50,7 +50,11 @@ class ResultsDisplay:
         content.append("\nDuration Trends\n", style="bold cyan")
 
         trend = analysis["duration_trend"]["trend"]
-        trend_style = {"increasing": "red", "decreasing": "green", "stable": "yellow"}.get(trend, "white")
+        trend_style = {
+            "increasing": "red",
+            "decreasing": "green",
+            "stable": "yellow",
+        }.get(trend, "white")
 
         content.append("Direction: ", style="dim")
         content.append(trend, style=trend_style)
@@ -111,7 +115,10 @@ class ResultsDisplay:
             diff_style = "red" if diff > 0 else "green"
 
             summary.add_row(
-                metric["name"], f"{base_val:.2f}", f"{target_val:.2f}", Text(f"{diff:+.2f}", style=diff_style)
+                metric["name"],
+                f"{base_val:.2f}",
+                f"{target_val:.2f}",
+                Text(f"{diff:+.2f}", style=diff_style),
             )
 
         console.print(summary)

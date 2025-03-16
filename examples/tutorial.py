@@ -19,8 +19,8 @@ from collections import Counter
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from pytest_insight.models import TestOutcome
 from pytest_insight.comparison import Comparison
+from pytest_insight.models import TestOutcome
 from pytest_insight.query import Query
 
 # %% [markdown]
@@ -270,6 +270,7 @@ for session in slow_tests.sessions:
 #
 # Track test stability over time to identify problematic tests and their relationships:
 
+
 # %%
 def query_failed_tests():
     """Query for failed tests in the last month."""
@@ -283,6 +284,7 @@ def query_failed_tests():
     )
 
     return failed_tests
+
 
 failed_tests = query_failed_tests()
 

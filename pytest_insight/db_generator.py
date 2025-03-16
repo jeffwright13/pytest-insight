@@ -2,9 +2,9 @@ import json
 import random
 import string
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import typer
 
@@ -68,9 +68,7 @@ class PracticeDataGenerator:
         self.module_types = ["api", "ui", "db", "auth", "integration", "performance"]
         self.test_types = ["get", "post", "update", "delete", "list", "create"]
 
-        self.sut_variations = [
-            f"{module}-service" for module in self.module_types
-        ] + [
+        self.sut_variations = [f"{module}-service" for module in self.module_types] + [
             "ref-sut-openjdk11",
             "ref-sut-openjdk17",
             "ref-sut-openjdk21",
@@ -159,17 +157,9 @@ class PracticeDataGenerator:
             start_time = start_time.replace(tzinfo=ZoneInfo("UTC"))
 
         caplog = self.text_gen.sentence()
-        capstderr = (
-            self.text_gen.sentence()
-            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-            else ""
-        )
+        capstderr = self.text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
         capstdout = self.text_gen.sentence()
-        longreprtext = (
-            self.text_gen.paragraph()
-            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-            else ""
-        )
+        longreprtext = self.text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
 
         return TestResult(
             nodeid=nodeid,
@@ -193,7 +183,7 @@ class PracticeDataGenerator:
         # Select a module type that matches the SUT name
         module_type = next(
             (m for m in self.module_types if m in sut_name.lower()),
-            random.choice(self.module_types)
+            random.choice(self.module_types),
         )
 
         # Get test patterns for this module
@@ -244,12 +234,12 @@ class PracticeDataGenerator:
                     list(TestOutcome),
                     weights=[
                         self.pass_rate,  # PASSED
-                        0.1,             # FAILED
-                        0.05,            # ERROR
-                        0.05,            # SKIPPED
-                        0.15,            # XFAILED
-                        0.05,            # XPASSED
-                        0.0,             # RERUN (handled separately)
+                        0.1,  # FAILED
+                        0.05,  # ERROR
+                        0.05,  # SKIPPED
+                        0.15,  # XFAILED
+                        0.05,  # XPASSED
+                        0.0,  # RERUN (handled separately)
                     ],
                 )[0]
 
@@ -431,9 +421,7 @@ def main(
                 # Use datetime(2023, 1, 1) as base like conftest.py
                 base = datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
                 parsed_date = datetime.strptime(start_date, "%Y-%m-%d")
-                parsed_start_date = base + timedelta(
-                    days=(parsed_date - datetime(2023, 1, 1)).days
-                )
+                parsed_start_date = base + timedelta(days=(parsed_date - datetime(2023, 1, 1)).days)
             except ValueError as e:
                 if "format" in str(e):
                     raise typer.BadParameter("Start date must be in YYYY-MM-DD format")

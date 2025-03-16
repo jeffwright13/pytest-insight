@@ -1,6 +1,4 @@
-import re
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List
 
 import pytest
 from pytest_insight.models import TestOutcome, TestResult, TestSession
@@ -8,7 +6,6 @@ from pytest_insight.query import (
     GlobPatternFilter,
     InvalidQueryParameterError,
     Query,
-    QueryTestFilter,
     RegexPatternFilter,
 )
 
@@ -165,9 +162,7 @@ class Test_PatternMatching:
         ]
 
         for case in test_cases:
-            filter = GlobPatternFilter(
-                pattern=case["pattern"], field_name=case["field_name"]
-            )
+            filter = GlobPatternFilter(pattern=case["pattern"], field_name=case["field_name"])
             assert filter.matches(test) == case["should_match"]
 
         # Regex patterns
@@ -199,9 +194,7 @@ class Test_PatternMatching:
         ]
 
         for case in test_cases:
-            filter = RegexPatternFilter(
-                pattern=case["pattern"], field_name=case["field_name"]
-            )
+            filter = RegexPatternFilter(pattern=case["pattern"], field_name=case["field_name"])
             assert filter.matches(test) == case["should_match"]
 
     def test_field_validation(self):
@@ -264,34 +257,19 @@ class Test_PatternMatching:
         query = Query()
 
         # Module pattern (broadest)
-        result = (
-            query.filter_by_test()
-            .with_pattern("test_api.py")
-            .apply()
-            .execute(sessions=[session])
-        )
+        result = query.filter_by_test().with_pattern("test_api.py").apply().execute(sessions=[session])
         assert len(result.sessions) == 1
         filtered = result.sessions[0].test_results
         assert len([t for t in filtered if "test_api.py" in t.nodeid]) == 2
 
         # Test name pattern (more specific)
-        result = (
-            query.filter_by_test()
-            .with_pattern("test_get")
-            .apply()
-            .execute(sessions=[session])
-        )
+        result = query.filter_by_test().with_pattern("test_get").apply().execute(sessions=[session])
         assert len(result.sessions) == 1
         filtered = result.sessions[0].test_results
         assert len([t for t in filtered if "test_get" in t.nodeid]) == 1
 
         # Full path pattern (most specific)
-        result = (
-            query.filter_by_test()
-            .with_pattern("test_api.py::test_get")
-            .apply()
-            .execute(sessions=[session])
-        )
+        result = query.filter_by_test().with_pattern("test_api.py::test_get").apply().execute(sessions=[session])
         assert len(result.sessions) == 1
         filtered = result.sessions[0].test_results
         assert len([t for t in filtered if t.nodeid == "test_api.py::test_get"]) == 1
@@ -359,21 +337,12 @@ class Test_PatternMatching:
 
         # 2. All tests preserved in matching session
         assert len(filtered_session.test_results) == 3
-        assert any(
-            t.nodeid == "test_api.py::test_get" for t in filtered_session.test_results
-        )
-        assert any(
-            t.nodeid == "test_api.py::test_post" for t in filtered_session.test_results
-        )
-        assert any(
-            t.nodeid == "test_db.py::test_connect"
-            for t in filtered_session.test_results
-        )
+        assert any(t.nodeid == "test_api.py::test_get" for t in filtered_session.test_results)
+        assert any(t.nodeid == "test_api.py::test_post" for t in filtered_session.test_results)
+        assert any(t.nodeid == "test_db.py::test_connect" for t in filtered_session.test_results)
 
         # 3. Test relationships preserved
-        api_tests = [
-            t for t in filtered_session.test_results if "test_api.py" in t.nodeid
-        ]
+        api_tests = [t for t in filtered_session.test_results if "test_api.py" in t.nodeid]
         assert len(api_tests) == 2
 
         # Pass/fail relationships
@@ -385,10 +354,7 @@ class Test_PatternMatching:
         assert any(t.duration > 4.0 for t in api_tests)  # Slow tests
 
         # API/DB test relationships
-        assert (
-            len([t for t in filtered_session.test_results if "test_db.py" in t.nodeid])
-            == 1
-        )
+        assert len([t for t in filtered_session.test_results if "test_db.py" in t.nodeid]) == 1
 
     def test_convenience_methods(self, get_test_time):
         """Test convenience methods for output filtering."""
@@ -491,17 +457,12 @@ class Test_QuerySystem:
             session_start_time=get_test_time(),
             session_stop_time=get_test_time(20),
             test_results=[test1, test2],
-            tags={"environment": "staging"}
+            tags={"environment": "staging"},
         )
 
         # Apply test-level filter
         query = Query()
-        result = (
-            query.filter_by_test()
-            .with_pattern("test_get")
-            .apply()
-            .execute(sessions=[session])
-        )
+        result = query.filter_by_test().with_pattern("test_get").apply().execute(sessions=[session])
 
         # Verify session context preservation
         assert len(result.sessions) == 1

@@ -11,7 +11,10 @@ class ComparisonAnalyzer:
 
     @staticmethod
     def compare_sessions(
-        sessions: List[TestSession], base_id: str, target_id: str, time_window: Optional[timedelta] = None
+        sessions: List[TestSession],
+        base_id: str,
+        target_id: str,
+        time_window: Optional[timedelta] = None,
     ) -> Dict:
         """Compare two sessions within specified time windows."""
         now = datetime.now()
@@ -74,7 +77,10 @@ class ComparisonAnalyzer:
 
     @staticmethod
     def compare_periods(
-        sessions: List[TestSession], period1_end: datetime, period2_end: datetime, days: int = 7
+        sessions: List[TestSession],
+        period1_end: datetime,
+        period2_end: datetime,
+        days: int = 7,
     ) -> Dict:
         """Compare test results between two time periods."""
         period1_start = period1_end - timedelta(days=days)
@@ -130,7 +136,9 @@ class SUTComparator:
 
     @staticmethod
     def _compare_performance(
-        sut1_sessions: List[TestSession], sut2_sessions: List[TestSession], common_tests: Set[str]
+        sut1_sessions: List[TestSession],
+        sut2_sessions: List[TestSession],
+        common_tests: Set[str],
     ) -> Dict:
         """Compare test performance between SUTs with safety checks."""
         sut1_durations = defaultdict(list)
@@ -159,7 +167,9 @@ class SUTComparator:
 
     @staticmethod
     def _compare_stability(
-        sut1_sessions: List[TestSession], sut2_sessions: List[TestSession], common_tests: Set[str]
+        sut1_sessions: List[TestSession],
+        sut2_sessions: List[TestSession],
+        common_tests: Set[str],
     ) -> Dict:
         """Compare test stability between SUTs with safety checks."""
 
@@ -208,5 +218,8 @@ class SUTComparator:
             "total_sessions": len(sessions),
             "avg_duration": total_duration / len(sessions),
             "total_tests": sum(len(s.test_results) for s in sessions),
-            "date_range": (min(s.session_start_time for s in sessions), max(s.session_start_time for s in sessions)),
+            "date_range": (
+                min(s.session_start_time for s in sessions),
+                max(s.session_start_time for s in sessions),
+            ),
         }

@@ -12,9 +12,7 @@ class Test_qPytestPlugin:
 
         # Verify the choices passed to addoption
         calls = mock_group.addoption.call_args_list
-        storage_type_call = next(
-            call for call in calls if call[0][0] == "--insight-storage-type"
-        )
+        storage_type_call = next(call for call in calls if call[0][0] == "--insight-storage-type")
         choices = storage_type_call[1]["choices"]
 
         assert "invalid_type" not in choices
@@ -30,9 +28,7 @@ class Test_qPytestPlugin:
 
         mock_parser.getgroup.assert_called_once_with("pytest-insight")
         assert mock_group.addoption.call_count == 4
-        mock_group.addoption.assert_any_call(
-            "--insight", action="store_true", help="Enable pytest-insight"
-        )
+        mock_group.addoption.assert_any_call("--insight", action="store_true", help="Enable pytest-insight")
 
     # Empty string passed as '--insight-sut' value
     def test_empty_insight_sut_value(self, mocker):
@@ -58,9 +54,7 @@ class Test_qPytestPlugin:
         pytest_addoption(mock_parser)
 
         mock_parser.getgroup.assert_called_once_with("pytest-insight")
-        mock_group.addoption.assert_any_call(
-            "--insight", action="store_true", help="Enable pytest-insight"
-        )
+        mock_group.addoption.assert_any_call("--insight", action="store_true", help="Enable pytest-insight")
 
     # '--insight-sut' option accepts string value with default 'default_sut'
     def test_insight_sut_option_default_value(self, mocker):
@@ -222,72 +216,81 @@ class Test_PluginHooks:
 
     def test_session_start(self, testdir):
         """Test session initialization and configuration."""
-        testdir.makepyfile("""
+        testdir.makepyfile(
+            """
             def test_example():
                 assert True
-        """)
+        """
+        )
 
         result = testdir.runpytest("--insight")
         result.stdout.fnmatch_lines(["*insight: collecting test results*"])
 
     def test_test_result_capture(self, testdir):
         """Test capturing of test results including output fields."""
-        testdir.makepyfile("""
+        testdir.makepyfile(
+            """
             import logging
 
             def test_with_output():
                 print("stdout message")
                 logging.error("log message")
                 raise ValueError("stderr message")
-        """)
+        """
+        )
 
         result = testdir.runpytest("--insight")
-        result.stdout.fnmatch_lines([
-            "*insight: test failed*",
-            "*stdout message*",
-            "*log message*",
-            "*stderr message*"
-        ])
+        result.stdout.fnmatch_lines(
+            [
+                "*insight: test failed*",
+                "*stdout message*",
+                "*log message*",
+                "*stderr message*",
+            ]
+        )
 
     def test_session_finish(self, testdir):
         """Test session completion and result storage."""
-        testdir.makepyfile("""
+        testdir.makepyfile(
+            """
             def test_one():
                 assert True
 
             def test_two():
                 assert False
-        """)
+        """
+        )
 
         result = testdir.runpytest("--insight")
-        result.stdout.fnmatch_lines([
-            "*insight: session completed*",
-            "*1 passed, 1 failed*"
-        ])
+        result.stdout.fnmatch_lines(["*insight: session completed*", "*1 passed, 1 failed*"])
 
     def test_rerun_handling(self, testdir):
         """Test handling of test reruns."""
-        testdir.makepyfile("""
+        testdir.makepyfile(
+            """
             import pytest
 
             @pytest.mark.flaky(reruns=2)
             def test_flaky():
                 import random
                 assert random.choice([True, False])
-        """)
+        """
+        )
 
         result = testdir.runpytest("--insight")
         result.stdout.fnmatch_lines(["*rerun*"])
 
     def test_warning_capture(self, testdir):
         """Test capturing of test warnings."""
-        testdir.makepyfile("""
+        testdir.makepyfile(
+            """
             import warnings
 
             def test_warning():
                 warnings.warn("test warning")
                 assert True
-        """)
+        """
+        )
 
         result = testdir.runpytest("--insight")
         result.stdout.fnmatch_lines(["*warning*test warning*"])
@@ -298,13 +301,15 @@ class Test_ResultStorage:
 
     def test_result_persistence(self, testdir, tmp_path):
         """Test that results are correctly persisted."""
-        testdir.makepyfile("""
+        testdir.makepyfile(
+            """
             def test_example():
                 assert True
-        """)
+        """
+        )
 
         storage_path = tmp_path / "insight"
-        result = testdir.runpytest(f"--insight-storage={storage_path}")
+        testdir.runpytest(f"--insight-storage={storage_path}")
 
         # Check storage directory
         assert storage_path.exists()
@@ -312,16 +317,18 @@ class Test_ResultStorage:
 
     def test_session_metadata(self, testdir, tmp_path):
         """Test that session metadata is correctly stored."""
-        testdir.makepyfile("""
+        testdir.makepyfile(
+            """
             def test_example():
                 assert True
-        """)
+        """
+        )
 
         storage_path = tmp_path / "insight"
-        result = testdir.runpytest(
+        testdir.runpytest(
             f"--insight-storage={storage_path}",
             "--insight-sut=example",
-            "--insight-tags=env:test"
+            "--insight-tags=env:test",
         )
 
         # Check metadata in storage
@@ -329,6 +336,7 @@ class Test_ResultStorage:
         assert session_files
 
         import json
+
         with open(session_files[0]) as f:
             data = json.load(f)
             assert data["sut_name"] == "example"
@@ -350,11 +358,5 @@ class Test_PluginConfiguration:
 
     def test_tag_configuration(self, testdir):
         """Test tag configuration."""
-        result = testdir.runpytest(
-            "--insight-tags=env:test,branch:main"
-        )
-        result.stdout.fnmatch_lines([
-            "*insight: using tags*",
-            "*env:test*",
-            "*branch:main*"
-        ])
+        result = testdir.runpytest("--insight-tags=env:test,branch:main")
+        result.stdout.fnmatch_lines(["*insight: using tags*", "*env:test*", "*branch:main*"])

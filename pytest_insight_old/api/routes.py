@@ -3,8 +3,8 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
-from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.comparison import Comparison, ComparisonResult
+from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.storage import get_storage_instance
 
 router = APIRouter(prefix="/api/v1")
@@ -158,7 +158,8 @@ async def get_sessions(
             sessions = [s for s in sessions if s.session_tags.get(key) == value]
         except ValueError:
             return JSONResponse(
-                status_code=400, content={"error": {"message": "Tag filter must be in format 'key=value'"}}
+                status_code=400,
+                content={"error": {"message": "Tag filter must be in format 'key=value'"}},
             )
 
     # Sort sessions by start time (newest first)
@@ -177,7 +178,10 @@ async def get_sessions(
         session_data.append(formatted)
 
     return JSONResponse(
-        content={"data": session_data, "meta": {"total": total_count, "limit": limit, "offset": offset}}
+        content={
+            "data": session_data,
+            "meta": {"total": total_count, "limit": limit, "offset": offset},
+        }
     )
 
 
@@ -188,7 +192,10 @@ async def get_session(session_id: str) -> JSONResponse:
     session = storage.get_session_by_id(session_id)
 
     if not session:
-        return JSONResponse(status_code=404, content={"error": {"message": f"Session with ID {session_id} not found"}})
+        return JSONResponse(
+            status_code=404,
+            content={"error": {"message": f"Session with ID {session_id} not found"}},
+        )
 
     # Format session and test results
     session_data = format_session_dict(session)
@@ -210,7 +217,8 @@ async def compare_sessions(request: Request) -> JSONResponse:
 
     if not base_session_id or not target_session_id:
         return JSONResponse(
-            status_code=400, content={"error": {"message": "base_session_id and target_session_id are required"}}
+            status_code=400,
+            content={"error": {"message": "base_session_id and target_session_id are required"}},
         )
 
     storage = get_storage_instance()
@@ -219,12 +227,14 @@ async def compare_sessions(request: Request) -> JSONResponse:
 
     if not base_session:
         return JSONResponse(
-            status_code=404, content={"error": {"message": f"Base session with ID {base_session_id} not found"}}
+            status_code=404,
+            content={"error": {"message": f"Base session with ID {base_session_id} not found"}},
         )
 
     if not target_session:
         return JSONResponse(
-            status_code=404, content={"error": {"message": f"Target session with ID {target_session_id} not found"}}
+            status_code=404,
+            content={"error": {"message": f"Target session with ID {target_session_id} not found"}},
         )
 
     # Configure comparison
@@ -248,7 +258,10 @@ async def compare_sessions(request: Request) -> JSONResponse:
 
         return JSONResponse(content={"data": response_data})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": {"message": f"Comparison failed: {str(e)}"}})
+        return JSONResponse(
+            status_code=500,
+            content={"error": {"message": f"Comparison failed: {str(e)}"}},
+        )
 
 
 @router.post("/compare/bulk")
@@ -263,7 +276,8 @@ async def compare_sessions_bulk(request: Request) -> JSONResponse:
 
     if not base_session_ids or not target_session_ids:
         return JSONResponse(
-            status_code=400, content={"error": {"message": "base_session_ids and target_session_ids are required"}}
+            status_code=400,
+            content={"error": {"message": "base_session_ids and target_session_ids are required"}},
         )
 
     storage = get_storage_instance()
@@ -300,7 +314,10 @@ async def compare_sessions_bulk(request: Request) -> JSONResponse:
         )
 
     if not base_sessions or not target_sessions:
-        return JSONResponse(status_code=400, content={"error": {"message": "No valid sessions found for comparison"}})
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"message": "No valid sessions found for comparison"}},
+        )
 
     # Perform all comparisons
     comparisons = []
@@ -353,7 +370,8 @@ async def compare_recent_sessions(
 
     if len(sut_sessions) < 2:
         return JSONResponse(
-            status_code=404, content={"error": {"message": f"Need at least 2 sessions for SUT '{sut}' to compare"}}
+            status_code=404,
+            content={"error": {"message": f"Need at least 2 sessions for SUT '{sut}' to compare"}},
         )
 
     # Get most recent and previous session
@@ -381,7 +399,10 @@ async def compare_recent_sessions(
 
         return JSONResponse(content={"data": response_data})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": {"message": f"Comparison failed: {str(e)}"}})
+        return JSONResponse(
+            status_code=500,
+            content={"error": {"message": f"Comparison failed: {str(e)}"}},
+        )
 
 
 @router.get("/flaky-tests")
@@ -400,7 +421,8 @@ async def get_flaky_tests(
 
     if len(sessions) < 2:
         return JSONResponse(
-            status_code=404, content={"error": {"message": "Need at least 2 sessions to identify flaky tests"}}
+            status_code=404,
+            content={"error": {"message": "Need at least 2 sessions to identify flaky tests"}},
         )
 
     # Sort sessions by start time
@@ -455,7 +477,12 @@ async def get_flaky_tests(
     # Apply limit
     flaky_tests = flaky_tests[:limit]
 
-    return JSONResponse(content={"data": flaky_tests, "meta": {"total": len(flaky_tests), "sut": sut or "all"}})
+    return JSONResponse(
+        content={
+            "data": flaky_tests,
+            "meta": {"total": len(flaky_tests), "sut": sut or "all"},
+        }
+    )
 
 
 @router.get("/stats")
@@ -471,7 +498,7 @@ async def get_stats(sut: Optional[str] = Query(None, description="Filter by SUT 
     if not sessions:
         return JSONResponse(
             status_code=404,
-            content={"error": {"message": f"No sessions found for SUT '{sut}'" if sut else "No sessions found"}},
+            content={"error": {"message": (f"No sessions found for SUT '{sut}'" if sut else "No sessions found")}},
         )
 
     # Calculate statistics
@@ -516,11 +543,13 @@ async def get_stats(sut: Optional[str] = Query(None, description="Filter by SUT 
 
         trend = {
             "pass_rate_change": second_pass_rate - first_pass_rate,
-            "direction": "improving"
-            if second_pass_rate > first_pass_rate
-            else "declining"
-            if second_pass_rate < first_pass_rate
-            else "stable",
+            "direction": (
+                "improving"
+                if second_pass_rate > first_pass_rate
+                else "declining"
+                if second_pass_rate < first_pass_rate
+                else "stable"
+            ),
         }
     else:
         trend = {"pass_rate_change": 0, "direction": "stable"}
@@ -555,7 +584,12 @@ async def get_suts() -> JSONResponse:
     for session in sessions:
         sut_name = session.sut_name
         if sut_name not in suts:
-            suts[sut_name] = {"count": 0, "last_run": None, "first_run": None, "tags": set()}
+            suts[sut_name] = {
+                "count": 0,
+                "last_run": None,
+                "first_run": None,
+                "tags": set(),
+            }
 
         suts[sut_name]["count"] += 1
 
@@ -640,7 +674,13 @@ async def get_test_trends(
 
                 # Track individual test metrics
                 if test_id not in date_tests:
-                    date_tests[test_id] = {"count": 0, "pass_count": 0, "fail_count": 0, "skip_count": 0, "duration": 0}
+                    date_tests[test_id] = {
+                        "count": 0,
+                        "pass_count": 0,
+                        "fail_count": 0,
+                        "skip_count": 0,
+                        "duration": 0,
+                    }
 
                 date_tests[test_id]["count"] += 1
                 if outcome == TestOutcome.PASSED.value:
@@ -674,9 +714,9 @@ async def get_test_trends(
                 "test_count": total_tests,
                 "outcomes": date_outcomes,
                 "pass_rate": date_outcomes.get(TestOutcome.PASSED.value, 0) / max(total_tests, 1) * 100,
-                "avg_duration": sum(s.session_duration for s in date_sessions) / len(date_sessions)
-                if date_sessions
-                else 0,
+                "avg_duration": (
+                    sum(s.session_duration for s in date_sessions) / len(date_sessions) if date_sessions else 0
+                ),
             }
         )
 
@@ -709,7 +749,12 @@ async def get_test_trends(
                 "trends": trend_data,
                 "significant_changes": changed_tests[:20],  # Top 20 most changed tests
             },
-            "meta": {"sut": sut, "days": days, "test_pattern": test_pattern, "session_count": len(filtered_sessions)},
+            "meta": {
+                "sut": sut,
+                "days": days,
+                "test_pattern": test_pattern,
+                "session_count": len(filtered_sessions),
+            },
         }
     )
 
@@ -742,7 +787,7 @@ async def get_test_details(
                         "sut": session.sut_name,
                         "start_time": format_datetime(test.start_time),
                         "duration": test.duration,
-                        "outcome": test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome),
+                        "outcome": (test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome)),
                         "has_warning": test.has_warning,
                     }
                 )
@@ -796,8 +841,16 @@ async def get_test_details(
 
     return JSONResponse(
         content={
-            "data": {"nodeid": test_id, "statistics": statistics, "history": test_history},
-            "meta": {"sut": sut, "total_occurrences": total, "shown_occurrences": min(total, limit)},
+            "data": {
+                "nodeid": test_id,
+                "statistics": statistics,
+                "history": test_history,
+            },
+            "meta": {
+                "sut": sut,
+                "total_occurrences": total,
+                "shown_occurrences": min(total, limit),
+            },
         }
     )
 
@@ -826,7 +879,7 @@ async def get_stacked_analytics(
             all_tests.append(
                 {
                     "nodeid": test.nodeid,
-                    "outcome": test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome),
+                    "outcome": (test.outcome.value if hasattr(test.outcome, "value") else str(test.outcome)),
                     "duration": test.duration,
                     "session_id": session.session_id,
                     "session_date": session.session_start_time.date().isoformat(),

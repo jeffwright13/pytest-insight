@@ -5,7 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pytest_insight.api.routes import router
 
 app = FastAPI(
-    title="pytest-insight API", description="API for analyzing and comparing pytest test results", version="0.1.0"
+    title="pytest-insight API",
+    description="API for analyzing and comparing pytest test results",
+    version="0.1.0",
 )
 
 # Add CORS middleware
