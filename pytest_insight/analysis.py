@@ -39,6 +39,8 @@ from typing import Dict, Any, List, Optional, Set, Tuple
 from datetime import datetime, timedelta
 from collections import defaultdict
 from statistics import mean, stdev
+from zoneinfo import ZoneInfo
+from pytz import utc
 
 from pytest_insight.storage import BaseStorage
 from pytest_insight.models import TestSession, TestResult, TestOutcome
@@ -78,7 +80,7 @@ class SessionAnalysis:
         if self._sessions is not None:
             sessions = self._sessions
             if days:
-                cutoff = datetime.now() - timedelta(days=days)
+                cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(days=days)
                 sessions = [s for s in sessions if s.session_start_time >= cutoff]
             return sessions
 
@@ -459,7 +461,7 @@ class MetricsAnalysis:
         if self._sessions is not None:
             sessions = self._sessions
             if days:
-                cutoff = datetime.now() - timedelta(days=days)
+                cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(days=days)
                 sessions = [s for s in sessions if s.session_start_time >= cutoff]
             return sessions
 

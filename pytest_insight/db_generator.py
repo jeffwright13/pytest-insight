@@ -1,7 +1,8 @@
 import json
 import random
 import string
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Optional
 
@@ -135,12 +136,12 @@ class PracticeDataGenerator:
         Returns:
             A UTC datetime starting from a fixed base time plus the offset.
         """
-        base_time = datetime(2023, 1, 1, tzinfo=timezone.utc)
+        base_time = datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
         return base_time + timedelta(seconds=offset_seconds)
 
     def _generate_session_id(self, sut_name: str, is_base: bool = False) -> str:
         """Generate a session ID following the proper pattern."""
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now(ZoneInfo("UTC")).strftime("%Y%m%d-%H%M%S")
         prefix = "base" if is_base else "target"
         return f"{prefix}-{sut_name}-{timestamp}-{random.randint(10000000, 99999999):x}"
 
@@ -155,7 +156,7 @@ class PracticeDataGenerator:
         """Generate a test result with realistic output."""
         # Ensure start_time is timezone-aware
         if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
+            start_time = start_time.replace(tzinfo=ZoneInfo("UTC"))
 
         caplog = self.text_gen.sentence()
         capstderr = (
@@ -428,7 +429,7 @@ def main(
         if start_date:
             try:
                 # Use datetime(2023, 1, 1) as base like conftest.py
-                base = datetime(2023, 1, 1, tzinfo=timezone.utc)
+                base = datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
                 parsed_date = datetime.strptime(start_date, "%Y-%m-%d")
                 parsed_start_date = base + timedelta(
                     days=(parsed_date - datetime(2023, 1, 1)).days

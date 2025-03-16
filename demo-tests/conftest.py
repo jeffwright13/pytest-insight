@@ -1,13 +1,20 @@
+"""Demo test fixtures."""
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
 
 @pytest.fixture
-def fake_data():
-    """Return canned test data."""
-    return {"id": "TEST-001", "timestamp": datetime.now(), "value": "test data", "status": "active"}
+def test_data():
+    """Return test data fixture."""
+    return {
+        "id": "TEST-001",
+        "timestamp": datetime.now(ZoneInfo("UTC")),
+        "value": "test data",
+        "status": "active"
+    }
 
 
 @pytest.fixture

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import random
 from pathlib import Path
 from typing import List
@@ -223,7 +224,7 @@ class ExampleDataGenerator:
     def generate_example_data(self, num_days: int = 30) -> None:
         """Generate example data spanning multiple days."""
         sessions: List[TestSession] = []
-        now = datetime.now()
+        now = datetime.now(ZoneInfo("UTC"))
 
         # Generate sessions across the time span
         for day in range(num_days):

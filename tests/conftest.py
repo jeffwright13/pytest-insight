@@ -1,18 +1,30 @@
-import random
-import string
+"""Pytest configuration and fixtures."""
+
 from datetime import datetime, timedelta, timezone
 from importlib.metadata import version
 from pathlib import Path
+import random
 
 import pytest
-from pytest_insight.models import (
-    RerunTestGroup,
-    TestHistory,
-    TestOutcome,
-    TestResult,
-    TestSession,
-)
+from pytest_insight.models import TestHistory, TestResult, TestSession
 from pytest_insight.storage import JSONStorage
+from pytest_insight.test_data import (
+    NodeId,
+    TextGenerator,
+    mock_test_result_error,
+    mock_test_result_fail,
+    mock_test_result_pass,
+    mock_test_result_skip,
+    mock_test_result_warning,
+    mock_test_result_xfail,
+    mock_test_result_xpass,
+    mock_test_session,
+    random_rerun_test_group,
+    random_test_result,
+    random_test_session,
+    random_test_sessions,
+)
+from pytest_insight.test_data import get_test_time as get_test_time_fn
 from pytest_mock import MockerFixture
 from typer.testing import CliRunner
 
@@ -28,52 +40,6 @@ def tester(request):
     return request.getfixturevalue(fixture_name)
 
 
-def pytest_configure(config):
-    """Configure pytest with custom markers."""
-    config.addinivalue_line("markers", "unit: Unit tests")
-    config.addinivalue_line("markers", "integration: Integration tests")
-    config.addinivalue_line("markers", "cli: CLI tests")
-    config.addinivalue_line("markers", "api: API tests")
-    config.addinivalue_line("markers", "storage: Storage tests")
-    config.addinivalue_line("markers", "analyzer: Analyzer tests")
-    config.addinivalue_line("markers", "filters: Filter tests")
-    config.addinivalue_line("markers", "display: Display tests")
-    config.addinivalue_line("markers", "commands: Command tests")
-    config.addinivalue_line("markers", "metrics: Metrics tests")
-    config.addinivalue_line("markers", "grafana: Grafana tests")
-    config.addinivalue_line("markers", "server: FastAPI Server tests")
-    config.addinivalue_line("markers", "smoke: Smoke tests")
-
-
-class TextGenerator:
-    """Generate random text content for testing."""
-
-    WORD_LENGTH_RANGE = (3, 10)
-    WORDS_PER_SENTENCE = (5, 15)
-    SENTENCES_PER_PARAGRAPH = (3, 7)
-
-    @staticmethod
-    def word(length=None):
-        """Generate a random word."""
-        if length is None:
-            length = random.randint(*TextGenerator.WORD_LENGTH_RANGE)
-        return "".join(random.choices(string.ascii_lowercase, k=length))
-
-    @classmethod
-    def sentence(cls):
-        """Generate a random sentence."""
-        num_words = random.randint(*cls.WORDS_PER_SENTENCE)
-        words = [cls.word() for _ in range(num_words)]
-        words[0] = words[0].capitalize()
-        return " ".join(words) + "."
-
-    @classmethod
-    def paragraph(cls):
-        """Generate a random paragraph."""
-        num_sentences = random.randint(*cls.SENTENCES_PER_PARAGRAPH)
-        return " ".join(cls.sentence() for _ in range(num_sentences))
-
-
 @pytest.fixture
 def text_gen():
     """Fixture providing access to TextGenerator."""
@@ -81,165 +47,100 @@ def text_gen():
 
 
 @pytest.fixture
-def random_test_session(text_gen, get_test_time):
-    """A factory fixture to create a random TestSession instance."""
-
-    def _create():
-        # Generate new random values each time the factory is called
-        num_tests = random.randint(2, 6)  # More realistic test count
-        include_rerun = random.choice(
-            [True, False, False, False]
-        )  # 25% chance of having reruns
-
-        # Create base session time window for consistent timing
-        base_time = get_test_time()  # Use get_test_time for timezone-aware datetime
-        session_start_time = base_time
-        session_stop_time = base_time + timedelta(seconds=random.randint(30, 300))
-
-        # Generate test nodeids that support our pattern matching rules
-        module_types = ["api", "ui", "db", "auth"]
-        test_types = ["get", "post", "update", "delete", "list", "create"]
-
-        # Create related tests in the same module to preserve relationships
-        module_name = random.choice(module_types)
-        test_file = f"test_{module_name}.py"
-
-        # Create base test results with realistic output
-        test_results = []
-        current_time = session_start_time
-
-        # Generate multiple tests in the same module to show relationships
-        for _ in range(num_tests):
-            test_name = f"test_{random.choice(test_types)}_{module_name}"
-            nodeid = f"{test_file}::{test_name}"
-
-            outcome = random.choice(list(TestOutcome))
-            caplog = text_gen.sentence()
-            capstderr = (
-                text_gen.sentence()
-                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-                else ""
-            )
-            capstdout = text_gen.sentence()
-            longreprtext = (
-                text_gen.paragraph()
-                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-                else ""
-            )
-            has_warning = random.choice([True, False])
-
-            result = TestResult(
-                nodeid=nodeid,
-                outcome=outcome,
-                start_time=current_time + timedelta(seconds=random.randint(1, 10)),
-                duration=random.uniform(0.1, 5.0),
-                caplog=caplog,
-                capstderr=capstderr,
-                capstdout=capstdout,
-                longreprtext=longreprtext,
-                has_warning=has_warning,
-            )
-            test_results.append(result)
-            current_time = result.stop_time
-
-        # Maybe add rerun groups with proper timing and relationships
-        rerun_groups = []
-        if include_rerun:
-            # Use same module for rerun groups to maintain relationships
-            num_rerun_groups = random.randint(1, 2)
-            for _ in range(num_rerun_groups):
-                test_name = f"test_{random.choice(test_types)}_{module_name}"
-                rerun_nodeid = f"{test_file}::{test_name}"
-
-                group = RerunTestGroup(nodeid=rerun_nodeid)
-
-                # Create rerun sequence
-                num_reruns = random.randint(2, 4)  # Store the number of reruns
-                for i in range(num_reruns):
-                    is_final = i == num_reruns - 1
-
-                    # For final attempt, more likely to pass than fail
-                    final_outcome = (
-                        random.choices(
-                            [TestOutcome.PASSED, TestOutcome.FAILED],
-                            weights=[0.8, 0.2],  # 80% chance to pass on final attempt
-                        )[0]
-                        if is_final
-                        else TestOutcome.RERUN
-                    )
-
-                    result = TestResult(
-                        nodeid=rerun_nodeid,
-                        outcome=final_outcome,
-                        start_time=current_time
-                        + timedelta(seconds=random.randint(1, 10)),
-                        duration=random.uniform(0.1, 5.0),
-                        caplog=f"Attempt {i+1}" if not is_final else "Final attempt",
-                        capstderr=(
-                            ""
-                            if not is_final or final_outcome == TestOutcome.PASSED
-                            else "Test failed after reruns"
-                        ),
-                        capstdout=f"Running test (attempt {i+1})",
-                        longreprtext=(
-                            ""
-                            if not is_final or final_outcome == TestOutcome.PASSED
-                            else "Failed after multiple attempts"
-                        ),
-                        has_warning=random.choice([True, False]) if is_final else False,
-                    )
-                    group.add_test(result)
-                    test_results.append(result)
-                    current_time = result.stop_time + timedelta(seconds=1)
-                rerun_groups.append(group)
-
-        # Create session with base components and realistic tags
-        session = TestSession(
-            sut_name=f"{module_name}_service",  # More realistic service name
-            session_id=f"session_{random.randint(1, 1000)}",
-            session_start_time=session_start_time,
-            session_stop_time=session_stop_time,
-            test_results=test_results,
-            rerun_test_groups=[],
-            session_tags=[
-                f"module_{module_name}",
-                f"type_{random.choice(['unit', 'integration', 'e2e'])}",
-                f"env_{random.choice(['dev', 'staging', 'prod'])}",
-            ],
-        )
-
-        # Add rerun groups using the proper method
-        for group in rerun_groups:
-            session.add_rerun_group(group)
-
-        return session
-
-    return _create
+def nodeid():
+    """Fixture providing access to NodeId generator."""
+    return NodeId()
 
 
 @pytest.fixture
-def random_test_sessions():
-    """Create a list of random TestSession instances."""
-    return [random_test_session() for _ in range(random.randint(1, 10))]
+def get_test_time():
+    """Fixture that provides timezone-aware test timestamps.
+
+    Returns a function that generates UTC timestamps starting from 2023-01-01
+    plus the given offset in seconds. This ensures consistent timezone handling
+    and prevents comparison issues between naive and aware datetimes.
+    """
+    return get_test_time_fn
+
+
+@pytest.fixture
+def random_test_session_factory(get_test_time):
+    """Factory fixture that creates random test sessions with timezone-aware timestamps.
+
+    All datetime operations use UTC to prevent comparison issues between naive and
+    aware datetimes, following the get_test_time pattern for consistency.
+
+    Returns:
+        function: Factory function that creates a TestSession with:
+            - Timezone-aware timestamps via get_test_time()
+            - Proper session context preservation
+            - Test results with consistent timing relationships
+    """
+    def _factory():
+        # Create base session
+        session = random_test_session()
+
+        # Ensure timezone-aware timestamps
+        base_time = get_test_time()
+        session.session_start_time = base_time
+
+        # Space test results 5 seconds apart
+        for i, result in enumerate(session.test_results):
+            result.start_time = get_test_time(i * 5)
+
+        # Set session stop time after all tests
+        session.session_stop_time = get_test_time(len(session.test_results) * 5 + 1)
+
+        return session
+    return _factory
+
+
+@pytest.fixture
+def random_test_sessions_factory(random_test_session_factory, get_test_time):
+    """Factory fixture that creates multiple random test sessions.
+
+    Uses random_test_session_factory to ensure all sessions:
+    - Have timezone-aware timestamps
+    - Maintain proper session context and relationships
+    - Preserve test result timing within each session
+
+    Returns:
+        function: Factory function that creates a list of TestSessions
+    """
+    def _factory(num_sessions=None):
+        if num_sessions is None:
+            num_sessions = random.randint(2, 5)
+
+        sessions = []
+        for i in range(num_sessions):
+            session = random_test_session_factory()
+            # Offset each session by 10 minutes to maintain clear chronological order
+            session.session_start_time = get_test_time(i * 600)  # 600 seconds = 10 minutes
+            session.session_stop_time = get_test_time((i + 1) * 600 - 1)  # End just before next session
+            for j, result in enumerate(session.test_results):
+                result.start_time = get_test_time(i * 600 + j * 5)  # Space tests 5 seconds apart
+            sessions.append(session)
+
+        return sessions
+    return _factory
+
+
+@pytest.fixture
+def random_test_result_factory():
+    """A factory fixture to create a random TestResult instance."""
+    return random_test_result
+
+
+@pytest.fixture
+def random_rerun_test_group_factory():
+    """A factory fixture to create a random RerunTestGroup instance."""
+    return random_rerun_test_group
 
 
 @pytest.fixture
 def test_history():
     """Create empty TestHistory instance."""
     return TestHistory()
-
-
-@pytest.fixture
-def sample_session(sut_name="test-sut", session_id="session-1"):
-    """Create a sample test session."""
-    now = datetime.now()
-    return TestSession(
-        sut_name=sut_name,
-        session_id=session_id,
-        session_start_time=now,
-        session_stop_time=now + timedelta(seconds=10),
-        test_results=[],
-    )
 
 
 @pytest.fixture
@@ -259,214 +160,13 @@ def temp_storage_dir(tmp_path):
 @pytest.fixture
 def temp_json_file(tmp_path):
     """Create a temporary JSON file for testing."""
-    temp_file = tmp_path / "test_sessions.json"
-    return temp_file
+    return tmp_path / "test.json"
 
 
 @pytest.fixture
-def json_storage(temp_json_file, mocker):
+def json_storage(temp_json_file):
     """Fixture for a JSONStorage instance using a temporary file."""
-    mocker.patch.object(JSONStorage, "FILE_PATH", temp_json_file)
-    return JSONStorage()
-
-
-@pytest.fixture
-def mock_test_result_pass():
-    """Fixture for a mock test result."""
-    return TestResult(
-        nodeid="test_file.py::test_case_1_pass",
-        outcome="PASSED",
-        start_time=datetime.utcnow(),
-        duration=1.5,
-        has_warning=False,
-    )
-
-
-@pytest.fixture
-def mock_test_result_fail():
-    """Fixture for a mock test result."""
-    return TestResult(
-        nodeid="test_file.py::test_case_2_fail",
-        outcome="FAILED",
-        start_time=datetime.utcnow(),
-        duration=1.5,
-        has_warning=False,
-    )
-
-
-@pytest.fixture
-def mock_test_result_skip():
-    """Fixture for a mock test result."""
-    return TestResult(
-        nodeid="test_file.py::test_case_3_skip",
-        outcome="SKIPPED",
-        start_time=datetime.utcnow(),
-        duration=1.5,
-        has_warning=False,
-    )
-
-
-@pytest.fixture
-def mock_test_result_xfail():
-    """Fixture for a mock test result."""
-    return TestResult(
-        nodeid="test_file.py::test_case_4_xfail",
-        outcome="XFAILED",
-        start_time=datetime.utcnow(),
-        duration=1.5,
-        has_warning=False,
-    )
-
-
-@pytest.fixture
-def mock_test_result_xpass():
-    """Fixture for a mock test result."""
-    return TestResult(
-        nodeid="test_file.py::test_case_5_xpass",
-        outcome="XPASSED",
-        start_time=datetime.utcnow(),
-        duration=1.5,
-        has_warning=False,
-    )
-
-
-@pytest.fixture
-def mock_test_result_warning():
-    """Fixture for a mock test result."""
-    return TestResult(
-        nodeid="test_file.py::test_case_6_warning",
-        outcome="PASSED",
-        start_time=datetime.utcnow(),
-        duration=1.5,
-        has_warning=True,
-    )
-
-
-@pytest.fixture
-def mock_test_result_error():
-    """Fixture for a mock test result."""
-    return TestResult(
-        nodeid="test_file.py::test_case_7_error",
-        outcome="ERROR",
-        start_time=datetime.utcnow(),
-        duration=1.5,
-        has_warning=False,
-    )
-
-
-@pytest.fixture
-def mock_rerun_group1(mock_test_result):
-    """Fixture for a rerun test group with a single test result."""
-    group = RerunTestGroup(nodeid="test_rerun_group_1")
-    group.add_test(mock_test_result)
-    return group
-
-
-@pytest.fixture
-def mock_session_no_reruns(
-    get_test_time,
-    mock_test_result_pass,
-    mock_test_result_fail,
-    mock_test_result_skip,
-    mock_test_result_xfail,
-    mock_test_result_xpass,
-    mock_test_result_warning,
-    mock_test_result_error,
-):
-    """Fixture for a test session with no reruns."""
-    return TestSession(
-        sut_name="test_sut",
-        session_id="123",
-        session_start_time=get_test_time(),
-        session_stop_time=get_test_time(60),  # 1 minute later
-        test_results=[
-            mock_test_result_pass,
-            mock_test_result_fail,
-            mock_test_result_skip,
-            mock_test_result_xfail,
-            mock_test_result_xpass,
-            mock_test_result_warning,
-            mock_test_result_error,
-        ],
-        rerun_test_groups=[],
-        session_tags=["tag1", "tag2"],
-    )
-
-
-@pytest.fixture
-def mock_session_w_reruns(
-    mocker,
-    mock_test_result_pass,
-    mock_test_result_fail,
-    mock_test_result_skip,
-    mock_test_result_xfail,
-    mock_test_result_xpass,
-    mock_test_result_warning,
-    mock_test_result_error,
-):
-    """Generate a test session with mocked rerun test groups."""
-
-    # Create first rerun group with failure
-    mock_rerun_group1 = mocker.MagicMock(spec=RerunTestGroup)
-    mock_rerun_group1.nodeid = "test_file.py::test_case_1"
-    mock_rerun_group1.reruns = [mocker.MagicMock(spec=TestResult)]
-    mock_rerun_group1.reruns[0].to_dict.return_value = {
-        "nodeid": "test_file.py::test_case_1",
-        "outcome": "FAILED",
-        "start_time": (datetime.utcnow() - timedelta(minutes=5)).isoformat(),
-        "duration": 2.5,
-    }
-    mock_rerun_group1.to_dict.return_value = {
-        "nodeid": mock_rerun_group1.nodeid,
-        "reruns": [r.to_dict() for r in mock_rerun_group1.reruns],
-        "full_test_list": [r.to_dict() for r in mock_rerun_group1.reruns],
-    }
-
-    # Create second rerun group with pass after failure
-    mock_rerun_group2 = mocker.MagicMock(spec=RerunTestGroup)
-    mock_rerun_group2.nodeid = "test_file.py::test_case_2"
-    mock_rerun_group2.reruns = [
-        mocker.MagicMock(spec=TestResult),
-        mocker.MagicMock(spec=TestResult),
-    ]
-    mock_rerun_group2.reruns[0].to_dict.return_value = {
-        "nodeid": "test_file.py::test_case_2",
-        "outcome": "FAILED",
-        "start_time": (datetime.utcnow() - timedelta(minutes=3)).isoformat(),
-        "duration": 1.5,
-    }
-    mock_rerun_group2.reruns[1].to_dict.return_value = {
-        "nodeid": "test_file.py::test_case_2",
-        "outcome": "PASSED",
-        "start_time": (datetime.utcnow() - timedelta(minutes=2)).isoformat(),
-        "duration": 1.2,
-    }
-    mock_rerun_group2.to_dict.return_value = {
-        "nodeid": mock_rerun_group2.nodeid,
-        "reruns": [r.to_dict() for r in mock_rerun_group2.reruns],
-        "full_test_list": [r.to_dict() for r in mock_rerun_group2.reruns],
-    }
-
-    # Create test session with 2 rerun groups
-    session = TestSession(
-        sut_name="test-sut",
-        session_id="test-session-123",
-        session_start_time=datetime.utcnow() - timedelta(minutes=10),
-        session_stop_time=datetime.utcnow(),
-        test_results=[
-            mock_test_result_pass,
-            mock_test_result_fail,
-            mock_test_result_skip,
-            mock_test_result_xfail,
-            mock_test_result_xpass,
-            mock_test_result_warning,
-            mock_test_result_error,
-        ],
-        rerun_test_groups=[mock_rerun_group1, mock_rerun_group2],
-        session_tags=["tag1", "tag2"],
-    )
-
-    return session
+    return JSONStorage(temp_json_file)
 
 
 @pytest.fixture
@@ -478,371 +178,161 @@ def cli_runner():
 @pytest.fixture
 def mock_terminal_reporter(mocker: MockerFixture):
     """Create a mock terminal reporter with standard attributes."""
-    reporter = mocker.Mock()
-    reporter.stats = {
-        "passed": [],
-        "failed": [],
-        "skipped": [],
-        "xfailed": [],
-        "xpassed": [],
-        "error": [],
-        "rerun": [],
-    }
+    reporter = mocker.MagicMock()
+    reporter._tw = mocker.MagicMock()
+    reporter.write = mocker.MagicMock()
+    reporter.write_line = mocker.MagicMock()
+    reporter.ensure_newline = mocker.MagicMock()
     return reporter
 
 
 @pytest.fixture
 def mock_config(mocker: MockerFixture):
     """Create a mock pytest config."""
-    config = mocker.Mock()
-    mocker.patch("pytest_insight.plugin.insight_enabled", return_value=True)
+    config = mocker.MagicMock()
+    config.option = mocker.MagicMock()
     return config
 
 
+# Test Result Fixtures
 @pytest.fixture
-def sample_test_result():
-    """Create a sample test result."""
-    return TestResult(
-        nodeid="test_example.py::test_something",
-        outcome="PASSED",
-        start_time=datetime.utcnow(),
-        duration=1.5,
-        has_warning=False,
-    )
-
-
-@pytest.fixture
-def temp_storage(tmp_path):
-    """Create temporary storage for tests."""
-    storage_file = tmp_path / "test_sessions.json"
-    return JSONStorage(storage_file)
-
-
-@pytest.fixture
-def random_test_result():
-    """A factory fixture to create a random TestResult instance.
-
-    Returns test results with nodeids that support pattern matching:
-    1. Non-regex patterns:
-       - Split on :: into parts
-       - Module part: Strip .py before matching
-       - Test name part: Direct pattern match
-    2. Pattern matches if ANY part matches
-
-    Example nodeids:
-    - "test_api.py::test_get_api"      # Matches 'api' in both parts
-    - "test_api.py::test_post_api"     # Matches 'api' in both parts
-    - "test_ui.py::test_get_ui"        # Matches 'get' in test name
+def test_result_pass(get_test_time):
+    """Fixture that returns a mock test result with PASSED outcome.
+    Uses get_test_time() to ensure timezone-aware timestamps.
     """
-
-    def _create():
-        # Generate nodeids that support our pattern matching rules
-        module_types = ["api", "ui", "db", "auth"]
-        module_name = random.choice(module_types)
-        test_types = ["get", "post", "update", "delete", "list", "create"]
-        test_name = random.choice(test_types)
-
-        # Format: test_{module}.py::test_{action}_{module}
-        nodeid = f"test_{module_name}.py::test_{test_name}_{module_name}"
-
-        # Generate timing info - use smaller duration range
-        start_time = datetime.now(timezone.utc)
-        duration = random.uniform(0.1, 10.0)  # Keep duration under 10 seconds
-        stop_time = start_time + timedelta(seconds=duration)
-
-        # Determine outcome first
-        outcome = random.choice(list(TestOutcome))
-
-        return TestResult(
-            nodeid=nodeid,
-            outcome=outcome,
-            start_time=start_time,
-            stop_time=stop_time,  # Set both stop_time and duration for consistency
-            duration=duration,
-            caplog="",  # Initialize with empty strings
-            capstderr="",  # Will be populated by session fixture
-            capstdout="",  # Will be populated by session fixture
-            longreprtext="",  # Will be populated by session fixture
-            has_warning=random.choice([True, False]),
-        )
-
-    return _create
+    result = mock_test_result_pass()
+    result.start_time = get_test_time()
+    return result
 
 
 @pytest.fixture
-def random_rerun_test_group(random_test_result, text_gen, get_test_time):
-    """A factory fixture to create a random RerunTestGroup instance.
-
-    Maintains session context by:
-    1. Using consistent nodeid for all tests in group
-    2. Preserving test relationships and timing
-    3. Following proper outcome progression (RERUN → PASSED/FAILED)
-
-    Supports pattern matching with nodeids:
-    - "test_api.py::test_get_api"      # Module pattern
-    - "test_api.py::test_post_api"     # Test name pattern
-    - "test_api.py::TestApi::test_get" # Full path with class
+def test_result_fail(get_test_time):
+    """Fixture that returns a mock test result with FAILED outcome.
+    Uses get_test_time() to ensure timezone-aware timestamps.
     """
-
-    def _create():
-        # Generate test nodeids that support pattern matching rules
-        module_types = ["api", "ui", "db", "auth"]
-        module_name = random.choice(module_types)
-        test_types = ["get", "post", "update", "delete", "list", "create"]
-
-        # Create test nodeid with optional class
-        test_name = f"test_{random.choice(test_types)}_{module_name}"
-        test_file = f"test_{module_name}.py"
-
-        # 30% chance to include a class in the nodeid
-        if random.random() < 0.3:
-            class_name = f"Test{random.choice(['Api', 'Ui', 'Db', 'Auth'])}"
-            nodeid = f"{test_file}::{class_name}::{test_name}"
-        else:
-            nodeid = f"{test_file}::{test_name}"
-
-        # Create rerun group
-        group = RerunTestGroup(nodeid=nodeid)
-        num_reruns = random.randint(1, 3)  # Random number of reruns
-        current_time = get_test_time()  # Start time for first test
-
-        # Generate rerun sequence with proper timing and outcomes
-        for i in range(num_reruns):
-            is_final = i == num_reruns - 1
-
-            # For final attempt, more likely to pass than fail
-            final_outcome = (
-                random.choices(
-                    [TestOutcome.PASSED, TestOutcome.FAILED],
-                    weights=[0.8, 0.2],  # 80% chance to pass on final attempt
-                )[0]
-                if is_final
-                else TestOutcome.RERUN
-            )
-
-            # Generate test output based on outcome
-            caplog = text_gen.sentence()
-            capstderr = (
-                text_gen.sentence() if final_outcome == TestOutcome.FAILED else ""
-            )
-            capstdout = text_gen.sentence()
-            longreprtext = (
-                text_gen.paragraph() if final_outcome == TestOutcome.FAILED else ""
-            )
-            has_warning = random.choice([True, False]) if is_final else False
-
-            result = TestResult(
-                nodeid=nodeid,
-                outcome=final_outcome,
-                start_time=current_time,
-                duration=random.uniform(0.1, 5.0),
-                caplog=caplog,
-                capstderr=capstderr,
-                capstdout=capstdout,
-                longreprtext=longreprtext,
-                has_warning=has_warning,
-            )
-
-            group.add_test(result)
-            current_time = result.stop_time + timedelta(
-                seconds=1
-            )  # 1 second gap between reruns
-
-        return group
-
-    return _create
+    result = mock_test_result_fail()
+    result.start_time = get_test_time()
+    return result
 
 
 @pytest.fixture
-def random_test_sessions(random_test_session):
-    """Create a list of random test sessions.
-
-    Each session is unique and contains multiple unique test results.
+def test_result_skip(get_test_time):
+    """Fixture that returns a mock test result with SKIPPED outcome.
+    Uses get_test_time() to ensure timezone-aware timestamps.
     """
-    num_sessions = random.randint(1, 10)
-    return [random_test_session() for _ in range(num_sessions)]
+    result = mock_test_result_skip()
+    result.start_time = get_test_time()
+    return result
 
 
 @pytest.fixture
-def static_test_session_list(
-    mock_test_result_pass,
-    mock_test_result_fail,
-    mock_test_result_skip,
-    mock_test_result_xfail,
-    mock_test_result_xpass,
-    mock_test_result_warning,
-    mock_test_result_error,
-):
-    """Create a static test session."""
-    return [
-        TestSession(
-            sut_name="test_sut",
-            session_id="123",
-            session_start_time=datetime.utcnow(),
-            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
-            test_results=[mock_test_result_pass],
-            rerun_test_groups=[],
-            session_tags=["tag_always", "tag_pass"],
-        ),
-        TestSession(
-            sut_name="test_sut",
-            session_id="124",
-            session_start_time=datetime.utcnow(),
-            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
-            test_results=[mock_test_result_fail],
-            rerun_test_groups=[],
-            session_tags=["tag_always", "tag_fail"],
-        ),
-        TestSession(
-            sut_name="test_sut",
-            session_id="125",
-            session_start_time=datetime.utcnow(),
-            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
-            test_results=[mock_test_result_skip],
-            rerun_test_groups=[],
-            session_tags=["tag_always", "tag_skip"],
-        ),
-        TestSession(
-            sut_name="test_sut",
-            session_id="126",
-            session_start_time=datetime.utcnow(),
-            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
-            test_results=[mock_test_result_xfail],
-            rerun_test_groups=[],
-            session_tags=["tag_always", "tag_xfail"],
-        ),
-        TestSession(
-            sut_name="test_sut",
-            session_id="127",
-            session_start_time=datetime.utcnow(),
-            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
-            test_results=[mock_test_result_xpass],
-            rerun_test_groups=[],
-            session_tags=["tag_always", "tag_xpass"],
-        ),
-        TestSession(
-            sut_name="test_sut",
-            session_id="128",
-            session_start_time=datetime.utcnow(),
-            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
-            test_results=[mock_test_result_warning],
-            rerun_test_groups=[],
-            session_tags=["tag_always", "tag_warning"],
-        ),
-        TestSession(
-            sut_name="test_sut",
-            session_id="129",
-            session_start_time=datetime.utcnow(),
-            session_stop_time=datetime.utcnow() + timedelta(minutes=1),
-            test_results=[mock_test_result_error],
-            rerun_test_groups=[],
-            session_tags=["tag_always", "tag_error"],
-        ),
-    ]
-
-
-class NodeId:
-    """Generate and manage pytest NodeIds for testing."""
-
-    def __init__(self):
-        self.path_parts = self._generate_path_parts()
-        self.filename = self._generate_filename()
-        self.test_name = self._generate_test_name()
-        self.params = self._generate_params()
-
-    @staticmethod
-    def _random_word(length=6):
-        """Generate a random word using lowercase letters."""
-        return "".join(random.choice(string.ascii_lowercase) for _ in range(length))
-
-    def _generate_path_parts(self):
-        """Generate random path components."""
-        num_parts = random.randint(0, 3)
-        return [self._random_word() for _ in range(num_parts)]
-
-    def _generate_filename(self):
-        """Generate random Python filename."""
-        return f"test_{self._random_word()}.py"
-
-    def _generate_test_name(self):
-        """Generate random test function name."""
-        return f"test_{self._random_word()}"
-
-    def _generate_params(self):
-        """Generate random parameter string."""
-        if random.choice([True, False]):
-            return f"[{random.randint(0, 100)}]"
-        return ""
-
-    def path(self):
-        """Get the full path including filename."""
-        if self.path_parts:
-            return str(Path(*self.path_parts, self.filename))
-        return self.filename
-
-    def full_name(self):
-        """Get the complete NodeId."""
-        parts = [self.path()]
-        if self.test_name:
-            parts.append(self.test_name)
-        if self.params:
-            parts[-1] += self.params
-        return "::".join(parts)
-
-    def __str__(self):
-        return self.full_name()
-
-
-@pytest.fixture
-def nodeid():
-    """Fixture that returns a NodeId instance."""
-    return NodeId()
-
-
-@pytest.fixture
-def random_test_result_legacy(nodeid, text_gen):
-    """Legacy version of random_test_result that uses NodeId."""
-
-    def _create():
-        outcome = random.choice(TestOutcome.to_list())
-        start_time = datetime.now(timezone.utc)
-        duration = random.uniform(0.1, 5.0)
-
-        return TestResult(
-            nodeid=str(nodeid),
-            outcome=TestOutcome.from_str(outcome),
-            start_time=start_time,
-            duration=duration,
-            caplog=text_gen.sentence(),
-            capstderr=(
-                text_gen.sentence()
-                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-                else ""
-            ),
-            capstdout=text_gen.sentence(),
-            longreprtext=(
-                text_gen.paragraph()
-                if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-                else ""
-            ),
-            has_warning=random.choice([True, False]),
-        )
-
-    return _create
-
-
-@pytest.fixture
-def get_test_time():
-    """Get a test timestamp with optional offset.
-
-    Returns:
-        A UTC datetime starting from 2023-01-01 plus the given offset in seconds.
-        This provides consistent timestamps for test cases while avoiding any
-        timezone issues.
+def test_result_xfailed(get_test_time):
+    """Fixture that returns a mock test result with XFAILED outcome.
+    Uses get_test_time() to ensure timezone-aware timestamps.
     """
+    result = mock_test_result_xfail()
+    result.start_time = get_test_time()
+    return result
 
-    def _get_test_time(offset_seconds: int = 0) -> datetime:
-        base = datetime(2023, 1, 1, tzinfo=timezone.utc)
-        return base + timedelta(seconds=offset_seconds)
 
-    return _get_test_time
+@pytest.fixture
+def test_result_xpassed(get_test_time):
+    """Fixture that returns a mock test result with XPASSED outcome.
+    Uses get_test_time() to ensure timezone-aware timestamps.
+    """
+    result = mock_test_result_xpass()
+    result.start_time = get_test_time()
+    return result
+
+
+@pytest.fixture
+def test_result_error(get_test_time):
+    """Fixture that returns a mock test result with ERROR outcome.
+    Uses get_test_time() to ensure timezone-aware timestamps.
+    """
+    result = mock_test_result_error()
+    result.start_time = get_test_time()
+    return result
+
+
+@pytest.fixture
+def test_result_warning(get_test_time):
+    """Fixture that returns a mock test result with warning.
+    Uses get_test_time() to ensure timezone-aware timestamps.
+    """
+    result = mock_test_result_warning()
+    result.start_time = get_test_time()
+    return result
+
+
+# Test Session Fixtures
+@pytest.fixture
+def test_session_basic(get_test_time):
+    """Fixture that returns a mock test session with all possible outcomes.
+    Uses get_test_time() to ensure timezone-aware timestamps.
+    """
+    session = mock_test_session()
+    session.session_start_time = get_test_time()
+    session.session_stop_time = get_test_time(60)  # 1 minute later
+    for i, result in enumerate(session.test_results):
+        result.start_time = get_test_time(i * 5)  # Space tests 5 seconds apart
+    return session
+
+
+@pytest.fixture
+def test_session_no_reruns(test_session_basic):
+    """Fixture that returns a mock test session with no reruns.
+    Inherits timezone-aware timestamps from test_session_basic.
+    """
+    session = test_session_basic
+    session.rerun_test_groups = []
+    return session
+
+
+@pytest.fixture
+def test_session_with_reruns(test_session_basic, mocker: MockerFixture, get_test_time):
+    """Generate a test session with mocked rerun test groups.
+    Uses get_test_time() to ensure timezone-aware timestamps.
+    """
+    session = test_session_basic
+
+    # Create first rerun group with failure
+    mock_rerun_group1 = mocker.MagicMock()
+    mock_rerun_group1.nodeid = "test_file.py::test_case_1"
+    mock_rerun_group1.reruns = [mocker.MagicMock()]
+    mock_rerun_group1.reruns[0].to_dict.return_value = {
+        "nodeid": "test_file.py::test_case_1",
+        "outcome": "FAILED",
+        "start_time": get_test_time(-300).isoformat(),  # 5 minutes ago
+        "duration": 2.5,
+    }
+    mock_rerun_group1.to_dict.return_value = {
+        "nodeid": mock_rerun_group1.nodeid,
+        "reruns": [r.to_dict() for r in mock_rerun_group1.reruns],
+        "full_test_list": [r.to_dict() for r in mock_rerun_group1.reruns],
+    }
+
+    # Create second rerun group with pass after failure
+    mock_rerun_group2 = mocker.MagicMock()
+    mock_rerun_group2.nodeid = "test_file.py::test_case_2"
+    mock_rerun_group2.reruns = [mocker.MagicMock(), mocker.MagicMock()]
+    mock_rerun_group2.reruns[0].to_dict.return_value = {
+        "nodeid": "test_file.py::test_case_2",
+        "outcome": "FAILED",
+        "start_time": get_test_time(-180).isoformat(),  # 3 minutes ago
+        "duration": 1.5,
+    }
+    mock_rerun_group2.reruns[1].to_dict.return_value = {
+        "nodeid": "test_file.py::test_case_2",
+        "outcome": "PASSED",
+        "start_time": get_test_time(-120).isoformat(),  # 2 minutes ago
+        "duration": 1.2,
+    }
+    mock_rerun_group2.to_dict.return_value = {
+        "nodeid": mock_rerun_group2.nodeid,
+        "reruns": [r.to_dict() for r in mock_rerun_group2.reruns],
+        "full_test_list": [r.to_dict() for r in mock_rerun_group2.reruns],
+    }
+
+    session.rerun_test_groups = [mock_rerun_group1, mock_rerun_group2]
+    return session

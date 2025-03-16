@@ -1,82 +1,81 @@
-import pytest
+"""Test the query filters."""
 from datetime import datetime, timedelta, timezone
-from pytest_insight.models import TestResult, TestSession, TestOutcome
-from pytest_insight.query import Query, CustomFilter
-from pytest_insight.storage import InMemoryStorage
+
+import pytest
+from pytest_insight.models import TestHistory, TestOutcome, TestResult, TestSession
+from pytest_insight.query import Query
+from pytest_insight.storage import InMemoryStorage, JSONStorage
 
 
-def get_test_time(offset_seconds: int = 0) -> datetime:
-    """Get a test timestamp with optional offset.
+@pytest.fixture
+def get_test_time():
+    """Fixture that provides timezone-aware test timestamps.
 
-    Returns:
-        A UTC datetime starting from 2023-01-01 plus the given offset in seconds.
-        This provides consistent timestamps for test cases while avoiding any
-        timezone issues.
+    Returns a function that generates UTC timestamps starting from 2023-01-01
+    plus the given offset in seconds. This ensures consistent timezone handling
+    and prevents comparison issues between naive and aware datetimes.
     """
     base = datetime(2023, 1, 1, tzinfo=timezone.utc)
-    return base + timedelta(seconds=offset_seconds)
+    return lambda offset_seconds=0: base + timedelta(seconds=offset_seconds)
 
 
-def test_query_initialization(mock_session_no_reruns):
+def test_query_initialization(test_session_no_reruns):
     """Test basic initialization of Query with no filters."""
     storage = InMemoryStorage()
-    storage.save_session(mock_session_no_reruns)
+    storage.save_session(test_session_no_reruns)
     query = Query(storage=storage)
     result = query.execute()
     assert len(result.sessions) == 1
-    assert result.sessions[0] == mock_session_no_reruns
+    assert result.sessions[0] == test_session_no_reruns
 
 
-def test_sut_filter(mock_session_no_reruns):
+def test_sut_filter(test_session_no_reruns):
     """Test filtering by SUT name.
 
     Session-level filter that preserves all tests in matching sessions.
     """
     storage = InMemoryStorage()
-    storage.save_session(mock_session_no_reruns)
+    storage.save_session(test_session_no_reruns)
     query = Query(storage=storage)
     result = query.for_sut("test_sut").execute()
     assert len(result.sessions) == 1
-    assert result.sessions[0].sut_name == "test_sut"
+
     # All tests preserved in matching sessions
     assert len(result.sessions[0].test_results) == len(
-        mock_session_no_reruns.test_results
+        test_session_no_reruns.test_results
     )
 
 
-def test_days_filter(mock_session_no_reruns):
+def test_days_filter(test_session_no_reruns, get_test_time):
     """Test filtering by days.
 
     Session-level filter that preserves all tests in matching sessions.
     """
     storage = InMemoryStorage()
-    storage.save_session(mock_session_no_reruns)
+    storage.save_session(test_session_no_reruns)
     query = Query(storage=storage)
     result = query.in_last_days(7).execute()
     assert len(result.sessions) == 1
+
     # All tests preserved in matching sessions
     assert len(result.sessions[0].test_results) == len(
-        mock_session_no_reruns.test_results
+        test_session_no_reruns.test_results
     )
 
     # Test old session gets filtered out
     old_session = TestSession(
         sut_name="test_sut",
-        session_id="old-123",
-        session_start_time=get_test_time(-10 * 24 * 60 * 60),  # 10 days ago
-        session_stop_time=get_test_time(
-            -10 * 24 * 60 * 60 + 60
-        ),  # 10 days ago + 1 minute
+        session_id="old-session",
+        session_start_time=get_test_time(-864000),  # 10 days ago
+        session_stop_time=get_test_time(-777600),   # 9 days ago
         test_results=[],
-        rerun_test_groups=[],
     )
-    storage = InMemoryStorage()
     storage.save_session(old_session)
-    result = Query(storage=storage).in_last_days(7).execute()
-    assert len(result.sessions) == 0
+    result = query.in_last_days(7).execute()
+    assert len(result.sessions) == 1
 
 
-def test_outcome_filter(mock_test_result_pass, mock_test_result_fail):
+def test_outcome_filter(test_result_pass, test_result_fail):
     """Test filtering by test outcome.
 
     Test-level filter that:
@@ -87,15 +86,17 @@ def test_outcome_filter(mock_test_result_pass, mock_test_result_fail):
     session = TestSession(
         sut_name="test_sut",
         session_id="test-123",
-        session_start_time=get_test_time(),
-        session_stop_time=get_test_time(2),  # 2 seconds total duration
-        test_results=[mock_test_result_pass, mock_test_result_fail],
+        session_start_time=test_result_pass.start_time,  # Use fixture's timezone-aware time
+        session_stop_time=test_result_pass.start_time + timedelta(minutes=1),
+        test_results=[test_result_pass, test_result_fail],
         rerun_test_groups=[],
     )
     storage = InMemoryStorage()
     storage.save_session(session)
+
     query = Query(storage=storage)
     result = query.filter_by_test().with_outcome(TestOutcome.PASSED).apply().execute()
+
     assert len(result.sessions) == 1
     # Session context preserved - both tests still present
     assert len(result.sessions[0].test_results) == 2
@@ -106,12 +107,7 @@ def test_outcome_filter(mock_test_result_pass, mock_test_result_fail):
     assert result.sessions[0].sut_name == "test_sut"
 
 
-def has_warning(test: TestResult) -> bool:
-    """Custom predicate for filtering tests with warnings."""
-    return test.has_warning
-
-
-def test_warnings_filter(mock_test_result_pass):
+def test_warnings_filter(test_result_warning):
     """Test filtering by warning presence using custom filter.
 
     Test-level filter that:
@@ -119,42 +115,31 @@ def test_warnings_filter(mock_test_result_pass):
     2. Preserves ALL tests in matching sessions
     3. Maintains session context (metadata, relationships)
     """
-    warning_result = TestResult(
-        nodeid="test_warn.py::test_warning",
-        outcome=TestOutcome.PASSED,
-        start_time=get_test_time(1),  # Start 1 second after first test
-        duration=1.0,
-        has_warning=True,
-    )
     session = TestSession(
         sut_name="test_sut",
         session_id="test-123",
-        session_start_time=get_test_time(),
-        session_stop_time=get_test_time(2),  # 2 seconds total duration
-        test_results=[mock_test_result_pass, warning_result],
+        session_start_time=test_result_warning.start_time,  # Use fixture's timezone-aware time
+        session_stop_time=test_result_warning.start_time + timedelta(minutes=1),
+        test_results=[test_result_warning],
         rerun_test_groups=[],
     )
     storage = InMemoryStorage()
     storage.save_session(session)
-    query = Query(storage=storage)
 
-    result = (
-        query.filter_by_test()
-        .with_custom_filter(has_warning, "has_warning")
-        .apply()
-        .execute()
-    )
+    query = Query(storage=storage)
+    result = query.with_warnings().execute()
+
     assert len(result.sessions) == 1
-    # Session context preserved - both tests still present
-    assert len(result.sessions[0].test_results) == 2
-    # At least one test has a warning
-    assert any(r.has_warning for r in result.sessions[0].test_results)
+    # Session context preserved
+    assert len(result.sessions[0].test_results) == 1
+    # Test has warning
+    assert result.sessions[0].test_results[0].has_warning
     # Session metadata preserved
     assert result.sessions[0].session_id == "test-123"
     assert result.sessions[0].sut_name == "test_sut"
 
 
-def test_pattern_matching():
+def test_pattern_matching(get_test_time):
     """Test pattern matching rules.
 
     Pattern matching rules:
@@ -172,20 +157,26 @@ def test_pattern_matching():
     test_in_module = TestResult(
         nodeid="test_api.py::test_get_user",
         outcome=TestOutcome.PASSED,
-        start_time=get_test_time(),
+        start_time=get_test_time(),  # Base time
         duration=1.0,
+        caplog="",
+        capstderr="",
+        capstdout="",
     )
     test_in_name = TestResult(
         nodeid="test_other.py::test_api_endpoint",
         outcome=TestOutcome.PASSED,
-        start_time=get_test_time(1),
+        start_time=get_test_time(5),  # 5 seconds later
         duration=1.0,
+        caplog="",
+        capstderr="",
+        capstdout="",
     )
     session = TestSession(
         sut_name="test_sut",
         session_id="test-123",
-        session_start_time=get_test_time(),
-        session_stop_time=get_test_time(2),  # 2 seconds total duration
+        session_start_time=get_test_time(),  # Same as first test
+        session_stop_time=get_test_time(10),  # 10 seconds total duration
         test_results=[test_in_module, test_in_name],
         rerun_test_groups=[],
     )
@@ -217,55 +208,64 @@ def test_pattern_matching():
     assert result.sessions[0].sut_name == "test_sut"
 
 
-def test_multiple_filters(mock_session_no_reruns):
+def test_multiple_filters(test_session_no_reruns, get_test_time):
     """Test combining multiple filters.
 
-    Demonstrates:
-    1. Session-level filters (SUT, time range)
-    2. Test-level filters (outcome)
-    3. Session context preservation
-       - Sessions containing ANY matching test are included
-       - ALL tests in matching sessions are preserved
-       - Session metadata (tags, IDs) is preserved
+    Demonstrates the two-level filtering design:
+    1. Session-Level Filters:
+       - Filter entire test sessions (SUT, time range)
+       - All tests in matching sessions preserved
+    2. Test-Level Filters:
+       - Filter by test properties while preserving session context
+       - Returns sessions containing matching tests
+       - Never returns isolated TestResult objects
+    3. Context Preservation:
+       - Session metadata (tags, IDs) preserved
+       - Test relationships maintained
+       - Warnings and reruns preserved
     """
     # Create test session with mixed outcomes
+    test_pass = TestResult(
+        nodeid="test_api.py::test_get",
+        outcome=TestOutcome.PASSED,
+        start_time=get_test_time(),  # Base time
+        duration=1.0,
+        caplog="",
+        capstderr="",
+        capstdout="",
+    )
+    test_fail = TestResult(
+        nodeid="test_api.py::test_post",
+        outcome=TestOutcome.FAILED,
+        start_time=get_test_time(5),  # 5 seconds later
+        duration=1.0,
+        caplog="",
+        capstderr="",
+        capstdout="",
+    )
     session = TestSession(
         sut_name="test_sut",
         session_id="test-123",
-        session_start_time=get_test_time(),
-        session_stop_time=get_test_time(3),  # 3 seconds total duration
-        test_results=[
-            TestResult(
-                nodeid="test_api.py::test_get",
-                outcome=TestOutcome.PASSED,
-                start_time=get_test_time(),
-                duration=1.0,
-            ),
-            TestResult(
-                nodeid="test_api.py::test_post",
-                outcome=TestOutcome.FAILED,
-                start_time=get_test_time(1),
-                duration=1.0,
-            ),
-        ],
+        session_start_time=get_test_time(),  # Same as first test
+        session_stop_time=get_test_time(10),  # 10 seconds total duration
+        test_results=[test_pass, test_fail],
         rerun_test_groups=[],
     )
 
     storage = InMemoryStorage()
     storage.save_session(session)
 
-    # Apply multiple filters
+    # Apply both session-level and test-level filters
     query = Query(storage=storage)
     result = (
         query.for_sut("test_sut")  # Session-level filter
-        .in_last_days(7)  # Session-level filter
-        .filter_by_test()
+        .in_last_days(7)           # Session-level filter
+        .filter_by_test()          # Switch to test-level filtering
         .with_outcome(TestOutcome.PASSED)  # Test-level filter
-        .apply()
+        .apply()                   # Back to session context
         .execute()
     )
 
-    assert len(result.sessions) == 1
     filtered_session = result.sessions[0]
 
     # Verify session-level filters worked

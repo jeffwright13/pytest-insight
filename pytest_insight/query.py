@@ -13,7 +13,8 @@ import fnmatch
 import re
 from dataclasses import dataclass
 from dataclasses import field as datafield
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from enum import Enum, auto
 from typing import (
     Callable,
@@ -471,7 +472,7 @@ class Query:
         Raises:
             QueryExecutionError: If sessions are invalid.
         """
-        start_time: datetime = datetime.now(timezone.utc)
+        start_time: datetime = datetime.now(ZoneInfo("UTC"))
 
         if sessions is None:
             sessions = self.storage.load_sessions()
@@ -497,7 +498,7 @@ class Query:
             ]
 
         execution_time: float = (
-            datetime.now(timezone.utc) - start_time
+            datetime.now(ZoneInfo("UTC")) - start_time
         ).total_seconds()
         return QueryResult(filtered_sessions, execution_time)
 
@@ -548,7 +549,7 @@ class Query:
         """
         if not isinstance(days, int) or days < 0:
             raise InvalidQueryParameterError("Days must be a non-negative integer")
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(days=days)
         self._session_filters.append(lambda s: s.session_start_time >= cutoff)
         return self
 
@@ -566,7 +567,7 @@ class Query:
         """
         if not isinstance(hours, int) or hours < 0:
             raise InvalidQueryParameterError("Hours must be a non-negative integer")
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(hours=hours)
         self._session_filters.append(lambda s: s.session_start_time >= cutoff)
         return self
 
@@ -584,7 +585,7 @@ class Query:
         """
         if not isinstance(minutes, int) or minutes < 0:
             raise InvalidQueryParameterError("Minutes must be a non-negative integer")
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(minutes=minutes)
         self._session_filters.append(lambda s: s.session_start_time >= cutoff)
         return self
 

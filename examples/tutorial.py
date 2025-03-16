@@ -17,6 +17,7 @@
 # %%
 from collections import Counter
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from pytest_insight.models import TestOutcome
 from pytest_insight.comparison import Comparison
@@ -270,17 +271,26 @@ for session in slow_tests.sessions:
 # Track test stability over time to identify problematic tests and their relationships:
 
 # %%
-print("\nAnalyzing test stability:")
-last_month = datetime.now() - timedelta(days=30)
-stability = (
-    query.date_range(last_month, datetime.now()).filter_by_test().with_outcome(TestOutcome.FAILED).apply().execute()
-)
+def query_failed_tests():
+    """Query for failed tests in the last month."""
+    last_month = datetime.now(ZoneInfo("UTC")) - timedelta(days=30)
+    failed_tests = (
+        query.date_range(last_month, datetime.now(ZoneInfo("UTC")))
+        .filter_by_test()
+        .with_outcome(TestOutcome.FAILED)
+        .apply()
+        .execute()
+    )
+
+    return failed_tests
+
+failed_tests = query_failed_tests()
 
 failure_counts = {}
 test_outcomes = {}  # Track all outcomes for each test
 session_relationships = {}  # Track which tests fail together
 
-for session in stability.sessions:
+for session in failed_tests.sessions:
     failed_tests = set()
     for test in session.test_results:
         # Track all outcomes for each test

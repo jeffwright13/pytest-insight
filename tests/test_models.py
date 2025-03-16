@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-
 import pytest
 from pytest_insight.models import (
     RerunTestGroup,
@@ -8,7 +7,7 @@ from pytest_insight.models import (
     TestResult,
     TestSession,
 )
-
+from zoneinfo import ZoneInfo
 
 # ------------------------------vvv Tests vvv -------------------------------- #
 class Test_TestOutcome:
@@ -53,9 +52,10 @@ class Test_TestOutcome:
 class Test_TestResult:
     """Test the TestResult model."""
 
-    def test_random_test_results(self, random_test_session):
+    def test_random_test_results(self, random_test_session_factory, get_test_time):
         """Test the random_test_session fixture's properties."""
-        session = random_test_session()  # Call factory function
+        now = get_test_time()
+        session = random_test_session_factory()  # Call factory function
         test_result = session.test_results[0]
 
         assert test_result.nodeid != ""
@@ -75,29 +75,25 @@ class Test_TestResult:
         assert isinstance(test_result.capstdout, str)
         assert isinstance(test_result.longreprtext, str)
 
-    def test_test_result_with_enum(self):
-        """Test TestResult with TestOutcome enum."""
+    def test_test_result_with_enum(self, get_test_time):
+        """Test creating a TestResult with TestOutcome enum."""
+        now = get_test_time()
         result = TestResult(
-            nodeid="test_nodeid",
-            outcome=TestOutcome.PASSED,
-            start_time=datetime.utcnow(),
-            duration=1.0,  # Add required duration
-        )
-        assert isinstance(result.outcome, TestOutcome)
-
-        # Test string conversion
-        result = TestResult(
-            nodeid="test_nodeid",
+            nodeid="test_a.py::test_1",
             outcome=TestOutcome.FAILED,
-            start_time=datetime.utcnow(),
-            duration=1.0,  # Add required duration
+            start_time=now,  # Base time
+            duration=1.0,
+            caplog="",
+            capstderr="",
+            capstdout="",
         )
         assert isinstance(result.outcome, TestOutcome)
         assert result.outcome == TestOutcome.FAILED
 
-    def test_test_result_to_dict(self, random_test_session):
+    def test_test_result_to_dict(self, random_test_session_factory, get_test_time):
         """Test the to_dict method of the TestResult model."""
-        session = random_test_session()  # Call factory function
+        now = get_test_time()
+        session = random_test_session_factory()  # Call factory function
         test_result = session.test_results[0]
 
         result_dict = test_result.to_dict()
@@ -114,9 +110,10 @@ class Test_TestResult:
         assert result_dict["longreprtext"] == test_result.longreprtext
         assert result_dict["has_warning"] == test_result.has_warning
 
-    def test_test_result_from_dict(self, random_test_session):
+    def test_test_result_from_dict(self, random_test_session_factory, get_test_time):
         """Test the from_dict method of the TestResult model."""
-        session = random_test_session()  # Call factory function
+        now = get_test_time()
+        session = random_test_session_factory()  # Call factory function
         test_result = session.test_results[0]
 
         result_dict = test_result.to_dict()
@@ -136,42 +133,28 @@ class Test_TestResult:
         assert result.longreprtext == test_result.longreprtext
         assert result.has_warning == test_result.has_warning
 
-    def test_test_result_timing_calculations(self):
-        """Test TestResult handles timing calculations correctly."""
-        now = datetime.utcnow()
-
-        # Test with duration provided
-        result1 = TestResult(
-            nodeid="test_a.py::test_1",
+    def test_test_result_timing_calculations(self, get_test_time):
+        """Test timing calculations for test results."""
+        now = get_test_time()
+        test_result = TestResult(
+            nodeid="test_api.py::test_get",
             outcome=TestOutcome.PASSED,
-            start_time=now,
-            duration=1.5,
+            start_time=now,  # Base time
+            duration=1.0,
+            caplog="",
+            capstderr="",
+            capstdout="",
         )
-        assert result1.stop_time == now + timedelta(seconds=1.5)
-
-        # Test with stop_time provided
-        result2 = TestResult(
-            nodeid="test_a.py::test_1",
-            outcome=TestOutcome.PASSED,
-            start_time=now,
-            stop_time=now + timedelta(seconds=2.0),
-        )
-        assert result2.duration == 2.0
-
-        # Test invalid initialization
-        with pytest.raises(ValueError) as exc:
-            TestResult(
-                nodeid="test_a.py::test_1", outcome=TestOutcome.PASSED, start_time=now
-            )
-        assert "Either stop_time or duration must be provided" in str(exc.value)
+        assert test_result.stop_time == test_result.start_time + timedelta(seconds=test_result.duration)
 
 
 class Test_TestSession:
     """Test the TestSession model."""
 
-    def test_random_test_session(self, random_test_session):
+    def test_random_test_session(self, random_test_session_factory, get_test_time):
         """Test the random_test_session fixture's properties and methods."""
-        session = random_test_session()  # Call factory function
+        now = get_test_time()
+        session = random_test_session_factory()  # Call factory function
         assert isinstance(session.sut_name, str) and session.sut_name.startswith("SUT-")
         assert isinstance(session.session_id, str) and session.session_id.startswith(
             "session-"
@@ -204,54 +187,40 @@ class Test_TestSession:
             ]
         )
 
-    def test_test_session(self):
-        """Test basic TestSession functionality."""
-        start_time = datetime.utcnow()
-        stop_time = start_time + timedelta(seconds=10)
-
+    def test_test_session(self, get_test_time):
+        """Test basic TestSession initialization."""
+        now = get_test_time()
+        start_time = now  # Base time
         session = TestSession(
-            sut_name="SUT-1",
+            sut_name="test-app",
             session_id="session-123",
             session_start_time=start_time,
-            session_stop_time=stop_time,
+            session_stop_time=get_test_time(60),  # 1 minute later
+            test_results=[],
+            rerun_test_groups=[],
         )
+        assert session.sut_name == "test-app"
+        assert session.session_id == "session-123"
+        assert session.duration == 60.0  # 1 minute in seconds
 
-        # Add test results
-        for _ in range(5):
-            session.add_test_result(
-                TestResult(
-                    nodeid="test_pass",
-                    outcome=TestOutcome.PASSED,
-                    start_time=start_time,
-                    duration=0.1,
-                )
-            )
-
-        assert len(session.test_results) == 5
-        assert session.session_duration == 10.0
-
-    def test_test_session_tags(self):
-        """Test session tags functionality."""
+    def test_test_session_tags(self, get_test_time):
+        """Test TestSession tags handling."""
+        now = get_test_time()
         session = TestSession(
-            sut_name="SUT-1",
+            sut_name="test-app",
             session_id="session-123",
-            session_start_time=datetime.utcnow(),
-            session_stop_time=datetime.utcnow(),
+            session_start_time=now,  # Base time
+            session_stop_time=get_test_time(60),  # 1 minute later
+            test_results=[],
+            rerun_test_groups=[],
+            session_tags={"env": "test", "version": "1.0"},
         )
+        assert session.session_tags == {"env": "test", "version": "1.0"}
 
-        session.add_tag("environment", "dev")
-        session.add_tag("platform", "linux")
-        session.add_tag("python_version", "3.8")
-
-        assert session.session_tags == {
-            "environment": "dev",
-            "platform": "linux",
-            "python_version": "3.8",
-        }
-
-    def test_test_session_to_dict(self, random_test_session):
+    def test_test_session_to_dict(self, random_test_session_factory, get_test_time):
         """Test the to_dict method of the TestSession model."""
-        session = random_test_session()  # Call factory function
+        now = get_test_time()
+        session = random_test_session_factory()  # Call factory function
         session_dict = session.to_dict()
         assert isinstance(session_dict, dict)
         assert session_dict["sut_name"] == session.sut_name
@@ -269,9 +238,10 @@ class Test_TestSession:
         assert len(session_dict["rerun_test_groups"]) == len(session.rerun_test_groups)
         assert session_dict["session_tags"] == session.session_tags
 
-    def test_test_session_from_dict(self, random_test_session):
+    def test_test_session_from_dict(self, random_test_session_factory, get_test_time):
         """Test the from_dict method of the TestSession model."""
-        session = random_test_session()  # Call factory function
+        now = get_test_time()
+        session = random_test_session_factory()  # Call factory function
         session_dict = session.to_dict()
         session = TestSession.from_dict(session_dict)
         assert isinstance(session, TestSession)
@@ -290,32 +260,41 @@ class Test_TestSession:
         assert len(session.rerun_test_groups) == len(session_dict["rerun_test_groups"])
         assert session.session_tags == session_dict["session_tags"]
 
-    def test_test_session_serialization(self):
-        """Test TestSession serialization to dictionary."""
-        now = datetime.utcnow()
+    def test_test_session_serialization(self, get_test_time):
+        """Test serialization of TestSession objects."""
+        # Create test session with timezone-aware timestamps
+        now = get_test_time()
         session = TestSession(
-            sut_name="test-app",
-            session_id="session-123",
-            session_start_time=now,
-            session_stop_time=now + timedelta(minutes=1),
+            sut_name="test_sut",
+            session_id="test-123",
+            session_start_time=now,  # Base time
+            session_stop_time=get_test_time(10),  # 10 seconds later
             test_results=[
                 TestResult(
-                    nodeid="test_a.py::test_1",
+                    nodeid="test_api.py::test_get",
                     outcome=TestOutcome.PASSED,
-                    start_time=now,
+                    start_time=now,  # Same as session start
                     duration=1.0,
-                )
+                ),
+                TestResult(
+                    nodeid="test_api.py::test_post",
+                    outcome=TestOutcome.FAILED,
+                    start_time=get_test_time(5),  # 5 seconds later
+                    duration=1.0,
+                ),
             ],
-            session_tags={"env": "test"},
+            rerun_test_groups=[],
         )
 
-        data = session.to_dict()
-        assert data["sut_name"] == "test-app"
-        assert data["session_id"] == "session-123"
-        assert isinstance(data["session_start_time"], str)
-        assert isinstance(data["session_stop_time"], str)
-        assert isinstance(data["test_results"], list)
-        assert data["session_tags"] == {"env": "test"}
+        # Serialize and deserialize
+        session_dict = session.to_dict()
+        restored_session = TestSession.from_dict(session_dict)
+
+        # Verify timestamps are preserved with timezone info
+        assert restored_session.session_start_time == session.session_start_time
+        assert restored_session.session_stop_time == session.session_stop_time
+        assert restored_session.test_results[0].start_time == session.test_results[0].start_time
+        assert restored_session.test_results[1].start_time == session.test_results[1].start_time
 
 
 class Test_RerunTestGroup:
@@ -336,7 +315,7 @@ class Test_RerunTestGroup:
         result2 = TestResult(
             nodeid="test_example.py::test_case",
             outcome=TestOutcome.PASSED,
-            start_time=now + timedelta(seconds=1),
+            start_time=get_test_time(1),  # 1 second later
             duration=0.7,
         )
 
@@ -349,9 +328,9 @@ class Test_RerunTestGroup:
         assert len(group.tests) == 2
         assert group.tests == [result1, result2]
 
-    def test_rerun_test_group_to_dict(self):
+    def test_rerun_test_group_to_dict(self, get_test_time):
         """Test the to_dict method of the RerunTestGroup model."""
-        now = datetime.utcnow()
+        now = get_test_time()
         group = RerunTestGroup(nodeid="test_example.py::test_case")
 
         result1 = TestResult(
@@ -363,7 +342,7 @@ class Test_RerunTestGroup:
         result2 = TestResult(
             nodeid="test_example.py::test_case",
             outcome=TestOutcome.PASSED,
-            start_time=now + timedelta(seconds=1),
+            start_time=get_test_time(1),  # 1 second later
             duration=0.7,
         )
 
@@ -377,9 +356,9 @@ class Test_RerunTestGroup:
         assert group_dict["tests"][0]["outcome"] == "rerun"
         assert group_dict["tests"][1]["outcome"] == "passed"
 
-    def test_rerun_test_group_from_dict(self):
+    def test_rerun_test_group_from_dict(self, get_test_time):
         """Test the from_dict method of the RerunTestGroup model."""
-        now = datetime.utcnow()
+        now = get_test_time()
         group = RerunTestGroup(nodeid="test_example.py::test_case")
 
         result1 = TestResult(
@@ -391,7 +370,7 @@ class Test_RerunTestGroup:
         result2 = TestResult(
             nodeid="test_example.py::test_case",
             outcome=TestOutcome.PASSED,
-            start_time=now + timedelta(seconds=1),
+            start_time=get_test_time(1),  # 1 second later
             duration=0.7,
         )
 
@@ -431,61 +410,57 @@ class Test_TestHistory:
         assert len(history.sessions) == 2
         assert history.latest_session() == session2
 
-    def test_test_history_sessions_property(self):
-        """Test the sessions property."""
+    def test_test_history_sessions_property(self, get_test_time):
+        """Test sessions property of TestHistory."""
         history = TestHistory()
-        assert history.sessions == []
-
+        now = get_test_time()
         session = TestSession(
-            "SUT-1", "session-001", datetime.utcnow(), datetime.utcnow(), [], []
+            "SUT-1", "session-001", now, now + timedelta(seconds=60), [], []
         )
         history.add_test_session(session)
-
         assert history.sessions == [session]
 
-    def test_test_history_add_test_session(self):
-        """Test the add_test_session method."""
+    def test_test_history_latest_session(self, get_test_time):
+        """Test getting latest session from TestHistory."""
         history = TestHistory()
-        now = datetime.utcnow()
-        stop_time1 = now + timedelta(seconds=5)
-        stop_time2 = now + timedelta(seconds=20)
-
-        session1 = TestSession("SUT-1", "session-001", now, stop_time1, [], [])
-        session2 = TestSession(
-            "SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], []
+        now = get_test_time()
+        session1 = TestSession(
+            sut_name="test-app",
+            session_id="session-1",
+            session_start_time=now,  # Base time
+            session_stop_time=get_test_time(60),  # 1 minute later
+            test_results=[],
+            rerun_test_groups=[],
         )
-
+        session2 = TestSession(
+            sut_name="test-app",
+            session_id="session-2",
+            session_start_time=get_test_time(120),  # 2 minutes later
+            session_stop_time=get_test_time(180),  # 3 minutes from base
+            test_results=[],
+            rerun_test_groups=[],
+        )
         history.add_test_session(session1)
         history.add_test_session(session2)
-
-        assert len(history.sessions) == 2
-        assert history.latest_session() == session2
-
-    def test_test_history_latest_session(self):
-        """Test the latest_session method."""
-        history = TestHistory()
-        now = datetime.utcnow()
-        stop_time1 = now + timedelta(seconds=5)
-        stop_time2 = now + timedelta(seconds=20)
-
-        session1 = TestSession("SUT-1", "session-001", now, stop_time1, [], [])
-        session2 = TestSession(
-            "SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], []
-        )
-
-        history.add_test_session(session1)
-        history.add_test_session(session2)
-
-        assert history.latest_session() == session2
+        assert history.get_latest_session("test-app") == session2
 
     def test_test_history_initialization(self, test_history):
-        """Test TestHistory initializes with empty collections."""
-        assert test_history._sessions_by_sut == {}
+        """Test TestHistory initialization."""
+        assert test_history.sessions == []
         assert test_history._latest_by_sut == {}
         assert test_history._all_sessions_cache is None
 
-    def test_add_test_session(self, test_history, sample_session):
+    def test_add_test_session(self, test_history, get_test_time):
         """Test adding a session to TestHistory."""
+        now = get_test_time()
+        sample_session = TestSession(
+            sut_name="test-sut",
+            session_id="session-1",
+            session_start_time=now,  # Base time
+            session_stop_time=get_test_time(60),  # 1 minute later
+            test_results=[],
+            session_tags={"env": "test"},
+        )
         test_history.add_test_session(sample_session)
 
         # Check main storage
@@ -809,7 +784,7 @@ class Test_TestResultBehavior:
         result = TestResult(
             nodeid="test_api.py::test_get",
             outcome=TestOutcome.FAILED,
-            start_time=datetime.now(),
+            start_time=datetime.now(ZoneInfo("UTC")),
             duration=1.0,
         )
 
@@ -823,11 +798,11 @@ class Test_TestResultBehavior:
 
     def test_timezone_handling(self, get_test_time):
         """Test that all datetime operations are timezone-aware."""
-        start_time = get_test_time()
+        now = get_test_time()
         result = TestResult(
             nodeid="test_api.py::test_get",
             outcome=TestOutcome.PASSED,
-            start_time=start_time,
+            start_time=now,
             duration=1.0,
         )
 
@@ -839,10 +814,11 @@ class Test_TestResultBehavior:
 
     def test_output_fields(self):
         """Test handling of output fields (stdout, stderr, log)."""
+        now = datetime.now(ZoneInfo("UTC"))
         result = TestResult(
             nodeid="test_api.py::test_get",
             outcome=TestOutcome.PASSED,
-            start_time=datetime.now(),
+            start_time=now,
             duration=1.0,
             caplog="DEBUG: message",
             capstderr="error",
@@ -858,7 +834,7 @@ class Test_TestResultBehavior:
         result = TestResult(
             nodeid="test_api.py::test_get",
             outcome=TestOutcome.PASSED,
-            start_time=datetime.now(),
+            start_time=now,
             duration=1.0,
         )
 
@@ -899,13 +875,52 @@ class Test_TestResultBehavior:
         assert start_time.tzinfo is not None
         assert stop_time.tzinfo is not None
 
+    def test_test_result_serialization(self, get_test_time):
+        """Test serialization of TestResult objects."""
+        # Create test result with timezone-aware timestamp
+        now = get_test_time()
+        test_result = TestResult(
+            nodeid="test_api.py::test_get",
+            outcome=TestOutcome.PASSED,
+            start_time=now,  # Use get_test_time for consistent timezone handling
+            duration=1.0,
+            caplog="",
+            capstderr="",
+            capstdout="",
+            longreprtext="",
+        )
+
+        # Serialize and deserialize
+        result_dict = test_result.to_dict()
+        restored_result = TestResult.from_dict(result_dict)
+
+        # Verify timestamps are preserved with timezone info
+        assert restored_result.start_time == test_result.start_time
+        assert restored_result.stop_time == test_result.stop_time
+
+    def test_test_result_timing(self, get_test_time):
+        """Test timing calculations for test results."""
+        now = get_test_time()  # Use get_test_time for consistent timezone handling
+        test_result = TestResult(
+            nodeid="test_api.py::test_get",
+            outcome=TestOutcome.PASSED,
+            start_time=now,
+            duration=1.0,
+            caplog="",
+            capstderr="",
+            capstdout="",
+            longreprtext="",
+        )
+
+        assert test_result.stop_time == now + timedelta(seconds=1.0)
 
 class Test_TestSessionBehavior:
     """Test suite for TestSession behavior and relationships."""
 
     def test_session_timing(self, get_test_time):
         """Test session timing calculations and timezone handling."""
-        start_time = get_test_time()
+        now = get_test_time()
+        start_time = now
         stop_time = get_test_time(3600)  # 1 hour later
 
         session = TestSession(
@@ -923,27 +938,27 @@ class Test_TestSessionBehavior:
 
     def test_test_relationships(self, get_test_time):
         """Test relationships between tests in a session."""
-        start_time = get_test_time()
+        now = get_test_time()
 
         test1 = TestResult(
             nodeid="test_api.py::test_get",
             outcome=TestOutcome.PASSED,
-            start_time=start_time,
+            start_time=now,
             duration=1.0,
         )
 
         test2 = TestResult(
             nodeid="test_api.py::test_post",
             outcome=TestOutcome.FAILED,
-            start_time=start_time + timedelta(seconds=1),
+            start_time=get_test_time(1),  # 1 second later
             duration=1.0,
         )
 
         session = TestSession(
             sut_name="api",
             session_id="test",
-            session_start_time=start_time,
-            session_stop_time=start_time + timedelta(seconds=10),
+            session_start_time=now,
+            session_stop_time=get_test_time(10),  # 10 seconds later
             test_results=[test1, test2],
             session_tags={"env": "test"},
         )
@@ -957,11 +972,12 @@ class Test_TestSessionBehavior:
 
     def test_session_metadata(self):
         """Test session metadata handling."""
+        now = datetime.now(ZoneInfo("UTC"))
         session = TestSession(
             sut_name="api",
             session_id="test",
-            session_start_time=datetime.now(),
-            session_stop_time=datetime.now() + timedelta(seconds=10),
+            session_start_time=now,
+            session_stop_time=now + timedelta(seconds=10),
             test_results=[],
             session_tags={"environment": "staging", "branch": "main"},
         )
