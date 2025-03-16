@@ -1,3 +1,5 @@
+from pytest_insight.analysis import Analysis
+from pytest_insight.api import InsightAPI
 from pytest_insight.comparison import Comparison
 from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
 from pytest_insight.models import (
@@ -27,4 +29,8 @@ __all__ = [
     "QueryTestFilter",
     # Comparison
     "Comparison",
+    # Analysis
+    "Analysis",
+    # API
+    "InsightAPI",
 ]

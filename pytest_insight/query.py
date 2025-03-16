@@ -313,6 +313,7 @@ class QueryTestFilter:
         """Filter tests by pattern in stdout/stderr/log output.
 
         This is a convenience method that checks all output fields.
+        An 'output field' in pytest is any of capstdout, capstderr, caplog.
         """
         filter_class = RegexPatternFilter if use_regex else GlobPatternFilter
         # Add filters for all output fields
@@ -422,12 +423,20 @@ class Query:
 
     Examples:
         # Session-level only
+        # Get TestSessions for the last 7 days for all SUTs with 'service' in name
         query.for_sut("service").in_last_days(7).execute()
 
         # Test-level with context
         query.filter_by_test()  # Filters sessions by test criteria
             .with_duration_between(10.0, float("inf"))
             .apply()  # Back to session context
+            .execute()
+
+        # Combining session and test filters
+        query.for_sut("service").in_last_days(14)
+            .filter_by_test()
+            .with_duration_between(5.0, 10.0)
+            .apply()
             .execute()
     """
 
