@@ -40,7 +40,7 @@ class Test_PatternMatching:
        - Full regex syntax support
     """
 
-    def test_pattern_rules_examples(self):
+    def test_pattern_rules_examples(self, get_test_time):
         """Test pattern matching rules with examples."""
         test_cases = [
             # Basic glob patterns
@@ -81,7 +81,7 @@ class Test_PatternMatching:
             filter = GlobPatternFilter(pattern=case["pattern"])
             assert filter.matches(test) == case["should_match"], case["message"]
 
-    def test_regex_pattern_rules(self):
+    def test_regex_pattern_rules(self, get_test_time):
         """Test regex pattern matching rules."""
         test_cases = [
             # Basic regex
@@ -123,7 +123,7 @@ class Test_PatternMatching:
             filter = RegexPatternFilter(pattern=case["pattern"])
             assert filter.matches(test) == case["should_match"], case["message"]
 
-    def test_string_field_matching(self):
+    def test_string_field_matching(self, get_test_time):
         """Test pattern matching against other string fields."""
         test = TestResult(
             nodeid="test_api.py::test_get",
@@ -199,10 +199,10 @@ class Test_PatternMatching:
         ]
 
         for case in test_cases:
-            pattern_filter = RegexPatternFilter(
+            filter = RegexPatternFilter(
                 pattern=case["pattern"], field_name=case["field_name"]
             )
-            assert pattern_filter.matches(test) == case["should_match"]
+            assert filter.matches(test) == case["should_match"]
 
     def test_field_validation(self):
         """Test field name validation."""
@@ -218,7 +218,7 @@ class Test_PatternMatching:
             GlobPatternFilter(pattern="test", field_name="invalid")
         assert "Invalid field" in str(exc.value)
 
-    def test_pattern_hierarchy(self):
+    def test_pattern_hierarchy(self, get_test_time):
         """Test pattern hierarchy from broad to specific.
 
         Pattern hierarchy (from broad to specific):
@@ -296,7 +296,7 @@ class Test_PatternMatching:
         filtered = result.sessions[0].test_results
         assert len([t for t in filtered if t.nodeid == "test_api.py::test_get"]) == 1
 
-    def test_session_context_preservation(self):
+    def test_session_context_preservation(self, get_test_time):
         """Test that session context is preserved when filtering.
 
         Session context rules:
@@ -390,7 +390,7 @@ class Test_PatternMatching:
             == 1
         )
 
-    def test_convenience_methods(self):
+    def test_convenience_methods(self, get_test_time):
         """Test convenience methods for output filtering."""
         query = Query()
         test_filter = query.filter_by_test()
@@ -448,3 +448,145 @@ class Test_PatternMatching:
             )
         )
         assert len(result.sessions) == 1
+
+
+class Test_QuerySystem:
+    """Test suite for complete query system functionality.
+
+    Tests the two-level filtering design and session context preservation.
+    """
+
+    def test_session_context_preservation(self, get_test_time):
+        """Test that session context is preserved after filtering.
+
+        Verifies:
+        1. All tests in matching sessions are preserved
+        2. Session metadata remains intact
+        3. Test relationships are maintained
+        """
+        # Create a session with multiple tests
+        test1 = TestResult(
+            nodeid="test_api.py::test_get",
+            outcome=TestOutcome.PASSED,
+            start_time=get_test_time(),
+            duration=1.0,
+            caplog="DEBUG: test message",
+            capstderr="",
+            capstdout="test output",
+        )
+
+        test2 = TestResult(
+            nodeid="test_api.py::test_post",
+            outcome=TestOutcome.FAILED,
+            start_time=get_test_time(10),  # 10 seconds later
+            duration=2.0,
+            caplog="ERROR: failed",
+            capstderr="stack trace",
+            capstdout="",
+        )
+
+        session = TestSession(
+            sut_name="api",
+            session_id="test-session",
+            session_start_time=get_test_time(),
+            session_stop_time=get_test_time(20),
+            test_results=[test1, test2],
+            tags={"environment": "staging"}
+        )
+
+        # Apply test-level filter
+        query = Query()
+        result = (
+            query.filter_by_test()
+            .with_pattern("test_get")
+            .apply()
+            .execute(sessions=[session])
+        )
+
+        # Verify session context preservation
+        assert len(result.sessions) == 1
+        filtered_session = result.sessions[0]
+        assert len(filtered_session.test_results) == 2  # Both tests preserved
+        assert filtered_session.tags == session.tags  # Metadata preserved
+        assert filtered_session.session_id == session.session_id
+
+    def test_timezone_aware_filtering(self, get_test_time):
+        """Test timezone-aware datetime filtering.
+
+        Verifies:
+        1. Time-based filters work with timezone-aware datetimes
+        2. Consistent behavior across different timezones
+        """
+        # Create sessions at different times
+        now = get_test_time()
+        old_session = TestSession(
+            sut_name="api",
+            session_id="old",
+            session_start_time=now - timedelta(days=10),
+            session_stop_time=now - timedelta(days=9),
+            test_results=[],
+        )
+
+        recent_session = TestSession(
+            sut_name="api",
+            session_id="recent",
+            session_start_time=now - timedelta(days=1),
+            session_stop_time=now,
+            test_results=[],
+        )
+
+        # Test time-based filtering
+        query = Query()
+        result = query.in_last_days(7).execute(sessions=[old_session, recent_session])
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].session_id == "recent"
+
+    def test_combined_filtering(self, get_test_time):
+        """Test combining session-level and test-level filters.
+
+        Verifies:
+        1. Session-level filters (SUT, time range) work with test-level filters
+        2. Filters are applied in correct order
+        3. Context is preserved at both levels
+        """
+        # Create test sessions
+        test1 = TestResult(
+            nodeid="test_api.py::test_get",
+            outcome=TestOutcome.PASSED,
+            start_time=get_test_time(),
+            duration=1.0,
+            caplog="",
+            capstderr="",
+            capstdout="",
+        )
+
+        session1 = TestSession(
+            sut_name="api",
+            session_id="recent-api",
+            session_start_time=get_test_time(),
+            session_stop_time=get_test_time(3600),
+            test_results=[test1],
+        )
+
+        session2 = TestSession(
+            sut_name="db",
+            session_id="recent-db",
+            session_start_time=get_test_time(),
+            session_stop_time=get_test_time(3600),
+            test_results=[test1],  # Same test, different service
+        )
+
+        # Apply both session and test filters
+        query = Query()
+        result = (
+            query.for_sut("api")  # Session-level
+            .filter_by_test()
+            .with_pattern("test_get")  # Test-level
+            .apply()
+            .execute(sessions=[session1, session2])
+        )
+
+        assert len(result.sessions) == 1
+        assert result.sessions[0].sut_name == "api"
+        assert any("test_get" in t.nodeid for t in result.sessions[0].test_results)

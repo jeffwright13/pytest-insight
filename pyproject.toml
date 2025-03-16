@@ -23,6 +23,7 @@ dependencies = [
     "freezegun>=1.5.1",
     "python-multipart>=0.0.20",
     "pytest-mock>=3.14.0",
+    "pytest-coverage>=0.0",
 ]
 
 [project.entry-points.pytest11]

@@ -1,8 +1,8 @@
-from pytest_insight.models import TestOutcome, TestResult, TestSession, RerunTestGroup, TestHistory
-from pytest_insight.storage import get_storage_instance, JSONStorage
-from pytest_insight.constants import StorageType, DEFAULT_STORAGE_TYPE
-from pytest_insight.query import Query, QueryTestFilter
 from pytest_insight.comparison import Comparison
+from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
+from pytest_insight.models import RerunTestGroup, TestHistory, TestOutcome, TestResult, TestSession
+from pytest_insight.query import Query, QueryTestFilter
+from pytest_insight.storage import JSONStorage, get_storage_instance
 
 __all__ = [
     # Core models

@@ -9,10 +9,10 @@ It follows a fluent interface design with three main operations:
 
 from typing import Optional
 
-from pytest_insight.query import Query
-from pytest_insight.comparison import Comparison
-from pytest_insight.storage import BaseStorage, get_storage_instance
 from pytest_insight.analysis import Analysis  # Import Analysis class
+from pytest_insight.comparison import Comparison
+from pytest_insight.query import Query
+from pytest_insight.storage import BaseStorage, get_storage_instance
 
 
 class InsightAPI:

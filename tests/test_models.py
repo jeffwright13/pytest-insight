@@ -166,7 +166,7 @@ class Test_TestResult:
         assert "Either stop_time or duration must be provided" in str(exc.value)
 
 
-class test_TestSession:
+class Test_TestSession:
     """Test the TestSession model."""
 
     def test_random_test_session(self, random_test_session):
@@ -228,7 +228,7 @@ class test_TestSession:
             )
 
         assert len(session.test_results) == 5
-        assert session.session_duration.total_seconds() == 10.0
+        assert session.session_duration == 10.0
 
     def test_test_session_tags(self):
         """Test session tags functionality."""
@@ -263,7 +263,7 @@ class test_TestSession:
             session_dict["session_stop_time"] == session.session_stop_time.isoformat()
         )
         assert (
-            session_dict["session_duration"] == session.session_duration.total_seconds()
+            session_dict["session_duration"] == session.session_duration
         )
         assert len(session_dict["test_results"]) == len(session.test_results)
         assert len(session_dict["rerun_test_groups"]) == len(session.rerun_test_groups)
@@ -321,9 +321,9 @@ class test_TestSession:
 class Test_RerunTestGroup:
     """Test the RerunTestGroup model."""
 
-    def test_rerun_test_group(self):
+    def test_rerun_test_group(self, get_test_time):
         """Test RerunTestGroup functionality."""
-        now = datetime.utcnow()
+        now = get_test_time()
         group = RerunTestGroup(nodeid="test_example.py::test_case")
 
         # Create test results in chronological order
@@ -507,9 +507,10 @@ class Test_TestHistory:
             TestSession(
                 sut_name="test-sut",
                 session_id=f"session-{i}",
-                session_start_time=now + timedelta(hours=i),
-                session_stop_time=now + timedelta(hours=i, minutes=1),
+                session_start_time=get_test_time(i * 3600),  # i hours later
+                session_stop_time=get_test_time(i * 3600 + 300),  # i hours + 5 mins later
                 test_results=[],
+                session_tags={"env": "test" if i % 2 == 0 else "prod"},
             )
             for i in range(3)
         ]
@@ -536,15 +537,17 @@ class Test_TestHistory:
                 sut_name="sut-1",
                 session_id="session-1",
                 session_start_time=now,
-                session_stop_time=now + timedelta(minutes=1),
+                session_stop_time=get_test_time(300),  # 5 mins later
                 test_results=[],
+                session_tags={"env": "test"},
             ),
             "sut-2": TestSession(
                 sut_name="sut-2",
                 session_id="session-2",
-                session_start_time=now + timedelta(hours=1),
-                session_stop_time=now + timedelta(hours=1, minutes=1),
+                session_start_time=get_test_time(3600),  # 1 hour later
+                session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
                 test_results=[],
+                session_tags={"env": "prod"},
             ),
         }
 
@@ -566,15 +569,17 @@ class Test_TestHistory:
             sut_name="test-sut",
             session_id="session-1",
             session_start_time=now,
-            session_stop_time=now + timedelta(minutes=1),
+            session_stop_time=get_test_time(300),  # 5 mins later
             test_results=[],
+            session_tags={"env": "test"},
         )
         session2 = TestSession(
             sut_name="test-sut",
             session_id="session-2",
-            session_start_time=now + timedelta(minutes=5),
-            session_stop_time=now + timedelta(minutes=6),
+            session_start_time=get_test_time(3600),  # 1 hour later
+            session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
             test_results=[],
+            session_tags={"env": "prod"},
         )
 
         # Add first session and cache sessions
@@ -604,22 +609,25 @@ class Test_TestHistory:
                 sut_name="sut-1",
                 session_id="session-1",
                 session_start_time=now,
-                session_stop_time=now + timedelta(minutes=1),
+                session_stop_time=get_test_time(300),  # 5 mins later
                 test_results=[],
+                session_tags={"env": "test"},
             ),
             TestSession(
                 sut_name="sut-2",
                 session_id="session-2",
-                session_start_time=now + timedelta(minutes=5),
-                session_stop_time=now + timedelta(minutes=6),
+                session_start_time=get_test_time(3600),  # 1 hour later
+                session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
                 test_results=[],
+                session_tags={"env": "prod"},
             ),
             TestSession(
                 sut_name="sut-1",
                 session_id="session-3",
-                session_start_time=now + timedelta(minutes=10),
-                session_stop_time=now + timedelta(minutes=11),
+                session_start_time=get_test_time(7200),  # 2 hours later
+                session_stop_time=get_test_time(7500),  # 2 hours + 5 mins later
                 test_results=[],
+                session_tags={"env": "test"},
             ),
         ]
 
@@ -655,15 +663,17 @@ class Test_TestHistory:
             sut_name="test-sut",
             session_id="session-1",
             session_start_time=now,
-            session_stop_time=now + timedelta(minutes=1),
+            session_stop_time=get_test_time(300),  # 5 mins later
             test_results=[],
+            session_tags={"env": "test"},
         )
         session2 = TestSession(
             sut_name="test-sut",
             session_id="session-2",
-            session_start_time=now + timedelta(minutes=5),
-            session_stop_time=now + timedelta(minutes=6),
+            session_start_time=get_test_time(3600),  # 1 hour later
+            session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
             test_results=[],
+            session_tags={"env": "prod"},
         )
 
         # Add first session and cache sessions
@@ -693,22 +703,25 @@ class Test_TestHistory:
                 sut_name="sut-1",
                 session_id="session-1",
                 session_start_time=now,
-                session_stop_time=now + timedelta(minutes=1),
+                session_stop_time=get_test_time(300),  # 5 mins later
                 test_results=[],
+                session_tags={"env": "test"},
             ),
             TestSession(
                 sut_name="sut-2",
                 session_id="session-2",
-                session_start_time=now + timedelta(minutes=5),
-                session_stop_time=now + timedelta(minutes=6),
+                session_start_time=get_test_time(3600),  # 1 hour later
+                session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
                 test_results=[],
+                session_tags={"env": "prod"},
             ),
             TestSession(
                 sut_name="sut-1",
                 session_id="session-3",
-                session_start_time=now + timedelta(minutes=10),
-                session_stop_time=now + timedelta(minutes=11),
+                session_start_time=get_test_time(7200),  # 2 hours later
+                session_stop_time=get_test_time(7500),  # 2 hours + 5 mins later
                 test_results=[],
+                session_tags={"env": "test"},
             ),
         ]
 
@@ -725,3 +738,346 @@ class Test_TestHistory:
 
         # Latest for sut-2 should be sessions[1]
         assert test_history._latest_by_sut["sut-2"] == sessions[1]
+
+    def test_test_history_cache_invalidation(self, get_test_time):
+        """Test cache invalidation in TestHistory."""
+        history = TestHistory()
+        now = get_test_time()
+
+        # Create test sessions with timezone-aware datetimes
+        sessions = [
+            TestSession(
+                sut_name=f"sut-{i}",
+                session_id=f"session-{i}",
+                session_start_time=get_test_time(i * 3600),  # i hours later
+                session_stop_time=get_test_time(i * 3600 + 300),  # i hours + 5 mins later
+                test_results=[],
+                session_tags={"env": "test" if i % 2 == 0 else "prod"},
+            )
+            for i in range(3)
+        ]
+
+        # Add sessions and verify cache behavior
+        for session in sessions:
+            history.add_test_session(session)
+            assert session.sut_name in history._latest_by_sut
+            assert history._latest_by_sut[session.sut_name] == session
+
+        # Verify cache is updated correctly
+        assert len(history._latest_by_sut) == 3
+        assert all(sut in history._latest_by_sut for sut in ["sut-0", "sut-1", "sut-2"])
+
+    def test_test_history_latest_session_by_sut(self, get_test_time):
+        """Test getting latest session by SUT."""
+        history = TestHistory()
+        now = get_test_time()
+
+        # Create sessions with different SUTs
+        sessions = {
+            "sut-1": TestSession(
+                sut_name="sut-1",
+                session_id="session-1",
+                session_start_time=now,
+                session_stop_time=get_test_time(300),  # 5 mins later
+                test_results=[],
+                session_tags={"env": "test"},
+            ),
+            "sut-2": TestSession(
+                sut_name="sut-2",
+                session_id="session-2",
+                session_start_time=get_test_time(3600),  # 1 hour later
+                session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
+                test_results=[],
+                session_tags={"env": "prod"},
+            ),
+        }
+
+        # Add sessions and verify latest by SUT
+        for session in sessions.values():
+            history.add_test_session(session)
+
+        assert history.get_sut_latest_session("sut-1") == sessions["sut-1"]
+        assert history.get_sut_latest_session("sut-2") == sessions["sut-2"]
+        assert history.get_sut_latest_session("non-existent") is None
+
+
+class Test_TestResultBehavior:
+    """Test suite for TestResult behavior and relationships."""
+
+    def test_outcome_serialization(self):
+        """Test that outcomes are consistently serialized in lowercase."""
+        result = TestResult(
+            nodeid="test_api.py::test_get",
+            outcome=TestOutcome.FAILED,
+            start_time=datetime.now(),
+            duration=1.0,
+        )
+
+        data = result.to_dict()
+        assert data["outcome"] == "failed"  # Always lowercase
+
+        # Test string outcomes
+        result.outcome = "PASSED"
+        data = result.to_dict()
+        assert data["outcome"] == "passed"
+
+    def test_timezone_handling(self, get_test_time):
+        """Test that all datetime operations are timezone-aware."""
+        start_time = get_test_time()
+        result = TestResult(
+            nodeid="test_api.py::test_get",
+            outcome=TestOutcome.PASSED,
+            start_time=start_time,
+            duration=1.0,
+        )
+
+        assert result.start_time.tzinfo is not None
+        assert result.stop_time.tzinfo is not None
+
+        data = result.to_dict()
+        assert "Z" in data["start_time"]  # ISO format with timezone
+
+    def test_output_fields(self):
+        """Test handling of output fields (stdout, stderr, log)."""
+        result = TestResult(
+            nodeid="test_api.py::test_get",
+            outcome=TestOutcome.PASSED,
+            start_time=datetime.now(),
+            duration=1.0,
+            caplog="DEBUG: message",
+            capstderr="error",
+            capstdout="output",
+        )
+
+        data = result.to_dict()
+        assert data["caplog"] == "DEBUG: message"
+        assert data["capstderr"] == "error"
+        assert data["capstdout"] == "output"
+
+        # Test empty fields
+        result = TestResult(
+            nodeid="test_api.py::test_get",
+            outcome=TestOutcome.PASSED,
+            start_time=datetime.now(),
+            duration=1.0,
+        )
+
+        data = result.to_dict()
+        assert data["caplog"] == ""
+        assert data["capstderr"] == ""
+        assert data["capstdout"] == ""
+
+    def test_test_result_timing_calculations(self, get_test_time):
+        """Test TestResult handles timing calculations correctly."""
+        now = get_test_time()
+        result = TestResult(
+            nodeid="test_example",
+            outcome=TestOutcome.PASSED,
+            start_time=now,
+            duration=1.5,
+        )
+
+        assert isinstance(result.duration, float)
+        assert result.duration == 1.5
+        assert result.stop_time == now + timedelta(seconds=1.5)
+        assert result.stop_time.tzinfo is not None  # Verify timezone info
+
+    def test_test_result_serialization(self, get_test_time):
+        """Test TestResult serialization."""
+        now = get_test_time()
+        result = TestResult(
+            nodeid="test_example",
+            outcome=TestOutcome.PASSED,
+            start_time=now,
+            duration=1.0,
+        )
+
+        data = result.to_dict()
+        assert isinstance(data["duration"], float)
+        start_time = datetime.fromisoformat(data["start_time"])
+        stop_time = datetime.fromisoformat(data["stop_time"])
+        assert start_time.tzinfo is not None
+        assert stop_time.tzinfo is not None
+
+
+class Test_TestSessionBehavior:
+    """Test suite for TestSession behavior and relationships."""
+
+    def test_session_timing(self, get_test_time):
+        """Test session timing calculations and timezone handling."""
+        start_time = get_test_time()
+        stop_time = get_test_time(3600)  # 1 hour later
+
+        session = TestSession(
+            sut_name="api",
+            session_id="test",
+            session_start_time=start_time,
+            session_stop_time=stop_time,
+            test_results=[],
+            session_tags={"env": "test"},
+        )
+
+        assert session.session_start_time.tzinfo is not None
+        assert session.session_stop_time.tzinfo is not None
+        assert session.session_duration == 3600.0  # Check float duration instead of timedelta
+
+    def test_test_relationships(self, get_test_time):
+        """Test relationships between tests in a session."""
+        start_time = get_test_time()
+
+        test1 = TestResult(
+            nodeid="test_api.py::test_get",
+            outcome=TestOutcome.PASSED,
+            start_time=start_time,
+            duration=1.0,
+        )
+
+        test2 = TestResult(
+            nodeid="test_api.py::test_post",
+            outcome=TestOutcome.FAILED,
+            start_time=start_time + timedelta(seconds=1),
+            duration=1.0,
+        )
+
+        session = TestSession(
+            sut_name="api",
+            session_id="test",
+            session_start_time=start_time,
+            session_stop_time=start_time + timedelta(seconds=10),
+            test_results=[test1, test2],
+            session_tags={"env": "test"},
+        )
+
+        # Test ordering
+        assert session.test_results[0].start_time < session.test_results[1].start_time
+
+        # Test outcome aggregation
+        assert len([t for t in session.test_results if t.outcome == TestOutcome.PASSED]) == 1
+        assert len([t for t in session.test_results if t.outcome == TestOutcome.FAILED]) == 1
+
+    def test_session_metadata(self):
+        """Test session metadata handling."""
+        session = TestSession(
+            sut_name="api",
+            session_id="test",
+            session_start_time=datetime.now(),
+            session_stop_time=datetime.now() + timedelta(seconds=10),
+            test_results=[],
+            session_tags={"environment": "staging", "branch": "main"},
+        )
+
+        data = session.to_dict()
+        assert data["sut_name"] == "api"
+        assert data["tags"] == {"environment": "staging", "branch": "main"}
+
+        # Test tag updates
+        session.tags["version"] = "1.0"
+        data = session.to_dict()
+        assert data["tags"]["version"] == "1.0"
+
+    def test_session_test_result_relationships(self, get_test_time):
+        """Test relationships between session and test results."""
+        now = get_test_time()
+        session = TestSession(
+            sut_name="test-app",
+            session_id="session-123",
+            session_start_time=now,
+            session_duration=10.0,
+            test_results=[],
+            session_tags={"env": "test"},
+        )
+
+        # Add test results
+        test1 = TestResult(
+            nodeid="test_example.py::test_1",
+            outcome=TestOutcome.PASSED,
+            start_time=now,
+            duration=1.0,
+        )
+        test2 = TestResult(
+            nodeid="test_example.py::test_2",
+            outcome=TestOutcome.FAILED,
+            start_time=get_test_time(5),  # 5 seconds later
+            duration=2.0,
+            longreprtext="Test failed",
+        )
+
+        session.add_test_result(test1)
+        session.add_test_result(test2)
+
+        # Verify test results are maintained in order
+        assert len(session.test_results) == 2
+        assert session.test_results[0].nodeid == "test_example.py::test_1"
+        assert session.test_results[1].nodeid == "test_example.py::test_2"
+
+        # Verify serialization preserves relationships
+        data = session.to_dict()
+        restored = TestSession.from_dict(data)
+
+        assert len(restored.test_results) == 2
+        assert restored.test_results[0].nodeid == "test_example.py::test_1"
+        assert restored.test_results[1].nodeid == "test_example.py::test_2"
+        assert restored.test_results[1].longreprtext == "Test failed"
+
+    def test_session_rerun_group_relationships(self, get_test_time):
+        """Test relationships between session and rerun groups."""
+        now = get_test_time()
+        session = TestSession(
+            sut_name="test-app",
+            session_id="session-123",
+            session_start_time=now,
+            session_duration=10.0,
+            test_results=[],
+            session_tags={"env": "test"},
+        )
+
+        # Create rerun groups
+        group1 = RerunTestGroup(nodeid="test_example.py::test_1")
+        test1 = TestResult(
+            nodeid="test_example.py::test_1",
+            outcome=TestOutcome.RERUN,
+            start_time=now,
+            duration=1.0,
+        )
+        test2 = TestResult(
+            nodeid="test_example.py::test_1",
+            outcome=TestOutcome.PASSED,
+            start_time=get_test_time(5),  # 5 seconds later
+            duration=1.0,
+        )
+        group1.add_test(test1)
+        group1.add_test(test2)
+
+        group2 = RerunTestGroup(nodeid="test_example.py::test_2")
+        test3 = TestResult(
+            nodeid="test_example.py::test_2",
+            outcome=TestOutcome.RERUN,
+            start_time=get_test_time(10),  # 10 seconds later
+            duration=1.0,
+        )
+        group2.add_test(test3)
+
+        session.add_rerun_group(group1)
+        session.add_rerun_group(group2)
+
+        # Verify rerun groups are maintained in order
+        assert len(session.rerun_test_groups) == 2
+        assert session.rerun_test_groups[0].nodeid == "test_example.py::test_1"
+        assert session.rerun_test_groups[1].nodeid == "test_example.py::test_2"
+        assert len(session.rerun_test_groups[0].tests) == 2
+        assert len(session.rerun_test_groups[1].tests) == 1
+
+        # Verify serialization preserves relationships
+        data = session.to_dict()
+        restored = TestSession.from_dict(data)
+
+        assert len(restored.rerun_test_groups) == 2
+        assert restored.rerun_test_groups[0].nodeid == "test_example.py::test_1"
+        assert restored.rerun_test_groups[1].nodeid == "test_example.py::test_2"
+        assert len(restored.rerun_test_groups[0].tests) == 2
+        assert len(restored.rerun_test_groups[1].tests) == 1
+
+        # Verify test outcomes in order
+        assert restored.rerun_test_groups[0].tests[0].outcome == TestOutcome.RERUN
+        assert restored.rerun_test_groups[0].tests[1].outcome == TestOutcome.PASSED
+        assert restored.rerun_test_groups[1].tests[0].outcome == TestOutcome.RERUN

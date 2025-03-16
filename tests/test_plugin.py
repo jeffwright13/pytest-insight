@@ -215,3 +215,146 @@ class Test_qPytestPlugin:
         actual_options = [call[0][0] for call in mock_group.addoption.call_args_list]
         assert all(option.startswith("--insight") for option in actual_options)
         assert set(expected_options) == set(actual_options)
+
+
+class Test_PluginHooks:
+    """Test suite for pytest plugin hooks."""
+
+    def test_session_start(self, testdir):
+        """Test session initialization and configuration."""
+        testdir.makepyfile("""
+            def test_example():
+                assert True
+        """)
+
+        result = testdir.runpytest("--insight")
+        result.stdout.fnmatch_lines(["*insight: collecting test results*"])
+
+    def test_test_result_capture(self, testdir):
+        """Test capturing of test results including output fields."""
+        testdir.makepyfile("""
+            import logging
+
+            def test_with_output():
+                print("stdout message")
+                logging.error("log message")
+                raise ValueError("stderr message")
+        """)
+
+        result = testdir.runpytest("--insight")
+        result.stdout.fnmatch_lines([
+            "*insight: test failed*",
+            "*stdout message*",
+            "*log message*",
+            "*stderr message*"
+        ])
+
+    def test_session_finish(self, testdir):
+        """Test session completion and result storage."""
+        testdir.makepyfile("""
+            def test_one():
+                assert True
+
+            def test_two():
+                assert False
+        """)
+
+        result = testdir.runpytest("--insight")
+        result.stdout.fnmatch_lines([
+            "*insight: session completed*",
+            "*1 passed, 1 failed*"
+        ])
+
+    def test_rerun_handling(self, testdir):
+        """Test handling of test reruns."""
+        testdir.makepyfile("""
+            import pytest
+
+            @pytest.mark.flaky(reruns=2)
+            def test_flaky():
+                import random
+                assert random.choice([True, False])
+        """)
+
+        result = testdir.runpytest("--insight")
+        result.stdout.fnmatch_lines(["*rerun*"])
+
+    def test_warning_capture(self, testdir):
+        """Test capturing of test warnings."""
+        testdir.makepyfile("""
+            import warnings
+
+            def test_warning():
+                warnings.warn("test warning")
+                assert True
+        """)
+
+        result = testdir.runpytest("--insight")
+        result.stdout.fnmatch_lines(["*warning*test warning*"])
+
+
+class Test_ResultStorage:
+    """Test suite for result storage and retrieval."""
+
+    def test_result_persistence(self, testdir, tmp_path):
+        """Test that results are correctly persisted."""
+        testdir.makepyfile("""
+            def test_example():
+                assert True
+        """)
+
+        storage_path = tmp_path / "insight"
+        result = testdir.runpytest(f"--insight-storage={storage_path}")
+
+        # Check storage directory
+        assert storage_path.exists()
+        assert list(storage_path.glob("*.json"))  # Session file created
+
+    def test_session_metadata(self, testdir, tmp_path):
+        """Test that session metadata is correctly stored."""
+        testdir.makepyfile("""
+            def test_example():
+                assert True
+        """)
+
+        storage_path = tmp_path / "insight"
+        result = testdir.runpytest(
+            f"--insight-storage={storage_path}",
+            "--insight-sut=example",
+            "--insight-tags=env:test"
+        )
+
+        # Check metadata in storage
+        session_files = list(storage_path.glob("*.json"))
+        assert session_files
+
+        import json
+        with open(session_files[0]) as f:
+            data = json.load(f)
+            assert data["sut_name"] == "example"
+            assert data["tags"]["env"] == "test"
+
+
+class Test_PluginConfiguration:
+    """Test suite for plugin configuration options."""
+
+    def test_storage_configuration(self, testdir):
+        """Test storage path configuration."""
+        result = testdir.runpytest("--insight-storage=invalid/path")
+        result.stderr.fnmatch_lines(["*invalid storage path*"])
+
+    def test_sut_configuration(self, testdir):
+        """Test SUT name configuration."""
+        result = testdir.runpytest("--insight-sut=test-service")
+        result.stdout.fnmatch_lines(["*insight: collecting results for test-service*"])
+
+    def test_tag_configuration(self, testdir):
+        """Test tag configuration."""
+        result = testdir.runpytest(
+            "--insight-tags=env:test,branch:main"
+        )
+        result.stdout.fnmatch_lines([
+            "*insight: using tags*",
+            "*env:test*",
+            "*branch:main*"
+        ])
