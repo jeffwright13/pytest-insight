@@ -784,11 +784,14 @@ class Test_TestResultBehavior:
             duration=1.0,
         )
 
+        # Verify timezone awareness
         assert result.start_time.tzinfo is not None
         assert result.stop_time.tzinfo is not None
 
+        # Verify ISO format includes UTC timezone (either 'Z' or '+00:00')
         data = result.to_dict()
-        assert "Z" in data["start_time"]  # ISO format with timezone
+        assert any(marker in data["start_time"] for marker in ["Z", "+00:00"]), \
+            f"Expected UTC timezone marker ('Z' or '+00:00') in {data['start_time']}"
 
     def test_output_fields(self):
         """Test handling of output fields (stdout, stderr, log)."""
@@ -963,12 +966,12 @@ class Test_TestSessionBehavior:
 
         data = session.to_dict()
         assert data["sut_name"] == "api"
-        assert data["tags"] == {"environment": "staging", "branch": "main"}
+        assert data["session_tags"] == {"environment": "staging", "branch": "main"}
 
         # Test tag updates
-        session.tags["version"] = "1.0"
+        session.session_tags["version"] = "1.0"
         data = session.to_dict()
-        assert data["tags"]["version"] == "1.0"
+        assert data["session_tags"]["version"] == "1.0"
 
     def test_session_test_result_relationships(self, get_test_time):
         """Test relationships between session and test results."""

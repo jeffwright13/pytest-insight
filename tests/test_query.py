@@ -422,7 +422,7 @@ class Test_QuerySystem:
     Tests the two-level filtering design and session context preservation.
     """
 
-    def test_session_context_preservation(self, get_test_time):
+    def test_session_context_preservation_create_session_using_add_test_result_method(self, get_test_time):
         """Test that session context is preserved after filtering.
 
         Verifies:
@@ -444,7 +444,7 @@ class Test_QuerySystem:
         test2 = TestResult(
             nodeid="test_api.py::test_post",
             outcome=TestOutcome.FAILED,
-            start_time=get_test_time(10),  # 10 seconds later
+            start_time=get_test_time(10),
             duration=2.0,
             caplog="ERROR: failed",
             capstderr="stack trace",
@@ -456,9 +456,12 @@ class Test_QuerySystem:
             session_id="test-session",
             session_start_time=get_test_time(),
             session_stop_time=get_test_time(20),
-            test_results=[test1, test2],
-            tags={"environment": "staging"},
+            test_results=[],
+            session_tags={"environment": "staging"},
         )
+
+        session.add_test_result(test1)
+        session.add_test_result(test2)
 
         # Apply test-level filter
         query = Query()
@@ -468,7 +471,7 @@ class Test_QuerySystem:
         assert len(result.sessions) == 1
         filtered_session = result.sessions[0]
         assert len(filtered_session.test_results) == 2  # Both tests preserved
-        assert filtered_session.tags == session.tags  # Metadata preserved
+        assert filtered_session.session_tags == session.session_tags  # Metadata preserved
         assert filtered_session.session_id == session.session_id
 
     def test_timezone_aware_filtering(self, get_test_time):
