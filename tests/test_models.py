@@ -790,8 +790,9 @@ class Test_TestResultBehavior:
 
         # Verify ISO format includes UTC timezone (either 'Z' or '+00:00')
         data = result.to_dict()
-        assert any(marker in data["start_time"] for marker in ["Z", "+00:00"]), \
-            f"Expected UTC timezone marker ('Z' or '+00:00') in {data['start_time']}"
+        assert any(
+            marker in data["start_time"] for marker in ["Z", "+00:00"]
+        ), f"Expected UTC timezone marker ('Z' or '+00:00') in {data['start_time']}"
 
     def test_output_fields(self):
         """Test handling of output fields (stdout, stderr, log)."""

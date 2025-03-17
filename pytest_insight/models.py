@@ -1,8 +1,29 @@
+"""Models for pytest-insight.
+
+This module defines the core data models used by pytest-insight to store and manage
+test results, sessions, and history.
+
+Key Models:
+1. TestOutcome - Enum for possible test outcomes
+2. TestResult - Individual test result with timing and output
+3. TestSession - Collection of test results from a single test run
+4. RerunTestGroup - Group of related test reruns
+5. TestHistory - Collection of test sessions grouped by SUT
+
+Timezone Handling:
+- All datetime fields accept both timezone-aware and naive datetime objects
+- When serializing to JSON via to_dict(), datetimes are converted to ISO-8601 format
+- Both 'Z' and '+00:00' are accepted as valid UTC markers in ISO-8601 strings
+- The test_data module's get_test_time() is recommended for consistent timezone handling
+"""
+
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, List, Optional
+import logging
 
+logger = logging.getLogger(__name__)
 
 class TestOutcome(Enum):
     """Test outcome states."""
@@ -73,9 +94,22 @@ class TestResult:
 
     def to_dict(self) -> Dict:
         """Convert test result to a dictionary for JSON serialization."""
+        # Handle both string and enum outcomes for backward compatibility
+        if not hasattr(self.outcome, 'to_str'):
+            logger.warning(
+                "Non-enum (probably string outcome detected where TestOutcome enum expected. "
+                f"nodeid={self.nodeid}, outcome={self.outcome}, type={type(self.outcome)}. "
+                "For proper session context and query filtering, use TestOutcome enum: "
+                "outcome=TestOutcome.FAILED instead of outcome='failed'. "
+                "String outcomes are deprecated and will be removed in a future version."
+            )
+            outcome_str = str(self.outcome).lower()
+        else:
+            outcome_str = self.outcome.to_str()
+
         return {
             "nodeid": self.nodeid,
-            "outcome": self.outcome.to_str(),  # Use to_str() for consistent lowercase serialization
+            "outcome": outcome_str,
             "start_time": self.start_time.isoformat(),
             "stop_time": self.stop_time.isoformat() if self.stop_time else None,
             "duration": self.duration,
