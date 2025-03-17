@@ -26,6 +26,15 @@ dependencies = [
     "pytest-coverage>=0.0",
 ]
 
+[project.optional-dependencies]
+demo = [
+    "bullet>=2.2.0",
+    "jupyter>=1.0.0",
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+    "ipywidgets>=8.1.0",
+]
+
 [project.entry-points.pytest11]
 insight = "pytest_insight.plugin"
 
