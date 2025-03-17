@@ -12,7 +12,7 @@ tests, never isolated TestResult objects.
 import fnmatch
 import re
 from dataclasses import dataclass
-from dataclasses import field as datafield
+from dataclasses import field as field
 from datetime import datetime, timedelta
 from enum import Enum, auto
 from typing import (
@@ -79,12 +79,14 @@ class GlobPatternFilter:
     field_name: str = "nodeid"  # Default to nodeid for backward compatibility
 
     def matches(self, test: TestResult) -> bool:
-        """Match pattern against the specified field value."""
-        field_value = str(getattr(test, self.field_name))
+        """Check if the specified field value in `test` matches the given glob pattern."""
+
+        field_value = str(getattr(test, self.field_name, ""))
         return fnmatch.fnmatch(field_value, f"*{self.pattern}*")
 
-    def to_dict(self) -> Dict:
-        """Convert to dictionary."""
+    def to_dict(self) -> Dict[str, str]:
+        """Convert the filter object to a dictionary representation."""
+
         return {
             "type": FilterType.GLOB_PATTERN.name,
             "pattern": self.pattern,
@@ -92,8 +94,11 @@ class GlobPatternFilter:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "GlobPatternFilter":
-        """Create from dictionary."""
+    def from_dict(cls, data: Dict[str, str]) -> "GlobPatternFilter":
+        """Create a GlobPatternFilter instance from a dictionary."""
+
+        if "pattern" not in data:
+            raise ValueError("Missing required key 'pattern' in data")
         return cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
 
 
@@ -109,7 +114,7 @@ class RegexPatternFilter:
 
     pattern: str
     field_name: str = "nodeid"  # Default to nodeid for backward compatibility
-    _compiled_regex: Optional[re.Pattern] = datafield(default=None, init=False)
+    _compiled_regex: Optional[re.Pattern] = field(default=None, init=False)
 
     def __post_init__(self):
         """Validate and compile pattern."""
@@ -123,7 +128,7 @@ class RegexPatternFilter:
 
     def matches(self, test: TestResult) -> bool:
         """Check if test matches the regex pattern."""
-        field_value = str(getattr(test, self.field_name))
+        field_value = str(getattr(test, self.field_name, ""))  # Default to empty string
         return bool(self._compiled_regex.search(field_value))
 
     def to_dict(self) -> Dict:
@@ -137,7 +142,9 @@ class RegexPatternFilter:
     @classmethod
     def from_dict(cls, data: Dict) -> "RegexPatternFilter":
         """Create from dictionary."""
-        return cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
+        instance = cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
+        instance._compiled_regex = re.compile(instance.pattern)
+        return instance
 
 
 @dataclass
@@ -168,11 +175,12 @@ class DurationFilter:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "DurationFilter":
-        """Create from dictionary."""
-        return cls(
+        """Create from dictionary, ensuring validation via dataclasses.replace."""
+        instance = cls(
             min_seconds=data["min_seconds"],
             max_seconds=data["max_seconds"],
         )
+        return dataclasses.replace(instance)  # Triggers __post_init__
 
 
 @dataclass
@@ -208,8 +216,12 @@ class OutcomeFilter:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "OutcomeFilter":
-        """Create from dictionary."""
-        return cls(outcome=TestOutcome.from_str(data["outcome"]))
+        """Create from dictionary with validation."""
+        outcome_str = data.get("outcome")
+        if not outcome_str:
+            raise InvalidQueryParameterError("Outcome field is required")
+
+        return cls(outcome=TestOutcome.from_str(outcome_str))
 
 
 @dataclass
@@ -224,16 +236,17 @@ class CustomFilter:
         return self.predicate(test)
 
     def to_dict(self) -> Dict:
-        """Convert to dictionary."""
+        """Convert to dictionary with a predicate description."""
         return {
             "type": FilterType.CUSTOM.name,
             "name": self.name,
+            "predicate_repr": repr(self.predicate),  # Stores function representation
         }
 
     @classmethod
     def from_dict(cls, data: Dict) -> "CustomFilter":
         """Create from dictionary."""
-        raise NotImplementedError("Custom filters cannot be serialized/deserialized")
+        raise NotImplementedError("Custom filters cannot be deserialized")
 
 
 class QueryResult:
