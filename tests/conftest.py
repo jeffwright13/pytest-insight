@@ -5,7 +5,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 import pytest
-from pytest_insight.models import TestHistory
+from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.storage import JSONStorage
 from pytest_insight.test_data import (
     NodeId,
@@ -137,12 +137,6 @@ def random_test_result_factory():
 def random_rerun_test_group_factory():
     """A factory fixture to create a random RerunTestGroup instance."""
     return random_rerun_test_group
-
-
-@pytest.fixture
-def test_history():
-    """Create empty TestHistory instance."""
-    return TestHistory()
 
 
 @pytest.fixture

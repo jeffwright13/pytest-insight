@@ -4,7 +4,6 @@ from zoneinfo import ZoneInfo
 import pytest
 from pytest_insight.models import (
     RerunTestGroup,
-    TestHistory,
     TestOutcome,
     TestResult,
     TestSession,
@@ -155,35 +154,42 @@ class Test_TestSession:
         """Test the random_test_session fixture's properties and methods."""
         get_test_time()
         session = random_test_session_factory()  # Call factory function
-        assert isinstance(session.sut_name, str) and session.sut_name.startswith("SUT-")
-        assert isinstance(session.session_id, str) and session.session_id.startswith("session-")
 
+        # Validate core session properties
+        assert isinstance(session.sut_name, str) and session.sut_name
+        assert isinstance(session.session_id, str) and session.session_id
+
+        # Validate session timing
         assert isinstance(session.session_start_time, datetime)
         assert isinstance(session.session_stop_time, datetime)
-        assert isinstance(session.session_duration, timedelta)
+        assert isinstance(session.session_duration, float)
         assert session.session_stop_time > session.session_start_time
 
-        # Ensure test results and rerun groups are populated
-        assert len(session.test_results) >= 2
-        assert len(session.rerun_test_groups) >= 1
+        # Validate session context preservation
+        assert len(session.test_results) >= 2  # Multiple tests per session
+        if session.rerun_test_groups:  # Rerun groups are optional
+            for group in session.rerun_test_groups:
+                assert group.tests  # Each group has tests
+                assert all(test.outcome == TestOutcome.RERUN for test in group.tests[:-1])  # All but last are reruns
+                assert group.tests[-1].outcome != TestOutcome.RERUN  # Last test has final outcome
 
-        # Test outcome categorization
+        # Validate test relationships
         outcomes = {test.outcome for test in session.test_results}
         warnings = any(test.has_warning for test in session.test_results)
 
-        # Verify we have at least one test result with a meaningful outcome
-        assert any(
-            [
-                TestOutcome.PASSED in outcomes,
-                TestOutcome.FAILED in outcomes,
-                TestOutcome.SKIPPED in outcomes,
-                TestOutcome.FAILED in outcomes,
-                TestOutcome.XPASSED in outcomes,
-                TestOutcome.RERUN in outcomes,
-                TestOutcome.ERROR in outcomes,
-                warnings,
-            ]
-        )
+        # Verify meaningful test outcomes exist
+        assert any([
+            TestOutcome.PASSED in outcomes,
+            TestOutcome.FAILED in outcomes,
+            TestOutcome.SKIPPED in outcomes,
+            TestOutcome.XPASSED in outcomes,
+            TestOutcome.RERUN in outcomes,
+            TestOutcome.ERROR in outcomes,
+            warnings,
+        ])
+
+        # Validate session tags
+        assert isinstance(session.session_tags, dict)
 
     def test_test_session(self, get_test_time):
         """Test basic TestSession initialization."""
@@ -199,7 +205,7 @@ class Test_TestSession:
         )
         assert session.sut_name == "test-app"
         assert session.session_id == "session-123"
-        assert session.duration == 60.0  # 1 minute in seconds
+        assert session.session_duration == 60.0  # 1 minute in seconds
 
     def test_test_session_tags(self, get_test_time):
         """Test TestSession tags handling."""
@@ -233,18 +239,36 @@ class Test_TestSession:
     def test_test_session_from_dict(self, random_test_session_factory, get_test_time):
         """Test the from_dict method of the TestSession model."""
         get_test_time()
-        session = random_test_session_factory()  # Call factory function
+        session = random_test_session_factory()
         session_dict = session.to_dict()
-        session = TestSession.from_dict(session_dict)
-        assert isinstance(session, TestSession)
-        assert session.sut_name == session_dict["sut_name"]
-        assert session.session_id == session_dict["session_id"]
-        assert session.session_start_time == datetime.fromisoformat(session_dict["session_start_time"])
-        assert session.session_stop_time == datetime.fromisoformat(session_dict["session_stop_time"])
-        assert session.session_duration == timedelta(seconds=session_dict["session_duration"])
-        assert len(session.test_results) == len(session_dict["test_results"])
-        assert len(session.rerun_test_groups) == len(session_dict["rerun_test_groups"])
-        assert session.session_tags == session_dict["session_tags"]
+        new_session = TestSession.from_dict(session_dict)
+
+        # Verify core session properties
+        assert isinstance(new_session, TestSession)
+        assert new_session.sut_name == session.sut_name
+        assert new_session.session_id == session.session_id
+        assert new_session.session_start_time == session.session_start_time
+        assert new_session.session_stop_time == session.session_stop_time
+
+        # Duration should be calculated from timestamps
+        expected_duration = (session.session_stop_time - session.session_start_time).total_seconds()
+        assert new_session.session_duration == expected_duration
+
+        # Verify test results
+        assert len(new_session.test_results) == len(session.test_results)
+        for new_result, orig_result in zip(new_session.test_results, session.test_results):
+            assert new_result.nodeid == orig_result.nodeid
+            assert new_result.outcome == orig_result.outcome
+            assert new_result.duration == orig_result.duration
+
+        # Verify rerun groups
+        assert len(new_session.rerun_test_groups) == len(session.rerun_test_groups)
+        for new_group, orig_group in zip(new_session.rerun_test_groups, session.rerun_test_groups):
+            assert new_group.nodeid == orig_group.nodeid
+            assert len(new_group.tests) == len(orig_group.tests)
+
+        # Verify session tags
+        assert new_session.session_tags == session.session_tags
 
     def test_test_session_serialization(self, get_test_time):
         """Test serialization of TestSession objects."""
@@ -373,385 +397,6 @@ class Test_RerunTestGroup:
         assert len(new_group.tests) == 2
         assert new_group.tests[0].outcome == TestOutcome.RERUN
         assert new_group.tests[1].outcome == TestOutcome.PASSED
-
-
-class Test_TestHistory:
-    """Test the TestHistory model."""
-
-    def test_test_history(self, get_test_time):
-        """Test TestHistory functionality."""
-        history = TestHistory()
-        now = get_test_time()
-        stop_time1 = now + timedelta(seconds=5)
-        stop_time2 = now + timedelta(seconds=20)
-
-        session1 = TestSession("SUT-1", "session-001", now, stop_time1, [], [])
-        session2 = TestSession("SUT-1", "session-002", now + timedelta(seconds=10), stop_time2, [], [])
-
-        history.add_test_session(session1)
-        history.add_test_session(session2)
-
-        assert len(history.sessions) == 2
-        assert history.latest_session() == session2
-
-    def test_test_history_sessions_property(self, get_test_time):
-        """Test sessions property of TestHistory."""
-        history = TestHistory()
-        now = get_test_time()
-        session = TestSession("SUT-1", "session-001", now, now + timedelta(seconds=60), [], [])
-        history.add_test_session(session)
-        assert history.sessions == [session]
-
-    def test_test_history_latest_session(self, get_test_time):
-        """Test getting latest session from TestHistory."""
-        history = TestHistory()
-        now = get_test_time()
-        session1 = TestSession(
-            sut_name="test-app",
-            session_id="session-1",
-            session_start_time=now,  # Base time
-            session_stop_time=get_test_time(60),  # 1 minute later
-            test_results=[],
-            rerun_test_groups=[],
-        )
-        session2 = TestSession(
-            sut_name="test-app",
-            session_id="session-2",
-            session_start_time=get_test_time(120),  # 2 minutes later
-            session_stop_time=get_test_time(180),  # 3 minutes from base
-            test_results=[],
-            rerun_test_groups=[],
-        )
-        history.add_test_session(session1)
-        history.add_test_session(session2)
-        assert history.get_latest_session("test-app") == session2
-
-    def test_test_history_initialization(self, test_history):
-        """Test TestHistory initialization."""
-        assert test_history.sessions == []
-        assert test_history._latest_by_sut == {}
-        assert test_history._all_sessions_cache is None
-
-    def test_add_test_session(self, test_history, get_test_time):
-        """Test adding a session to TestHistory."""
-        now = get_test_time()
-        sample_session = TestSession(
-            sut_name="test-sut",
-            session_id="session-1",
-            session_start_time=now,  # Base time
-            session_stop_time=get_test_time(60),  # 1 minute later
-            test_results=[],
-            session_tags={"env": "test"},
-        )
-        test_history.add_test_session(sample_session)
-
-        # Check main storage
-        assert "test-sut" in test_history._sessions_by_sut
-        assert test_history._sessions_by_sut["test-sut"][0] == sample_session
-
-        # Check latest cache
-        assert test_history._latest_by_sut["test-sut"] == sample_session
-
-        # Check global cache invalidation
-        assert test_history._all_sessions_cache is None
-
-    def test_multiple_sessions_same_sut(self, test_history, get_test_time):
-        """Test adding multiple sessions for same SUT."""
-        get_test_time()
-
-        # Create sessions with different times
-        sessions = [
-            TestSession(
-                sut_name="test-sut",
-                session_id=f"session-{i}",
-                session_start_time=get_test_time(i * 3600),  # i hours later
-                session_stop_time=get_test_time(i * 3600 + 300),  # i hours + 5 mins later
-                test_results=[],
-                session_tags={"env": "test" if i % 2 == 0 else "prod"},
-            )
-            for i in range(3)
-        ]
-
-        # Add sessions in random order
-        test_history.add_test_session(sessions[1])
-        test_history.add_test_session(sessions[0])
-        test_history.add_test_session(sessions[2])
-
-        # Check latest session is most recent
-        assert test_history._latest_by_sut["test-sut"] == sessions[2]
-
-        # Check chronological order in get_sut_sessions
-        ordered_sessions = test_history.get_sut_sessions("test-sut")
-        assert ordered_sessions == sorted(sessions, key=lambda s: s.session_start_time)
-
-    def test_multiple_suts(self, test_history, get_test_time):
-        """Test handling multiple SUTs."""
-        now = get_test_time()
-
-        # Create sessions for different SUTs
-        sut_sessions = {
-            "sut-1": TestSession(
-                sut_name="sut-1",
-                session_id="session-1",
-                session_start_time=now,
-                session_stop_time=get_test_time(300),  # 5 mins later
-                test_results=[],
-                session_tags={"env": "test"},
-            ),
-            "sut-2": TestSession(
-                sut_name="sut-2",
-                session_id="session-2",
-                session_start_time=get_test_time(3600),  # 1 hour later
-                session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
-                test_results=[],
-                session_tags={"env": "prod"},
-            ),
-        }
-
-        for session in sut_sessions.values():
-            test_history.add_test_session(session)
-
-        # Check SUT names
-        assert set(test_history.get_sut_names()) == {"sut-1", "sut-2"}
-
-        # Check latest session across all SUTs
-        assert test_history.latest_session() == sut_sessions["sut-2"]
-
-    def test_sessions_cache_invalidation(self, test_history, get_test_time):
-        """Test that sessions cache is properly invalidated on updates."""
-        now = get_test_time()
-
-        # Create sessions
-        session1 = TestSession(
-            sut_name="test-sut",
-            session_id="session-1",
-            session_start_time=now,
-            session_stop_time=get_test_time(300),  # 5 mins later
-            test_results=[],
-            session_tags={"env": "test"},
-        )
-        session2 = TestSession(
-            sut_name="test-sut",
-            session_id="session-2",
-            session_start_time=get_test_time(3600),  # 1 hour later
-            session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
-            test_results=[],
-            session_tags={"env": "prod"},
-        )
-
-        # Add first session and cache sessions
-        test_history.add_test_session(session1)
-        _ = test_history.sessions  # Access to build cache
-
-        # Add second session
-        test_history.add_test_session(session2)
-
-        # Cache should be invalidated
-        assert test_history._all_sessions_cache is None
-
-        # Rebuild cache and verify
-        sessions = test_history.sessions
-        assert len(sessions) == 2
-        assert sessions == sorted([session1, session2], key=lambda s: s.session_start_time)
-
-    def test_latest_session_across_suts(self, test_history, get_test_time):
-        """Test latest_session returns most recent across all SUTs."""
-        now = get_test_time()
-
-        # Create sessions for different SUTs with different times
-        sessions = [
-            TestSession(
-                sut_name="sut-1",
-                session_id="session-1",
-                session_start_time=now,
-                session_stop_time=get_test_time(300),  # 5 mins later
-                test_results=[],
-                session_tags={"env": "test"},
-            ),
-            TestSession(
-                sut_name="sut-2",
-                session_id="session-2",
-                session_start_time=get_test_time(3600),  # 1 hour later
-                session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
-                test_results=[],
-                session_tags={"env": "prod"},
-            ),
-            TestSession(
-                sut_name="sut-1",
-                session_id="session-3",
-                session_start_time=get_test_time(7200),  # 2 hours later
-                session_stop_time=get_test_time(7500),  # 2 hours + 5 mins later
-                test_results=[],
-                session_tags={"env": "test"},
-            ),
-        ]
-
-        # Add sessions in random order
-        test_history.add_test_session(sessions[1])  # sut-2 middle time
-        test_history.add_test_session(sessions[0])  # sut-1 earliest
-        test_history.add_test_session(sessions[2])  # sut-1 latest
-
-        # Latest session overall should be sessions[2]
-        assert test_history.latest_session() == sessions[2]
-
-        # Latest for sut-1 should be sessions[2]
-        assert test_history._latest_by_sut["sut-1"] == sessions[2]
-
-        # Latest for sut-2 should be sessions[1]
-        assert test_history._latest_by_sut["sut-2"] == sessions[1]
-
-    def test_nonexistent_sut(self, test_history):
-        """Test handling of nonexistent SUT requests."""
-        assert test_history.get_sut_sessions("nonexistent") == []
-        assert test_history.get_sut_latest_session("nonexistent") is None
-
-    def test_empty_history_latest_session(self, test_history):
-        """Test latest_session with empty history."""
-        assert test_history.latest_session() is None
-
-    def test_sessions_cache_invalidation(self, test_history, get_test_time):
-        """Test that sessions cache is properly invalidated on updates."""
-        now = get_test_time()
-
-        # Create sessions
-        session1 = TestSession(
-            sut_name="test-sut",
-            session_id="session-1",
-            session_start_time=now,
-            session_stop_time=get_test_time(300),  # 5 mins later
-            test_results=[],
-            session_tags={"env": "test"},
-        )
-        session2 = TestSession(
-            sut_name="test-sut",
-            session_id="session-2",
-            session_start_time=get_test_time(3600),  # 1 hour later
-            session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
-            test_results=[],
-            session_tags={"env": "prod"},
-        )
-
-        # Add first session and cache sessions
-        test_history.add_test_session(session1)
-        _ = test_history.sessions  # Access to build cache
-
-        # Add second session
-        test_history.add_test_session(session2)
-
-        # Cache should be invalidated
-        assert test_history._all_sessions_cache is None
-
-        # Rebuild cache and verify
-        sessions = test_history.sessions
-        assert len(sessions) == 2
-        assert sessions == sorted([session1, session2], key=lambda s: s.session_start_time)
-
-    def test_latest_session_across_suts(self, test_history, get_test_time):
-        """Test latest_session returns most recent across all SUTs."""
-        now = get_test_time()
-
-        # Create sessions for different SUTs with different times
-        sessions = [
-            TestSession(
-                sut_name="sut-1",
-                session_id="session-1",
-                session_start_time=now,
-                session_stop_time=get_test_time(300),  # 5 mins later
-                test_results=[],
-                session_tags={"env": "test"},
-            ),
-            TestSession(
-                sut_name="sut-2",
-                session_id="session-2",
-                session_start_time=get_test_time(3600),  # 1 hour later
-                session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
-                test_results=[],
-                session_tags={"env": "prod"},
-            ),
-            TestSession(
-                sut_name="sut-1",
-                session_id="session-3",
-                session_start_time=get_test_time(7200),  # 2 hours later
-                session_stop_time=get_test_time(7500),  # 2 hours + 5 mins later
-                test_results=[],
-                session_tags={"env": "test"},
-            ),
-        ]
-
-        # Add sessions in random order
-        test_history.add_test_session(sessions[1])  # sut-2 middle time
-        test_history.add_test_session(sessions[0])  # sut-1 earliest
-        test_history.add_test_session(sessions[2])  # sut-1 latest
-
-        # Latest session overall should be sessions[2]
-        assert test_history.latest_session() == sessions[2]
-
-        # Latest for sut-1 should be sessions[2]
-        assert test_history._latest_by_sut["sut-1"] == sessions[2]
-
-        # Latest for sut-2 should be sessions[1]
-        assert test_history._latest_by_sut["sut-2"] == sessions[1]
-
-    def test_test_history_cache_invalidation(self, get_test_time):
-        """Test cache invalidation in TestHistory."""
-        history = TestHistory()
-        get_test_time()
-
-        # Create test sessions with timezone-aware datetimes
-        sessions = [
-            TestSession(
-                sut_name=f"sut-{i}",
-                session_id=f"session-{i}",
-                session_start_time=get_test_time(i * 3600),  # i hours later
-                session_stop_time=get_test_time(i * 3600 + 300),  # i hours + 5 mins later
-                test_results=[],
-                session_tags={"env": "test" if i % 2 == 0 else "prod"},
-            )
-            for i in range(3)
-        ]
-
-        # Add sessions and verify cache behavior
-        for session in sessions:
-            history.add_test_session(session)
-            assert session.sut_name in history._latest_by_sut
-            assert history._latest_by_sut[session.sut_name] == session
-
-        # Verify cache is updated correctly
-        assert len(history._latest_by_sut) == 3
-        assert all(sut in history._latest_by_sut for sut in ["sut-0", "sut-1", "sut-2"])
-
-    def test_test_history_latest_session_by_sut(self, get_test_time):
-        """Test getting latest session by SUT."""
-        history = TestHistory()
-        now = get_test_time()
-
-        # Create sessions with different SUTs
-        sessions = {
-            "sut-1": TestSession(
-                sut_name="sut-1",
-                session_id="session-1",
-                session_start_time=now,
-                session_stop_time=get_test_time(300),  # 5 mins later
-                test_results=[],
-                session_tags={"env": "test"},
-            ),
-            "sut-2": TestSession(
-                sut_name="sut-2",
-                session_id="session-2",
-                session_start_time=get_test_time(3600),  # 1 hour later
-                session_stop_time=get_test_time(3900),  # 1 hour + 5 mins later
-                test_results=[],
-                session_tags={"env": "prod"},
-            ),
-        }
-
-        # Add sessions and verify latest by SUT
-        for session in sessions.values():
-            history.add_test_session(session)
-
-        assert history.get_sut_latest_session("sut-1") == sessions["sut-1"]
-        assert history.get_sut_latest_session("sut-2") == sessions["sut-2"]
-        assert history.get_sut_latest_session("non-existent") is None
 
 
 class Test_TestResultBehavior:

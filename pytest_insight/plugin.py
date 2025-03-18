@@ -79,7 +79,28 @@ def pytest_configure(config: Config):
         # Convert string path to Path object only if path is specified
         if json_path:
             json_path = Path(json_path).resolve()
-            json_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Validate parent directory exists or can be created
+            try:
+                parent = json_path.parent
+                if not parent.exists():
+                    msg = f"Invalid storage path: Parent directory {parent} does not exist"
+                    config.warn(1, msg)
+                    raise pytest.UsageError(msg)
+                elif not parent.is_dir():
+                    msg = f"Invalid storage path: {parent} exists but is not a directory"
+                    config.warn(1, msg)
+                    raise pytest.UsageError(msg)
+                elif not os.access(parent, os.W_OK):
+                    msg = f"Invalid storage path: {parent} is not writable"
+                    config.warn(1, msg)
+                    raise pytest.UsageError(msg)
+            except pytest.UsageError:
+                raise
+            except Exception as e:
+                msg = f"Invalid storage path: {e}"
+                config.warn(1, msg)
+                raise pytest.UsageError(msg)
 
         # Create storage instance (will use default path if json_path is None)
         storage = get_storage_instance(storage_type, json_path)

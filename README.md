@@ -31,7 +31,7 @@ print(f"Flaky rate: {health.flaky_rate:.1%}")
 
 # Find slow tests with warnings
 slow_tests = (query
-    .having_warnings(True)      # Session-level filter
+    .with_warning(True)      # Session-level filter
     .filter_by_test()          # Test-level filter
     .with_duration(10.0, float("inf"))
     .apply()                   # Back to session context

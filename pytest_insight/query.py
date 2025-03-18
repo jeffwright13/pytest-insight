@@ -43,6 +43,7 @@ class FilterType(Enum):
 
     GLOB_PATTERN = auto()
     REGEX_PATTERN = auto()
+    SHELL_PATTERN = auto()
     DURATION = auto()
     OUTCOME = auto()
     CUSTOM = auto()
@@ -66,6 +67,40 @@ class TestFilter(Protocol):
 
 
 @dataclass
+class ShellPatternFilter:
+    """Filter tests using shell-style pattern matching (like bash).
+
+    The pattern is used as provided with no automatic wildcard wrapping.
+    """
+    pattern: str
+    field_name: str = "nodeid"
+
+    ALLOWED_FIELDS = {"nodeid", "caplog", "capstderr", "capstdout", "longreprtext"}
+
+    def __post_init__(self):
+        if self.field_name not in self.ALLOWED_FIELDS:
+            raise InvalidQueryParameterError(f"Invalid field name: {self.field_name}")
+
+    def matches(self, test: TestResult) -> bool:
+        field_value = str(getattr(test, self.field_name, ""))
+        # Use the pattern exactly as given.
+        return fnmatch.fnmatch(field_value, self.pattern)
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "type": FilterType.SHELL_PATTERN.name,
+            "pattern": self.pattern,
+            "field_name": self.field_name,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, str]) -> "ShellPatternFilter":
+        if "pattern" not in data:
+            raise ValueError("Missing required key 'pattern' in data")
+        return cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
+
+
+@dataclass
 class GlobPatternFilter:
     """Filter tests by glob pattern matching against any string field.
 
@@ -74,9 +109,15 @@ class GlobPatternFilter:
     - Pattern is matched against the specified field value
     - For nodeid field, matches full nodeid as a single string
     """
+    ALLOWED_FIELDS = {"nodeid", "caplog", "capstderr", "capstdout", "longreprtext"}
 
     pattern: str
     field_name: str = "nodeid"  # Default to nodeid for backward compatibility
+
+    def __post_init__(self):
+        """Validate field name."""
+        if self.field_name not in self.ALLOWED_FIELDS:
+            raise InvalidQueryParameterError(f"Invalid field name: {self.field_name}")
 
     def matches(self, test: TestResult) -> bool:
         """Check if the specified field value in `test` matches the given glob pattern."""
@@ -640,7 +681,7 @@ class Query:
         )
         return self
 
-    def having_warnings(self, has_warnings: bool = True) -> "Query":
+    def with_warning(self, has_warnings: bool = True) -> "Query":
         """Filter sessions by presence of warnings in test results.
 
         Args:

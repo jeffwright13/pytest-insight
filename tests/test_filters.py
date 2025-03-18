@@ -45,11 +45,20 @@ def test_sut_filter(test_session_no_reruns):
     assert len(result.sessions[0].test_results) == len(test_session_no_reruns.test_results)
 
 
-def test_days_filter(test_session_no_reruns, get_test_time):
+def test_days_filter(test_session_no_reruns, get_test_time, mocker):
     """Test filtering by days.
 
     Session-level filter that preserves all tests in matching sessions.
     """
+    # Mock datetime.now to return a fixed time relative to our test timestamps
+    mock_now = get_test_time(3600)  # 1 hour after base time
+    mock_datetime = mocker.MagicMock()
+    mock_datetime.now = mocker.MagicMock(return_value=mock_now)
+    mock_zoneinfo = mocker.MagicMock()
+    mock_zoneinfo.return_value = mock_now.tzinfo
+    mocker.patch("pytest_insight.query.datetime", mock_datetime)
+    mocker.patch("pytest_insight.query.ZoneInfo", mock_zoneinfo)
+
     storage = InMemoryStorage()
     storage.save_session(test_session_no_reruns)
     query = Query(storage=storage)
@@ -124,7 +133,7 @@ def test_warnings_filter(test_result_warning):
     storage.save_session(session)
 
     query = Query(storage=storage)
-    result = query.with_warnings().execute()
+    result = query.with_warning().execute()
 
     assert len(result.sessions) == 1
     # Session context preserved
@@ -205,7 +214,7 @@ def test_pattern_matching(get_test_time):
     assert result.sessions[0].sut_name == "test_sut"
 
 
-def test_multiple_filters(test_session_no_reruns, get_test_time):
+def test_multiple_filters(test_session_no_reruns, get_test_time, mocker):
     """Test combining multiple filters.
 
     Demonstrates the two-level filtering design:
@@ -221,6 +230,15 @@ def test_multiple_filters(test_session_no_reruns, get_test_time):
        - Test relationships maintained
        - Warnings and reruns preserved
     """
+    # Mock datetime.now to return a fixed time relative to our test timestamps
+    mock_now = get_test_time(3600)  # 1 hour after base time
+    mock_datetime = mocker.MagicMock()
+    mock_datetime.now = mocker.MagicMock(return_value=mock_now)
+    mock_zoneinfo = mocker.MagicMock()
+    mock_zoneinfo.return_value = mock_now.tzinfo
+    mocker.patch("pytest_insight.query.datetime", mock_datetime)
+    mocker.patch("pytest_insight.query.ZoneInfo", mock_zoneinfo)
+
     # Create test session with mixed outcomes
     test_pass = TestResult(
         nodeid="test_api.py::test_get",
@@ -263,11 +281,13 @@ def test_multiple_filters(test_session_no_reruns, get_test_time):
         .execute()
     )
 
+    assert not result.empty
+    assert len(result.sessions) > 0
     filtered_session = result.sessions[0]
 
     # Verify session-level filters worked
     assert filtered_session.sut_name == "test_sut"
-    assert (get_test_time() - filtered_session.session_start_time).days < 7
+    assert (mock_now - filtered_session.session_start_time).days < 7
 
     # Verify test-level filter worked but preserved context
     assert len(filtered_session.test_results) == 2  # Both tests preserved

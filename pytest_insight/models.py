@@ -1,27 +1,17 @@
-"""Models for pytest-insight.
+"""Models for test session data.
 
-This module defines the core data models used by pytest-insight to store and manage
-test results, sessions, and history.
-
-Key Models:
-1. TestOutcome - Enum for possible test outcomes
-2. TestResult - Individual test result with timing and output
-3. TestSession - Collection of test results from a single test run
+Core models:
+1. TestOutcome - Enum for test result outcomes
+2. TestResult - Single test execution result
+3. TestSession - Collection of test results with metadata
 4. RerunTestGroup - Group of related test reruns
-5. TestHistory - Collection of test sessions grouped by SUT
-
-Timezone Handling:
-- All datetime fields accept both timezone-aware and naive datetime objects
-- When serializing to JSON via to_dict(), datetimes are converted to ISO-8601 format
-- Both 'Z' and '+00:00' are accepted as valid UTC markers in ISO-8601 strings
-- The test_data module's get_test_time() is recommended for consistent timezone handling
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, List, Optional
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -127,13 +117,15 @@ class TestResult:
             raise ValueError(f"Invalid data for TestResult. Expected dict, got {type(data)}")
 
         start_time = datetime.fromisoformat(data["start_time"])
-        stop_time = datetime.fromisoformat(data["stop_time"])
+        stop_time = datetime.fromisoformat(data["stop_time"]) if data.get("stop_time") else None
+        duration = data.get("duration")
 
         return cls(
             nodeid=data["nodeid"],
             outcome=TestOutcome.from_str(data["outcome"]),
             start_time=start_time,
             stop_time=stop_time,
+            duration=duration,
             caplog=data.get("caplog", ""),
             capstderr=data.get("capstderr", ""),
             capstdout=data.get("capstdout", ""),
@@ -271,69 +263,3 @@ class TestSession:
             )
 
         self.rerun_test_groups.append(group)
-
-
-@dataclass
-class TestHistory:
-    """Collection of test sessions grouped by SUT with efficient access patterns."""
-
-    __test__ = False  # Tell Pytest this is NOT a test class
-
-    def __init__(self):
-        # Main storage: Dict[sut_name, List[TestSession]]
-        self._sessions_by_sut: Dict[str, List[TestSession]] = {}
-        # Cache of latest sessions: Dict[sut_name, TestSession]
-        self._latest_by_sut: Dict[str, TestSession] = {}
-        # Cache for global session list
-        self._all_sessions_cache: Optional[List[TestSession]] = None
-
-    def add_test_session(self, session: TestSession) -> None:
-        """Add a test session to the appropriate SUT group."""
-        if not isinstance(session, TestSession):
-            raise ValueError(
-                f"Invalid test session {session}; must be a TestSession object, instead was type {type(session)}"
-            )
-
-        # Initialize SUT list if needed
-        if session.sut_name not in self._sessions_by_sut:
-            self._sessions_by_sut[session.sut_name] = []
-
-        # Add session
-        self._sessions_by_sut[session.sut_name].append(session)
-
-        # Update latest session cache for this SUT
-        current_latest = self._latest_by_sut.get(session.sut_name)
-        if not current_latest or session.session_start_time > current_latest.session_start_time:
-            self._latest_by_sut[session.sut_name] = session
-
-        # Invalidate global cache
-        self._all_sessions_cache = None
-
-    def get_sut_sessions(self, sut_name: str) -> List[TestSession]:
-        """Get all sessions for a specific SUT, chronologically ordered."""
-        sessions = self._sessions_by_sut.get(sut_name, [])
-        return sorted(sessions, key=lambda s: s.session_start_time)
-
-    def get_sut_latest_session(self, sut_name: str) -> Optional[TestSession]:
-        """Get the most recent session for a specific SUT."""
-        return self._latest_by_sut.get(sut_name)
-
-    @property
-    def sessions(self) -> List[TestSession]:
-        """Get all sessions across all SUTs, sorted by start time (cached)."""
-        if self._all_sessions_cache is None:
-            all_sessions = []
-            for sut_sessions in self._sessions_by_sut.values():
-                all_sessions.extend(sut_sessions)
-            self._all_sessions_cache = sorted(all_sessions, key=lambda s: s.session_start_time)
-        return self._all_sessions_cache.copy()  # Return copy to prevent cache modification
-
-    def latest_session(self) -> Optional[TestSession]:
-        """Get the most recent session across all SUTs."""
-        if not self._latest_by_sut:
-            return None
-        return max(self._latest_by_sut.values(), key=lambda s: s.session_start_time)
-
-    def get_sut_names(self) -> List[str]:
-        """Get list of all SUT names."""
-        return list(self._sessions_by_sut.keys())

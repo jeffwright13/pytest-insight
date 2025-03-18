@@ -232,7 +232,7 @@ if result.new_failures:
 # %%
 print("\nAnalyzing slow tests with context:")
 slow_tests = (
-    query.having_warnings(True)  # Session-level: has warnings
+    query.with_warning(True)  # Session-level: has warnings
     .filter_by_test()  # Start test filtering
     .with_duration(10.0, float("inf"))  # Test-level: >10s runtime
     .apply()  # Back to session context

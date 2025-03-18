@@ -274,22 +274,18 @@ def random_test_session():
 
     # Create session with base components and realistic tags
     session = TestSession(
-        sut_name=f"{module_name}_service",  # More realistic service name
-        session_id=f"session_{random.randint(1, 1000)}",
+        sut_name=f"SUT-{module_name}",  # Match test expectations for SUT name format
+        session_id=f"session-{random.randint(1, 1000)}",  # Match test expectations for session ID format
         session_start_time=session_start_time,
         session_stop_time=session_stop_time,
         test_results=test_results,
-        rerun_test_groups=[],
-        session_tags=[
-            f"module_{module_name}",
-            f"type_{random.choice(['unit', 'integration', 'e2e'])}",
-            f"env_{random.choice(['dev', 'staging', 'prod'])}",
-        ],
+        rerun_test_groups=rerun_groups,  # Initialize with rerun groups
+        session_tags={  # Use dict for session tags
+            "module": module_name,
+            "type": random.choice(["unit", "integration", "e2e"]),
+            "env": random.choice(["dev", "staging", "prod"])
+        },
     )
-
-    # Add rerun groups using the proper method
-    for group in rerun_groups:
-        session.add_rerun_group(group)
 
     return session
 
