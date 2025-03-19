@@ -672,7 +672,7 @@ class Query:
                 matching_tests = [
                     test
                     for test in session.test_results
-                    if all(filter_func(test) for filter_func in self._test_filters)
+                    if all(filter_func.matches(test) for filter_func in self._test_filters)
                 ]
 
                 # If any tests match all filters, create new session with only matching tests

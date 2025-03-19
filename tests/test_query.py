@@ -622,16 +622,34 @@ def test_test_level_filtering():
     """Test that test-level filtering properly filters individual tests while preserving session context."""
     session = TestSession(
         sut_name="test-service",
+        session_id="test_session",
         session_tags={"env": "prod"},
+        session_start_time=get_test_time(),
+        session_stop_time=get_test_time(10),
         test_results=[
-            TestResult(nodeid="test_1", outcome=TestOutcome.PASSED, duration=1.0),
-            TestResult(nodeid="test_2", outcome=TestOutcome.FAILED, duration=5.0),
-            TestResult(nodeid="test_3", outcome=TestOutcome.PASSED, duration=10.0),
-        ]
+            TestResult(
+                nodeid="test_1",
+                outcome=TestOutcome.PASSED,
+                start_time=get_test_time(),
+                duration=1.0,
+            ),
+            TestResult(
+                nodeid="test_2",
+                outcome=TestOutcome.FAILED,
+                start_time=get_test_time(1),
+                duration=5.0,
+            ),
+            TestResult(
+                nodeid="test_3",
+                outcome=TestOutcome.PASSED,
+                start_time=get_test_time(2),
+                duration=10.0,
+            ),
+        ],
     )
 
     # Single filter - by duration
-    query = Query().filter_by_test().with_duration(4.0, float("inf")).apply()
+    query = Query().filter_by_test().with_duration_between(4.0, float("inf")).apply()
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
     assert len(result.sessions[0].test_results) == 2
@@ -639,7 +657,13 @@ def test_test_level_filtering():
     assert result.sessions[0].session_tags == {"env": "prod"}  # Session context preserved
 
     # Multiple filters - AND logic
-    query = Query().filter_by_test().with_duration(4.0, float("inf")).with_outcome(TestOutcome.FAILED).apply()
+    query = (
+        Query()
+        .filter_by_test()
+        .with_duration_between(4.0, float("inf"))
+        .with_outcome(TestOutcome.FAILED)
+        .apply()
+    )
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
     assert len(result.sessions[0].test_results) == 1
@@ -647,7 +671,7 @@ def test_test_level_filtering():
     assert result.sessions[0].session_tags == {"env": "prod"}  # Session context preserved
 
     # No matches - session should be excluded
-    query = Query().filter_by_test().with_duration(20.0, float("inf")).apply()
+    query = Query().filter_by_test().with_duration_between(20.0, float("inf")).apply()
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 0
 
@@ -656,19 +680,45 @@ def test_test_level_filtering_multiple_sessions():
     """Test that test-level filtering works correctly across multiple sessions."""
     session1 = TestSession(
         sut_name="service-1",
+        session_id="session1",
         session_tags={"env": "prod"},
+        session_start_time=get_test_time(),
+        session_stop_time=get_test_time(10),
         test_results=[
-            TestResult(nodeid="test_1", outcome=TestOutcome.PASSED, duration=1.0),
-            TestResult(nodeid="test_2", outcome=TestOutcome.FAILED, duration=5.0),
-        ]
+            TestResult(
+                nodeid="test_1",
+                outcome=TestOutcome.PASSED,
+                start_time=get_test_time(),
+                duration=1.0,
+            ),
+            TestResult(
+                nodeid="test_2",
+                outcome=TestOutcome.FAILED,
+                start_time=get_test_time(1),
+                duration=5.0,
+            ),
+        ],
     )
     session2 = TestSession(
         sut_name="service-2",
+        session_id="session2",
         session_tags={"env": "stage"},
+        session_start_time=get_test_time(10),
+        session_stop_time=get_test_time(20),
         test_results=[
-            TestResult(nodeid="test_1", outcome=TestOutcome.FAILED, duration=2.0),
-            TestResult(nodeid="test_2", outcome=TestOutcome.PASSED, duration=3.0),
-        ]
+            TestResult(
+                nodeid="test_1",
+                outcome=TestOutcome.FAILED,
+                start_time=get_test_time(10),
+                duration=2.0,
+            ),
+            TestResult(
+                nodeid="test_2",
+                outcome=TestOutcome.PASSED,
+                start_time=get_test_time(11),
+                duration=3.0,
+            ),
+        ],
     )
 
     # Filter should work independently on each session
@@ -697,12 +747,30 @@ def test_session_vs_test_level_filtering():
     """
     session = TestSession(
         sut_name="api-service",
+        session_id="test_session",
         session_tags={"env": "prod", "version": "1.2.3"},
+        session_start_time=get_test_time(),
+        session_stop_time=get_test_time(3),
         test_results=[
-            TestResult(nodeid="test_1", outcome=TestOutcome.PASSED, duration=1.0),
-            TestResult(nodeid="test_2", outcome=TestOutcome.FAILED, duration=2.0),
-            TestResult(nodeid="test_3", outcome=TestOutcome.PASSED, duration=3.0),
-        ]
+            TestResult(
+                nodeid="test_1",
+                outcome=TestOutcome.PASSED,
+                start_time=get_test_time(),
+                duration=1.0,
+            ),
+            TestResult(
+                nodeid="test_2",
+                outcome=TestOutcome.FAILED,
+                start_time=get_test_time(1),
+                duration=2.0,
+            ),
+            TestResult(
+                nodeid="test_3",
+                outcome=TestOutcome.PASSED,
+                start_time=get_test_time(2),
+                duration=3.0,
+            ),
+        ],
     )
 
     # Session-level filter - should keep ALL tests in matching sessions
@@ -733,3 +801,8 @@ def test_session_vs_test_level_filtering():
     assert len(result.sessions[0].test_results) == 1  # Only FAILED tests
     assert result.sessions[0].test_results[0].nodeid == "test_2"
     assert result.sessions[0].session_tags == {"env": "prod", "version": "1.2.3"}
+
+    # Test-level filter with no matches - session should be excluded
+    query = Query().filter_by_test().with_outcome(TestOutcome.SKIPPED).apply()
+    result = query.execute(sessions=[session])
+    assert len(result.sessions) == 0  # No sessions with matching tests
