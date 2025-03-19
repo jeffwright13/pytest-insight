@@ -191,9 +191,9 @@ class TestSession:
     session_start_time: datetime
     session_stop_time: Optional[datetime] = None
     session_duration: Optional[float] = None
-    test_results: List[TestResult] = field(default_factory=list)  # Fix: use =list
-    rerun_test_groups: List[RerunTestGroup] = field(default_factory=list)  # Fix: use =list
-    session_tags: Dict[str, str] = field(default_factory=dict)  # Fix: use =dict
+    test_results: List[TestResult] = field(default_factory=list)
+    rerun_test_groups: List[RerunTestGroup] = field(default_factory=list)
+    session_tags: Dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
         """Calculate timing information once at initialization."""

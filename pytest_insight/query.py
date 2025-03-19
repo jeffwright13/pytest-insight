@@ -302,11 +302,13 @@ class QueryResult:
     returns sessions containing matching tests, never isolated TestResult objects.
     """
 
-    def __init__(self, sessions: List[TestSession], execution_time: float = 0.0):
-        """Initialize query result."""
-        self.sessions: List[TestSession] = sessions
-        self.execution_time: float = execution_time
-        self._matched_nodeids: Optional[Set[str]] = None
+    def __init__(self, sessions: List[TestSession]):
+        """Initialize QueryResult.
+
+        Args:
+            sessions: List of matching TestSession objects
+        """
+        self.sessions = sessions
 
     @property
     def empty(self) -> bool:
@@ -317,17 +319,6 @@ class QueryResult:
     def total_count(self) -> int:
         """Get total number of matching sessions."""
         return len(self.sessions)
-
-    @property
-    def matched_nodeids(self) -> Set[str]:
-        """Get set of unique test nodeids from matching sessions."""
-        if self._matched_nodeids is None:
-            self._matched_nodeids = {
-                test.nodeid
-                for session in self.sessions
-                for test in session.test_results
-            }
-        return self._matched_nodeids
 
     def __iter__(self):
         """Iterate over matching sessions."""
@@ -553,19 +544,9 @@ class QueryTestFilter:
         if not self.filters:
             return self.query
 
-        def session_filter(session: TestSession) -> bool:
-            """Check if session contains any matching tests."""
-            if not session.test_results:
-                return False
-
-            # Check each test against all filters
-            for test in session.test_results:
-                # A test must match ALL filters to be included
-                if all(f.matches(test) for f in self.filters):
-                    return True
-            return False
-
-        self.query._session_filters.append(session_filter)
+        # Store test filters directly in Query._test_filters
+        # This ensures test-level filtering creates new sessions with only matching tests
+        self.query._test_filters.extend(self.filters)
         return self.query
 
     def to_dict(self) -> Dict:
@@ -669,8 +650,6 @@ class Query:
         Raises:
             InvalidQueryParameterError: If sessions list is empty or contains invalid sessions.
         """
-        start_time: datetime = datetime.now(ZoneInfo("UTC"))
-
         if sessions is None:
             sessions = self.storage.load_sessions()
         elif not sessions:
@@ -710,10 +689,7 @@ class Query:
                     sessions_with_matching_tests.append(filtered_session)
             filtered_sessions = sessions_with_matching_tests
 
-        execution_time: float = (
-            datetime.now(ZoneInfo("UTC")) - start_time
-        ).total_seconds()
-        return QueryResult(filtered_sessions, execution_time)
+        return QueryResult(filtered_sessions)
 
     def to_dict(self) -> Dict:
         """Convert query to dictionary."""

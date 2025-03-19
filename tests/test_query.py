@@ -276,7 +276,7 @@ def test_query_execution():
                 longreprtext="AssertionError: Expected success",
             ),
         ],
-        session_tags={"api", "test"},
+        session_tags={"type": "api", "component": "test"},
         rerun_test_groups=[],
     )
 
@@ -290,7 +290,7 @@ def test_query_execution():
     assert result.sessions[0].test_results[0].nodeid == "test_api.py::test_get"
     assert result.sessions[0].test_results[1].nodeid == "test_core.py::test_error"
     # Session metadata is preserved
-    assert result.sessions[0].session_tags == {"api", "test"}
+    assert result.sessions[0].session_tags == {"type": "api", "component": "test"}
 
     # Test output pattern matching
     query = Query().filter_by_test().with_log_containing("Error").apply()
@@ -309,7 +309,7 @@ def test_query_execution():
     # Both tests should be included (session context preserved)
     assert len(result.sessions[0].test_results) == 2
     # Session metadata is preserved
-    assert result.sessions[0].session_tags == {"api", "test"}
+    assert result.sessions[0].session_tags == {"type": "api", "component": "test"}
 
     # Test complex query chain (pattern + outcome)
     query = (
@@ -367,7 +367,7 @@ def test_query_order_preservation():
                 longreprtext="error 3",
             ),
         ],
-        session_tags={"tag1", "tag2"},
+        session_tags={"a": "1", "b": "2", "c": "3"},
         rerun_test_groups=[],
     )
 
@@ -376,13 +376,16 @@ def test_query_order_preservation():
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
     assert len(result.sessions[0].test_results) == 1
+    assert result.sessions[0].test_results[0].nodeid == "test_2.py::test_second"
+    assert result.sessions[0].session_tags == {"a": "1", "b": "2", "c": "3"}
+    assert result.sessions[0].rerun_test_groups == session.rerun_test_groups
 
     # Verify session context is preserved
     filtered_session = result.sessions[0]
     assert filtered_session.sut_name == session.sut_name
     assert filtered_session.session_id == session.session_id
     assert filtered_session.session_start_time == session.session_start_time
-    assert filtered_session.session_tags == session.session_tags
+    assert filtered_session.session_tags == {"a": "1", "b": "2", "c": "3"}
     assert filtered_session.rerun_test_groups == session.rerun_test_groups
 
     # Verify test order matches original for matching tests
@@ -400,6 +403,28 @@ def test_query_order_preservation():
     assert len(result.sessions) == 1
     nodeids = [t.nodeid for t in result.sessions[0].test_results]
     assert nodeids == ["test_1.py::test_first", "test_3.py::test_third"]
+
+    # Verify A == B is same as B == A
+    query1 = (
+        Query()
+        .filter_by_test()
+        .with_pattern("test", field_name="caplog")
+        .with_outcome(TestOutcome.PASSED)
+        .apply()
+    )
+    query2 = (
+        Query()
+        .filter_by_test()
+        .with_outcome(TestOutcome.PASSED)
+        .with_pattern("test", field_name="caplog")
+        .apply()
+    )
+    result1 = query1.execute(sessions=[session])
+    result2 = query2.execute(sessions=[session])
+    assert len(result1.sessions) == len(result2.sessions)
+    nodeids1 = [t.nodeid for t in result1.sessions[0].test_results]
+    nodeids2 = [t.nodeid for t in result2.sessions[0].test_results]
+    assert nodeids1 == nodeids2
 
 
 def test_query_filtered_sessions():
@@ -450,7 +475,7 @@ def test_query_filtered_sessions():
                 longreprtext="AssertionError",
             ),
         ],
-        session_tags={"api", "v1"},
+        session_tags={"type": "api", "version": "v1"},
         rerun_test_groups=[],
     )
 
@@ -471,7 +496,7 @@ def test_query_filtered_sessions():
                 longreprtext="",
             ),
         ],
-        session_tags={"db", "v1"},
+        session_tags={"type": "db", "version": "v1"},
         rerun_test_groups=[],
     )
 
@@ -485,7 +510,7 @@ def test_query_filtered_sessions():
     assert result.sessions[0].test_results[0].nodeid == "test_api.py::test_get"
     assert result.sessions[0].test_results[1].nodeid == "test_api.py::test_post"
     # Session metadata is preserved
-    assert result.sessions[0].session_tags == {"api", "v1"}
+    assert result.sessions[0].session_tags == {"type": "api", "version": "v1"}
 
     # Test pattern matching with multiple sessions
     query = Query().filter_by_test().with_pattern("test", field_name="caplog").apply()
@@ -499,8 +524,8 @@ def test_query_filtered_sessions():
     assert result.sessions[0].test_results[1].nodeid == "test_api.py::test_post"
     assert result.sessions[1].test_results[0].nodeid == "test_db.py::test_query"
     # Session metadata is preserved for both sessions
-    assert result.sessions[0].session_tags == {"api", "v1"}
-    assert result.sessions[1].session_tags == {"db", "v1"}
+    assert result.sessions[0].session_tags == {"type": "api", "version": "v1"}
+    assert result.sessions[1].session_tags == {"type": "db", "version": "v1"}
 
     # Test pattern matching with multiple fields
     query = (
@@ -517,7 +542,25 @@ def test_query_filtered_sessions():
     # Original test order is maintained
     assert result.sessions[0].test_results[0].nodeid == "test_db.py::test_query"
     # Session metadata is preserved
-    assert result.sessions[0].session_tags == {"db", "v1"}
+    assert result.sessions[0].session_tags == {"type": "db", "version": "v1"}
+
+    # Test session tag filtering
+    query = Query().with_tag("type", "api")
+    result = query.execute(sessions=[session1, session2])
+    assert len(result.sessions) == 1
+    assert result.sessions[0].session_id == session1.session_id
+
+    # Test session tag filtering with multiple sessions
+    query = Query().with_tag("version", "v1")
+    result = query.execute(sessions=[session1, session2])
+    assert len(result.sessions) == 2
+    assert result.sessions[0].session_id == session1.session_id
+    assert result.sessions[1].session_id == session2.session_id
+
+    # Test session tag filtering with no matches
+    query = Query().with_tag("type", "unknown")
+    result = query.execute(sessions=[session1, session2])
+    assert len(result.sessions) == 0
 
 
 def test_query_invalid_sessions():
@@ -573,3 +616,120 @@ def test_query_invalid_sessions():
     query.with_pattern("test", field_name="nodeid").apply()
     assert len(query.filters) == 1
     assert isinstance(query.filters[0], ShellPatternFilter)
+
+
+def test_test_level_filtering():
+    """Test that test-level filtering properly filters individual tests while preserving session context."""
+    session = TestSession(
+        sut_name="test-service",
+        session_tags={"env": "prod"},
+        test_results=[
+            TestResult(nodeid="test_1", outcome=TestOutcome.PASSED, duration=1.0),
+            TestResult(nodeid="test_2", outcome=TestOutcome.FAILED, duration=5.0),
+            TestResult(nodeid="test_3", outcome=TestOutcome.PASSED, duration=10.0),
+        ]
+    )
+
+    # Single filter - by duration
+    query = Query().filter_by_test().with_duration(4.0, float("inf")).apply()
+    result = query.execute(sessions=[session])
+    assert len(result.sessions) == 1
+    assert len(result.sessions[0].test_results) == 2
+    assert {t.nodeid for t in result.sessions[0].test_results} == {"test_2", "test_3"}
+    assert result.sessions[0].session_tags == {"env": "prod"}  # Session context preserved
+
+    # Multiple filters - AND logic
+    query = Query().filter_by_test().with_duration(4.0, float("inf")).with_outcome(TestOutcome.FAILED).apply()
+    result = query.execute(sessions=[session])
+    assert len(result.sessions) == 1
+    assert len(result.sessions[0].test_results) == 1
+    assert result.sessions[0].test_results[0].nodeid == "test_2"
+    assert result.sessions[0].session_tags == {"env": "prod"}  # Session context preserved
+
+    # No matches - session should be excluded
+    query = Query().filter_by_test().with_duration(20.0, float("inf")).apply()
+    result = query.execute(sessions=[session])
+    assert len(result.sessions) == 0
+
+
+def test_test_level_filtering_multiple_sessions():
+    """Test that test-level filtering works correctly across multiple sessions."""
+    session1 = TestSession(
+        sut_name="service-1",
+        session_tags={"env": "prod"},
+        test_results=[
+            TestResult(nodeid="test_1", outcome=TestOutcome.PASSED, duration=1.0),
+            TestResult(nodeid="test_2", outcome=TestOutcome.FAILED, duration=5.0),
+        ]
+    )
+    session2 = TestSession(
+        sut_name="service-2",
+        session_tags={"env": "stage"},
+        test_results=[
+            TestResult(nodeid="test_1", outcome=TestOutcome.FAILED, duration=2.0),
+            TestResult(nodeid="test_2", outcome=TestOutcome.PASSED, duration=3.0),
+        ]
+    )
+
+    # Filter should work independently on each session
+    query = Query().filter_by_test().with_outcome(TestOutcome.FAILED).apply()
+    result = query.execute(sessions=[session1, session2])
+    assert len(result.sessions) == 2
+
+    # Session 1 should have only test_2
+    assert len(result.sessions[0].test_results) == 1
+    assert result.sessions[0].test_results[0].nodeid == "test_2"
+    assert result.sessions[0].session_tags == {"env": "prod"}
+
+    # Session 2 should have only test_1
+    assert len(result.sessions[1].test_results) == 1
+    assert result.sessions[1].test_results[0].nodeid == "test_1"
+    assert result.sessions[1].session_tags == {"env": "stage"}
+
+
+def test_session_vs_test_level_filtering():
+    """Test the difference between session-level and test-level filtering.
+
+    Key aspects of the query system's two-level design:
+    1. Session-Level: Filter entire test sessions (keeps all tests)
+    2. Test-Level: Filter by test properties (keeps matching tests only)
+    Both preserve full session context.
+    """
+    session = TestSession(
+        sut_name="api-service",
+        session_tags={"env": "prod", "version": "1.2.3"},
+        test_results=[
+            TestResult(nodeid="test_1", outcome=TestOutcome.PASSED, duration=1.0),
+            TestResult(nodeid="test_2", outcome=TestOutcome.FAILED, duration=2.0),
+            TestResult(nodeid="test_3", outcome=TestOutcome.PASSED, duration=3.0),
+        ]
+    )
+
+    # Session-level filter - should keep ALL tests in matching sessions
+    query = Query().with_tag("env", "prod")
+    result = query.execute(sessions=[session])
+    assert len(result.sessions) == 1
+    assert len(result.sessions[0].test_results) == 3  # All tests kept
+    assert result.sessions[0].session_tags == {"env": "prod", "version": "1.2.3"}
+
+    # Test-level filter - should keep ONLY matching tests
+    query = Query().filter_by_test().with_outcome(TestOutcome.PASSED).apply()
+    result = query.execute(sessions=[session])
+    assert len(result.sessions) == 1
+    assert len(result.sessions[0].test_results) == 2  # Only PASSED tests
+    assert {t.nodeid for t in result.sessions[0].test_results} == {"test_1", "test_3"}
+    assert result.sessions[0].session_tags == {"env": "prod", "version": "1.2.3"}
+
+    # Combined filtering - session filtered first, then tests
+    query = (
+        Query()
+        .with_tag("env", "prod")  # Session-level: keeps whole session
+        .filter_by_test()
+        .with_outcome(TestOutcome.FAILED)  # Test-level: keeps only FAILED tests
+        .apply()
+    )
+    result = query.execute(sessions=[session])
+    assert len(result.sessions) == 1
+    assert len(result.sessions[0].test_results) == 1  # Only FAILED tests
+    assert result.sessions[0].test_results[0].nodeid == "test_2"
+    assert result.sessions[0].session_tags == {"env": "prod", "version": "1.2.3"}
