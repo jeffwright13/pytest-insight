@@ -1,12 +1,38 @@
-"""Query system for filtering and retrieving test sessions.
+"""Query class for filtering and retrieving test sessions.
 
-This module implements a two-level filtering design:
+The Query class implements a two-level filtering design:
 1. Session-Level: Filter entire test sessions (SUT, time range, warnings)
-2. Test-Level: Filter by individual test properties while preserving session context
+2. Test-Level: Filter by test properties (pattern, duration, outcome)
 
-Both levels return full TestSession objects to preserve session context (warnings,
-reruns, relationships). Test-level filtering returns sessions containing matching
-tests, never isolated TestResult objects.
+Key Behaviors:
+1. Session-Level Filtering:
+   - Returns complete TestSession objects that match session criteria
+   - No modification of test results within matching sessions
+
+2. Test-Level Filtering:
+   - Returns NEW TestSession objects containing only matching tests
+   - Preserves session metadata (ID, tags, timing, etc.)
+   - A session is included if it has at least one matching test
+   - Non-matching tests are excluded from the results
+
+Examples:
+    # Session-level only
+    # Get TestSessions for the last 7 days for all SUTs with 'service' in name
+    query.for_sut("service").in_last_days(7).execute()
+
+    # Test-level with context
+    query.filter_by_test()  # Returns new sessions with only matching tests
+        .with_duration_between(10.0, float("inf"))
+        .with_outcome(TestOutcome.FAILED)
+        .apply()  # Back to session context
+        .execute()
+
+    # Combining session and test filters
+    query.for_sut("service").in_last_days(14)
+        .filter_by_test()
+        .with_duration_between(5.0, 10.0)
+        .apply()
+        .execute()
 """
 
 import dataclasses
@@ -342,7 +368,9 @@ class QueryTestFilter:
 
     IMPORTANT: QueryTestFilter returns full TestSession objects, never isolated
     TestResult objects. This preserves session context (warnings, reruns, relationships)
-    for analysis.
+    for analysis. Note that the returned sessions may not contain all tests from the
+    original sessions, only those that match the test filters, and as such represent
+    NEW sessions with only matching tests.
     """
 
     def __init__(self, query: "Query"):
@@ -378,7 +406,8 @@ class QueryTestFilter:
             use_regex: Whether to use regex matching (default: False)
 
         Returns:
-            QueryTestFilter instance for chaining
+            QueryTestFilter instance for chaining (may be one of two types: substring
+            or regex pattern filter)
 
         Raises:
             TypeError: If field_name is not provided
@@ -580,11 +609,18 @@ class Query:
 
     The Query class implements a two-level filtering design:
     1. Session-Level: Filter entire test sessions (SUT, time range, warnings)
-    2. Test-Level: Filter by individual test properties while preserving session context
+    2. Test-Level: Filter by test properties (pattern, duration, outcome)
 
-    Both levels return full TestSession objects to preserve session context (warnings,
-    reruns, relationships). Test-level filtering returns sessions containing matching
-    tests, never isolated TestResult objects.
+    Key Behaviors:
+    1. Session-Level Filtering:
+       - Returns complete TestSession objects that match session criteria
+       - No modification of test results within matching sessions
+
+    2. Test-Level Filtering:
+       - Returns NEW TestSession objects containing only matching tests
+       - Preserves session metadata (ID, tags, timing, etc.)
+       - A session is included if it has at least one matching test
+       - Non-matching tests are excluded from the results
 
     Examples:
         # Session-level only
@@ -592,7 +628,7 @@ class Query:
         query.for_sut("service").in_last_days(7).execute()
 
         # Test-level with context
-        query.filter_by_test()  # Filters sessions by test criteria
+        query.filter_by_test()  # Returns new sessions with only matching tests
             .with_duration_between(10.0, float("inf"))
             .with_outcome(TestOutcome.FAILED)
             .apply()  # Back to session context

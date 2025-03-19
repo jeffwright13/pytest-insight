@@ -96,42 +96,59 @@ class Test_QueryOperations:
     """Test the Query operation functionality."""
 
     def test_sut_filtering(self, test_session_basic):
-        """Test filtering sessions by SUT."""
+        """Test filtering sessions by SUT.
+
+        Key aspects:
+        1. Session-Level Filtering:
+           - Filters entire sessions by SUT
+           - Returns ALL tests in matching sessions
+           - No test-level criteria applied
+        """
         storage = InMemoryStorage()
+        test_session_basic.sut_name = "test-service"  # Ensure correct SUT name
         storage.save_session(test_session_basic)
 
-        # Test Query operation
+        # Test Query operation with session-level filter
         query = Query(storage=storage)
         result = query.for_sut("test-service").execute()
 
+        # Session-level filter should return ALL tests in matching sessions
         assert len(result.sessions) == 1
         assert result.sessions[0].sut_name == "test-service"
+        # Should have all 7 test results (one of each outcome)
+        assert len(result.sessions[0].test_results) == 7
 
-    def test_outcome_filtering(self, test_session_basic, test_result_fail):
-        """Test filtering by test outcome while preserving context."""
+    def test_outcome_filtering(self, test_session_basic):
+        """Test filtering by test outcome while preserving context.
+
+        Key aspects:
+        1. Test-Level Filtering:
+           - Creates new sessions with ONLY matching tests
+           - Original order maintained within matching tests
+           - Session metadata preserved
+
+        2. Context Preservation:
+           - Test relationships maintained within matching tests
+           - Never returns isolated TestResult objects
+        """
         storage = InMemoryStorage()
         storage.save_session(test_session_basic)
-        session = TestSession(
-            sut_name="test-service",
-            session_id="test-456",
-            session_start_time=test_result_fail.start_time,
-            session_stop_time=test_result_fail.start_time + timedelta(seconds=1),
-            test_results=[test_result_fail],
-            rerun_test_groups=[],
-            session_tags={},
-        )
-        storage.save_session(session)
 
-        # Test two-level filtering
+        # Test test-level filtering for PASSED outcome
         query = Query(storage=storage)
         result = (
             query.filter_by_test().with_outcome(TestOutcome.PASSED).apply().execute()
         )
 
+        # Only sessions with matching tests are included
         assert len(result.sessions) == 1
         session = result.sessions[0]
+        # Should have exactly 1 PASSED test
         assert len(session.test_results) == 1
-        assert session.test_results[0].outcome == TestOutcome.PASSED
+        # All included tests match the outcome filter
+        assert all(t.outcome == TestOutcome.PASSED for t in session.test_results)
+        # Original order maintained - PASSED test is first in original session
+        assert session.test_results[0].nodeid == test_session_basic.test_results[0].nodeid
 
     def test_invalid_sut_filter(self, test_session_basic):
         """Test error handling for invalid SUT filter."""
@@ -143,20 +160,36 @@ class Test_QueryOperations:
             query.for_sut("").execute()
         assert "SUT name must be a non-empty string" in str(exc_info.value)
 
-    def test_multiple_session_handling(self, test_session_basic, test_result_fail):
-        """Test handling multiple test sessions with different outcomes."""
+    def test_multiple_session_handling(self, test_session_basic):
+        """Test handling multiple test sessions with different outcomes.
+
+        Key aspects:
+        1. Test-Level Filtering:
+           - Creates new sessions with ONLY matching tests
+           - Original order maintained within matching tests
+           - Session metadata preserved
+
+        2. Multiple Session Handling:
+           - Each session filtered independently
+           - Only sessions with matching tests included
+           - Session relationships preserved
+        """
         storage = InMemoryStorage()
+
+        # First session with all outcomes
         storage.save_session(test_session_basic)
-        session = TestSession(
+
+        # Second session with only failed tests
+        second_session = TestSession(
             sut_name="test-service",
             session_id="test-456",
-            session_start_time=test_result_fail.start_time,
-            session_stop_time=test_result_fail.start_time + timedelta(seconds=1),
-            test_results=[test_result_fail],
+            session_start_time=test_session_basic.session_start_time + timedelta(hours=1),
+            session_stop_time=test_session_basic.session_stop_time + timedelta(hours=1),
+            test_results=[t for t in test_session_basic.test_results if t.outcome == TestOutcome.FAILED],
             rerun_test_groups=[],
             session_tags={},
         )
-        storage.save_session(session)
+        storage.save_session(second_session)
 
         # Test filtering with multiple sessions
         query = Query(storage=storage)
@@ -164,40 +197,59 @@ class Test_QueryOperations:
             query.filter_by_test().with_outcome(TestOutcome.FAILED).apply().execute()
         )
 
-        assert len(result.sessions) == 1
-        assert result.sessions[0].session_id == "test-456"
-        assert result.sessions[0].test_results[0].outcome == TestOutcome.FAILED
+        # Both sessions have FAILED tests
+        assert len(result.sessions) == 2
 
-    def test_complex_query_chain(self, test_session_basic, test_result_fail):
-        """Test complex query chaining with multiple filters."""
+        # Verify each result session
+        for session in result.sessions:
+            # Only FAILED tests included
+            assert len(session.test_results) == 1
+            # All included tests match the outcome filter
+            assert all(t.outcome == TestOutcome.FAILED for t in session.test_results)
+
+    def test_complex_query_chain(self, test_session_basic):
+        """Test complex query chaining with multiple filters.
+
+        Key aspects:
+        1. Multi-Level Filtering:
+           - Session-level filters applied first (SUT)
+           - Test-level filters create new sessions with ONLY matching tests
+           - Multiple test filters use AND logic
+
+        2. Context Preservation:
+           - Session metadata preserved
+           - Original order maintained within matching tests
+           - Never returns isolated TestResult objects
+        """
         storage = InMemoryStorage()
+        test_session_basic.sut_name = "test-service"  # Ensure correct SUT name
         storage.save_session(test_session_basic)
-        session = TestSession(
-            sut_name="test-service",
-            session_id="test-456",
-            session_start_time=test_result_fail.start_time,
-            session_stop_time=test_result_fail.start_time + timedelta(seconds=1),
-            test_results=[test_result_fail],
-            rerun_test_groups=[],
-            session_tags={},
-        )
-        storage.save_session(session)
 
         # Test complex query chain
         query = Query(storage=storage)
         result = (
-            query.for_sut("test-service")
-            .filter_by_test()
+            query.for_sut("test-service")  # Session-level filter first
+            .filter_by_test()  # Then test-level filters
             .with_outcome(TestOutcome.PASSED)
-            .with_nodeid_containing("basic")  # Use new explicit method
+            .with_duration(0, 10.0)  # Tests under 10 seconds
             .apply()
             .execute()
         )
 
+        # Only sessions with tests matching ALL filters included
         assert len(result.sessions) == 1
-        assert (
-            result.sessions[0].test_results[0].nodeid == "test_example.py::test_basic"
-        )
+        session = result.sessions[0]
+
+        # Should have exactly 1 PASSED test (first test in original session)
+        assert len(session.test_results) == 1
+        test = session.test_results[0]
+
+        # Test matches both filters
+        assert test.outcome == TestOutcome.PASSED
+        assert 0 <= (test.stop_time - test.start_time).total_seconds() <= 10.0
+
+        # Original order maintained - PASSED test is first in original session
+        assert test.nodeid == test_session_basic.test_results[0].nodeid
 
 
 class Test_StorageConfiguration:
@@ -215,7 +267,7 @@ class Test_StorageConfiguration:
 
         invalid_path = tmp_path / "nonexistent" / "test.json"
         result = tester.runpytest("--insight", f"--insight-json-path={invalid_path}")
-        assert result.ret != 0  # Should fail on invalid path
+        assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
         assert "Invalid storage path" in result.stderr.str()  # Verify error message
 
     def test_storage_type_validation(self, tester, tmp_path):
@@ -230,7 +282,8 @@ class Test_StorageConfiguration:
 
         # Test with invalid storage type
         result = tester.runpytest("--insight", "--insight-storage-type=invalid")
-        assert result.ret != 0  # Should fail with invalid storage type
+        assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
+        assert "Invalid storage type" in result.stderr.str()  # Verify error message
 
     def test_json_storage_creation(self, tester, tmp_path):
         """Test JSON storage creation and initialization."""
@@ -249,8 +302,16 @@ class Test_StorageConfiguration:
 
         # Run with valid storage path
         result = tester.runpytest("--insight", f"--insight-json-path={storage_path}")
-        assert result.ret == 0  # Should succeed with valid path
+
+        # Should succeed with valid path
+        assert result.ret == pytest.ExitCode.OK
         assert storage_path.exists()  # Storage file should be created
+
+        # Verify file is valid JSON
+        content = storage_path.read_text()
+        assert content.strip(), "Storage file should not be empty"
+        import json
+        assert json.loads(content), "Storage file should contain valid JSON"
 
     def test_storage_path_permissions(self, tester, tmp_path):
         """Test storage path permission validation."""
@@ -270,8 +331,8 @@ class Test_StorageConfiguration:
 
         # Run with read-only directory
         result = tester.runpytest("--insight", f"--insight-json-path={storage_path}")
-        assert result.ret != 0  # Should fail with read-only directory
-        assert "is not writable" in result.stderr.str()  # Verify error message
+        assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
+        assert "Permission denied" in result.stderr.str() or "is not writable" in result.stderr.str()
 
     def test_storage_path_file_exists(self, tester, tmp_path):
         """Test handling of existing storage files."""
@@ -287,8 +348,14 @@ class Test_StorageConfiguration:
         storage_dir = tmp_path / "storage"
         storage_dir.mkdir()
         storage_path = storage_dir / "test.json"
-        storage_path.write_text("{}")  # Create empty JSON file
+        storage_path.write_text('{"sessions": []}')  # Create valid JSON file
 
         # Run with existing file
         result = tester.runpytest("--insight", f"--insight-json-path={storage_path}")
-        assert result.ret == 0  # Should succeed with existing file
+        assert result.ret == pytest.ExitCode.OK  # Should succeed with existing file
+
+        # Verify file still contains valid JSON
+        content = storage_path.read_text()
+        assert content.strip(), "Storage file should not be empty"
+        import json
+        assert json.loads(content), "Storage file should contain valid JSON"

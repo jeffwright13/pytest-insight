@@ -208,6 +208,10 @@ def test_result_fail(get_test_time):
     """
     result = mock_test_result_fail()
     result.start_time = get_test_time()
+    result.stop_time = get_test_time(1)  # 1 second later
+    result.capstdout = "Standard output from failed test"
+    result.capstderr = "Standard error from failed test"
+    result.caplog = "Log output from failed test"
     return result
 
 

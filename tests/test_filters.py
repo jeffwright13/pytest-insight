@@ -90,7 +90,7 @@ def test_outcome_filter(test_result_pass, test_result_fail):
 
     Test-level filter that:
     1. Returns sessions containing ANY matching test
-    2. Preserves ALL tests in matching sessions
+    2. Creates new sessions with only matching tests
     3. Maintains session context (metadata, relationships)
     """
     session = TestSession(
@@ -108,21 +108,21 @@ def test_outcome_filter(test_result_pass, test_result_fail):
     result = query.filter_by_test().with_outcome(TestOutcome.PASSED).apply().execute()
 
     assert len(result.sessions) == 1
-    # Session context preserved - both tests still present
-    assert len(result.sessions[0].test_results) == 2
-    # At least one test matches the filter
-    assert any(t.outcome == TestOutcome.PASSED for t in result.sessions[0].test_results)
+    # Only matching tests included in new session
+    assert len(result.sessions[0].test_results) == 1
+    # Test matches the filter
+    assert all(t.outcome == TestOutcome.PASSED for t in result.sessions[0].test_results)
     # Session metadata preserved
     assert result.sessions[0].session_id == "test-123"
     assert result.sessions[0].sut_name == "test_sut"
 
 
-def test_warnings_filter(test_result_warning):
+def test_warnings_filter(test_result_warning, test_result_pass):
     """Test filtering by warning presence using custom filter.
 
     Test-level filter that:
     1. Returns sessions containing ANY test with warning
-    2. Preserves ALL tests in matching sessions
+    2. Creates new sessions with only tests containing warnings
     3. Maintains session context (metadata, relationships)
     """
     session = TestSession(
@@ -130,17 +130,17 @@ def test_warnings_filter(test_result_warning):
         session_id="test-123",
         session_start_time=test_result_warning.start_time,  # Use fixture's timezone-aware time
         session_stop_time=test_result_warning.start_time + timedelta(minutes=1),
-        test_results=[test_result_warning],
+        test_results=[test_result_warning, test_result_pass],  # Add a test without warning
         rerun_test_groups=[],
     )
     storage = InMemoryStorage()
     storage.save_session(session)
 
     query = Query(storage=storage)
-    result = query.with_warning().execute()
+    result = query.filter_by_test().with_warning().apply().execute()
 
     assert len(result.sessions) == 1
-    # Session context preserved
+    # Only tests with warnings included
     assert len(result.sessions[0].test_results) == 1
     # Test has warning
     assert result.sessions[0].test_results[0].has_warning
@@ -245,15 +245,17 @@ def test_multiple_filters(test_session_no_reruns, get_test_time, mocker):
     Demonstrates the two-level filtering design:
     1. Session-Level Filters:
        - Filter entire test sessions (SUT, time range)
-       - All tests in matching sessions preserved
+       - No modification of test results in matching sessions
+
     2. Test-Level Filters:
-       - Filter by test properties while preserving session context
-       - Returns sessions containing matching tests
-       - Never returns isolated TestResult objects
+       - Creates new sessions with only matching tests
+       - Preserves session metadata (tags, IDs)
+       - Returns sessions that have at least one matching test
+
     3. Context Preservation:
        - Session metadata (tags, IDs) preserved
-       - Test relationships maintained
-       - Warnings and reruns preserved
+       - Test relationships maintained within matching tests
+       - Original order of matching tests preserved
     """
     # Mock datetime.now to return a fixed time relative to our test timestamps
     mock_now = get_test_time(3600)  # 1 hour after base time
@@ -307,16 +309,16 @@ def test_multiple_filters(test_session_no_reruns, get_test_time, mocker):
     )
 
     assert not result.empty
-    assert len(result.sessions) > 0
+    assert len(result.sessions) == 1  # Session is included because it has a matching test
     filtered_session = result.sessions[0]
 
     # Verify session-level filters worked
     assert filtered_session.sut_name == "test_sut"
     assert (mock_now - filtered_session.session_start_time).days < 7
 
-    # Verify test-level filter worked but preserved context
-    assert len(filtered_session.test_results) == 2  # Both tests preserved
-    assert any(t.outcome == TestOutcome.PASSED for t in filtered_session.test_results)
+    # Verify test-level filter worked - only matching tests included
+    assert len(filtered_session.test_results) == 1  # Only the passing test
+    assert all(t.outcome == TestOutcome.PASSED for t in filtered_session.test_results)
 
     # Verify session metadata preserved
     assert filtered_session.session_id == "test-123"
