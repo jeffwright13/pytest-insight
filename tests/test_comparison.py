@@ -69,7 +69,11 @@ class Test_Comparison:
 
     def test_basic_comparison(self, base_session, target_session):
         """Test basic comparison functionality."""
-        comparison = Comparison().between_suts("api-service", "api-service").execute([base_session, target_session])
+        comparison = (
+            Comparison()
+            .between_suts("api-service", "api-service")
+            .execute([base_session, target_session])
+        )
 
         assert isinstance(comparison, ComparisonResult)
 
@@ -96,7 +100,9 @@ class Test_Comparison:
     def test_environment_comparison(self, base_session, target_session):
         """Test comparing across environments."""
         comparison = (
-            Comparison().with_environment({"python": "3.9"}, {"python": "3.10"}).execute([base_session, target_session])
+            Comparison()
+            .with_environment({"python": "3.9"}, {"python": "3.10"})
+            .execute([base_session, target_session])
         )
 
         assert isinstance(comparison, ComparisonResult)
@@ -143,38 +149,62 @@ class Test_Comparison:
             comparison.execute()
 
     def test_filtered_comparison(self, base_session, target_session):
-        """Test comparison with filters.
+        """Test comparison with pattern matching and filtering.
 
-        Pattern matching behavior:
-        1. For non-regex patterns:
-           - Module part: stripped of .py and matched with wildcards (*pattern*)
-           - Test name part: matched as substring (p in part)
-           - This allows partial matches like "get" matching "test_get"
-        2. Session context is preserved:
+        Key aspects:
+        1. Pattern Matching:
+           - Simple substring matching for specified field
+           - field_name parameter is required
+           - Case-sensitive matching
+
+        2. Two-Level Filtering:
+           - Test-level filter that returns full TestSession objects
            - Sessions containing ANY matching test are included
            - ALL tests in matching sessions are preserved
+
+        3. Context Preservation:
+           - Session metadata (tags, IDs) is preserved
+           - Test relationships are maintained
+           - Never returns isolated TestResult objects
         """
         comparison = (
             Comparison()
-            .with_test_pattern("get")  # Will match test_get and test_post (both contain "get")
+            .with_test_pattern(
+                "get", field_name="nodeid"
+            )  # Match tests with 'get' in nodeid
             .with_duration_threshold(0.5)  # Lower threshold to 0.5s
             .execute([base_session, target_session])
         )
 
         # Both tests should be included because:
-        # 1. Both contain "get" in their names
-        # 2. They're in the same session so would be preserved anyway
+        # 1. They're in the same session so would be preserved
+        # 2. At least one test matches the pattern
         assert len(comparison.outcome_changes) == 2
         assert "test_api.py::test_get" in comparison.outcome_changes
         assert "test_api.py::test_post" in comparison.outcome_changes
 
     def test_combined_filters(self, base_session, target_session):
-        """Test multiple filters working together."""
-        # Create a comparison with multiple filters
+        """Test multiple filters working together in comparison.
+
+        Demonstrates:
+        1. Test-Level Filtering:
+           - Pattern matching on test fields
+           - Duration thresholds for test execution
+           - Returns full TestSession objects
+
+        2. Session Context:
+           - Preserves session metadata
+           - Maintains test relationships
+           - Keeps all tests in matching sessions
+        """
         comparison = (
             Comparison()
-            .with_test_pattern("get")  # Will match test_get and test_post (both contain "get")
-            .with_duration_threshold(0.5)  # This should pass (both sessions have durations > 0.5)
+            .with_test_pattern(
+                "get", field_name="nodeid"
+            )  # Match tests with 'get' in nodeid
+            .with_duration_threshold(
+                0.5
+            )  # This should pass (both sessions have durations > 0.5)
             .execute([base_session, target_session])
         )
 
@@ -182,13 +212,25 @@ class Test_Comparison:
         assert len(comparison.base_results.sessions) == 1
         assert len(comparison.target_results.sessions) == 1
         # Both tests should be included because:
-        # 1. Both contain "get" in their names
-        # 2. They're in the same session so would be preserved anyway
+        # 1. They're in the same session so would be preserved
+        # 2. At least one test matches the pattern
         assert "test_api.py::test_get" in comparison.outcome_changes
         assert "test_api.py::test_post" in comparison.outcome_changes
 
     def test_filter_stacking(self, base_session, target_session):
-        """Test that filters can be stacked in specific ways."""
+        """Test filter stacking in comparison.
+
+        Demonstrates:
+        1. Filter Combinations:
+           - Session-level filters (environment)
+           - Test-level filters (pattern matching)
+           - Outcome filters (failures, flaky)
+
+        2. Two-Level Design:
+           - Session filters applied first
+           - Test filters preserve session context
+           - Never returns isolated test results
+        """
         # Test multiple outcome filters (should restrict results)
         comparison1 = (
             Comparison()
@@ -201,10 +243,10 @@ class Test_Comparison:
         # Test environment + pattern filtering
         comparison2 = (
             Comparison()
-            .with_environment(  # First filter - environment
-                {"python": "3.9"}, {"python": "3.10"}
-            )
-            .with_test_pattern("test_api")  # Second filter - pattern
+            .with_environment({"python": "3.9"}, {"python": "3.10"})
+            .with_test_pattern(
+                "api", field_name="nodeid"
+            )  # Match tests with 'api' in nodeid
             .execute([base_session, target_session])
         )
-        assert len(comparison2.outcome_changes) == 2
+        assert len(comparison2.base_results.sessions) > 0

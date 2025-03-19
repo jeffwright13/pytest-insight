@@ -1,3 +1,4 @@
+import os
 import sys
 import uuid
 from datetime import datetime, timedelta
@@ -88,7 +89,9 @@ def pytest_configure(config: Config):
                     config.warn(1, msg)
                     raise pytest.UsageError(msg)
                 elif not parent.is_dir():
-                    msg = f"Invalid storage path: {parent} exists but is not a directory"
+                    msg = (
+                        f"Invalid storage path: {parent} exists but is not a directory"
+                    )
                     config.warn(1, msg)
                     raise pytest.UsageError(msg)
                 elif not os.access(parent, os.W_OK):
@@ -116,7 +119,9 @@ def pytest_configure(config: Config):
 
 
 @pytest.hookimpl
-def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
+def pytest_terminal_summary(
+    terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config
+):
     """Process test results and show useful insights in terminal summary."""
     if not insight_enabled(config):
         return
@@ -124,7 +129,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     if not storage:  # Ensure storage is initialized
         return
 
-    sut_name = config.getoption("insight_sut", "default_sut")  # Get SUT name from pytest option
+    sut_name = config.getoption(
+        "insight_sut", "default_sut"
+    )  # Get SUT name from pytest option
     stats = terminalreporter.stats
     test_results = []
     session_start = None
@@ -132,7 +139,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
     # Process all test reports
     for outcome, reports in stats.items():
-        if not outcome:  # looking for empty string "", only populated with 'setup' and 'teardown' reports
+        if (
+            not outcome
+        ):  # looking for empty string "", only populated with 'setup' and 'teardown' reports
             continue
 
         if outcome == "warnings":
@@ -144,7 +153,8 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
             # Capture only call-phase or error failures from setup/teardown
             if report.when == "call" or (
-                report.when in ("setup", "teardown") and report.outcome in ("failed", "error")
+                report.when in ("setup", "teardown")
+                and report.outcome in ("failed", "error")
             ):
                 report_time = datetime.fromtimestamp(report.start)
 
@@ -157,7 +167,11 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 test_results.append(
                     TestResult(
                         nodeid=report.nodeid,
-                        outcome=(TestOutcome.from_str(outcome) if outcome else TestOutcome.SKIPPED),
+                        outcome=(
+                            TestOutcome.from_str(outcome)
+                            if outcome
+                            else TestOutcome.SKIPPED
+                        ),
                         start_time=report_time,
                         duration=report.duration,
                         caplog=getattr(report, "caplog", ""),
@@ -183,7 +197,10 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     session_end = session_end or datetime.now()
 
     # Generate unique session ID
-    session_id = (f"{sut_name}-{session_start.strftime('%Y%m%d-%H%M%S')}-" f"{str(uuid.uuid4())[:8]}").lower()
+    session_id = (
+        f"{sut_name}-{session_start.strftime('%Y%m%d-%H%M%S')}-"
+        f"{str(uuid.uuid4())[:8]}"
+    ).lower()
 
     # Create/process rerun test groups
     rerun_test_group_list = group_tests_into_rerun_test_groups(test_results)
@@ -206,8 +223,12 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     try:
         storage.save_session(session)
     except Exception as e:
-        terminalreporter.write_line(f"[pytest-insight] Error: Failed to save session - {str(e)}", red=True)
-        terminalreporter.write_line(f"[pytest-insight] Error details: {str(e)}", red=True)
+        terminalreporter.write_line(
+            f"[pytest-insight] Error: Failed to save session - {str(e)}", red=True
+        )
+        terminalreporter.write_line(
+            f"[pytest-insight] Error details: {str(e)}", red=True
+        )
 
     # Calculate insights
     total_tests = len(test_results)
@@ -246,7 +267,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
     write_section_header(terminalreporter, "Test Execution Summary")
     write_stat_line(terminalreporter, "Total Tests", str(total_tests), green=True)
-    write_stat_line(terminalreporter, "Total Duration", f"{total_duration:.2f}s", green=True)
+    write_stat_line(
+        terminalreporter, "Total Duration", f"{total_duration:.2f}s", green=True
+    )
     write_stat_line(terminalreporter, "Start Time", session_start.isoformat())
     write_stat_line(terminalreporter, "Stop Time", session_end.isoformat())
 
@@ -255,7 +278,11 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         if outcome not in ["warnings", ""]:
             count = len(reports)
             percentage = (count / total_tests) * 100 if total_tests > 0 else 0
-            value = f"{count} ({percentage:.1f}%)" if outcome.lower() not in ["rerun", "deselected"] else str(count)
+            value = (
+                f"{count} ({percentage:.1f}%)"
+                if outcome.lower() not in ["rerun", "deselected"]
+                else str(count)
+            )
             color_kwargs = {
                 "passed": {"green": True},
                 "failed": {"red": True},
@@ -265,7 +292,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 "xpassed": {"yellow": True},
                 "rerun": {"cyan": True},
             }.get(outcome, {})
-            write_stat_line(terminalreporter, f"{outcome.capitalize()}", value, **color_kwargs)
+            write_stat_line(
+                terminalreporter, f"{outcome.capitalize()}", value, **color_kwargs
+            )
 
     if rerun_groups:
         write_section_header(terminalreporter, "Rerun Analysis")
@@ -275,13 +304,21 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
             str(len(rerun_groups)),
             cyan=True,
         )
-        write_stat_line(terminalreporter, "Eventually Passed", str(len(flaky_tests)), green=True)
-        write_stat_line(terminalreporter, "Remained Failed", str(len(unstable_tests)), red=True)
+        write_stat_line(
+            terminalreporter, "Eventually Passed", str(len(flaky_tests)), green=True
+        )
+        write_stat_line(
+            terminalreporter, "Remained Failed", str(len(unstable_tests)), red=True
+        )
 
         if most_retried:
             write_section_header(terminalreporter, "Most Retried Tests")
             for group in most_retried:
-                color_kwargs = {"green": True} if group.final_outcome == TestOutcome.PASSED else {"red": True}
+                color_kwargs = (
+                    {"green": True}
+                    if group.final_outcome == TestOutcome.PASSED
+                    else {"red": True}
+                )
                 write_stat_line(
                     terminalreporter,
                     group.nodeid,
@@ -305,36 +342,6 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 **color_kwargs,
             )
 
-    # if
-
-    # TODO: Is this worth the reasl estate it takes up?
-    #
-    # --- Warnings Summary ---
-    #       Total: 42
-    #       Unique: 42
-    #
-    # if "warnings" in terminalreporter.stats:
-    #     num_warnings: int = len(terminalreporter.stats["warnings"])
-    #     unique_warnings: List[str] = []
-    #     for warning in terminalreporter.stats["warnings"]:
-    #         if warning.message not in unique_warnings:
-    #             unique_warnings.append(warning.message)
-    #     num_unique_warnings: int = len(unique_warnings)
-
-    #     write_section_header(terminalreporter, "Warnings Summary")
-    #     write_stat_line(
-    #         terminalreporter,
-    #         "Total",
-    #         str(num_warnings),
-    #         yellow=True,
-    #     )
-    #     write_stat_line(
-    #         terminalreporter,
-    #         "Unique",
-    #         str(num_unique_warnings),
-    #         yellow=True,
-    #     )
-
     # Add final spacing
     terminalreporter.write_line("")
 
@@ -355,7 +362,9 @@ def group_tests_into_rerun_test_groups(
     # First pass: group by nodeid
     for test_result in test_results:
         if test_result.nodeid not in rerun_test_groups:
-            rerun_test_groups[test_result.nodeid] = RerunTestGroup(nodeid=test_result.nodeid)
+            rerun_test_groups[test_result.nodeid] = RerunTestGroup(
+                nodeid=test_result.nodeid
+            )
         rerun_test_groups[test_result.nodeid].add_test(test_result)
 
     # Return only groups with reruns (more than one test)

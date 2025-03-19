@@ -42,7 +42,9 @@ def test_sut_filter(test_session_no_reruns):
     assert len(result.sessions) == 1
 
     # All tests preserved in matching sessions
-    assert len(result.sessions[0].test_results) == len(test_session_no_reruns.test_results)
+    assert len(result.sessions[0].test_results) == len(
+        test_session_no_reruns.test_results
+    )
 
 
 def test_days_filter(test_session_no_reruns, get_test_time, mocker):
@@ -66,7 +68,9 @@ def test_days_filter(test_session_no_reruns, get_test_time, mocker):
     assert len(result.sessions) == 1
 
     # All tests preserved in matching sessions
-    assert len(result.sessions[0].test_results) == len(test_session_no_reruns.test_results)
+    assert len(result.sessions[0].test_results) == len(
+        test_session_no_reruns.test_results
+    )
 
     # Test old session gets filtered out
     old_session = TestSession(
@@ -146,18 +150,23 @@ def test_warnings_filter(test_result_warning):
 
 
 def test_pattern_matching(get_test_time):
-    """Test pattern matching rules.
+    """Test pattern matching behavior in test-level filtering.
 
-    Pattern matching rules:
-    1. Non-regex patterns:
-       - Matches are done using fnmatch with wildcards (*pattern*)
-       - Pattern is matched against both file parts and test names separately
-       - File part has .py extension removed before matching
-       - Any part matching the pattern counts as a match
-    2. Session context preservation:
+    Key aspects:
+    1. Pattern Matching:
+       - Simple substring matching for specified field
+       - field_name parameter is required
+       - Case-sensitive matching
+
+    2. Two-Level Filtering:
+       - Test-level filter that returns full TestSession objects
        - Sessions containing ANY matching test are included
        - ALL tests in matching sessions are preserved
+
+    3. Context Preservation:
        - Session metadata (tags, IDs) is preserved
+       - Test relationships are maintained
+       - Never returns isolated TestResult objects
     """
     # Create test with module and test name parts
     test_in_module = TestResult(
@@ -165,7 +174,7 @@ def test_pattern_matching(get_test_time):
         outcome=TestOutcome.PASSED,
         start_time=get_test_time(),  # Base time
         duration=1.0,
-        caplog="",
+        caplog="API module test",
         capstderr="",
         capstdout="",
     )
@@ -174,7 +183,7 @@ def test_pattern_matching(get_test_time):
         outcome=TestOutcome.PASSED,
         start_time=get_test_time(5),  # 5 seconds later
         duration=1.0,
-        caplog="",
+        caplog="API name test",
         capstderr="",
         capstdout="",
     )
@@ -190,28 +199,44 @@ def test_pattern_matching(get_test_time):
     storage = InMemoryStorage()
     storage.save_session(session)
 
-    # Pattern matches module part (after .py strip)
+    # Test pattern matching in nodeid field
     query = Query(storage=storage)
-    result = query.filter_by_test().with_pattern("api").apply().execute()
+    result = (
+        query.filter_by_test()
+        .with_pattern("api", field_name="nodeid")
+        .apply()
+        .execute()
+    )
     assert len(result.sessions) == 1
     # Session context preserved - both tests still present
     assert len(result.sessions[0].test_results) == 2
-    # At least one test matches pattern in module part
-    assert any("test_api" in r.nodeid for r in result.sessions[0].test_results)
+    # Both tests match pattern in nodeid
+    assert all("api" in r.nodeid.lower() for r in result.sessions[0].test_results)
     # Session metadata preserved
     assert result.sessions[0].session_id == "test-123"
     assert result.sessions[0].sut_name == "test_sut"
 
-    # Pattern matches test name part
-    result = query.filter_by_test().with_pattern("endpoint").apply().execute()
+    # Test pattern matching in caplog field
+    query = Query(storage=storage)
+    result = (
+        query.filter_by_test()
+        .with_pattern("API", field_name="caplog")
+        .apply()
+        .execute()
+    )
     assert len(result.sessions) == 1
-    # Session context preserved - both tests still present
-    assert len(result.sessions[0].test_results) == 2
-    # At least one test matches pattern in test name
-    assert any("api_endpoint" in r.nodeid for r in result.sessions[0].test_results)
-    # Session metadata preserved
-    assert result.sessions[0].session_id == "test-123"
-    assert result.sessions[0].sut_name == "test_sut"
+    # Both tests match pattern in caplog
+    assert all("API" in r.caplog for r in result.sessions[0].test_results)
+
+    # Test case-sensitive pattern matching
+    query = Query(storage=storage)
+    result = (
+        query.filter_by_test()
+        .with_pattern("api", field_name="caplog")
+        .apply()
+        .execute()
+    )
+    assert len(result.sessions) == 0  # No matches due to case sensitivity
 
 
 def test_multiple_filters(test_session_no_reruns, get_test_time, mocker):

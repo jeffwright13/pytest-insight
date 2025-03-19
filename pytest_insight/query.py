@@ -9,21 +9,13 @@ reruns, relationships). Test-level filtering returns sessions containing matchin
 tests, never isolated TestResult objects.
 """
 
+import dataclasses
 import fnmatch
 import re
-from dataclasses import dataclass
-from dataclasses import field as field
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum, auto
-from typing import (
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Protocol,
-    Set,
-    Union,
-)
+from typing import Callable, Dict, List, Optional, Protocol, Set, Union
 from zoneinfo import ZoneInfo
 
 from pytest_insight.models import TestOutcome, TestResult, TestSession
@@ -41,9 +33,8 @@ class QueryExecutionError(Exception):
 class FilterType(Enum):
     """Types of filters supported by the query system."""
 
-    GLOB_PATTERN = auto()
-    REGEX_PATTERN = auto()
     SHELL_PATTERN = auto()
+    REGEX_PATTERN = auto()
     DURATION = auto()
     OUTCOME = auto()
     CUSTOM = auto()
@@ -68,25 +59,63 @@ class TestFilter(Protocol):
 
 @dataclass
 class ShellPatternFilter:
-    """Filter tests using shell-style pattern matching (like bash).
+    """Filter tests using simple substring pattern matching.
 
-    The pattern is used as provided with no automatic wildcard wrapping.
+    Key aspects:
+    1. Pattern Matching:
+       - Simple case-sensitive substring match
+       - field_name parameter is required
+       - No special handling for any fields
+       - No automatic wildcards or transformations
+
+    2. Field Validation:
+       - Field names must be valid test result attributes
+       - Common fields: nodeid, caplog, capstdout, capstderr, longreprtext
+       - Invalid fields raise InvalidQueryParameterError
+
+    3. Pattern Validation:
+       - Pattern must be a non-empty string
+       - No type conversion or coercion
+       - Invalid patterns raise InvalidQueryParameterError
     """
+
     pattern: str
-    field_name: str = "nodeid"
+    field_name: str
 
     ALLOWED_FIELDS = {"nodeid", "caplog", "capstderr", "capstdout", "longreprtext"}
 
     def __post_init__(self):
+        """Validate pattern and field name."""
+        if not isinstance(self.pattern, str):
+            raise InvalidQueryParameterError(
+                f"Invalid pattern type: {type(self.pattern)}"
+            )
+
+        if not self.pattern:
+            raise InvalidQueryParameterError("Pattern cannot be empty")
+
+        if not isinstance(self.field_name, str):
+            raise InvalidQueryParameterError(
+                f"Invalid field_name type: {type(self.field_name)}"
+            )
+
         if self.field_name not in self.ALLOWED_FIELDS:
             raise InvalidQueryParameterError(f"Invalid field name: {self.field_name}")
 
     def matches(self, test: TestResult) -> bool:
+        """Check if test matches the pattern using simple substring matching.
+
+        Args:
+            test: TestResult to check for match
+
+        Returns:
+            True if pattern is found in the specified field, False otherwise
+        """
         field_value = str(getattr(test, self.field_name, ""))
-        # Use the pattern exactly as given.
-        return fnmatch.fnmatch(field_value, self.pattern)
+        return self.pattern in field_value
 
     def to_dict(self) -> Dict[str, str]:
+        """Convert filter to dictionary for serialization."""
         return {
             "type": FilterType.SHELL_PATTERN.name,
             "pattern": self.pattern,
@@ -95,52 +124,25 @@ class ShellPatternFilter:
 
     @classmethod
     def from_dict(cls, data: Dict[str, str]) -> "ShellPatternFilter":
+        """Create filter from dictionary.
+
+        Args:
+            data: Dictionary containing filter parameters
+
+        Returns:
+            New ShellPatternFilter instance
+
+        Raises:
+            ValueError: If required parameters are missing
+            InvalidQueryParameterError: If parameters are invalid
+        """
         if "pattern" not in data:
             raise ValueError("Missing required key 'pattern' in data")
-        return cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
 
+        if "field_name" not in data:
+            raise ValueError("Missing required key 'field_name' in data")
 
-@dataclass
-class GlobPatternFilter:
-    """Filter tests by glob pattern matching against any string field.
-
-    Pattern matching rules:
-    - Pattern is wrapped with wildcards: *{pattern}*
-    - Pattern is matched against the specified field value
-    - For nodeid field, matches full nodeid as a single string
-    """
-    ALLOWED_FIELDS = {"nodeid", "caplog", "capstderr", "capstdout", "longreprtext"}
-
-    pattern: str
-    field_name: str = "nodeid"  # Default to nodeid for backward compatibility
-
-    def __post_init__(self):
-        """Validate field name."""
-        if self.field_name not in self.ALLOWED_FIELDS:
-            raise InvalidQueryParameterError(f"Invalid field name: {self.field_name}")
-
-    def matches(self, test: TestResult) -> bool:
-        """Check if the specified field value in `test` matches the given glob pattern."""
-
-        field_value = str(getattr(test, self.field_name, ""))
-        return fnmatch.fnmatch(field_value, f"*{self.pattern}*")
-
-    def to_dict(self) -> Dict[str, str]:
-        """Convert the filter object to a dictionary representation."""
-
-        return {
-            "type": FilterType.GLOB_PATTERN.name,
-            "pattern": self.pattern,
-            "field_name": self.field_name,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, str]) -> "GlobPatternFilter":
-        """Create a GlobPatternFilter instance from a dictionary."""
-
-        if "pattern" not in data:
-            raise ValueError("Missing required key 'pattern' in data")
-        return cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
+        return cls(pattern=data["pattern"], field_name=data["field_name"])
 
 
 @dataclass
@@ -183,7 +185,9 @@ class RegexPatternFilter:
     @classmethod
     def from_dict(cls, data: Dict) -> "RegexPatternFilter":
         """Create from dictionary."""
-        instance = cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
+        instance = cls(
+            pattern=data["pattern"], field_name=data.get("field_name", "nodeid")
+        )
         instance._compiled_regex = re.compile(instance.pattern)
         return instance
 
@@ -300,8 +304,8 @@ class QueryResult:
 
     def __init__(self, sessions: List[TestSession], execution_time: float = 0.0):
         """Initialize query result."""
-        self.sessions = sessions
-        self.execution_time = execution_time
+        self.sessions: List[TestSession] = sessions
+        self.execution_time: float = execution_time
         self._matched_nodeids: Optional[Set[str]] = None
 
     @property
@@ -318,7 +322,11 @@ class QueryResult:
     def matched_nodeids(self) -> Set[str]:
         """Get set of unique test nodeids from matching sessions."""
         if self._matched_nodeids is None:
-            self._matched_nodeids = {test.nodeid for session in self.sessions for test in session.test_results}
+            self._matched_nodeids = {
+                test.nodeid
+                for session in self.sessions
+                for test in session.test_results
+            }
         return self._matched_nodeids
 
     def __iter__(self):
@@ -351,42 +359,164 @@ class QueryTestFilter:
         self.query = query
         self.filters: List[TestFilter] = []
 
-    def with_pattern(self, pattern: str, field_name: str = "nodeid", use_regex: bool = False) -> "QueryTestFilter":
-        """Filter tests by pattern against any string field.
+    def with_pattern(
+        self, pattern: str, *, field_name: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
+        """Filter tests by pattern matching against any string field.
+
+        Key aspects:
+        1. Pattern Matching:
+           - Simple substring or regex pattern matching
+           - Case-sensitive comparison
+           - field_name parameter is required
+           - No special handling for any fields
+
+        2. Field Validation:
+           - Field names must be valid test result attributes
+           - Common fields: nodeid, caplog, capstdout, capstderr, longreprtext
+           - Invalid fields raise InvalidQueryParameterError
+
+        3. Filter Chain:
+           - Returns full TestSession objects
+           - Preserves session context (warnings, reruns)
+           - Never returns isolated TestResult objects
 
         Args:
-            pattern: Pattern to match
-            field_name: Field to match against (default: nodeid)
+            pattern: Pattern to match against test field
+            field_name: Field to match against (required)
             use_regex: Whether to use regex matching (default: False)
+
+        Returns:
+            QueryTestFilter instance for chaining
+
+        Raises:
+            TypeError: If field_name is not provided
+            InvalidQueryParameterError: If pattern or field_name is invalid
         """
-        filter_class = RegexPatternFilter if use_regex else GlobPatternFilter
+        if not isinstance(pattern, str):
+            raise InvalidQueryParameterError(f"Invalid pattern type: {type(pattern)}")
+
+        if not pattern:
+            raise InvalidQueryParameterError("Pattern cannot be empty")
+
+        if not isinstance(field_name, str):
+            raise InvalidQueryParameterError(
+                f"Invalid field_name type: {type(field_name)}"
+            )
+
+        filter_class = RegexPatternFilter if use_regex else ShellPatternFilter
         self.filters.append(filter_class(pattern=pattern, field_name=field_name))
         return self
 
-    def with_output_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
-        """Filter tests by pattern in stdout/stderr/log output.
+    def with_nodeid_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
+        """Filter tests by pattern in nodeid.
+
+        This is a convenience method that sets field_name="nodeid".
+        See with_pattern() for full pattern matching documentation.
+
+        Args:
+            pattern: Pattern to match against nodeid
+            use_regex: Whether to use regex matching (default: False)
+
+        Returns:
+            QueryTestFilter instance for chaining
+        """
+        return self.with_pattern(pattern, field_name="nodeid", use_regex=use_regex)
+
+    def with_output_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
+        """Filter tests by pattern in any output field.
 
         This is a convenience method that checks all output fields.
         An 'output field' in pytest is any of capstdout, capstderr, caplog.
+
+        Args:
+            pattern: Pattern to match in output
+            use_regex: Whether to use regex matching (default: False)
+
+        Returns:
+            QueryTestFilter instance for chaining
         """
-        filter_class = RegexPatternFilter if use_regex else GlobPatternFilter
-        # Add filters for all output fields
-        self.filters.extend(
-            [
-                filter_class(pattern=pattern, field_name="capstdout"),
-                filter_class(pattern=pattern, field_name="capstderr"),
-                filter_class(pattern=pattern, field_name="caplog"),
-            ]
+        for fld in ["capstdout", "capstderr", "caplog"]:
+            self.with_pattern(pattern, field_name=fld, use_regex=use_regex)
+        return self
+
+    def with_error_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
+        """Filter tests by pattern in error output (longreprtext).
+
+        This is a convenience method that sets field_name="longreprtext".
+        See with_pattern() for full pattern matching documentation.
+
+        Args:
+            pattern: Pattern to match in error output
+            use_regex: Whether to use regex matching (default: False)
+
+        Returns:
+            QueryTestFilter instance for chaining
+        """
+        return self.with_pattern(
+            pattern, field_name="longreprtext", use_regex=use_regex
         )
-        return self
 
-    def with_error_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
-        """Filter tests by pattern in error output (longreprtext)."""
-        filter_class = RegexPatternFilter if use_regex else GlobPatternFilter
-        self.filters.append(filter_class(pattern=pattern, field_name="longreprtext"))
-        return self
+    def with_log_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
+        """Filter tests by pattern in log output (caplog).
 
-    def with_duration_between(self, min_seconds: float, max_seconds: float) -> "QueryTestFilter":
+        This is a convenience method that sets field_name="caplog".
+        See with_pattern() for full pattern matching documentation.
+
+        Args:
+            pattern: Pattern to match in log output
+            use_regex: Whether to use regex matching (default: False)
+
+        Returns:
+            QueryTestFilter instance for chaining
+        """
+        return self.with_pattern(pattern, field_name="caplog", use_regex=use_regex)
+
+    def with_stdout_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
+        """Filter tests by pattern in stdout (capstdout).
+
+        This is a convenience method that sets field_name="capstdout".
+        See with_pattern() for full pattern matching documentation.
+
+        Args:
+            pattern: Pattern to match in stdout
+            use_regex: Whether to use regex matching (default: False)
+
+        Returns:
+            QueryTestFilter instance for chaining
+        """
+        return self.with_pattern(pattern, field_name="capstdout", use_regex=use_regex)
+
+    def with_stderr_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
+        """Filter tests by pattern in stderr (capstderr).
+
+        This is a convenience method that sets field_name="capstderr".
+        See with_pattern() for full pattern matching documentation.
+
+        Args:
+            pattern: Pattern to match in stderr
+            use_regex: Whether to use regex matching (default: False)
+
+        Returns:
+            QueryTestFilter instance for chaining
+        """
+        return self.with_pattern(pattern, field_name="capstderr", use_regex=use_regex)
+
+    def with_duration_between(
+        self, min_seconds: float, max_seconds: float
+    ) -> "QueryTestFilter":
         """Filter tests by duration range."""
         self.filters.append(DurationFilter(min_seconds, max_seconds))
         return self
@@ -396,13 +526,30 @@ class QueryTestFilter:
         self.filters.append(OutcomeFilter(outcome))
         return self
 
-    def with_custom_filter(self, predicate: Callable[[TestResult], bool], name: str) -> "QueryTestFilter":
+    def with_custom_filter(
+        self, predicate: Callable[[TestResult], bool], name: str
+    ) -> "QueryTestFilter":
         """Add custom test filter."""
         self.filters.append(CustomFilter(predicate, name))
         return self
 
     def apply(self) -> "Query":
-        """Apply test filters and return to session context."""
+        """Apply test filters and return to session context.
+
+        Key aspects:
+        1. Filter Logic:
+           - All filters use AND logic
+           - A test must match ALL filters to be included
+           - No special handling for output vs non-output filters
+
+        2. Context Preservation:
+           - Returns full TestSession objects
+           - Preserves session metadata (warnings, reruns)
+           - Never returns isolated TestResult objects
+
+        Returns:
+            Query instance for chaining
+        """
         if not self.filters:
             return self.query
 
@@ -411,32 +558,11 @@ class QueryTestFilter:
             if not session.test_results:
                 return False
 
-            # Group filters by type: output filters and other filters.
-            # In pytest, output filters are capstdout, capstderr, caplog.
-            # All other filters are considered non-output filters.
-            output_filters = []
-            other_filters = []
-            for f in self.filters:
-                if isinstance(f, (GlobPatternFilter, RegexPatternFilter)) and f.field_name in [
-                    "capstdout",
-                    "capstderr",
-                    "caplog",
-                ]:
-                    output_filters.append(f)
-                else:
-                    other_filters.append(f)
-
-            # Check each test
+            # Check each test against all filters
             for test in session.test_results:
-                # All non-output filters must match
-                if not all(f.matches(test) for f in other_filters):
-                    continue
-
-                # At least one output filter must match (if any output filters exist)
-                if output_filters and not any(f.matches(test) for f in output_filters):
-                    continue
-
-                return True
+                # A test must match ALL filters to be included
+                if all(f.matches(test) for f in self.filters):
+                    return True
             return False
 
         self.query._session_filters.append(session_filter)
@@ -444,23 +570,27 @@ class QueryTestFilter:
 
     def to_dict(self) -> Dict:
         """Convert filters to dictionary."""
-        return {"filters": [f.to_dict() for f in self.filters if not isinstance(f, CustomFilter)]}
+        return {
+            "filters": [
+                f.to_dict() for f in self.filters if not isinstance(f, CustomFilter)
+            ]
+        }
 
     @classmethod
     def from_dict(cls, data: Dict, query: "Query") -> "QueryTestFilter":
         """Create filters from dictionary."""
         filter_types = {
-            FilterType.GLOB_PATTERN.name: GlobPatternFilter,
+            FilterType.SHELL_PATTERN.name: ShellPatternFilter,
             FilterType.REGEX_PATTERN.name: RegexPatternFilter,
             FilterType.DURATION.name: DurationFilter,
             FilterType.OUTCOME.name: OutcomeFilter,
         }
 
         instance = cls(query)
-        for filter_data in data["filters"]:
-            filter_type = filter_data["type"]
-            filter_class = filter_types[filter_type]
-            instance.filters.append(filter_class.from_dict(filter_data))
+        for filter_type_data in data["filters"]:
+            filter_type = filter_type_data["type"]
+            filter_cls = filter_types[filter_type]
+            instance.filters.append(filter_cls.from_dict(filter_type_data))
         return instance
 
 
@@ -483,6 +613,7 @@ class Query:
         # Test-level with context
         query.filter_by_test()  # Filters sessions by test criteria
             .with_duration_between(10.0, float("inf"))
+            .with_outcome(TestOutcome.FAILED)
             .apply()  # Back to session context
             .execute()
 
@@ -507,7 +638,26 @@ class Query:
         self.storage = storage or get_storage_instance()
 
     def execute(self, sessions: Optional[List[TestSession]] = None) -> QueryResult:
-        """Execute query and return results.
+        """Execute query and return results as QueryResult class instance.
+
+        Key aspects:
+        1. Two-Level Filtering:
+           - Session-level filters (SUT, time range, warnings)
+           - Test-level filters (pattern, duration, outcome)
+           - Returns full TestSession objects
+
+        2. Test Filter Behavior:
+           - Multiple test filters use AND logic
+           - A test must match ALL filters to be included
+           - Example: with_pattern("DB", field="caplog") AND
+                     with_pattern("stdout", field="capstdout")
+           - No partial matches allowed
+
+        3. Context Preservation:
+           - Sessions containing ANY matching test are included
+           - Only matching tests are kept, in their original order
+           - Session metadata (tags, IDs) is maintained
+           - Test relationships are preserved
 
         Args:
             sessions: Optional list of sessions to query. If not provided,
@@ -517,31 +667,78 @@ class Query:
             QueryResult containing filtered sessions.
 
         Raises:
-            QueryExecutionError: If sessions are invalid.
+            InvalidQueryParameterError: If sessions list is empty or contains invalid sessions.
         """
         start_time: datetime = datetime.now(ZoneInfo("UTC"))
 
         if sessions is None:
             sessions = self.storage.load_sessions()
-        elif not isinstance(sessions, list) or not all(isinstance(s, TestSession) for s in sessions):
-            raise QueryExecutionError("Invalid session type")
+        elif not sessions:
+            raise InvalidQueryParameterError("Sessions list cannot be empty")
+        elif not isinstance(sessions, list) or not all(
+            isinstance(s, TestSession) for s in sessions
+        ):
+            raise InvalidQueryParameterError("Invalid session type")
 
+        # Apply session-level filters
         filtered_sessions: List[TestSession] = sessions
         for filter_func in self._session_filters:
             filtered_sessions = [s for s in filtered_sessions if filter_func(s)]
 
+        # Apply test-level filters
         if self._test_filters:
-            filtered_sessions = [
-                session
-                for session in filtered_sessions
-                if any(  # ANY test in session matches...
-                    all(filter_func(test) for filter_func in self._test_filters)  # ALL filters
+            sessions_with_matching_tests = []
+            for session in filtered_sessions:
+                # Find tests that match all filters, preserving order
+                matching_tests = [
+                    test
                     for test in session.test_results
-                )
-            ]
+                    if all(filter_func(test) for filter_func in self._test_filters)
+                ]
 
-        execution_time: float = (datetime.now(ZoneInfo("UTC")) - start_time).total_seconds()
+                # If any tests match all filters, create new session with only matching tests
+                if matching_tests:
+                    filtered_session = TestSession(
+                        sut_name=session.sut_name,
+                        session_id=session.session_id,
+                        session_start_time=session.session_start_time,
+                        session_stop_time=session.session_stop_time,
+                        test_results=matching_tests,  # Only matching tests in original order
+                        rerun_test_groups=session.rerun_test_groups,
+                        session_tags=session.session_tags,
+                    )
+                    sessions_with_matching_tests.append(filtered_session)
+            filtered_sessions = sessions_with_matching_tests
+
+        execution_time: float = (
+            datetime.now(ZoneInfo("UTC")) - start_time
+        ).total_seconds()
         return QueryResult(filtered_sessions, execution_time)
+
+    def to_dict(self) -> Dict:
+        """Convert query to dictionary."""
+        data = {"version": 1}
+        if self._test_filters:
+            data["test_filters"] = [f.to_dict() for f in self._test_filters]
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict, storage: Optional[BaseStorage] = None) -> "Query":
+        """Create query from dictionary."""
+        query = cls(storage)
+        filter_map = {
+            FilterType.SHELL_PATTERN.name: ShellPatternFilter,
+            FilterType.REGEX_PATTERN.name: RegexPatternFilter,
+            FilterType.DURATION.name: DurationFilter,
+            FilterType.OUTCOME.name: OutcomeFilter,
+        }
+
+        if "test_filters" in data:
+            for filter_type_data in data["test_filters"]:
+                filter_type = filter_type_data["type"]
+                filter_cls = filter_map[filter_type]
+                query._test_filters.append(filter_cls.from_dict(filter_type_data))
+        return query
 
     def filter_by_test(self) -> QueryTestFilter:
         """Start building test-level filters.
@@ -551,8 +748,7 @@ class Query:
 
         Example:
             query.filter_by_test()
-                .with_pattern("test_api")
-                .with_duration_between(3.0, 10.0)
+                .with_duration_between(10.0, float("inf"))
                 .with_outcome(TestOutcome.FAILED)
                 .apply()
                 .execute()
@@ -630,6 +826,24 @@ class Query:
         self._session_filters.append(lambda s: s.session_start_time >= cutoff)
         return self
 
+    def in_last_seconds(self, seconds: int) -> "Query":
+        """Filter sessions from last N seconds.
+
+        Args:
+            seconds: Number of seconds to look back.
+
+        Returns:
+            Query instance for chaining.
+
+        Raises:
+            InvalidQueryParameterError: If seconds is not a non-negative integer.
+        """
+        if not isinstance(seconds, int) or seconds < 0:
+            raise InvalidQueryParameterError("Seconds must be a non-negative integer")
+        cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(seconds=seconds)
+        self._session_filters.append(lambda s: s.session_start_time >= cutoff)
+        return self
+
     def date_range(self, start: datetime, end: datetime) -> "Query":
         """Filter sessions between two dates.
 
@@ -646,9 +860,13 @@ class Query:
         if not isinstance(start, datetime) or not isinstance(end, datetime):
             raise InvalidQueryParameterError("Start and end must be datetime objects")
         if bool(start.tzinfo) != bool(end.tzinfo):
-            raise InvalidQueryParameterError("Start and end dates must both be naive or both be timezone-aware")
+            raise InvalidQueryParameterError(
+                "Start and end dates must both be naive or both be timezone-aware"
+            )
         if start.tzinfo and end.tzinfo and start.tzinfo != end.tzinfo:
-            raise InvalidQueryParameterError("Start and end dates must be in the same timezone")
+            raise InvalidQueryParameterError(
+                "Start and end dates must be in the same timezone"
+            )
         if start > end:
             raise InvalidQueryParameterError("Start date must be before end date")
         self._session_filters.append(lambda s: start <= s.session_start_time <= end)
@@ -675,7 +893,8 @@ class Query:
 
         self._session_filters.append(
             lambda s: any(
-                (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == outcome_str
+                (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome))
+                == outcome_str
                 for t in s.test_results
             )
         )
@@ -690,7 +909,9 @@ class Query:
         Returns:
             Query instance for chaining.
         """
-        self._session_filters.append(lambda s: any(t.has_warning for t in s.test_results) == has_warnings)
+        self._session_filters.append(
+            lambda s: any(t.has_warning for t in s.test_results) == has_warnings
+        )
         return self
 
     def with_reruns(self, has_reruns: bool = True) -> "Query":
@@ -719,7 +940,11 @@ class Query:
         """
         if not isinstance(pattern, str) or not pattern.strip():
             raise InvalidQueryParameterError("Test pattern must be a non-empty string")
-        self._session_filters.append(lambda s: any(pattern == t.nodeid or pattern in t.nodeid for t in s.test_results))
+        self._session_filters.append(
+            lambda s: any(
+                pattern == t.nodeid or pattern in t.nodeid for t in s.test_results
+            )
+        )
         return self
 
     def before(self, timestamp: datetime) -> "Query":
@@ -796,7 +1021,9 @@ class Query:
             InvalidQueryParameterError: If pattern is empty.
         """
         if not isinstance(pattern, str) or not pattern.strip():
-            raise InvalidQueryParameterError("Session ID pattern must be a non-empty string")
+            raise InvalidQueryParameterError(
+                "Session ID pattern must be a non-empty string"
+            )
         self._session_filters.append(lambda s: fnmatch.fnmatch(s.session_id, pattern))
         return self
 
@@ -820,19 +1047,3 @@ class Query:
 
         self._session_filters.append(lambda s: s.session_tags.get(tag_key) == tag_value)
         return self
-
-    def to_dict(self) -> Dict:
-        """Convert query to dictionary."""
-        data = {"version": 1}
-        if self._test_filter:
-            data["test_filter"] = self._test_filter.to_dict()
-        return data
-
-    @classmethod
-    def from_dict(cls, data: Dict, storage: Optional[BaseStorage] = None) -> "Query":
-        """Create query from dictionary."""
-        query = cls(storage)
-        if "test_filter" in data:
-            query._test_filter = QueryTestFilter.from_dict(data["test_filter"], query)
-            query._test_filter.apply()
-        return query
