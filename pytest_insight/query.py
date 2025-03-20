@@ -1,8 +1,8 @@
 """Query class for filtering and retrieving test sessions.
 
 The Query class implements a two-level filtering design:
-1. Session-Level: Filter entire test sessions (SUT, time range, warnings)
-2. Test-Level: Filter by test properties (pattern, duration, outcome)
+1. Session-Level: Filter entire test sessions (TestSession) (SUT, time range, warnings)
+2. Test-Level: Filter by test (TestResult) properties (pattern, duration, outcome)
 
 Key Behaviors:
 1. Session-Level Filtering:
