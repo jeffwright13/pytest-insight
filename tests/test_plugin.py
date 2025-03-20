@@ -1,5 +1,7 @@
 """Test the pytest-insight plugin functionality."""
 
+import os
+import stat
 from datetime import timedelta
 
 import pytest
@@ -147,8 +149,12 @@ class Test_QueryOperations:
         assert len(session.test_results) == 1
         # All included tests match the outcome filter
         assert all(t.outcome == TestOutcome.PASSED for t in session.test_results)
-        # Original order maintained - PASSED test is first in original session
+        # Original order maintained - PASSED test should be in original position
         assert session.test_results[0].nodeid == test_session_basic.test_results[0].nodeid
+        # Session metadata preserved
+        assert session.session_id == test_session_basic.session_id
+        assert session.session_tags == test_session_basic.session_tags
+        assert session.session_start_time == test_session_basic.session_start_time
 
     def test_invalid_sut_filter(self, test_session_basic):
         """Test error handling for invalid SUT filter."""

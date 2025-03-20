@@ -396,7 +396,7 @@ class QueryTestFilter:
            - Invalid fields raise InvalidQueryParameterError
 
         3. Filter Chain:
-           - Returns full TestSession objects
+           - Returns full TestSession objects, each populated with matching tests
            - Preserves session context (warnings, reruns)
            - Never returns isolated TestResult objects
 
@@ -410,22 +410,20 @@ class QueryTestFilter:
             or regex pattern filter)
 
         Raises:
-            TypeError: If field_name is not provided
-            InvalidQueryParameterError: If pattern or field_name is invalid
+            TypeError: If pattern is not a string
+            InvalidQueryParameterError: If field_name is invalid or empty
         """
         if not isinstance(pattern, str):
-            raise InvalidQueryParameterError(f"Invalid pattern type: {type(pattern)}")
+            raise TypeError(f"Invalid pattern type: {type(pattern)}")
+
+        if not isinstance(field_name, str) or not field_name:
+            raise InvalidQueryParameterError("field_name parameter is required")
 
         if not pattern:
             raise InvalidQueryParameterError("Pattern cannot be empty")
 
-        if not isinstance(field_name, str):
-            raise InvalidQueryParameterError(
-                f"Invalid field_name type: {type(field_name)}"
-            )
-
-        filter_class = RegexPatternFilter if use_regex else ShellPatternFilter
-        self.filters.append(filter_class(pattern=pattern, field_name=field_name))
+        filter_cls = RegexPatternFilter if use_regex else ShellPatternFilter
+        self.filters.append(filter_cls(pattern=pattern, field_name=field_name))
         return self
 
     def with_nodeid_containing(
@@ -534,22 +532,82 @@ class QueryTestFilter:
         """
         return self.with_pattern(pattern, field_name="capstderr", use_regex=use_regex)
 
+    def with_warning(self, has_warning: bool = True) -> "QueryTestFilter":
+        """Filter tests by warning presence.
+
+        Test-level filter that:
+        1. Returns sessions containing ANY test with warning
+        2. Creates new sessions with only tests containing warnings
+        3. Maintains session context (metadata, relationships)
+
+        Args:
+            has_warning: If True, keep tests with warnings. If False, keep tests without warnings.
+
+        Returns:
+            QueryTestFilter instance for chaining
+        """
+        def warning_predicate(test: TestResult) -> bool:
+            return bool(test.has_warning) == has_warning
+
+        return self.with_custom_filter(
+            warning_predicate,
+            name=f"warning_filter(has_warning={has_warning})"
+        )
+
     def with_duration_between(
         self, min_seconds: float, max_seconds: float
     ) -> "QueryTestFilter":
-        """Filter tests by duration range."""
+        """Filter tests by duration range.
+
+        Test-level filter that:
+        1. Returns sessions containing ANY test within the duration range
+        2. Creates new sessions with only tests within the duration range
+        3. Maintains session context (metadata, relationships)
+
+        Args:
+            min_seconds: Minimum duration in seconds
+            max_seconds: Maximum duration in seconds
+
+        Returns:
+            QueryTestFilter instance for chaining
+        """
         self.filters.append(DurationFilter(min_seconds, max_seconds))
         return self
 
     def with_outcome(self, outcome: Union[str, TestOutcome]) -> "QueryTestFilter":
-        """Filter tests by outcome."""
+        """Filter tests by outcome.
+
+        Test-level filter that:
+        1. Returns sessions containing ANY test with the specified outcome
+        2. Creates new sessions with only tests with the specified outcome
+        3. Maintains session context (metadata, relationships)
+
+        Args:
+            outcome: Test outcome to filter by (str or TestOutcome)
+
+        Returns:
+            QueryTestFilter instance for chaining
+        """
         self.filters.append(OutcomeFilter(outcome))
         return self
 
     def with_custom_filter(
         self, predicate: Callable[[TestResult], bool], name: str
     ) -> "QueryTestFilter":
-        """Add custom test filter."""
+        """Add custom test filter.
+
+        Test-level filter that:
+        1. Returns sessions containing ANY test matching the predicate
+        2. Creates new sessions with only tests matching the predicate
+        3. Maintains session context (metadata, relationships)
+
+        Args:
+            predicate: Callable that takes a TestResult and returns a boolean
+            name: Name for the filter (used in error messages)
+
+        Returns:
+            QueryTestFilter instance for chaining
+        """
         self.filters.append(CustomFilter(predicate, name))
         return self
 
@@ -563,7 +621,7 @@ class QueryTestFilter:
            - No special handling for output vs non-output filters
 
         2. Context Preservation:
-           - Returns full TestSession objects
+           - Returns full TestSession objects, each populated with matching tests
            - Preserves session metadata (warnings, reruns)
            - Never returns isolated TestResult objects
 
@@ -689,7 +747,7 @@ class Query:
         if sessions is None:
             sessions = self.storage.load_sessions()
         elif not sessions:
-            raise InvalidQueryParameterError("Sessions list cannot be empty")
+            raise InvalidQueryParameterError("No sessions provided")
         elif not isinstance(sessions, list) or not all(
             isinstance(s, TestSession) for s in sessions
         ):

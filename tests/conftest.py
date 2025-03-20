@@ -271,12 +271,12 @@ def test_session_basic(get_test_time):
     """Fixture that returns a mock test session with all possible outcomes.
     Uses get_test_time() to ensure timezone-aware timestamps.
     """
-    session = mock_test_session()
-    session.session_start_time = get_test_time()
-    session.session_stop_time = get_test_time(60)  # 1 minute later
-    for i, result in enumerate(session.test_results):
+    basic_session = mock_test_session()
+    basic_session.session_start_time = get_test_time()
+    basic_session.session_stop_time = get_test_time(60)  # 1 minute later
+    for i, result in enumerate(basic_session.test_results):
         result.start_time = get_test_time(i * 5)  # Space tests 5 seconds apart
-    return session
+    return basic_session
 
 
 @pytest.fixture
@@ -336,3 +336,65 @@ def test_session_with_reruns(test_session_basic, mocker: MockerFixture, get_test
 
     session.rerun_test_groups = [mock_rerun_group1, mock_rerun_group2]
     return session
+
+# Query Test Fixtures
+@pytest.fixture
+def api_session(get_test_time):
+    """Fixture providing a test session for API tests with both passing and failing tests."""
+    session = TestSession(
+        sut_name="api",
+        session_id="session1",
+        session_tags={"type": "api"},
+        session_start_time=get_test_time(),
+        session_stop_time=get_test_time(10),
+        test_results=[
+            TestResult(
+                nodeid="test_get.py",
+                outcome=TestOutcome.PASSED,
+                start_time=get_test_time(),
+                duration=1.0,
+            ),
+            TestResult(
+                nodeid="test_post.py",
+                outcome=TestOutcome.FAILED,
+                start_time=get_test_time(1),
+                duration=2.0,
+            ),
+        ],
+        rerun_test_groups=[["test_post.py"]],  # Failed test was rerun
+    )
+    return session
+
+
+@pytest.fixture
+def db_session(get_test_time):
+    """Fixture providing a test session for database tests with all passing tests."""
+    session = TestSession(
+        sut_name="db",
+        session_id="session2",
+        session_tags={"type": "db"},
+        session_start_time=get_test_time(),
+        session_stop_time=get_test_time(10),
+        test_results=[
+            TestResult(
+                nodeid="test_query.py",
+                outcome=TestOutcome.PASSED,
+                start_time=get_test_time(),
+                duration=1.0,
+            ),
+            TestResult(
+                nodeid="test_update.py",
+                outcome=TestOutcome.PASSED,
+                start_time=get_test_time(1),
+                duration=0.5,
+            ),
+        ],
+        rerun_test_groups=[],  # No reruns needed
+    )
+    return session
+
+
+@pytest.fixture
+def test_sessions(api_session, db_session):
+    """Fixture providing a list of test sessions for query testing."""
+    return [api_session, db_session]
