@@ -55,7 +55,9 @@ class PracticeDataGenerator:
         sut_filter: Optional[str] = None,
         test_categories: Optional[list[str]] = None,
     ):
-        self.target_path = target_path or Path.home() / ".pytest_insight" / "practice.json"
+        self.target_path = (
+            target_path or Path.home() / ".pytest_insight" / "practice.json"
+        )
         self.days = days
         self.targets_per_base = targets_per_base
         self.start_date = start_date
@@ -80,7 +82,9 @@ class PracticeDataGenerator:
 
         # Filter SUTs if specified
         if sut_filter:
-            self.sut_variations = [sut for sut in self.sut_variations if sut.startswith(sut_filter)]
+            self.sut_variations = [
+                sut for sut in self.sut_variations if sut.startswith(sut_filter)
+            ]
             if not self.sut_variations:
                 raise ValueError(f"No SUTs found matching prefix '{sut_filter}'")
 
@@ -123,7 +127,9 @@ class PracticeDataGenerator:
             invalid_categories = set(test_categories) - set(self.test_patterns.keys())
             if invalid_categories:
                 raise ValueError(f"Invalid test categories: {invalid_categories}")
-            self.test_patterns = {k: v for k, v in self.test_patterns.items() if k in test_categories}
+            self.test_patterns = {
+                k: v for k, v in self.test_patterns.items() if k in test_categories
+            }
 
     def _get_test_time(self, offset_seconds: int = 0) -> datetime:
         """Get a consistent timezone-aware timestamp for tests.
@@ -157,9 +163,17 @@ class PracticeDataGenerator:
             start_time = start_time.replace(tzinfo=ZoneInfo("UTC"))
 
         caplog = self.text_gen.sentence()
-        capstderr = self.text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+        capstderr = (
+            self.text_gen.sentence()
+            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+            else ""
+        )
         capstdout = self.text_gen.sentence()
-        longreprtext = self.text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+        longreprtext = (
+            self.text_gen.paragraph()
+            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+            else ""
+        )
 
         return TestResult(
             nodeid=nodeid,
@@ -421,7 +435,9 @@ def main(
                 # Use datetime(2023, 1, 1) as base like conftest.py
                 base = datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
                 parsed_date = datetime.strptime(start_date, "%Y-%m-%d")
-                parsed_start_date = base + timedelta(days=(parsed_date - datetime(2023, 1, 1)).days)
+                parsed_start_date = base + timedelta(
+                    days=(parsed_date - datetime(2023, 1, 1)).days
+                )
             except ValueError as e:
                 if "format" in str(e):
                     raise typer.BadParameter("Start date must be in YYYY-MM-DD format")

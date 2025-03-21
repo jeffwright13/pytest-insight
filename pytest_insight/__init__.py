@@ -8,7 +8,7 @@ from pytest_insight.models import (
     TestResult,
     TestSession,
 )
-from pytest_insight.query import Query, QueryTestFilter, InvalidQueryParameterError
+from pytest_insight.query import InvalidQueryParameterError, Query, QueryTestFilter
 from pytest_insight.storage import JSONStorage, get_storage_instance
 
 __all__ = [

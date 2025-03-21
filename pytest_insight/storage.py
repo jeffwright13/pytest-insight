@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -31,23 +32,6 @@ class BaseStorage:
         """Retrieve a test session by its unique identifier."""
         sessions = self.load_sessions()
         return next((s for s in sessions if s.session_id == session_id), None)
-
-    def get_sessions_summary(self) -> List[str]:
-        """Get formatted summary strings for all test sessions."""
-        sessions = self.load_sessions()
-        if not sessions:
-            return ["[pytest-insight] No test sessions found."]
-
-        return [
-            (
-                f"Session {idx}: {session.session_id}, "
-                f"Started: {session.session_start_time}, "
-                f"Duration: {session.session_duration}, "
-                f"Tests: {len(session.test_results)}\n"
-                f"{session.outcome_summary}"
-            )
-            for idx, session in enumerate(sessions, start=1)
-        ]
 
 
 class InMemoryStorage(BaseStorage):
@@ -86,14 +70,21 @@ class JSONStorage(BaseStorage):
 
         # Initialize file if it doesn't exist
         if not self.file_path.exists():
-            self.file_path.write_text("[]")
+            self._write_json_safely([])
 
     def load_sessions(self) -> List[TestSession]:
         """Load all test sessions from storage."""
-
+        if not self.file_path.exists():
+            return []
         try:
-            data = json.loads(self.file_path.read_text())
-            return [TestSession.from_dict(s) for s in data]
+            data = self._read_json_safely()
+            sessions = []
+            for idx, session_data in enumerate(data):
+                try:
+                    sessions.append(TestSession.from_dict(session_data))
+                except Exception as e:
+                    print(f"Warning: Failed to deserialize session at index {idx}: {e}")
+            return sessions
         except Exception as e:
             print(f"Warning: Failed to load sessions from {self.file_path}: {e}")
             return []
@@ -113,7 +104,7 @@ class JSONStorage(BaseStorage):
             sessions.append(session)
 
             # Save all sessions
-            self.file_path.write_text(json.dumps([s.to_dict() for s in sessions], indent=2))
+            self._write_json_safely([s.to_dict() for s in sessions])
         except Exception as e:
             print(f"Warning: Failed to save session to {self.file_path}: {e}")
 
@@ -125,20 +116,62 @@ class JSONStorage(BaseStorage):
         """
 
         try:
-            self.file_path.write_text(json.dumps([s.to_dict() for s in sessions], indent=2))
+            self._write_json_safely([s.to_dict() for s in sessions])
         except Exception as e:
             print(f"Warning: Failed to save sessions to {self.file_path}: {e}")
 
     def clear(self) -> None:
         """Clear all sessions from storage."""
-        self.file_path.write_text("[]")
+        self._write_json_safely([])
 
     def clear_sessions(self) -> None:
         """Remove all stored sessions."""
         self.clear()
 
+    def _write_json_safely(self, data):
+        """Write JSON data to file using atomic operations."""
+        # Create a temporary file in the same directory
+        temp_dir = self.file_path.parent
+        temp_dir.mkdir(parents=True, exist_ok=True)
 
-def get_storage_instance(storage_type: str = None, file_path: str = None) -> BaseStorage:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=temp_dir, delete=False
+        ) as temp_file:
+            # Write data to the temporary file
+            json.dump(data, temp_file, indent=2)
+            temp_path = Path(temp_file.name)
+
+        try:
+            # Rename is atomic on POSIX systems
+            temp_path.replace(self.file_path)
+        except Exception as e:
+            print(f"Warning: Failed to save data to {self.file_path}: {e}")
+            if temp_path.exists():
+                temp_path.unlink()  # Clean up temp file
+            raise
+
+    def _read_json_safely(self):
+        """Read JSON data from file with error handling."""
+        try:
+            data = json.loads(self.file_path.read_text())
+            if not isinstance(data, list):
+                print(
+                    f"Warning: Invalid data format in {self.file_path}, expected list"
+                )
+                return []
+            return data
+        except json.JSONDecodeError as e:
+            print(f"Warning: JSON decode error in {self.file_path}: {e}")
+            # Try to recover by creating a backup of the corrupted file
+            backup_path = self.file_path.with_suffix(".bak")
+            print(f"Creating backup of corrupted file at {backup_path}")
+            self.file_path.rename(backup_path)
+            return []
+
+
+def get_storage_instance(
+    storage_type: str = None, file_path: str = None
+) -> BaseStorage:
     """Get storage instance based on configuration."""
     # Get storage type from args, env, or default
     storage_type = storage_type or os.environ.get("PYTEST_INSIGHT_STORAGE_TYPE", "json")

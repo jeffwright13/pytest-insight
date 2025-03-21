@@ -41,7 +41,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum, auto
-from typing import Callable, Dict, List, Optional, Protocol, Set, Union
+from typing import Callable, Dict, List, Optional, Protocol, Union
 from zoneinfo import ZoneInfo
 
 from pytest_insight.models import TestOutcome, TestResult, TestSession
@@ -546,12 +546,12 @@ class QueryTestFilter:
         Returns:
             QueryTestFilter instance for chaining
         """
+
         def warning_predicate(test: TestResult) -> bool:
             return bool(test.has_warning) == has_warning
 
         return self.with_custom_filter(
-            warning_predicate,
-            name=f"warning_filter(has_warning={has_warning})"
+            warning_predicate, name=f"warning_filter(has_warning={has_warning})"
         )
 
     def with_duration_between(
@@ -766,7 +766,9 @@ class Query:
                 matching_tests = [
                     test
                     for test in session.test_results
-                    if all(filter_func.matches(test) for filter_func in self._test_filters)
+                    if all(
+                        filter_func.matches(test) for filter_func in self._test_filters
+                    )
                 ]
 
                 # If any tests match all filters, create new session with only matching tests

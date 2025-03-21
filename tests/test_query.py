@@ -12,12 +12,6 @@ from pytest_insight.query import (
 )
 
 
-def get_test_time(offset_seconds: int = 0) -> datetime:
-    """Returns a consistent UTC datetime for test cases."""
-    base = datetime(2023, 1, 1, tzinfo=timezone.utc)
-    return base + timedelta(seconds=offset_seconds)
-
-
 def test_query_pattern_methods():
     """Test Query pattern matching methods.
 
@@ -74,7 +68,7 @@ def test_query_pattern_methods():
     assert filter.field_name == "longreprtext"
 
 
-def test_query_execution():
+def test_query_execution(get_test_time, mocker):
     """Test query execution with pattern filters.
 
     Key aspects:
@@ -168,7 +162,7 @@ def test_query_execution():
     assert result.sessions[0].test_results[0].nodeid == "test_api.py::test_get"
 
 
-def test_query_order_preservation():
+def test_query_order_preservation(get_test_time, mocker):
     """Test that query execution preserves test order and session context."""
     session = TestSession(
         sut_name="api-service",
@@ -544,7 +538,7 @@ def test_query_invalid_sessions():
     assert isinstance(query.filters[0], ShellPatternFilter)
 
 
-def test_test_level_filtering():
+def test_test_level_filtering(get_test_time, mocker):
     """Test that test-level filtering properly filters individual tests while preserving session context."""
     session = TestSession(
         sut_name="test-service",
@@ -602,7 +596,7 @@ def test_test_level_filtering():
     assert len(result.sessions) == 0
 
 
-def test_test_level_filtering_multiple_sessions():
+def test_test_level_filtering_multiple_sessions(get_test_time, mocker):
     """Test that test-level filtering works correctly across multiple sessions."""
     session1 = TestSession(
         sut_name="service-1",
@@ -663,7 +657,7 @@ def test_test_level_filtering_multiple_sessions():
     assert result.sessions[1].session_tags == {"env": "stage"}
 
 
-def test_session_vs_test_level_filtering():
+def test_session_vs_test_level_filtering(get_test_time, mocker):
     """Test the difference between session-level and test-level filtering.
 
     Key aspects of the query system's two-level design:
@@ -748,7 +742,7 @@ def test_session_vs_test_level_filtering():
     assert len(result.sessions) == 0  # No sessions with matching tests
 
 
-def test_query_duration_filter():
+def test_query_duration_filter(get_test_time, mocker):
     """Test filtering by test duration.
 
     Key aspects:
@@ -843,7 +837,7 @@ def test_query_duration_filter():
     assert len(result.sessions) == 0
 
 
-def test_query_outcome_filter():
+def test_query_outcome_filter(get_test_time, mocker):
     """Test filtering by test outcome."""
     session1 = TestSession(
         sut_name="api-service",
@@ -939,7 +933,7 @@ def test_query_outcome_filter():
     assert len(result.sessions) == 0
 
 
-def test_query_combined_filters():
+def test_query_combined_filters(get_test_time, mocker):
     """Test combining session-level and test-level filters.
 
     Key aspects:
@@ -1047,7 +1041,7 @@ def test_query_combined_filters():
     assert len(result.sessions) == 0
 
 
-def test_query_pattern_filter():
+def test_query_pattern_filter(get_test_time, mocker):
     """Test pattern matching filters.
 
     Key aspects:

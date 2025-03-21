@@ -152,9 +152,17 @@ def random_test_result():
 
     text_gen = TextGenerator()
     caplog = text_gen.sentence()
-    capstderr = text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+    capstderr = (
+        text_gen.sentence()
+        if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+        else ""
+    )
     capstdout = text_gen.sentence()
-    longreprtext = text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+    longreprtext = (
+        text_gen.paragraph()
+        if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+        else ""
+    )
 
     return TestResult(
         nodeid=nodeid,
@@ -180,7 +188,9 @@ def random_test_session():
     """
     # Generate new random values each time the factory is called
     num_tests = random.randint(2, 6)  # More realistic test count
-    include_rerun = random.choice([True, False, False, False])  # 25% chance of having reruns
+    include_rerun = random.choice(
+        [True, False, False, False]
+    )  # 25% chance of having reruns
 
     # Create base session time window for consistent timing
     base_time = get_test_time(random.randint(0, 3600))  # Random time within first hour
@@ -207,9 +217,17 @@ def random_test_session():
 
         outcome = random.choice(list(TestOutcome))
         caplog = text_gen.sentence()
-        capstderr = text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+        capstderr = (
+            text_gen.sentence()
+            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+            else ""
+        )
         capstdout = text_gen.sentence()
-        longreprtext = text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+        longreprtext = (
+            text_gen.paragraph()
+            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+            else ""
+        )
         has_warning = random.choice([True, False])
 
         result = TestResult(
@@ -259,11 +277,15 @@ def random_test_session():
                     duration=random.uniform(0.1, 5.0),
                     caplog=f"Attempt {i+1}" if not is_final else "Final attempt",
                     capstderr=(
-                        "" if not is_final or final_outcome == TestOutcome.PASSED else "Test failed after reruns"
+                        ""
+                        if not is_final or final_outcome == TestOutcome.PASSED
+                        else "Test failed after reruns"
                     ),
                     capstdout=f"Running test (attempt {i+1})",
                     longreprtext=(
-                        "" if not is_final or final_outcome == TestOutcome.PASSED else "Failed after multiple attempts"
+                        ""
+                        if not is_final or final_outcome == TestOutcome.PASSED
+                        else "Failed after multiple attempts"
                     ),
                     has_warning=random.choice([True, False]) if is_final else False,
                 )
@@ -283,7 +305,7 @@ def random_test_session():
         session_tags={  # Use dict for session tags
             "module": module_name,
             "type": random.choice(["unit", "integration", "e2e"]),
-            "env": random.choice(["dev", "staging", "prod"])
+            "env": random.choice(["dev", "staging", "prod"]),
         },
     )
 
@@ -359,7 +381,9 @@ def random_rerun_test_group():
         caplog = text_gen.sentence()
         capstderr = text_gen.sentence() if final_outcome == TestOutcome.FAILED else ""
         capstdout = text_gen.sentence()
-        longreprtext = text_gen.paragraph() if final_outcome == TestOutcome.FAILED else ""
+        longreprtext = (
+            text_gen.paragraph() if final_outcome == TestOutcome.FAILED else ""
+        )
         has_warning = random.choice([True, False]) if is_final else False
 
         result = TestResult(
@@ -375,7 +399,9 @@ def random_rerun_test_group():
         )
 
         group.add_test(result)
-        current_time = result.stop_time + timedelta(seconds=1)  # 1 second gap between reruns
+        current_time = result.stop_time + timedelta(
+            seconds=1
+        )  # 1 second gap between reruns
 
     return group
 
@@ -506,13 +532,16 @@ def mock_test_session():
         result = mock_fn()
         result.start_time = current_time
         test_results.append(result)
-        current_time += timedelta(seconds=result.duration + 0.1)  # Add small gap between tests
+        current_time += timedelta(
+            seconds=result.duration + 0.1
+        )  # Add small gap between tests
 
     return TestSession(
         sut_name="test_sut",
         session_id="test-123",
         session_start_time=base_time,  # Same as first test
-        session_stop_time=current_time + timedelta(seconds=0.5),  # Add buffer after last test
+        session_stop_time=current_time
+        + timedelta(seconds=0.5),  # Add buffer after last test
         test_results=test_results,
         rerun_test_groups=[],
     )

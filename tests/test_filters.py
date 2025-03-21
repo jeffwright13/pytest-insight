@@ -9,17 +9,6 @@ from pytest_insight.storage import InMemoryStorage
 
 
 @pytest.fixture
-def get_test_time():
-    """Fixture that provides timezone-aware test timestamps.
-
-    Returns a function that generates UTC timestamps starting from 2023-01-01
-    plus the given offset in seconds. This ensures consistent timezone handling
-    and prevents comparison issues between naive and aware datetimes.
-    """
-    base = datetime(2023, 1, 1, tzinfo=timezone.utc)
-    return lambda offset_seconds=0: base + timedelta(seconds=offset_seconds)
-
-
 def test_query_initialization(test_session_no_reruns):
     """Test basic initialization of Query with no filters."""
     storage = InMemoryStorage()
