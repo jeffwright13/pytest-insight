@@ -1,8 +1,8 @@
 """Query class for filtering and retrieving test sessions.
 
 The Query class implements a two-level filtering design:
-1. Session-Level: Filter entire test sessions (TestSession) (SUT, time range, warnings)
-2. Test-Level: Filter by test (TestResult) properties (pattern, duration, outcome)
+1. Session-Level: Filter entire test sessions (SUT, time range, warnings)
+2. Test-Level: Filter by test properties (pattern, duration, outcome)
 
 Key Behaviors:
 1. Session-Level Filtering:
@@ -14,6 +14,12 @@ Key Behaviors:
    - Preserves session metadata (ID, tags, timing, etc.)
    - A session is included if it has at least one matching test
    - Non-matching tests are excluded from the results
+
+3. Filter Accumulation:
+   - IMPORTANT: Filters accumulate when chaining methods on the same Query instance
+   - All filters are applied with AND logic (all conditions must be met)
+   - To apply independent filters, create new Query instances for each filter set
+   - Once execute() is called, the Query instance retains all previously added filters
 
 Examples:
     # Session-level only
@@ -33,9 +39,24 @@ Examples:
         .with_duration_between(5.0, 10.0)
         .apply()
         .execute()
+
+    # IMPORTANT: Filters accumulate, so these are NOT equivalent:
+
+    # Example 1: Single query with two filters (returns sessions with BOTH env=prod AND region=us-east)
+    query = Query(storage)
+    result = query.with_session_tag("env", "prod").with_session_tag("region", "us-east").execute()
+
+    # Example 2: Separate queries (returns different results for each filter independently)
+    query1 = Query(storage)
+    result1 = query1.with_session_tag("env", "prod").execute()
+
+    query2 = Query(storage)
+    result2 = query2.with_session_tag("region", "us-east").execute()
 """
 
 import dataclasses
+
+# Import the real datetime class for isinstance checks
 import fnmatch
 import re
 from dataclasses import dataclass, field
@@ -113,17 +134,13 @@ class ShellPatternFilter:
     def __post_init__(self):
         """Validate pattern and field name."""
         if not isinstance(self.pattern, str):
-            raise InvalidQueryParameterError(
-                f"Invalid pattern type: {type(self.pattern)}"
-            )
+            raise InvalidQueryParameterError(f"Invalid pattern type: {type(self.pattern)}")
 
         if not self.pattern:
             raise InvalidQueryParameterError("Pattern cannot be empty")
 
         if not isinstance(self.field_name, str):
-            raise InvalidQueryParameterError(
-                f"Invalid field_name type: {type(self.field_name)}"
-            )
+            raise InvalidQueryParameterError(f"Invalid field_name type: {type(self.field_name)}")
 
         if self.field_name not in self.ALLOWED_FIELDS:
             raise InvalidQueryParameterError(f"Invalid field name: {self.field_name}")
@@ -211,9 +228,7 @@ class RegexPatternFilter:
     @classmethod
     def from_dict(cls, data: Dict) -> "RegexPatternFilter":
         """Create from dictionary."""
-        instance = cls(
-            pattern=data["pattern"], field_name=data.get("field_name", "nodeid")
-        )
+        instance = cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
         instance._compiled_regex = re.compile(instance.pattern)
         return instance
 
@@ -341,11 +356,6 @@ class QueryResult:
         """Check if query returned no results."""
         return len(self.sessions) == 0
 
-    @property
-    def total_count(self) -> int:
-        """Get total number of matching sessions."""
-        return len(self.sessions)
-
     def __iter__(self):
         """Iterate over matching sessions."""
         return iter(self.sessions)
@@ -378,9 +388,7 @@ class QueryTestFilter:
         self.query = query
         self.filters: List[TestFilter] = []
 
-    def with_pattern(
-        self, pattern: str, *, field_name: str, use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_pattern(self, pattern: str, *, field_name: str, use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern matching against any string field.
 
         Key aspects:
@@ -426,9 +434,7 @@ class QueryTestFilter:
         self.filters.append(filter_cls(pattern=pattern, field_name=field_name))
         return self
 
-    def with_nodeid_containing(
-        self, pattern: str, use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_nodeid_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern in nodeid.
 
         This is a convenience method that sets field_name="nodeid".
@@ -443,9 +449,7 @@ class QueryTestFilter:
         """
         return self.with_pattern(pattern, field_name="nodeid", use_regex=use_regex)
 
-    def with_output_containing(
-        self, pattern: str, use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_output_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern in any output field.
 
         This is a convenience method that checks all output fields.
@@ -462,9 +466,7 @@ class QueryTestFilter:
             self.with_pattern(pattern, field_name=fld, use_regex=use_regex)
         return self
 
-    def with_error_containing(
-        self, pattern: str, use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_error_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern in error output (longreprtext).
 
         This is a convenience method that sets field_name="longreprtext".
@@ -477,13 +479,9 @@ class QueryTestFilter:
         Returns:
             QueryTestFilter instance for chaining
         """
-        return self.with_pattern(
-            pattern, field_name="longreprtext", use_regex=use_regex
-        )
+        return self.with_pattern(pattern, field_name="longreprtext", use_regex=use_regex)
 
-    def with_log_containing(
-        self, pattern: str, use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_log_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern in log output (caplog).
 
         This is a convenience method that sets field_name="caplog".
@@ -498,9 +496,7 @@ class QueryTestFilter:
         """
         return self.with_pattern(pattern, field_name="caplog", use_regex=use_regex)
 
-    def with_stdout_containing(
-        self, pattern: str, use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_stdout_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern in stdout (capstdout).
 
         This is a convenience method that sets field_name="capstdout".
@@ -515,9 +511,7 @@ class QueryTestFilter:
         """
         return self.with_pattern(pattern, field_name="capstdout", use_regex=use_regex)
 
-    def with_stderr_containing(
-        self, pattern: str, use_regex: bool = False
-    ) -> "QueryTestFilter":
+    def with_stderr_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
         """Filter tests by pattern in stderr (capstderr).
 
         This is a convenience method that sets field_name="capstderr".
@@ -550,13 +544,9 @@ class QueryTestFilter:
         def warning_predicate(test: TestResult) -> bool:
             return bool(test.has_warning) == has_warning
 
-        return self.with_custom_filter(
-            warning_predicate, name=f"warning_filter(has_warning={has_warning})"
-        )
+        return self.with_custom_filter(warning_predicate, name=f"warning_filter(has_warning={has_warning})")
 
-    def with_duration_between(
-        self, min_seconds: float, max_seconds: float
-    ) -> "QueryTestFilter":
+    def with_duration_between(self, min_seconds: float, max_seconds: float) -> "QueryTestFilter":
         """Filter tests by duration range.
 
         Test-level filter that:
@@ -591,9 +581,7 @@ class QueryTestFilter:
         self.filters.append(OutcomeFilter(outcome))
         return self
 
-    def with_custom_filter(
-        self, predicate: Callable[[TestResult], bool], name: str
-    ) -> "QueryTestFilter":
+    def with_custom_filter(self, predicate: Callable[[TestResult], bool], name: str) -> "QueryTestFilter":
         """Add custom test filter.
 
         Test-level filter that:
@@ -638,11 +626,7 @@ class QueryTestFilter:
 
     def to_dict(self) -> Dict:
         """Convert filters to dictionary."""
-        return {
-            "filters": [
-                f.to_dict() for f in self.filters if not isinstance(f, CustomFilter)
-            ]
-        }
+        return {"filters": [f.to_dict() for f in self.filters if not isinstance(f, CustomFilter)]}
 
     @classmethod
     def from_dict(cls, data: Dict, query: "Query") -> "QueryTestFilter":
@@ -680,6 +664,12 @@ class Query:
        - A session is included if it has at least one matching test
        - Non-matching tests are excluded from the results
 
+    3. Filter Accumulation:
+       - IMPORTANT: Filters accumulate when chaining methods on the same Query instance
+       - All filters are applied with AND logic (all conditions must be met)
+       - To apply independent filters, create new Query instances for each filter set
+       - Once execute() is called, the Query instance retains all previously added filters
+
     Examples:
         # Session-level only
         # Get TestSessions for the last 7 days for all SUTs with 'service' in name
@@ -698,6 +688,19 @@ class Query:
             .with_duration_between(5.0, 10.0)
             .apply()
             .execute()
+
+        # IMPORTANT: Filters accumulate, so these are NOT equivalent:
+
+        # Example 1: Single query with two filters (returns sessions with BOTH env=prod AND region=us-east)
+        query = Query(storage)
+        result = query.with_session_tag("env", "prod").with_session_tag("region", "us-east").execute()
+
+        # Example 2: Separate queries (returns different results for each filter independently)
+        query1 = Query(storage)
+        result1 = query1.with_session_tag("env", "prod").execute()
+
+        query2 = Query(storage)
+        result2 = query2.with_session_tag("region", "us-east").execute()
     """
 
     def __init__(self, storage: Optional[BaseStorage] = None):
@@ -748,9 +751,7 @@ class Query:
             sessions = self.storage.load_sessions()
         elif not sessions:
             raise InvalidQueryParameterError("No sessions provided")
-        elif not isinstance(sessions, list) or not all(
-            isinstance(s, TestSession) for s in sessions
-        ):
+        elif not isinstance(sessions, list) or not all(isinstance(s, TestSession) for s in sessions):
             raise InvalidQueryParameterError("Invalid session type")
 
         # Apply session-level filters
@@ -766,9 +767,7 @@ class Query:
                 matching_tests = [
                     test
                     for test in session.test_results
-                    if all(
-                        filter_func.matches(test) for filter_func in self._test_filters
-                    )
+                    if all(filter_func.matches(test) for filter_func in self._test_filters)
                 ]
 
                 # If any tests match all filters, create new session with only matching tests
@@ -847,6 +846,10 @@ class Query:
     def in_last_days(self, days: int) -> "Query":
         """Filter sessions from the last N days.
 
+        This method includes sessions that started exactly N days ago or more recently.
+        For example, if days=1, it includes sessions from exactly 24 hours ago up to now.
+        Sessions that started even 1 second before the cutoff will not be included.
+
         Args:
             days: Number of days to look back.
 
@@ -919,9 +922,16 @@ class Query:
     def date_range(self, start: datetime, end: datetime) -> "Query":
         """Filter sessions between two dates.
 
+        This method includes sessions that started at or after the start datetime
+        and at or before the end datetime. Both boundaries are inclusive.
+
+        For example, if start=2023-01-01 00:00:00 and end=2023-01-31 23:59:59,
+        sessions starting exactly at 2023-01-01 00:00:00 or exactly at
+        2023-01-31 23:59:59 will be included in the results.
+
         Args:
-            start: Start datetime.
-            end: End datetime.
+            start: Start datetime (inclusive).
+            end: End datetime (inclusive).
 
         Returns:
             Query instance for chaining.
@@ -929,19 +939,68 @@ class Query:
         Raises:
             InvalidQueryParameterError: If dates are invalid.
         """
-        if not isinstance(start, datetime) or not isinstance(end, datetime):
+        # Check if objects have the expected datetime attributes instead of using isinstance
+        if not (
+            hasattr(start, "year")
+            and hasattr(start, "month")
+            and hasattr(start, "day")
+            and hasattr(end, "year")
+            and hasattr(end, "month")
+            and hasattr(end, "day")
+        ):
             raise InvalidQueryParameterError("Start and end must be datetime objects")
-        if bool(start.tzinfo) != bool(end.tzinfo):
-            raise InvalidQueryParameterError(
-                "Start and end dates must both be naive or both be timezone-aware"
-            )
-        if start.tzinfo and end.tzinfo and start.tzinfo != end.tzinfo:
-            raise InvalidQueryParameterError(
-                "Start and end dates must be in the same timezone"
-            )
+
+        if bool(getattr(start, "tzinfo", None)) != bool(getattr(end, "tzinfo", None)):
+            raise InvalidQueryParameterError("Both start and end must either have timezones or not have timezones")
+        if getattr(start, "tzinfo", None) and getattr(end, "tzinfo", None) and start.tzinfo != end.tzinfo:
+            raise InvalidQueryParameterError("Start and end dates must use the same timezone if timezone-aware")
         if start > end:
-            raise InvalidQueryParameterError("Start date must be before end date")
+            raise InvalidQueryParameterError("Start datetime must be before or equal to end datetime")
         self._session_filters.append(lambda s: start <= s.session_start_time <= end)
+        return self
+
+    def before(self, timestamp: datetime) -> "Query":
+        """Filter sessions before given timestamp.
+
+        This method includes sessions that started before the given timestamp, but does
+        not include sessions that started exactly at the timestamp.
+
+        Args:
+            timestamp: Datetime to filter before (exclusive).
+
+        Returns:
+            Query instance for chaining.
+
+        Raises:
+            InvalidQueryParameterError: If timestamp is not a datetime object.
+        """
+        # Check if object has the expected datetime attributes instead of using isinstance
+        if not (hasattr(timestamp, "year") and hasattr(timestamp, "month") and hasattr(timestamp, "day")):
+            raise InvalidQueryParameterError("Timestamp must be a datetime object")
+
+        self._session_filters.append(lambda s: s.session_start_time < timestamp)
+        return self
+
+    def after(self, timestamp: datetime) -> "Query":
+        """Filter sessions after given timestamp.
+
+        This method includes sessions that started after the given timestamp, but does
+        not include sessions that started exactly at the timestamp.
+
+        Args:
+            timestamp: Datetime to filter after (exclusive).
+
+        Returns:
+            Query instance for chaining.
+
+        Raises:
+            InvalidQueryParameterError: If timestamp is not a datetime object.
+        """
+        # Check if object has the expected datetime attributes instead of using isinstance
+        if not (hasattr(timestamp, "year") and hasattr(timestamp, "month") and hasattr(timestamp, "day")):
+            raise InvalidQueryParameterError("Timestamp must be a datetime object")
+
+        self._session_filters.append(lambda s: s.session_start_time > timestamp)
         return self
 
     def with_outcome(self, outcome: Union[str, TestOutcome]) -> "Query":
@@ -965,8 +1024,7 @@ class Query:
 
         self._session_filters.append(
             lambda s: any(
-                (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome))
-                == outcome_str
+                (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == outcome_str
                 for t in s.test_results
             )
         )
@@ -981,9 +1039,7 @@ class Query:
         Returns:
             Query instance for chaining.
         """
-        self._session_filters.append(
-            lambda s: any(t.has_warning for t in s.test_results) == has_warnings
-        )
+        self._session_filters.append(lambda s: any(t.has_warning for t in s.test_results) == has_warnings)
         return self
 
     def with_reruns(self, has_reruns: bool = True) -> "Query":
@@ -1012,68 +1068,7 @@ class Query:
         """
         if not isinstance(pattern, str) or not pattern.strip():
             raise InvalidQueryParameterError("Test pattern must be a non-empty string")
-        self._session_filters.append(
-            lambda s: any(
-                pattern == t.nodeid or pattern in t.nodeid for t in s.test_results
-            )
-        )
-        return self
-
-    def before(self, timestamp: datetime) -> "Query":
-        """Filter sessions before given timestamp.
-
-        Args:
-            timestamp: Datetime to filter before.
-
-        Returns:
-            Query instance for chaining.
-
-        Raises:
-            InvalidQueryParameterError: If timestamp is not a datetime object.
-        """
-        if not isinstance(timestamp, datetime):
-            raise InvalidQueryParameterError("Timestamp must be a datetime object")
-
-        self._session_filters.append(lambda s: s.session_start_time < timestamp)
-        return self
-
-    def after(self, timestamp: datetime) -> "Query":
-        """Filter sessions after given timestamp.
-
-        Args:
-            timestamp: Datetime to filter after.
-
-        Returns:
-            Query instance for chaining.
-
-        Raises:
-            InvalidQueryParameterError: If timestamp is not a datetime object.
-        """
-        if not isinstance(timestamp, datetime):
-            raise InvalidQueryParameterError("Timestamp must be a datetime object")
-
-        self._session_filters.append(lambda s: s.session_start_time > timestamp)
-        return self
-
-    def with_tag(self, key: str, value: str) -> "Query":
-        """Filter sessions by tag key-value pair.
-
-        Args:
-            key: Tag key to filter by.
-            value: Tag value to match.
-
-        Returns:
-            Query instance for chaining.
-
-        Raises:
-            InvalidQueryParameterError: If key or value is invalid.
-        """
-        if not key or not isinstance(key, str):
-            raise InvalidQueryParameterError("Tag key must be a non-empty string")
-        if not value or not isinstance(value, str):
-            raise InvalidQueryParameterError("Tag value must be a non-empty string")
-
-        self._session_filters.append(lambda s: s.session_tags.get(key) == value)
+        self._session_filters.append(lambda s: any(pattern == t.nodeid or pattern in t.nodeid for t in s.test_results))
         return self
 
     def with_session_id_pattern(self, pattern: str) -> "Query":
@@ -1093,9 +1088,7 @@ class Query:
             InvalidQueryParameterError: If pattern is empty.
         """
         if not isinstance(pattern, str) or not pattern.strip():
-            raise InvalidQueryParameterError(
-                "Session ID pattern must be a non-empty string"
-            )
+            raise InvalidQueryParameterError("Session ID pattern must be a non-empty string")
         self._session_filters.append(lambda s: fnmatch.fnmatch(s.session_id, pattern))
         return self
 
@@ -1105,6 +1098,10 @@ class Query:
         Args:
             tag_key: Session tag key.
             tag_value: Session tag value.
+
+        Example:
+            # Filter sessions where session_tags = {"env": "prod"}
+            query.with_session_tag("env", "prod")
 
         Returns:
             Query instance for chaining.

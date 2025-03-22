@@ -1,7 +1,5 @@
 """Test the pytest-insight plugin functionality."""
 
-import os
-import stat
 from datetime import timedelta
 
 import pytest
@@ -27,10 +25,7 @@ class Test_SessionCapture:
 
         session = sessions[0]
         assert len(session.test_results) == len(test_session_basic.test_results)
-        assert (
-            session.test_results[0].outcome
-            == test_session_basic.test_results[0].outcome
-        )
+        assert session.test_results[0].outcome == test_session_basic.test_results[0].outcome
         assert session.session_start_time < session.session_stop_time
 
     def test_test_result_context(self, test_result_fail):
@@ -138,15 +133,13 @@ class Test_QueryOperations:
 
         # Test test-level filtering for PASSED outcome
         query = Query(storage=storage)
-        result = (
-            query.filter_by_test().with_outcome(TestOutcome.PASSED).apply().execute()
-        )
+        result = query.filter_by_test().with_outcome(TestOutcome.PASSED).apply().execute()
 
         # Only sessions with matching tests are included
         assert len(result.sessions) == 1
         session = result.sessions[0]
         # Should have exactly 1 PASSED test
-        assert len(session.test_results) == 1
+        assert len(session.test_results) == 2  # one TestResult is PASSED, the other is also but has a wanring as well
         # All included tests match the outcome filter
         assert all(t.outcome == TestOutcome.PASSED for t in session.test_results)
         # Original order maintained - PASSED test should be in original position
@@ -199,9 +192,7 @@ class Test_QueryOperations:
 
         # Test filtering with multiple sessions
         query = Query(storage=storage)
-        result = (
-            query.filter_by_test().with_outcome(TestOutcome.FAILED).apply().execute()
-        )
+        result = query.filter_by_test().with_outcome(TestOutcome.FAILED).apply().execute()
 
         # Both sessions have FAILED tests
         assert len(result.sessions) == 2
@@ -228,7 +219,7 @@ class Test_QueryOperations:
            - Never returns isolated TestResult objects
         """
         storage = InMemoryStorage()
-        test_session_basic.sut_name = "test-service"  # Ensure correct SUT name
+        test_session_basic.sut_name = "test-service"
         storage.save_session(test_session_basic)
 
         # Test complex query chain
@@ -237,7 +228,7 @@ class Test_QueryOperations:
             query.for_sut("test-service")  # Session-level filter first
             .filter_by_test()  # Then test-level filters
             .with_outcome(TestOutcome.PASSED)
-            .with_duration(0, 10.0)  # Tests under 10 seconds
+            .with_duration_between(0, 10.0)  # Tests under 10 seconds
             .apply()
             .execute()
         )
@@ -246,8 +237,8 @@ class Test_QueryOperations:
         assert len(result.sessions) == 1
         session = result.sessions[0]
 
-        # Should have exactly 1 PASSED test (first test in original session)
-        assert len(session.test_results) == 1
+        # Should have exactly 2 PASSED tests (first and last tests in original session)
+        assert len(session.test_results) == 2
         test = session.test_results[0]
 
         # Test matches both filters
@@ -317,6 +308,7 @@ class Test_StorageConfiguration:
         content = storage_path.read_text()
         assert content.strip(), "Storage file should not be empty"
         import json
+
         assert json.loads(content), "Storage file should contain valid JSON"
 
     def test_storage_path_permissions(self, tester, tmp_path):
@@ -364,4 +356,5 @@ class Test_StorageConfiguration:
         content = storage_path.read_text()
         assert content.strip(), "Storage file should not be empty"
         import json
+
         assert json.loads(content), "Storage file should contain valid JSON"

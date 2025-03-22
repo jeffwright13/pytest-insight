@@ -178,15 +178,17 @@ class Test_TestSession:
         warnings = any(test.has_warning for test in session.test_results)
 
         # Verify meaningful test outcomes exist
-        assert any([
-            TestOutcome.PASSED in outcomes,
-            TestOutcome.FAILED in outcomes,
-            TestOutcome.SKIPPED in outcomes,
-            TestOutcome.XPASSED in outcomes,
-            TestOutcome.RERUN in outcomes,
-            TestOutcome.ERROR in outcomes,
-            warnings,
-        ])
+        assert any(
+            [
+                TestOutcome.PASSED in outcomes,
+                TestOutcome.FAILED in outcomes,
+                TestOutcome.SKIPPED in outcomes,
+                TestOutcome.XPASSED in outcomes,
+                TestOutcome.RERUN in outcomes,
+                TestOutcome.ERROR in outcomes,
+                warnings,
+            ]
+        )
 
         # Validate session tags
         assert isinstance(session.session_tags, dict)
@@ -485,7 +487,7 @@ class Test_TestResultBehavior:
         assert result.stop_time == now + timedelta(seconds=1.5)
         assert result.stop_time.tzinfo is not None  # Verify timezone info
 
-    def test_test_result_serialization(self, get_test_time):
+    def test_test_result_serialization_1(self, get_test_time):
         """Test TestResult serialization."""
         now = get_test_time()
         result = TestResult(
@@ -502,7 +504,7 @@ class Test_TestResultBehavior:
         assert start_time.tzinfo is not None
         assert stop_time.tzinfo is not None
 
-    def test_test_result_serialization(self, get_test_time):
+    def test_test_result_serialization_2(self, get_test_time):
         """Test serialization of TestResult objects."""
         # Create test result with timezone-aware timestamp
         now = get_test_time()

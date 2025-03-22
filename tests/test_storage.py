@@ -13,10 +13,12 @@ def json_storage(tmp_path):
     storage_path = tmp_path / "sessions.json"
     return JSONStorage(file_path=storage_path)
 
+
 @pytest.fixture
 def in_memory_storage():
     """Fixture to create an InMemoryStorage instance."""
     return InMemoryStorage()
+
 
 @pytest.mark.parametrize("storage_class", [InMemoryStorage, JSONStorage])
 def test_save_and_load_session(storage_class, tmp_path, test_session_basic):
@@ -29,6 +31,7 @@ def test_save_and_load_session(storage_class, tmp_path, test_session_basic):
     assert len(storage.load_sessions()) == 1
     assert storage.load_sessions()[0].session_id == "test-123"
 
+
 def test_clear_sessions_in_memory(in_memory_storage, test_session_basic):
     """Test clearing sessions in InMemoryStorage."""
     in_memory_storage.save_session(test_session_basic)
@@ -36,6 +39,7 @@ def test_clear_sessions_in_memory(in_memory_storage, test_session_basic):
 
     in_memory_storage.clear_sessions()
     assert in_memory_storage.load_sessions() == []
+
 
 def test_clear_sessions_json(json_storage, test_session_basic):
     """Test clearing sessions in JSONStorage."""
@@ -45,12 +49,14 @@ def test_clear_sessions_json(json_storage, test_session_basic):
     json_storage.clear_sessions()
     assert json_storage.load_sessions() == []
 
+
 def test_get_last_session(json_storage, test_session_basic):
     """Test retrieving the last session."""
     assert json_storage.get_last_session() is None  # No sessions initially
 
     json_storage.save_session(test_session_basic)
     assert json_storage.get_last_session().session_id == "test-123"
+
 
 def test_get_session_by_id(json_storage, test_session_basic):
     """Test retrieving a session by ID."""
@@ -59,6 +65,7 @@ def test_get_session_by_id(json_storage, test_session_basic):
     assert json_storage.get_session_by_id("test-123") is not None
     assert json_storage.get_session_by_id("wrong-id") is None
 
+
 def test_get_storage_instance_json(mocker, tmp_path):
     """Test get_storage_instance correctly returns JSONStorage."""
     mocker.patch("os.environ.get", return_value=str(tmp_path / "sessions.json"))
@@ -66,13 +73,19 @@ def test_get_storage_instance_json(mocker, tmp_path):
     storage = get_storage_instance("json")
     assert isinstance(storage, JSONStorage)
 
+
 def test_jsonstorage_handles_corrupt_data(mocker, json_storage):
     """Test JSONStorage gracefully handles corrupt data."""
     # Mock the _read_json_safely method to raise JSONDecodeError
-    mocker.patch.object(json_storage, "_read_json_safely", side_effect=json.JSONDecodeError("Invalid JSON", "", 0))
+    mocker.patch.object(
+        json_storage,
+        "_read_json_safely",
+        side_effect=json.JSONDecodeError("Invalid JSON", "", 0),
+    )
 
     # Should return empty list instead of crashing
     assert json_storage.load_sessions() == []
+
 
 def test_atomic_write_operations(tmp_path, get_test_time):
     """Test atomic write operations using a temporary file."""
@@ -103,6 +116,7 @@ def test_atomic_write_operations(tmp_path, get_test_time):
     temp_files = list(tmp_path.glob("tmp*"))
     assert not temp_files
 
+
 def test_save_sessions_bulk(tmp_path, get_test_time):
     """Test saving multiple sessions at once."""
     # Create a storage instance
@@ -129,6 +143,7 @@ def test_save_sessions_bulk(tmp_path, get_test_time):
     assert len(loaded_sessions) == 5
     assert {s.session_id for s in loaded_sessions} == {f"bulk-test-{i}" for i in range(5)}
 
+
 def test_handles_invalid_data_format(mocker, json_storage):
     """Test handling of invalid data format (non-list JSON)."""
     # Mock the _read_json_safely method instead of read_text
@@ -136,6 +151,7 @@ def test_handles_invalid_data_format(mocker, json_storage):
 
     # Should handle gracefully and return empty list
     assert json_storage.load_sessions() == []
+
 
 def test_handles_invalid_session_data(mocker, json_storage, get_test_time):
     """Test handling of invalid session data within a valid JSON list."""
@@ -148,9 +164,9 @@ def test_handles_invalid_session_data(mocker, json_storage, get_test_time):
             "session_start_time": timestamp.isoformat(),
             "session_stop_time": (timestamp + timedelta(seconds=30)).isoformat(),
             "session_duration": 30,
-            "test_results": []
+            "test_results": [],
         },
-        {"invalid_session": "missing required fields"}
+        {"invalid_session": "missing required fields"},
     ]
 
     # Mock the _read_json_safely method
@@ -160,6 +176,7 @@ def test_handles_invalid_session_data(mocker, json_storage, get_test_time):
     sessions = json_storage.load_sessions()
     assert len(sessions) == 1
     assert sessions[0].session_id == "valid"
+
 
 def test_backup_on_json_decode_error(mocker, tmp_path):
     """Test that a backup is created when JSON decode error occurs."""
@@ -178,6 +195,7 @@ def test_backup_on_json_decode_error(mocker, tmp_path):
     assert len(backup_files) == 1
     assert backup_files[0].read_text() == "{corrupt json"
 
+
 def test_clear_method_uses_atomic_operations(mocker, json_storage):
     """Test that clear() method uses atomic operations."""
     # Spy on _write_json_safely
@@ -188,6 +206,7 @@ def test_clear_method_uses_atomic_operations(mocker, json_storage):
 
     # Verify _write_json_safely was called with empty list
     spy.assert_called_once_with([])
+
 
 def test_concurrent_access_simulation(tmp_path, get_test_time):
     """Simulate concurrent access to the storage file."""
@@ -221,16 +240,17 @@ def test_concurrent_access_simulation(tmp_path, get_test_time):
     assert len(loaded_sessions) == 2
     assert {s.session_id for s in loaded_sessions} == {"concurrent-1", "concurrent-2"}
 
+
 def test_get_storage_instance_with_env_vars(mocker, tmp_path):
     """Test get_storage_instance with environment variables."""
     # Use tmp_path instead of /custom to avoid permission issues
     custom_path = str(tmp_path / "custom_storage.json")
 
     # Mock environment variables
-    mocker.patch.dict(os.environ, {
-        "PYTEST_INSIGHT_STORAGE_TYPE": "json",
-        "PYTEST_INSIGHT_DB_PATH": custom_path
-    })
+    mocker.patch.dict(
+        os.environ,
+        {"PYTEST_INSIGHT_STORAGE_TYPE": "json", "PYTEST_INSIGHT_DB_PATH": custom_path},
+    )
 
     # Get storage instance
     storage = get_storage_instance()
@@ -238,6 +258,7 @@ def test_get_storage_instance_with_env_vars(mocker, tmp_path):
     # Verify correct type and path
     assert isinstance(storage, JSONStorage)
     assert str(storage.file_path) == custom_path
+
 
 def test_get_storage_instance_invalid_type():
     """Test get_storage_instance with invalid storage type."""

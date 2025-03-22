@@ -33,7 +33,7 @@ print(f"Flaky rate: {health.flaky_rate:.1%}")
 slow_tests = (query
     .with_warning(True)      # Session-level filter
     .filter_by_test()          # Test-level filter
-    .with_duration(10.0, float("inf"))
+    .with_duration_between(10.0, float("inf"))
     .apply()                   # Back to session context
     .execute())
 

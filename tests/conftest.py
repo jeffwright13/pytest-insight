@@ -337,6 +337,7 @@ def test_session_with_reruns(test_session_basic, mocker: MockerFixture, get_test
     session.rerun_test_groups = [mock_rerun_group1, mock_rerun_group2]
     return session
 
+
 # Query Test Fixtures
 @pytest.fixture
 def api_session(get_test_time):

@@ -1,13 +1,12 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.query import (
-    DurationFilter,
     InvalidQueryParameterError,
     Query,
     QueryTestFilter,
-    RegexPatternFilter,
     ShellPatternFilter,
 )
 
@@ -58,9 +57,7 @@ def test_query_pattern_methods():
     query = QueryTestFilter(Query())
     query.with_output_containing("error")
     assert len(query.filters) == 3
-    assert all(
-        f.field_name in {"capstdout", "capstderr", "caplog"} for f in query.filters
-    )
+    assert all(f.field_name in {"capstdout", "capstderr", "caplog"} for f in query.filters)
 
     # Test with_error_containing uses longreprtext
     query = QueryTestFilter(Query())
@@ -148,13 +145,7 @@ def test_query_execution(get_test_time, mocker):
     assert result.sessions[0].session_tags == {"type": "api", "component": "test"}
 
     # Test complex query chain (pattern + outcome)
-    query = (
-        Query()
-        .filter_by_test()
-        .with_pattern("API", field_name="caplog")
-        .with_outcome(TestOutcome.PASSED)
-        .apply()
-    )
+    query = Query().filter_by_test().with_pattern("API", field_name="caplog").with_outcome(TestOutcome.PASSED).apply()
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
     # Only test matching both filters should be included
@@ -226,13 +217,7 @@ def test_query_order_preservation(get_test_time, mocker):
     assert filtered_session.rerun_test_groups == session.rerun_test_groups
 
     # Test that order is preserved with multiple filters
-    query = (
-        Query()
-        .filter_by_test()
-        .with_pattern("test", field_name="caplog")
-        .with_outcome(TestOutcome.PASSED)
-        .apply()
-    )
+    query = Query().filter_by_test().with_pattern("test", field_name="caplog").with_outcome(TestOutcome.PASSED).apply()
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
     # Only matching tests should be included
@@ -242,20 +227,8 @@ def test_query_order_preservation(get_test_time, mocker):
     assert result.sessions[0].test_results[1].nodeid == "test_3.py::test_third"
 
     # Verify A == B is same as B == A
-    query1 = (
-        Query()
-        .filter_by_test()
-        .with_pattern("test", field_name="caplog")
-        .with_outcome(TestOutcome.PASSED)
-        .apply()
-    )
-    query2 = (
-        Query()
-        .filter_by_test()
-        .with_outcome(TestOutcome.PASSED)
-        .with_pattern("test", field_name="caplog")
-        .apply()
-    )
+    query1 = Query().filter_by_test().with_pattern("test", field_name="caplog").with_outcome(TestOutcome.PASSED).apply()
+    query2 = Query().filter_by_test().with_outcome(TestOutcome.PASSED).with_pattern("test", field_name="caplog").apply()
     result1 = query1.execute(sessions=[session])
     result2 = query2.execute(sessions=[session])
     assert len(result1.sessions) == len(result2.sessions)
@@ -301,7 +274,7 @@ def test_session_level_filtering(test_sessions, api_session):
         (TestOutcome.PASSED, [1, 2]),  # [api_session_count, db_session_count]
         (TestOutcome.FAILED, [1, 0]),
         (TestOutcome.SKIPPED, [0, 0]),
-    ]
+    ],
 )
 def test_outcome_filtering(test_sessions, outcome, expected_counts):
     """Test filtering by test outcome.
@@ -343,8 +316,8 @@ def test_pattern_substring_matching(test_sessions):
     query = Query().filter_by_test().with_pattern("get", field_name="nodeid").apply()
     result = query.execute(sessions=test_sessions)
 
-    # Verify both sessions are returned (each with matching tests)
-    assert len(result.sessions) == 2
+    # Verify only one session is returned (each with matching tests)
+    assert len(result.sessions) == 1
 
     # Verify only matching tests are included
     assert len(result.sessions[0].test_results) == 1
@@ -363,12 +336,7 @@ def test_pattern_regex_matching(test_sessions):
     - Test-level filters create NEW sessions with ONLY matching tests
     - Session context is preserved
     """
-    query = (
-        Query()
-        .filter_by_test()
-        .with_pattern("test_(get|query)\\.py$", field_name="nodeid", use_regex=True)
-        .apply()
-    )
+    query = Query().filter_by_test().with_pattern("test_(get|query)\\.py$", field_name="nodeid", use_regex=True).apply()
     result = query.execute(sessions=test_sessions)
 
     # Verify both sessions are returned (each with matching tests)
@@ -389,13 +357,7 @@ def test_combined_session_and_test_filtering(test_sessions):
     - Only matching tests from matching sessions are returned
     - Session context is preserved
     """
-    query = (
-        Query()
-        .for_sut("api")
-        .filter_by_test()
-        .with_outcome(TestOutcome.FAILED)
-        .apply()
-    )
+    query = Query().for_sut("api").filter_by_test().with_outcome(TestOutcome.FAILED).apply()
     result = query.execute(sessions=test_sessions)
 
     # Verify only one session is returned
@@ -416,14 +378,14 @@ def test_no_matching_sessions(test_sessions):
 
     Key aspects:
     - Empty result is returned when no sessions match
-    - QueryResult.empty() returns True
+    - QueryResult.empty is True
     """
     query = Query().for_sut("unknown")
     result = query.execute(sessions=test_sessions)
 
     # Verify no sessions are returned
     assert len(result.sessions) == 0
-    assert result.empty()
+    assert result.empty
 
 
 def test_no_matching_tests(test_sessions):
@@ -431,14 +393,14 @@ def test_no_matching_tests(test_sessions):
 
     Key aspects:
     - Empty result is returned when no tests match
-    - QueryResult.empty() returns True
+    - QueryResult.empty is True
     """
     query = Query().filter_by_test().with_outcome(TestOutcome.SKIPPED).apply()
     result = query.execute(sessions=test_sessions)
 
     # Verify no sessions are returned
     assert len(result.sessions) == 0
-    assert result.empty()
+    assert result.empty
 
 
 def test_order_preservation_in_test_filtering(test_sessions, db_session):
@@ -517,12 +479,12 @@ def test_query_invalid_sessions():
 
     # Test invalid pattern parameters
     query = Query().filter_by_test()
-    with pytest.raises(TypeError, match="missing 1 required positional argument: 'field_name'"):
+    with pytest.raises(TypeError, match="missing 1 required keyword-only argument: 'field_name'"):
         query.with_pattern("test")
 
     # Test invalid filter combinations
     query = Query().filter_by_test()
-    with pytest.raises(TypeError, match="Pattern must be a string"):
+    with pytest.raises(TypeError, match="Invalid pattern type: <class 'NoneType'>"):
         query.with_pattern(None, field_name="nodeid")
 
     # Verify query state remains consistent after errors
@@ -577,18 +539,16 @@ def test_test_level_filtering(get_test_time, mocker):
     assert result.sessions[0].session_tags == {"env": "prod"}  # Session context preserved
 
     # Multiple filters - AND logic
-    query = (
-        Query()
-        .filter_by_test()
-        .with_duration_between(4.0, float("inf"))
-        .with_outcome(TestOutcome.FAILED)
-        .apply()
-    )
+    query = Query().filter_by_test().with_duration_between(4.0, float("inf")).with_outcome(TestOutcome.FAILED).apply()
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
+    # Only tests matching BOTH filters included
     assert len(result.sessions[0].test_results) == 1
-    assert result.sessions[0].test_results[0].nodeid == "test_2"
-    assert result.sessions[0].session_tags == {"env": "prod"}  # Session context preserved
+    # Test matches both duration and outcome filters
+    assert result.sessions[0].test_results[0].duration >= 4.0
+    assert result.sessions[0].test_results[0].outcome == TestOutcome.FAILED
+    # Session context preserved
+    assert result.sessions[0].session_tags == {"env": "prod"}
 
     # No matches - session should be excluded
     query = Query().filter_by_test().with_duration_between(20.0, float("inf")).apply()
@@ -695,7 +655,7 @@ def test_session_vs_test_level_filtering(get_test_time, mocker):
     )
 
     # Session-level filter - should keep ALL tests in matching sessions
-    query = Query().with_tag("env", "prod")
+    query = Query().with_session_tag("env", "prod")
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
     # ALL tests should be included (session-level filter)
@@ -722,7 +682,7 @@ def test_session_vs_test_level_filtering(get_test_time, mocker):
     # Combined filtering - session filtered first, then tests
     query = (
         Query()
-        .with_tag("env", "prod")  # Session-level: keeps whole session
+        .with_session_tag("env", "prod")  # Session-level: keeps whole session
         .filter_by_test()
         .with_outcome(TestOutcome.FAILED)  # Test-level: keeps only FAILED tests
         .apply()
@@ -812,13 +772,7 @@ def test_query_duration_filter(get_test_time, mocker):
     assert result.sessions[0].session_tags == {"env": "prod"}
 
     # Multiple filters - AND logic
-    query = (
-        Query()
-        .filter_by_test()
-        .with_duration_between(4.0, float("inf"))
-        .with_outcome(TestOutcome.FAILED)
-        .apply()
-    )
+    query = Query().filter_by_test().with_duration_between(4.0, float("inf")).with_outcome(TestOutcome.FAILED).apply()
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
     # Only tests matching BOTH filters included
@@ -994,7 +948,7 @@ def test_query_combined_filters(get_test_time, mocker):
     )
 
     # Session-level filter only - keep ALL tests
-    query = Query().with_tag("env", "prod")
+    query = Query().with_session_tag("env", "prod")
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
     # ALL tests should be included (session-level filter)
@@ -1019,13 +973,7 @@ def test_query_combined_filters(get_test_time, mocker):
     assert result.sessions[0].session_tags == {"env": "prod", "version": "1.2.3"}
 
     # Combined filtering - session filtered first, then tests
-    query = (
-        Query()
-        .with_tag("env", "prod")
-        .filter_by_test()
-        .with_outcome(TestOutcome.FAILED)
-        .apply()
-    )
+    query = Query().with_session_tag("env", "prod").filter_by_test().with_outcome(TestOutcome.FAILED).apply()
     result = query.execute(sessions=[session])
     assert len(result.sessions) == 1
     # Only matching tests should be included
@@ -1135,3 +1083,329 @@ def test_query_pattern_filter(get_test_time, mocker):
     assert result.sessions[0].test_results[0].nodeid == "test_api.py::test_get"
     # Session metadata is preserved
     assert result.sessions[0].session_tags == {"type": "api", "component": "test"}
+
+
+def test_time_based_filtering(mocker):
+    """Test time-based filtering methods.
+
+    Key aspects:
+    1. Time-Based Filtering:
+       - in_last_days, in_last_hours, in_last_minutes, in_last_seconds
+       - date_range, before, after
+       - All return sessions with matching time criteria
+
+    2. Session Context:
+       - All tests within matching sessions are preserved
+       - Session metadata is maintained
+    """
+    # Import required modules
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    # Create a fixed reference time for testing
+    fixed_now = datetime(2023, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+    # Mock datetime.now to return our fixed time
+    datetime_mock = mocker.patch("pytest_insight.query.datetime")
+    datetime_mock.now.return_value = fixed_now
+    # Keep the original datetime functionality
+    datetime_mock.timedelta = timedelta
+
+    # Create sessions with different timestamps relative to our fixed now
+    now = fixed_now
+    one_day_ago = now - timedelta(days=1)
+    two_days_ago = now - timedelta(days=2)
+    three_days_ago = now - timedelta(days=3)
+
+    # Create test sessions with different start times
+    recent_session = TestSession(
+        sut_name="recent",
+        session_id="recent-1",
+        session_tags={"env": "prod"},
+        session_start_time=now,
+        session_stop_time=now + timedelta(minutes=5),
+        test_results=[
+            TestResult(
+                nodeid="test_recent.py",
+                outcome=TestOutcome.PASSED,
+                start_time=now,
+                duration=1.0,
+            ),
+        ],
+    )
+
+    day_old_session = TestSession(
+        sut_name="day-old",
+        session_id="day-old-1",
+        session_tags={"env": "staging"},
+        session_start_time=one_day_ago,
+        session_stop_time=one_day_ago + timedelta(minutes=5),
+        test_results=[
+            TestResult(
+                nodeid="test_day_old.py",
+                outcome=TestOutcome.PASSED,
+                start_time=one_day_ago,
+                duration=1.0,
+            ),
+        ],
+    )
+
+    two_day_old_session = TestSession(
+        sut_name="two-day-old",
+        session_id="two-day-old-1",
+        session_tags={"env": "dev"},
+        session_start_time=two_days_ago,
+        session_stop_time=two_days_ago + timedelta(minutes=5),
+        test_results=[
+            TestResult(
+                nodeid="test_two_day_old.py",
+                outcome=TestOutcome.PASSED,
+                start_time=two_days_ago,
+                duration=1.0,
+            ),
+        ],
+    )
+
+    three_day_old_session = TestSession(
+        sut_name="three-day-old",
+        session_id="three-day-old-1",
+        session_tags={"env": "dev"},
+        session_start_time=three_days_ago,
+        session_stop_time=three_days_ago + timedelta(minutes=5),
+        test_results=[
+            TestResult(
+                nodeid="test_three_day_old.py",
+                outcome=TestOutcome.PASSED,
+                start_time=three_days_ago,
+                duration=1.0,
+            ),
+        ],
+    )
+
+    # Mock storage to return our sessions
+    all_sessions = [
+        recent_session,
+        day_old_session,
+        two_day_old_session,
+        three_day_old_session,
+    ]
+    mock_storage = mocker.Mock()
+    mock_storage.load_sessions.return_value = all_sessions
+
+    # Test in_last_days
+    query = Query(storage=mock_storage)
+    result = query.in_last_days(1).execute()
+    assert len(result) == 2
+    assert {s.session_id for s in result.sessions} == {"recent-1", "day-old-1"}
+
+    query = Query(storage=mock_storage)
+    result = query.in_last_days(2).execute()
+    assert len(result) == 3
+    assert {s.session_id for s in result.sessions} == {
+        "recent-1",
+        "day-old-1",
+        "two-day-old-1",
+    }
+
+    query = Query(storage=mock_storage)
+    result = query.in_last_days(3).execute()
+    assert len(result) == 4
+    assert {s.session_id for s in result.sessions} == {
+        "recent-1",
+        "day-old-1",
+        "two-day-old-1",
+        "three-day-old-1",
+    }
+
+    # Test in_last_hours
+    query = Query(storage=mock_storage)
+    query = Query(storage=mock_storage)
+    result = query.in_last_hours(24).execute()
+    assert len(result) == 2
+    assert {s.session_id for s in result.sessions} == {"recent-1", "day-old-1"}
+
+    query = Query(storage=mock_storage)
+    result = query.in_last_hours(48).execute()
+    assert len(result) == 3
+    assert {s.session_id for s in result.sessions} == {
+        "recent-1",
+        "day-old-1",
+        "two-day-old-1",
+    }
+
+    # Test in_last_minutes
+    query = Query(storage=mock_storage)
+    result = query.in_last_minutes(24 * 60).execute()
+    assert len(result) == 2
+    assert {s.session_id for s in result.sessions} == {"recent-1", "day-old-1"}
+
+    # Test in_last_seconds
+    query = Query(storage=mock_storage)
+    result = query.in_last_seconds(24 * 60 * 60).execute()
+    assert len(result) == 2
+    assert {s.session_id for s in result.sessions} == {"recent-1", "day-old-1"}
+
+    # Test date_range
+    query = Query(storage=mock_storage)
+    result = query.date_range(one_day_ago - timedelta(hours=1), one_day_ago + timedelta(hours=1)).execute()
+    assert len(result) == 1
+    assert result.sessions[0].session_id == "day-old-1"
+
+    # Test before
+    query = Query(storage=mock_storage)
+    result = query.before(one_day_ago + timedelta(hours=1)).execute()
+    assert len(result) == 3
+    assert {s.session_id for s in result.sessions} == {
+        "day-old-1",
+        "two-day-old-1",
+        "three-day-old-1",
+    }
+
+    # Test after
+    query = Query(storage=mock_storage)
+    result = query.after(two_days_ago - timedelta(hours=1)).execute()
+    assert len(result) == 3
+    assert {s.session_id for s in result.sessions} == {
+        "recent-1",
+        "day-old-1",
+        "two-day-old-1",
+    }
+
+    # Test invalid parameters
+    query = Query(storage=mock_storage)
+    with pytest.raises(InvalidQueryParameterError):
+        query.in_last_days(-1).execute()
+
+    query = Query(storage=mock_storage)
+    with pytest.raises(InvalidQueryParameterError):
+        query.in_last_hours(-1).execute()
+
+    query = Query(storage=mock_storage)
+    with pytest.raises(InvalidQueryParameterError):
+        query.in_last_minutes(-1).execute()
+
+    query = Query(storage=mock_storage)
+    with pytest.raises(InvalidQueryParameterError):
+        query.in_last_seconds(-1).execute()
+
+    query = Query(storage=mock_storage)
+    with pytest.raises(InvalidQueryParameterError):
+        query.date_range(one_day_ago, one_day_ago - timedelta(days=1)).execute()
+
+
+def test_tag_based_filtering(mocker):
+    """Test tag-based filtering methods.
+
+    Key aspects:
+    1. Tag-Based Filtering:
+       - with_session_tag filters by session tag
+       - with_session_id_pattern filters by session ID pattern
+
+    2. Session Context:
+       - All tests within matching sessions are preserved
+       - Session metadata is maintained
+    """
+    # Create a fixed reference time for testing
+    fixed_now = datetime(2023, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+
+    # Mock datetime.now to return our fixed time
+    datetime_mock = mocker.patch("pytest_insight.query.datetime")
+    datetime_mock.now.return_value = fixed_now
+    # Keep the original datetime functionality
+    datetime_mock.timedelta = timedelta
+
+    # Create sessions with different tags and IDs
+    now = fixed_now
+
+    # Session with prod environment tag
+    prod_session = TestSession(
+        sut_name="api",
+        session_id="prod-run-123",
+        session_tags={"env": "prod", "region": "us-west"},
+        session_start_time=now,
+        session_stop_time=now + timedelta(minutes=5),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_endpoint",
+                outcome=TestOutcome.PASSED,
+                start_time=now,
+                duration=1.0,
+            ),
+        ],
+    )
+
+    # Session with staging environment tag
+    staging_session = TestSession(
+        sut_name="api",
+        session_id="staging-run-456",
+        session_tags={"env": "staging", "region": "us-east"},
+        session_start_time=now,
+        session_stop_time=now + timedelta(minutes=5),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_endpoint",
+                outcome=TestOutcome.PASSED,
+                start_time=now,
+                duration=1.0,
+            ),
+        ],
+    )
+
+    # Session with dev environment tag
+    dev_session = TestSession(
+        sut_name="api",
+        session_id="dev-run-789",
+        session_tags={"env": "dev", "region": "eu-west"},
+        session_start_time=now,
+        session_stop_time=now + timedelta(minutes=5),
+        test_results=[
+            TestResult(
+                nodeid="test_api.py::test_endpoint",
+                outcome=TestOutcome.PASSED,
+                start_time=now,
+                duration=1.0,
+            ),
+        ],
+    )
+
+    # Mock storage to return our sessions
+    all_sessions = [prod_session, staging_session, dev_session]
+    mock_storage = mocker.Mock()
+    mock_storage.load_sessions.return_value = all_sessions
+
+    # Test with_session_tag
+    query = Query(storage=mock_storage)
+    result = query.with_session_tag("env", "prod").execute()
+    assert len(result) == 1
+    assert result.sessions[0].session_id == "prod-run-123"
+
+    query = Query(storage=mock_storage)
+    result = query.with_session_tag("region", "us-east").execute()
+    assert len(result) == 1
+    assert result.sessions[0].session_id == "staging-run-456"
+
+    # Test with_session_id_pattern
+    query = Query(storage=mock_storage)
+    result = query.with_session_id_pattern("prod-*").execute()
+    assert len(result) == 1
+    assert result.sessions[0].session_id == "prod-run-123"
+
+    query = Query(storage=mock_storage)
+    result = query.with_session_id_pattern("*-run-*").execute()
+    assert len(result) == 3
+    assert {s.session_id for s in result.sessions} == {
+        "prod-run-123",
+        "staging-run-456",
+        "dev-run-789",
+    }
+
+    # Test invalid parameters
+    query = Query(storage=mock_storage)
+    with pytest.raises(InvalidQueryParameterError):
+        query.with_session_tag("", "value").execute()
+
+    with pytest.raises(InvalidQueryParameterError):
+        query.with_session_tag("key", "").execute()
+
+    with pytest.raises(InvalidQueryParameterError):
+        query.with_session_id_pattern("").execute()

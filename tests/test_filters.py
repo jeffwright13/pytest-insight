@@ -1,6 +1,6 @@
 """Test the query filters."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 from pytest_insight.models import TestOutcome, TestResult, TestSession
@@ -31,9 +31,7 @@ def test_sut_filter(test_session_no_reruns):
     assert len(result.sessions) == 1
 
     # All tests preserved in matching sessions
-    assert len(result.sessions[0].test_results) == len(
-        test_session_no_reruns.test_results
-    )
+    assert len(result.sessions[0].test_results) == len(test_session_no_reruns.test_results)
 
 
 def test_days_filter(test_session_no_reruns, get_test_time, mocker):
@@ -57,9 +55,7 @@ def test_days_filter(test_session_no_reruns, get_test_time, mocker):
     assert len(result.sessions) == 1
 
     # All tests preserved in matching sessions
-    assert len(result.sessions[0].test_results) == len(
-        test_session_no_reruns.test_results
-    )
+    assert len(result.sessions[0].test_results) == len(test_session_no_reruns.test_results)
 
     # Test old session gets filtered out
     old_session = TestSession(
@@ -119,7 +115,10 @@ def test_warnings_filter(test_result_warning, test_result_pass):
         session_id="test-123",
         session_start_time=test_result_warning.start_time,  # Use fixture's timezone-aware time
         session_stop_time=test_result_warning.start_time + timedelta(minutes=1),
-        test_results=[test_result_warning, test_result_pass],  # Add a test without warning
+        test_results=[
+            test_result_warning,
+            test_result_pass,
+        ],  # Add a test without warning
         rerun_test_groups=[],
     )
     storage = InMemoryStorage()
@@ -190,12 +189,7 @@ def test_pattern_matching(get_test_time):
 
     # Test pattern matching in nodeid field
     query = Query(storage=storage)
-    result = (
-        query.filter_by_test()
-        .with_pattern("api", field_name="nodeid")
-        .apply()
-        .execute()
-    )
+    result = query.filter_by_test().with_pattern("api", field_name="nodeid").apply().execute()
     assert len(result.sessions) == 1
     # Session context preserved - both tests still present
     assert len(result.sessions[0].test_results) == 2
@@ -207,24 +201,14 @@ def test_pattern_matching(get_test_time):
 
     # Test pattern matching in caplog field
     query = Query(storage=storage)
-    result = (
-        query.filter_by_test()
-        .with_pattern("API", field_name="caplog")
-        .apply()
-        .execute()
-    )
+    result = query.filter_by_test().with_pattern("API", field_name="caplog").apply().execute()
     assert len(result.sessions) == 1
     # Both tests match pattern in caplog
     assert all("API" in r.caplog for r in result.sessions[0].test_results)
 
     # Test case-sensitive pattern matching
     query = Query(storage=storage)
-    result = (
-        query.filter_by_test()
-        .with_pattern("api", field_name="caplog")
-        .apply()
-        .execute()
-    )
+    result = query.filter_by_test().with_pattern("api", field_name="caplog").apply().execute()
     assert len(result.sessions) == 0  # No matches due to case sensitivity
 
 
