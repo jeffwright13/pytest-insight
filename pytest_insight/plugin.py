@@ -57,7 +57,7 @@ def pytest_addoption(parser):
         "--insight-json-path",
         action="store",
         default=None,  # Make path optional, use default from JSONStorage if not specified
-        help="Path to JSON storage file for test sessions (use 'none' to disable saving results)",
+        help="Path to JSON storage file for reading in  test sessions (use 'none' to disable saving results)",
     )
 
 

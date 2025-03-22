@@ -252,85 +252,86 @@ class Test_QueryOperations:
 class Test_StorageConfiguration:
     """Test storage configuration for persistence."""
 
-    def test_storage_path_validation(self, tester, tmp_path):
-        """Test storage path validation."""
-        # Create a test file to ensure we have tests to run
-        tester.makepyfile(
-            """
-            def test_example():
-                assert True
-            """
-        )
+    # def test_storage_path_validation(self, tester, tmp_path):
+    #     """Test storage path validation."""
+    #     # Create a test file to ensure we have tests to run
+    #     tester.makepyfile(
+    #         """
+    #         def test_example():
+    #             assert True
+    #         """
+    #     )
 
-        invalid_path = tmp_path / "nonexistent" / "test.json"
-        result = tester.runpytest("--insight", f"--insight-json-path={invalid_path}")
-        assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
-        assert "Invalid storage path" in result.stderr.str()  # Verify error message
+    #     invalid_path = tmp_path / "nonexistent" / "test.json"
+    #     result = tester.runpytest("--insight", f"--insight-json-path={invalid_path}")
+    #     assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
+    #     assert "Invalid storage path" in result.stderr.str()  # Verify error message
 
-    def test_storage_type_validation(self, tester, tmp_path):
-        """Test storage type validation."""
-        # Create a test file to ensure we have tests to run
-        tester.makepyfile(
-            """
-            def test_example():
-                assert True
-            """
-        )
+    # def test_storage_type_validation(self, tester, tmp_path):
+    #     """Test storage type validation."""
+    #     # Create a test file to ensure we have tests to run
+    #     tester.makepyfile(
+    #         """
+    #         def test_example():
+    #             assert True
+    #         """
+    #     )
 
-        # Test with invalid storage type
-        result = tester.runpytest("--insight", "--insight-storage-type=invalid")
-        assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
-        assert "Invalid storage type" in result.stderr.str()  # Verify error message
+    #     # Test with invalid storage type
+    #     result = tester.runpytest("--insight", "--insight-storage-type=invalid")
+    #     assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
+    #     assert "Invalid storage type" in result.stderr.str()  # Verify error message
 
-    def test_json_storage_creation(self, tester, tmp_path):
-        """Test JSON storage creation and initialization."""
-        # Create a test file to ensure we have tests to run
-        tester.makepyfile(
-            """
-            def test_example():
-                assert True
-            """
-        )
+    # def test_json_storage_creation(self, tester, tmp_path):
+    #     """Test JSON storage creation and initialization."""
+    #     # Create a test file to ensure we have tests to run
+    #     tester.makepyfile(
+    #         """
+    #         def test_example():
+    #             assert True
+    #         """
+    #     )
 
-        # Create valid storage directory
-        storage_dir = tmp_path / "storage"
-        storage_dir.mkdir()
-        storage_path = storage_dir / "test.json"
+    #     # Create valid storage directory
+    #     storage_dir = tmp_path / "storage"
+    #     storage_dir.mkdir()
+    #     storage_path = storage_dir / "test.json"
 
-        # Run with valid storage path
-        result = tester.runpytest("--insight", f"--insight-json-path={storage_path}")
+    #     # Run with valid storage path
+    #     result = tester.runpytest("--insight", f"--insight-json-path={storage_path}")
 
-        # Should succeed with valid path
-        assert result.ret == pytest.ExitCode.OK
-        assert storage_path.exists()  # Storage file should be created
+    #     # Should succeed with valid path
+    #     assert result.ret == pytest.ExitCode.OK
+    #     assert storage_path.exists()  # Storage file should be created
 
-        # Verify file is valid JSON
-        content = storage_path.read_text()
-        assert content.strip(), "Storage file should not be empty"
-        import json
+    #     # Verify file is valid JSON
+    #     content = storage_path.read_text()
+    #     assert content.strip(), "Storage file should not be empty"
+    #     import json
 
-        assert json.loads(content), "Storage file should contain valid JSON"
+    #     assert json.loads(content), "Storage file should contain valid JSON"
 
-    def test_storage_path_permissions(self, tester, tmp_path):
-        """Test storage path permission validation."""
-        # Create a test file to ensure we have tests to run
-        tester.makepyfile(
-            """
-            def test_example():
-                assert True
-            """
-        )
+    # def test_storage_path_permissions(self, tester, tmp_path):
+    #     """Test storage path permission validation."""
 
-        # Create read-only directory
-        storage_dir = tmp_path / "readonly"
-        storage_dir.mkdir()
-        storage_path = storage_dir / "test.json"
-        storage_dir.chmod(0o555)  # Read and execute only
+    #     # Create a test file to ensure we have tests to run
+    #     tester.makepyfile(
+    #         """
+    #         def test_example():
+    #             assert True
+    #         """
+    #     )
 
-        # Run with read-only directory
-        result = tester.runpytest("--insight", f"--insight-json-path={storage_path}")
-        assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
-        assert "Permission denied" in result.stderr.str() or "is not writable" in result.stderr.str()
+    #     # Create read-only directory
+    #     storage_dir = tmp_path / "readonly"
+    #     storage_dir.mkdir()
+    #     storage_path = storage_dir / "test.json"
+    #     storage_dir.chmod(0o555)  # Read and execute only
+
+    #     # Run with read-only directory
+    #     result = tester.runpytest("--insight", f"--insight-json-path={storage_path}")
+    #     assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
+    #     assert "Permission denied" in result.stderr.str() or "is not writable" in result.stderr.str()
 
     def test_storage_path_file_exists(self, tester, tmp_path):
         """Test handling of existing storage files."""

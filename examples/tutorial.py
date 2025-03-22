@@ -234,12 +234,12 @@ print("\nAnalyzing slow tests with context:")
 slow_tests = (
     query.with_warning(True)  # Session-level: has warnings
     .filter_by_test()  # Start test filtering
-    .with_duration(10.0, float("inf"))  # Test-level: >10s runtime
+    .with_duration_between(10.0, float("inf"))  # Test-level: >10s runtime
     .apply()  # Back to session context
     .execute()
 )
 
-print(f"\nFound {slow_tests.total_count} sessions with slow tests")
+print(f"\nFound {len(slow_tests)} sessions with slow tests")
 for session in slow_tests.sessions:
     print(f"\nSession {session.session_id}:")
     # Show ALL tests in session for context
