@@ -1,5 +1,6 @@
 """Test the query filters."""
 
+import datetime as dt_module
 from datetime import timedelta
 
 import pytest
@@ -39,14 +40,19 @@ def test_days_filter(test_session_no_reruns, get_test_time, mocker):
 
     Session-level filter that preserves all tests in matching sessions.
     """
-    # Mock datetime.now to return a fixed time relative to our test timestamps
+    # Get a fixed time for testing
     mock_now = get_test_time(3600)  # 1 hour after base time
+
+    # Create a mock datetime object with a now method that returns our fixed time
     mock_datetime = mocker.MagicMock()
-    mock_datetime.now = mocker.MagicMock(return_value=mock_now)
-    mock_zoneinfo = mocker.MagicMock()
-    mock_zoneinfo.return_value = mock_now.tzinfo
-    mocker.patch("pytest_insight.query.datetime", mock_datetime)
-    mocker.patch("pytest_insight.query.ZoneInfo", mock_zoneinfo)
+    mock_datetime.now.return_value = mock_now
+    # Preserve the original timedelta for calculations
+    mock_datetime.timedelta = mocker.patch("pytest_insight.query.dt_module.timedelta", wraps=dt_module.timedelta)
+    # Preserve the original timezone for UTC
+    mock_datetime.timezone = mocker.patch("pytest_insight.query.dt_module.timezone", wraps=dt_module.timezone)
+
+    # Patch dt_module.datetime, not dt_module.datetime.now
+    mocker.patch("pytest_insight.query.dt_module.datetime", mock_datetime)
 
     storage = InMemoryStorage()
     storage.save_session(test_session_no_reruns)
@@ -66,6 +72,7 @@ def test_days_filter(test_session_no_reruns, get_test_time, mocker):
         test_results=[],
     )
     storage.save_session(old_session)
+    query = Query(storage=storage)
     result = query.in_last_days(7).execute()
     assert len(result.sessions) == 1
 
@@ -230,14 +237,19 @@ def test_multiple_filters(test_session_no_reruns, get_test_time, mocker):
        - Test relationships maintained within matching tests
        - Original order of matching tests preserved
     """
-    # Mock datetime.now to return a fixed time relative to our test timestamps
+    # Mock dt_module.datetime.now to return a fixed time relative to our test timestamps
     mock_now = get_test_time(3600)  # 1 hour after base time
+
+    # Create a mock datetime object with a now method that returns our fixed time
     mock_datetime = mocker.MagicMock()
-    mock_datetime.now = mocker.MagicMock(return_value=mock_now)
-    mock_zoneinfo = mocker.MagicMock()
-    mock_zoneinfo.return_value = mock_now.tzinfo
-    mocker.patch("pytest_insight.query.datetime", mock_datetime)
-    mocker.patch("pytest_insight.query.ZoneInfo", mock_zoneinfo)
+    mock_datetime.now.return_value = mock_now
+    # Preserve the original timedelta for calculations
+    mock_datetime.timedelta = mocker.patch("pytest_insight.query.dt_module.timedelta", wraps=dt_module.timedelta)
+    # Preserve the original timezone for UTC
+    mock_datetime.timezone = mocker.patch("pytest_insight.query.dt_module.timezone", wraps=dt_module.timezone)
+
+    # Patch dt_module.datetime, not dt_module.datetime.now
+    mocker.patch("pytest_insight.query.dt_module.datetime", mock_datetime)
 
     # Create test session with mixed outcomes
     test_pass = TestResult(

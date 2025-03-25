@@ -69,11 +69,7 @@ class Test_Comparison:
 
     def test_basic_comparison(self, base_session, target_session):
         """Test basic comparison functionality."""
-        comparison = (
-            Comparison()
-            .between_suts("api-service", "api-service")
-            .execute([base_session, target_session])
-        )
+        comparison = Comparison().between_suts("api-service", "api-service").execute([base_session, target_session])
 
         assert isinstance(comparison, ComparisonResult)
 
@@ -100,9 +96,7 @@ class Test_Comparison:
     def test_environment_comparison(self, base_session, target_session):
         """Test comparing across environments."""
         comparison = (
-            Comparison()
-            .with_environment({"python": "3.9"}, {"python": "3.10"})
-            .execute([base_session, target_session])
+            Comparison().with_environment({"python": "3.9"}, {"python": "3.10"}).execute([base_session, target_session])
         )
 
         assert isinstance(comparison, ComparisonResult)
@@ -169,9 +163,7 @@ class Test_Comparison:
         """
         comparison = (
             Comparison()
-            .with_test_pattern(
-                "get", field_name="nodeid"
-            )  # Match tests with 'get' in nodeid
+            .with_test_pattern("get", field_name="nodeid")  # Match tests with 'get' in nodeid
             .with_duration_threshold(0.5)  # Lower threshold to 0.5s
             .execute([base_session, target_session])
         )
@@ -199,12 +191,8 @@ class Test_Comparison:
         """
         comparison = (
             Comparison()
-            .with_test_pattern(
-                "get", field_name="nodeid"
-            )  # Match tests with 'get' in nodeid
-            .with_duration_threshold(
-                0.5
-            )  # This should pass (both sessions have durations > 0.5)
+            .with_test_pattern("get", field_name="nodeid")  # Match tests with 'get' in nodeid
+            .with_duration_threshold(0.5)  # This should pass (both sessions have durations > 0.5)
             .execute([base_session, target_session])
         )
 
@@ -244,9 +232,7 @@ class Test_Comparison:
         comparison2 = (
             Comparison()
             .with_environment({"python": "3.9"}, {"python": "3.10"})
-            .with_test_pattern(
-                "api", field_name="nodeid"
-            )  # Match tests with 'api' in nodeid
+            .with_test_pattern("api", field_name="nodeid")  # Match tests with 'api' in nodeid
             .execute([base_session, target_session])
         )
         assert len(comparison2.base_results.sessions) > 0

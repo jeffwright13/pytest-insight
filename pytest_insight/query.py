@@ -57,13 +57,12 @@ Examples:
 import dataclasses
 
 # Import the real datetime class for isinstance checks
+import datetime as dt_module
 import fnmatch
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from enum import Enum, auto
 from typing import Callable, Dict, List, Optional, Protocol, Union
-from zoneinfo import ZoneInfo
 
 from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.storage import BaseStorage, get_storage_instance
@@ -861,7 +860,7 @@ class Query:
         """
         if not isinstance(days, int) or days < 0:
             raise InvalidQueryParameterError("Days must be a non-negative integer")
-        cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(days=days)
+        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(days=days)
         self._session_filters.append(lambda s: s.session_start_time >= cutoff)
         return self
 
@@ -879,7 +878,7 @@ class Query:
         """
         if not isinstance(hours, int) or hours < 0:
             raise InvalidQueryParameterError("Hours must be a non-negative integer")
-        cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(hours=hours)
+        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(hours=hours)
         self._session_filters.append(lambda s: s.session_start_time >= cutoff)
         return self
 
@@ -897,7 +896,7 @@ class Query:
         """
         if not isinstance(minutes, int) or minutes < 0:
             raise InvalidQueryParameterError("Minutes must be a non-negative integer")
-        cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(minutes=minutes)
+        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(minutes=minutes)
         self._session_filters.append(lambda s: s.session_start_time >= cutoff)
         return self
 
@@ -915,11 +914,11 @@ class Query:
         """
         if not isinstance(seconds, int) or seconds < 0:
             raise InvalidQueryParameterError("Seconds must be a non-negative integer")
-        cutoff = datetime.now(ZoneInfo("UTC")) - timedelta(seconds=seconds)
+        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(seconds=seconds)
         self._session_filters.append(lambda s: s.session_start_time >= cutoff)
         return self
 
-    def date_range(self, start: datetime, end: datetime) -> "Query":
+    def date_range(self, start: dt_module.datetime, end: dt_module.datetime) -> "Query":
         """Filter sessions between two dates.
 
         This method includes sessions that started at or after the start datetime
@@ -939,34 +938,25 @@ class Query:
         Raises:
             InvalidQueryParameterError: If dates are invalid.
         """
-        # Check if objects have the expected datetime attributes instead of using isinstance
-        if not (
-            hasattr(start, "year")
-            and hasattr(start, "month")
-            and hasattr(start, "day")
-            and hasattr(end, "year")
-            and hasattr(end, "month")
-            and hasattr(end, "day")
-        ):
+        if not isinstance(start, dt_module.datetime) or not isinstance(end, dt_module.datetime):
             raise InvalidQueryParameterError("Start and end must be datetime objects")
-
-        if bool(getattr(start, "tzinfo", None)) != bool(getattr(end, "tzinfo", None)):
-            raise InvalidQueryParameterError("Both start and end must either have timezones or not have timezones")
-        if getattr(start, "tzinfo", None) and getattr(end, "tzinfo", None) and start.tzinfo != end.tzinfo:
-            raise InvalidQueryParameterError("Start and end dates must use the same timezone if timezone-aware")
+        if bool(start.tzinfo) != bool(end.tzinfo):
+            raise InvalidQueryParameterError("Start and end dates must both be naive or both be timezone-aware")
+        if start.tzinfo and end.tzinfo and start.tzinfo != end.tzinfo:
+            raise InvalidQueryParameterError("Start and end dates must be in the same timezone")
         if start > end:
-            raise InvalidQueryParameterError("Start datetime must be before or equal to end datetime")
+            raise InvalidQueryParameterError("Start date must be before end date")
         self._session_filters.append(lambda s: start <= s.session_start_time <= end)
         return self
 
-    def before(self, timestamp: datetime) -> "Query":
+    def before(self, timestamp: dt_module.datetime) -> "Query":
         """Filter sessions before given timestamp.
 
         This method includes sessions that started before the given timestamp, but does
         not include sessions that started exactly at the timestamp.
 
         Args:
-            timestamp: Datetime to filter before (exclusive).
+            timestamp: Datetime to filter before.
 
         Returns:
             Query instance for chaining.
@@ -974,21 +964,20 @@ class Query:
         Raises:
             InvalidQueryParameterError: If timestamp is not a datetime object.
         """
-        # Check if object has the expected datetime attributes instead of using isinstance
-        if not (hasattr(timestamp, "year") and hasattr(timestamp, "month") and hasattr(timestamp, "day")):
+        if not isinstance(timestamp, dt_module.datetime):
             raise InvalidQueryParameterError("Timestamp must be a datetime object")
 
         self._session_filters.append(lambda s: s.session_start_time < timestamp)
         return self
 
-    def after(self, timestamp: datetime) -> "Query":
+    def after(self, timestamp: dt_module.datetime) -> "Query":
         """Filter sessions after given timestamp.
 
         This method includes sessions that started after the given timestamp, but does
         not include sessions that started exactly at the timestamp.
 
         Args:
-            timestamp: Datetime to filter after (exclusive).
+            timestamp: Datetime to filter after.
 
         Returns:
             Query instance for chaining.
@@ -996,8 +985,7 @@ class Query:
         Raises:
             InvalidQueryParameterError: If timestamp is not a datetime object.
         """
-        # Check if object has the expected datetime attributes instead of using isinstance
-        if not (hasattr(timestamp, "year") and hasattr(timestamp, "month") and hasattr(timestamp, "day")):
+        if not isinstance(timestamp, dt_module.datetime):
             raise InvalidQueryParameterError("Timestamp must be a datetime object")
 
         self._session_filters.append(lambda s: s.session_start_time > timestamp)
@@ -1054,7 +1042,7 @@ class Query:
         self._session_filters.append(lambda s: bool(s.rerun_test_groups) == has_reruns)
         return self
 
-    def test_contains(self, pattern: str) -> "Query":
+    def test_nodeid_contains(self, pattern: str) -> "Query":
         """Filter sessions containing tests with nodeid matching pattern.
 
         Args:

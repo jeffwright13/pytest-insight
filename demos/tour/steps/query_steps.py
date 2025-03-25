@@ -6,13 +6,12 @@ This module implements the Query tour steps, showcasing:
 3. Context Benefits: Demonstrate why context preservation matters
 """
 
-from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from bullet import Bullet, Check, YesNo, colors
 from pytest_insight import InsightAPI, TestSession
 
-from ..utils.tour_helpers import TourHelper, Style
+from ..utils.tour_helpers import Style, TourHelper
 
 
 class QueryTourSteps:
@@ -33,7 +32,7 @@ class QueryTourSteps:
             bullet_color=colors.bright(colors.foreground["cyan"]),
             word_color=colors.bright(colors.foreground["white"]),
             word_on_switch=colors.bright(colors.foreground["yellow"]),
-            background_on_switch=colors.background["black"]
+            background_on_switch=colors.background["black"],
         )
         sut = sut_prompt.launch()
 
@@ -45,24 +44,21 @@ class QueryTourSteps:
             bullet_color=colors.bright(colors.foreground["cyan"]),
             word_color=colors.bright(colors.foreground["white"]),
             word_on_switch=colors.bright(colors.foreground["yellow"]),
-            background_on_switch=colors.background["black"]
+            background_on_switch=colors.background["black"],
         )
         days = int(days_prompt.launch().split()[1])
 
         # Show example code from MEMORY[96f9d536]
-        self.helper.print_code("""
+        self.helper.print_code(
+            """
 api.query()
    .for_sut("service").in_last_days(7).execute()
-""")
+"""
+        )
 
         # Execute query
         try:
-            sessions = (
-                self.api.query()
-                .for_sut(sut)
-                .in_last_days(days)
-                .execute()
-            )
+            sessions = self.api.query().for_sut(sut).in_last_days(days).execute()
             self.helper.print_success(f"Found {len(sessions)} sessions for {sut} in last {days} days")
             return sessions
         except Exception as e:
@@ -82,7 +78,7 @@ api.query()
             bullet_color=colors.bright(colors.foreground["cyan"]),
             word_color=colors.bright(colors.foreground["white"]),
             word_on_switch=colors.bright(colors.foreground["yellow"]),
-            background_on_switch=colors.background["black"]
+            background_on_switch=colors.background["black"],
         )
         duration = float(duration_prompt.launch().split()[0])
 
@@ -94,18 +90,20 @@ api.query()
             check_color=colors.bright(colors.foreground["green"]),
             check_on_switch=colors.bright(colors.foreground["yellow"]),
             word_color=colors.bright(colors.foreground["white"]),
-            background_on_switch=colors.background["black"]
+            background_on_switch=colors.background["black"],
         )
         outcomes = outcome_prompt.launch()
 
         # Show example code from MEMORY[96f9d536]
-        self.helper.print_code("""
+        self.helper.print_code(
+            """
 api.query()
    .filter_by_test()  # Filters sessions by test criteria
-   .with_duration(10.0, float("inf"))
+   .with_duration_between(10.0, float("inf"))
    .apply()  # Back to session context
    .execute()
-""")
+"""
+        )
 
         # Execute query with test filtering
         try:
@@ -114,7 +112,7 @@ api.query()
                 result = (
                     self.api.query()
                     .filter_by_test()  # Start test-level filtering
-                    .with_duration(duration, None)
+                    .with_duration_between(duration, None)
                     .with_outcome(outcome)
                     .apply()  # Back to session context
                     .execute()
@@ -140,7 +138,7 @@ api.query()
         show_warnings = YesNo(
             "Would you like to see test warnings?",
             word_color=colors.bright(colors.foreground["white"]),
-            background_on_switch=colors.background["black"]
+            background_on_switch=colors.background["black"],
         ).launch()
 
         # Show related tests
@@ -157,7 +155,7 @@ api.query()
             show_reruns = YesNo(
                 "Would you like to see rerun patterns?",
                 word_color=colors.bright(colors.foreground["white"]),
-                background_on_switch=colors.background["black"]
+                background_on_switch=colors.background["black"],
             ).launch()
 
             if show_reruns:

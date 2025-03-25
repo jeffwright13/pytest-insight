@@ -91,7 +91,7 @@ def demo_query(api):
             api.query()
             .for_sut("api-service")
             .filter_by_test()  # Enter test filtering context
-            .with_duration(5.0, None)  # Find slow tests (>5s)
+            .with_duration_between(5.0, None)  # Find slow tests (>5s)
             .with_outcome("failed")  # That also failed
             .apply()  # Back to session context
             .execute()
