@@ -163,10 +163,12 @@ class Test_Comparison:
         """
         comparison = (
             Comparison()
-            .apply_to_both(lambda q: q.filter_by_test()
+            .apply_to_both(
+                lambda q: q.filter_by_test()
                 .with_nodeid_containing("get")  # Match tests with 'get' in nodeid
                 .with_duration_between(0.5, float("inf"))  # Lower threshold to 0.5s
-                .apply())
+                .apply()
+            )
             .execute([base_session, target_session])
         )
 
@@ -193,10 +195,12 @@ class Test_Comparison:
         """
         comparison = (
             Comparison()
-            .apply_to_both(lambda q: q.filter_by_test()
+            .apply_to_both(
+                lambda q: q.filter_by_test()
                 .with_nodeid_containing("get")  # Match tests with 'get' in nodeid
                 .with_duration_between(0.5, float("inf"))  # This should pass (both sessions have durations > 0.5)
-                .apply())
+                .apply()
+            )
             .execute([base_session, target_session])
         )
 
@@ -221,9 +225,11 @@ class Test_Comparison:
         # Test multiple outcome filters (should restrict results)
         comparison1 = (
             Comparison()
-            .apply_to_both(lambda q: q.filter_by_test()
+            .apply_to_both(
+                lambda q: q.filter_by_test()
                 .with_outcome(TestOutcome.FAILED)  # First filter - failed outcomes
-                .apply())
+                .apply()
+            )
             .apply_to_both(lambda q: q.with_reruns(False))  # Second filter - no reruns
             .execute([base_session, target_session])
         )
@@ -233,9 +239,11 @@ class Test_Comparison:
         comparison2 = (
             Comparison()
             .with_environment({"python": "3.9"}, {"python": "3.10"})
-            .apply_to_both(lambda q: q.filter_by_test()
+            .apply_to_both(
+                lambda q: q.filter_by_test()
                 .with_nodeid_containing("api")  # Match tests with 'api' in nodeid
-                .apply())
+                .apply()
+            )
             .execute([base_session, target_session])
         )
         assert comparison2.base_session is not None
