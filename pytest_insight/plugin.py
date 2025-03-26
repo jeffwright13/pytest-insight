@@ -197,131 +197,24 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     # Create an Insights instance with the analysis
     insights = Insights(analysis=analysis)
 
-    # Get console-friendly summary
+    # Get formatted console output
     try:
-        summary = insights.console_summary()
+        # Format the console output with session info
+        output = insights.format_console_output(
+            session_id=session.session_id,
+            sut_name=session.sut_name,
+            storage_path=storage.file_path,
+        )
+
+        # Write the formatted header with terminal-width separators
+        terminalreporter.write_line("")
+        terminalreporter.write_sep("=", "pytest-insight", cyan=True)
+
+        # Write the formatted insights output
+        terminalreporter.write_line(output)
     except Exception as e:
         terminalreporter.write_line(f"[pytest-insight] Error generating summary: {str(e)}", red=True)
         return
-
-    # Helper functions for terminal output
-    def write_section_header(terminalreporter, text):
-        """Write a section header with dashes."""
-        terminalreporter.write_line("")
-        terminalreporter.write_line(f"--- {text} ---", yellow=True)
-
-    def write_stat_line(terminalreporter, label, value, **color_kwargs):
-        """Write an indented stat line with colored value."""
-        terminalreporter.write("    ")  # 4-space indentation
-        terminalreporter.write(f"{label}: ")
-        terminalreporter.write_line(f"{value}", **color_kwargs)
-
-    # Add screen-wide header only for main plugin section
-    terminalreporter.write_sep("=", "pytest-insight summary", cyan=True)
-    terminalreporter.write_line("")  # Add spacing
-
-    # Main sections
-    write_section_header(terminalreporter, "Test Session Info")
-    write_stat_line(terminalreporter, "SUT Name", sut_name)
-    write_stat_line(terminalreporter, "Session ID", session_id)
-    write_stat_line(terminalreporter, "Storage Path", storage.file_path)
-
-    # Health score from insights
-    write_section_header(terminalreporter, "Test Health")
-    write_stat_line(
-        terminalreporter,
-        "Health Score",
-        f"{summary['health_score']:.2f}/100",
-        green=summary["health_score"] >= 80,
-        yellow=60 <= summary["health_score"] < 80,
-        red=summary["health_score"] < 60,
-    )
-
-    # Test execution summary
-    write_section_header(terminalreporter, "Test Execution Summary")
-    write_stat_line(terminalreporter, "Total Tests", str(summary["outcome_distribution"][0][1]), green=True)
-    write_stat_line(terminalreporter, "Total Duration", f"{session.session_duration:.2f}s", green=True)
-    write_stat_line(terminalreporter, "Start Time", session_start.isoformat())
-    write_stat_line(terminalreporter, "Stop Time", session_end.isoformat())
-
-    # Outcome distribution from insights
-    write_section_header(terminalreporter, "Outcome Distribution")
-    for outcome, count in summary["outcome_distribution"]:
-        percentage = (count / len(test_results)) * 100 if test_results else 0
-        value = f"{count} ({percentage:.1f}%)"
-        outcome_str = outcome.to_str() if hasattr(outcome, "to_str") else str(outcome)
-        color_kwargs = {
-            "passed": {"green": True},
-            "failed": {"red": True},
-            "error": {"red": True},
-            "skipped": {"yellow": True},
-            "xfailed": {"yellow": True},
-            "xpassed": {"yellow": True},
-            "rerun": {"cyan": True},
-        }.get(outcome_str.lower(), {})
-        write_stat_line(terminalreporter, f"{outcome_str.capitalize()}", value, **color_kwargs)
-
-    # Flaky test information from insights
-    if summary["flaky_test_count"] > 0:
-        write_section_header(terminalreporter, "Flaky Tests")
-        write_stat_line(
-            terminalreporter,
-            "Tests Requiring Reruns",
-            str(summary["flaky_test_count"]),
-            cyan=True,
-        )
-
-        # Display most flaky tests
-        if summary["most_flaky"]:
-            write_section_header(terminalreporter, "Most Flaky Tests")
-            for nodeid, data in summary["most_flaky"][:3]:
-                write_stat_line(
-                    terminalreporter,
-                    nodeid,
-                    f"{data['reruns']} reruns (Pass rate: {data['pass_rate']*100:.1f}%)",
-                    yellow=True,
-                )
-
-    # Slowest tests from insights
-    if summary["slowest_tests"]:
-        write_section_header(terminalreporter, "Longest Running Tests")
-        for nodeid, duration in summary["slowest_tests"]:
-            # Find the test outcome for coloring
-            test_outcome = None
-            for test in test_results:
-                if test.nodeid == nodeid:
-                    test_outcome = test.outcome
-                    break
-
-            color_kwargs = {
-                TestOutcome.PASSED: {"green": True},
-                TestOutcome.FAILED: {"red": True},
-                TestOutcome.ERROR: {"red": True},
-                TestOutcome.SKIPPED: {"yellow": True},
-            }.get(test_outcome, {})
-
-            write_stat_line(
-                terminalreporter,
-                nodeid,
-                f"{duration:.2f}s ({test_outcome.to_str().capitalize() if test_outcome else 'Unknown'})",
-                **color_kwargs,
-            )
-
-    # Failure trend information if available
-    if summary["failure_trend"]["change"] != 0:
-        write_section_header(terminalreporter, "Trend Analysis")
-        trend_text = f"{abs(summary['failure_trend']['change']):.1f}% "
-        if summary["failure_trend"]["improving"]:
-            trend_text += "decrease in failures"
-            color_kwargs = {"green": True}
-        else:
-            trend_text += "increase in failures"
-            color_kwargs = {"red": True}
-
-        write_stat_line(terminalreporter, "Failure Trend", trend_text, **color_kwargs)
-
-    # Add final spacing
-    terminalreporter.write_line("")
 
 
 def group_tests_into_rerun_test_groups(

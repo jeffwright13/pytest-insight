@@ -56,7 +56,11 @@ class TestInsights:
             percentage = (count / total_tests) * 100 if total_tests > 0 else 0
             outcomes[outcome] = {"count": count, "percentage": percentage}
 
-        return {"total_tests": total_tests, "outcomes": outcomes, "most_common": outcome_counts.most_common()}
+        return {
+            "total_tests": total_tests,
+            "outcomes": outcomes,
+            "most_common": outcome_counts.most_common(),
+        }
 
     def flaky_tests(self) -> Dict[str, Any]:
         """Identify flaky tests across all sessions.
@@ -77,7 +81,11 @@ class TestInsights:
                     if rerun_group.final_outcome == TestOutcome.PASSED:
                         nodeid = rerun_group.nodeid
                         if nodeid not in flaky_tests:
-                            flaky_tests[nodeid] = {"reruns": 0, "sessions": set(), "pass_rate": 0.0}
+                            flaky_tests[nodeid] = {
+                                "reruns": 0,
+                                "sessions": set(),
+                                "pass_rate": 0.0,
+                            }
                         flaky_tests[nodeid]["reruns"] += (
                             len(rerun_group.tests) - 1
                         )  # Subtract 1 for the final passing test
@@ -91,10 +99,16 @@ class TestInsights:
 
         # Sort by number of reruns
         most_flaky = sorted(
-            [(nodeid, data) for nodeid, data in flaky_tests.items()], key=lambda x: x[1]["reruns"], reverse=True
+            [(nodeid, data) for nodeid, data in flaky_tests.items()],
+            key=lambda x: x[1]["reruns"],
+            reverse=True,
         )
 
-        return {"flaky_tests": flaky_tests, "total_flaky": len(flaky_tests), "most_flaky": most_flaky}
+        return {
+            "flaky_tests": flaky_tests,
+            "total_flaky": len(flaky_tests),
+            "most_flaky": most_flaky,
+        }
 
     def slowest_tests(self, limit: int = 10) -> Dict[str, Any]:
         """Identify the slowest tests across all sessions.
@@ -192,7 +206,11 @@ class SessionInsights:
         # Get available SUTs
         suts = set(session.sut_name for session in self._sessions)
         if len(suts) < 2:
-            return {"suts": list(suts), "comparisons": {}, "best_sut": next(iter(suts)) if suts else None}
+            return {
+                "suts": list(suts),
+                "comparisons": {},
+                "best_sut": next(iter(suts)) if suts else None,
+            }
 
         # Group sessions by SUT
         sut_sessions = defaultdict(list)
@@ -336,7 +354,11 @@ class TrendInsights:
             trend_percentage = 0.0
             increasing = False
 
-        return {"daily_durations": daily_durations, "trend_percentage": trend_percentage, "increasing": increasing}
+        return {
+            "daily_durations": daily_durations,
+            "trend_percentage": trend_percentage,
+            "increasing": increasing,
+        }
 
     def failure_trends(self) -> Dict[str, Any]:
         """Analyze test failure trends over time.
@@ -351,7 +373,11 @@ class TrendInsights:
         sorted_sessions = sorted(self._sessions, key=lambda s: s.session_start_time)
 
         if len(sorted_sessions) < 2:
-            return {"daily_failure_rates": [], "trend_percentage": 0.0, "improving": False}
+            return {
+                "daily_failure_rates": [],
+                "trend_percentage": 0.0,
+                "improving": False,
+            }
 
         # Group sessions by day
         sessions_by_day = {}
@@ -412,7 +438,12 @@ class TrendInsights:
         sorted_sessions = sorted(self._sessions, key=lambda s: s.session_start_time)
 
         if len(sorted_sessions) < 2:
-            return {"early_period": {}, "late_period": {}, "health_difference": 0.0, "improving": False}
+            return {
+                "early_period": {},
+                "late_period": {},
+                "health_difference": 0.0,
+                "improving": False,
+            }
 
         # Split into two halves
         midpoint = len(sorted_sessions) // 2
@@ -485,7 +516,7 @@ class Insights:
         insights = Insights(analysis=analysis)
         combined_report = {
             "health": insights.summary_report(),
-            "trends": insights.trends.failure_trends()
+            "trends": insights.trends.duration_trends()
         }
     """
 
@@ -563,32 +594,253 @@ class Insights:
             Dict containing the most important metrics and insights
             formatted for easy display in a terminal.
         """
-        # Get health score
+        # Get health score from metrics
         health_report = self.analysis.health_report()
-        health_score = health_report["health_score"]["overall_score"]
+        health_score = health_report.get("health_score", {}).get("overall_score", 0)
+
+        # Get test outcome distribution
+        outcome_dist = self.tests.outcome_distribution()
+        outcomes = []
+        for outcome, data in outcome_dist.get("outcomes", {}).items():
+            outcomes.append((outcome, data.get("count", 0)))
+        total_tests = outcome_dist.get("total_tests", 0)
+
+        # Get flaky tests
+        flaky_tests = self.tests.flaky_tests()
+        flaky_test_count = flaky_tests.get("total_flaky", 0)
+        most_flaky = flaky_tests.get("most_flaky", [])
+
+        # Get slowest tests
+        slow_tests = self.tests.slowest_tests(limit=3)
+        slowest_tests = slow_tests.get("slowest_tests", [])
+
+        # Get failure trends if we have multiple sessions
+        failure_trend = {"change": 0, "improving": False}
+        if self.analysis._sessions and len(self.analysis._sessions) > 1:
+            trends = self.trends.failure_trends()
+            failure_trend = {
+                "change": trends.get("trend_percentage", 0),
+                "improving": trends.get("improving", False),
+            }
+
+        # Get health report for more detailed metrics
+        stability_score = health_report.get("health_score", {}).get("stability_score", 0)
+        performance_score = health_report.get("health_score", {}).get("performance_score", 0)
+        warning_score = health_report.get("health_score", {}).get("warning_score", 0)
+
+        # Get recommendations if available
+        recommendations = health_report.get("recommendations", [])
 
         # Get session metrics
         session_metrics = self.sessions.session_metrics()
-
-        # Get outcome distribution
-        outcome_dist = self.tests.outcome_distribution()
-
-        # Get flaky tests
-        flaky = self.tests.flaky_tests()
-
-        # Get slowest tests (limited to 3)
-        slow_tests = self.tests.slowest_tests(limit=3)
-
-        # Get failure trends
-        failure_trends = self.trends.failure_trends()
+        avg_duration = session_metrics.get("avg_duration", 0)
+        failure_rate = session_metrics.get("failure_rate", 0) * 100
+        warning_rate = session_metrics.get("warning_rate", 0) * 100
 
         return {
             "health_score": health_score,
-            "session_count": session_metrics["total_sessions"],
-            "failure_rate": session_metrics["failure_rate"] * 100,  # Convert to percentage
-            "outcome_distribution": outcome_dist["most_common"],
-            "flaky_test_count": flaky["total_flaky"],
-            "most_flaky": flaky["most_flaky"][:3] if flaky["most_flaky"] else [],
-            "slowest_tests": slow_tests["slowest_tests"],
-            "failure_trend": {"improving": failure_trends["improving"], "change": failure_trends["trend_percentage"]},
+            "stability_score": stability_score,
+            "performance_score": performance_score,
+            "warning_score": warning_score,
+            "failure_rate": failure_rate,
+            "warning_rate": warning_rate,
+            "avg_duration": avg_duration,
+            "outcome_distribution": outcomes,
+            "total_tests": total_tests,
+            "flaky_test_count": flaky_test_count,
+            "most_flaky": most_flaky,
+            "slowest_tests": slowest_tests,
+            "failure_trend": failure_trend,
+            "recommendations": (recommendations[:3] if recommendations else []),  # Show top 3 recommendations
         }
+
+    def format_console_output(self, session_id: str, sut_name: str, storage_path: str = None) -> str:
+        """Format insights data into a string suitable for console output.
+
+        This method formats the insights from the current session into a
+        human-readable string with ANSI color codes for terminal display.
+
+        Args:
+            session_id: The ID of the current session
+            sut_name: The name of the system under test
+            storage_path: Optional path to the storage file
+
+        Returns:
+            A formatted string with ANSI color codes ready for terminal display
+        """
+        # Get summary data
+        summary = self.console_summary()
+
+        # ANSI color codes
+        RESET = "\033[0m"
+        YELLOW = "\033[33m"
+        GREEN = "\033[32m"
+        RED = "\033[31m"
+        CYAN = "\033[36m"
+
+        # Helper function to colorize text
+        def colorize(text, color_code):
+            return f"{color_code}{text}{RESET}"
+
+        # Helper function to create section headers
+        def section_header(text):
+            return colorize(f"\n--- {text} ---", YELLOW)
+
+        # Format output
+        output = []
+
+        # Add note about single-session insights
+        output.append("Note: This summary shows insights for the current test session only.")
+        output.append("For multi-session analysis, use the analyze_test_data.py script or the Insights API.")
+
+        # Session Info Section
+        output.append(section_header("Test Session Info"))
+        output.append(f"    SUT Name: {sut_name}")
+        output.append(f"    Session ID: {session_id}")
+        if storage_path:
+            output.append(f"    Storage Path: {storage_path}")
+
+        # Health Score Section
+        output.append(section_header("Test Health"))
+        health_score = summary["health_score"]
+        health_color = GREEN if health_score >= 80 else (YELLOW if health_score >= 60 else RED)
+        health_text = f"{health_score:.2f}/100"
+        output.append(f"    Health Score: {colorize(health_text, health_color)}")
+
+        # Add detailed health score components
+        if "stability_score" in summary:
+            stability_color = (
+                GREEN if summary["stability_score"] >= 80 else (YELLOW if summary["stability_score"] >= 60 else RED)
+            )
+            stability_text = f"{summary['stability_score']:.2f}/100"
+            output.append(f"    Stability Score: {colorize(stability_text, stability_color)}")
+
+        if "performance_score" in summary:
+            perf_color = (
+                GREEN if summary["performance_score"] >= 80 else (YELLOW if summary["performance_score"] >= 60 else RED)
+            )
+            perf_text = f"{summary['performance_score']:.2f}/100"
+            output.append(f"    Performance Score: {colorize(perf_text, perf_color)}")
+
+        if "warning_score" in summary:
+            warn_color = (
+                GREEN if summary["warning_score"] >= 80 else (YELLOW if summary["warning_score"] >= 60 else RED)
+            )
+            warn_text = f"{summary['warning_score']:.2f}/100"
+            output.append(f"    Warning Score: {colorize(warn_text, warn_color)}")
+
+        # Add failure rate
+        if "failure_rate" in summary:
+            fail_color = GREEN if summary["failure_rate"] < 10 else (YELLOW if summary["failure_rate"] < 20 else RED)
+            fail_text = f"{summary['failure_rate']:.1f}%"
+            output.append(f"    Failure Rate: {colorize(fail_text, fail_color)}")
+
+        # Add warning rate
+        if "warning_rate" in summary:
+            warn_rate_color = (
+                GREEN if summary["warning_rate"] < 5 else (YELLOW if summary["warning_rate"] < 15 else RED)
+            )
+            warn_rate_text = f"{summary['warning_rate']:.1f}%"
+            output.append(f"    Warning Rate: {colorize(warn_rate_text, warn_rate_color)}")
+
+        # Add average duration
+        if "avg_duration" in summary:
+            avg_duration_color = (
+                GREEN if summary["avg_duration"] < 60 else (YELLOW if summary["avg_duration"] < 120 else RED)
+            )
+            avg_duration_text = f"{summary['avg_duration']:.2f}s"
+            output.append(f"    Average Duration: {colorize(avg_duration_text, avg_duration_color)}")
+
+        # Test Execution Summary
+        output.append(section_header("Test Execution Summary"))
+        output.append(f"    Total Tests: {colorize(str(summary['total_tests']), GREEN)}")
+
+        # Calculate total duration from sessions
+        total_duration = (
+            sum(session.session_duration for session in self.analysis._sessions) if self.analysis._sessions else 0
+        )
+        duration_text = f"{total_duration:.2f}s"
+        output.append(f"    Total Duration: {colorize(duration_text, GREEN)}")
+
+        # Add session start/stop times if available
+        if self.analysis._sessions and len(self.analysis._sessions) > 0:
+            session = self.analysis._sessions[0]  # Use the first session for start/stop times
+            output.append(f"    Start Time: {session.session_start_time.isoformat()}")
+            output.append(f"    Stop Time: {session.session_stop_time.isoformat()}")
+
+        # Outcome Distribution
+        output.append(section_header("Outcome Distribution"))
+        for outcome, count in summary["outcome_distribution"]:
+            # Get the percentage from the count and total tests
+            percentage = (count / summary["total_tests"]) * 100 if summary["total_tests"] else 0
+            value = f"{count} ({percentage:.1f}%)"
+            outcome_str = outcome.to_str() if hasattr(outcome, "to_str") else str(outcome)
+
+            # Choose color based on outcome
+            color = GREEN
+            if outcome_str.lower() in ["failed", "error"]:
+                color = RED
+            elif outcome_str.lower() in ["skipped", "xfailed", "xpassed"]:
+                color = YELLOW
+            elif outcome_str.lower() == "rerun":
+                color = CYAN
+
+            output.append(f"    {outcome_str.capitalize()}: {colorize(value, color)}")
+
+        # Flaky Tests
+        if summary["flaky_test_count"] > 0:
+            output.append(section_header("Flaky Tests"))
+            output.append(f"    Tests Requiring Reruns: {colorize(str(summary['flaky_test_count']), CYAN)}")
+
+            # Display most flaky tests
+            if summary["most_flaky"]:
+                output.append(section_header("Most Flaky Tests"))
+                for nodeid, data in summary["most_flaky"][:3]:  # Show top 3
+                    reruns = data.get("reruns", 0)
+                    pass_rate = data.get("pass_rate", 0) * 100
+                    pass_rate_text = f"{pass_rate:.1f}%"
+                    output.append(
+                        f"    {nodeid}: {colorize(str(reruns), CYAN)} reruns (Pass rate: {colorize(pass_rate_text, YELLOW)})"  # noqa: E501
+                    )
+
+        # Slowest Tests
+        if summary["slowest_tests"]:
+            output.append(section_header("Longest Running Tests"))
+            for nodeid, duration in summary["slowest_tests"]:
+                # Find test outcome for coloring if possible
+                color = GREEN
+                outcome = "Unknown"
+
+                # Try to find the test in sessions to get its outcome
+                for session in self.analysis._sessions:
+                    for test in session.test_results:
+                        if test.nodeid == nodeid:
+                            outcome = test.outcome.to_str() if hasattr(test.outcome, "to_str") else str(test.outcome)
+                            if outcome.lower() in ["failed", "error"]:
+                                color = RED
+                            elif outcome.lower() in ["skipped", "xfailed", "xpassed"]:
+                                color = YELLOW
+                            break
+
+                duration_text = f"{duration:.2f}s"
+                output.append(f"    {nodeid}: {colorize(duration_text, color)} ({outcome.capitalize()})")
+
+        # Failure Trend (only if we have multiple sessions)
+        if summary["failure_trend"]["change"] != 0:
+            output.append(section_header("Trend Analysis"))
+            trend_text = f"{abs(summary['failure_trend']['change']):.1f}% "
+            if summary["failure_trend"]["improving"]:
+                trend_text += "decrease in failures"
+                output.append(f"    Failure Trend: {colorize(trend_text, GREEN)}")
+            else:
+                trend_text += "increase in failures"
+                output.append(f"    Failure Trend: {colorize(trend_text, RED)}")
+
+        # Add recommendations if available
+        if summary.get("recommendations"):
+            output.append(section_header("Recommendations"))
+            for i, recommendation in enumerate(summary["recommendations"]):
+                output.append(f"    {i+1}. {recommendation}")
+
+        # Join all lines and return
+        return "\n".join(output)
