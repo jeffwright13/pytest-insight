@@ -350,7 +350,7 @@ class Test_StorageConfiguration:
         storage_path.write_text('{"sessions": []}')  # Create valid JSON file
 
         # Run with existing file
-        result = tester.runpytest("--insight", f"--insight-json-path={storage_path}")
+        result = tester.runpytest("--insight", f"--insight-storage-path={storage_path}")
         assert result.ret == pytest.ExitCode.OK  # Should succeed with existing file
 
         # Verify file still contains valid JSON

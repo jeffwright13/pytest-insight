@@ -1,7 +1,6 @@
 import sys
 import uuid
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import pytest
@@ -11,6 +10,7 @@ from _pytest.terminal import TerminalReporter, WarningReport
 from pytest import ExitCode
 
 from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
+from pytest_insight.insights import Insights
 from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
 from pytest_insight.storage import get_storage_instance
 
@@ -49,75 +49,48 @@ def pytest_addoption(parser):
     group.addoption(
         "--insight-storage-type",
         action="store",
-        choices=[t.value for t in StorageType],
         default=DEFAULT_STORAGE_TYPE.value,
-        help=f"Storage type for test sessions (default: {DEFAULT_STORAGE_TYPE.value})",
+        choices=[t.value for t in StorageType],
+        help=f"Storage type for test data (default: {DEFAULT_STORAGE_TYPE.value})",
     )
     group.addoption(
-        "--insight-json-path",
+        "--insight-storage-path",
         action="store",
-        default=None,  # Make path optional, use default from JSONStorage if not specified
-        help="Path to JSON storage file for reading in  test sessions (use 'none' to disable saving results)",
+        default=None,
+        help="Path to storage directory/file (default: ~/.pytest_insight)",
+    )
+    group.addoption(
+        "--insight-environment",
+        action="store",
+        default="test",
+        help="Environment name (e.g., dev, test, prod)",
     )
 
 
 @pytest.hookimpl
 def pytest_configure(config: Config):
     """Configure the plugin if enabled."""
+    global storage
+
     if not insight_enabled(config):
         return
 
-    global storage
-    if storage is None:
-        storage_type = config.getoption("insight_storage_type")
-        json_path = config.getoption("insight_json_path")
+    # Initialize storage
+    storage_type_str = config.getoption("insight_storage_type", DEFAULT_STORAGE_TYPE.value)
+    storage_type = StorageType(storage_type_str)
+    storage_path = config.getoption("insight_storage_path", None)
 
-        # Don't initialize storage if JSON output is disabled
-        if json_path and json_path.lower() == "none":
-            return
+    try:
+        storage = get_storage_instance(storage_type.value, storage_path)
+    except Exception as e:
+        # Log error but don't fail the test run
+        print(f"[pytest-insight] Error initializing storage: {e}", file=sys.stderr)
+        return
 
-        # Convert string path to Path object only if path is specified
-        if json_path:
-            json_path = Path(json_path).resolve()
-
-            # Validate parent directory exists or can be created
-            try:
-                parent = json_path.parent
-                if not parent.exists():
-                    msg = f"Invalid storage path: Parent directory {parent} does not exist"
-                    config.warn(1, msg)
-                    raise pytest.UsageError(msg)
-                elif not parent.is_dir():
-                    msg = f"Invalid storage path: {parent} exists but is not a directory"
-                    config.warn(1, msg)
-                    raise pytest.UsageError(msg)
-                else:
-                    # More reliable write permission check - try to create a temporary file
-                    try:
-                        test_file = parent / f".pytest_insight_write_test_{uuid.uuid4().hex[:8]}"
-                        test_file.touch()
-                        test_file.unlink()  # Clean up the test file
-                    except OSError:
-                        msg = f"Invalid storage path: {parent} is not writable"
-                        config.warn(1, msg)
-                        raise pytest.UsageError(msg)
-            except pytest.UsageError:
-                raise
-            except Exception as e:
-                msg = f"Invalid storage path: {e}"
-                config.warn(1, msg)
-                raise pytest.UsageError(msg)
-
-        # Create storage instance (will use default path if json_path is None)
-        storage = get_storage_instance(storage_type, json_path)
-
-    # Initialize session with empty metadata
-    sut_name = config.getoption("insight_sut", "default_sut")
-    config._insight_session = TestSession(
-        sut_name=sut_name,
-        session_id=f"{sut_name}-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}".lower(),
-        session_start_time=datetime.now(),
-        session_stop_time=datetime.now(),  # Will be updated later
+    # Register additional markers
+    config.addinivalue_line(
+        "markers",
+        "insight_tag(name, value): add a tag to the test session",
     )
 
 
@@ -215,20 +188,23 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         terminalreporter.write_line(f"[pytest-insight] Error: Failed to save session - {str(e)}", red=True)
         terminalreporter.write_line(f"[pytest-insight] Error details: {str(e)}", red=True)
 
-    # Calculate insights
-    total_tests = len(test_results)
-    total_duration = sum(t.duration for t in test_results)
-    rerun_groups = group_tests_into_rerun_test_groups(test_results)
-    flaky_tests = [g for g in rerun_groups if g.final_outcome == TestOutcome.PASSED]
-    unstable_tests = [g for g in rerun_groups if g.final_outcome == TestOutcome.FAILED]
+    # Import Analysis class here to avoid circular imports
+    from pytest_insight.analysis import Analysis
 
-    # Sort tests by duration
-    sorted_by_duration = sorted(test_results, key=lambda t: t.duration, reverse=True)
-    top_duration_tests = sorted_by_duration[:3]
+    # Create an Analysis instance with the current session
+    analysis = Analysis(storage=storage, sessions=[session])
 
-    # Sort rerun groups by number of attempts
-    most_retried = sorted(rerun_groups, key=lambda g: len(g.tests), reverse=True)[:3]
+    # Create an Insights instance with the analysis
+    insights = Insights(analysis=analysis)
 
+    # Get console-friendly summary
+    try:
+        summary = insights.console_summary()
+    except Exception as e:
+        terminalreporter.write_line(f"[pytest-insight] Error generating summary: {str(e)}", red=True)
+        return
+
+    # Helper functions for terminal output
     def write_section_header(terminalreporter, text):
         """Write a section header with dashes."""
         terminalreporter.write_line("")
@@ -250,66 +226,99 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     write_stat_line(terminalreporter, "Session ID", session_id)
     write_stat_line(terminalreporter, "Storage Path", storage.file_path)
 
+    # Health score from insights
+    write_section_header(terminalreporter, "Test Health")
+    write_stat_line(
+        terminalreporter,
+        "Health Score",
+        f"{summary['health_score']:.2f}/100",
+        green=summary["health_score"] >= 80,
+        yellow=60 <= summary["health_score"] < 80,
+        red=summary["health_score"] < 60,
+    )
+
+    # Test execution summary
     write_section_header(terminalreporter, "Test Execution Summary")
-    write_stat_line(terminalreporter, "Total Tests", str(total_tests), green=True)
-    write_stat_line(terminalreporter, "Total Duration", f"{total_duration:.2f}s", green=True)
+    write_stat_line(terminalreporter, "Total Tests", str(summary["outcome_distribution"][0][1]), green=True)
+    write_stat_line(terminalreporter, "Total Duration", f"{session.session_duration:.2f}s", green=True)
     write_stat_line(terminalreporter, "Start Time", session_start.isoformat())
     write_stat_line(terminalreporter, "Stop Time", session_end.isoformat())
 
+    # Outcome distribution from insights
     write_section_header(terminalreporter, "Outcome Distribution")
-    for outcome, reports in sorted(terminalreporter.stats.items()):
-        if outcome not in ["warnings", ""]:
-            count = len(reports)
-            percentage = (count / total_tests) * 100 if total_tests > 0 else 0
-            value = f"{count} ({percentage:.1f}%)" if outcome.lower() not in ["rerun", "deselected"] else str(count)
-            color_kwargs = {
-                "passed": {"green": True},
-                "failed": {"red": True},
-                "error": {"red": True},
-                "skipped": {"yellow": True},
-                "xfailed": {"yellow": True},
-                "xpassed": {"yellow": True},
-                "rerun": {"cyan": True},
-            }.get(outcome, {})
-            write_stat_line(terminalreporter, f"{outcome.capitalize()}", value, **color_kwargs)
+    for outcome, count in summary["outcome_distribution"]:
+        percentage = (count / len(test_results)) * 100 if test_results else 0
+        value = f"{count} ({percentage:.1f}%)"
+        outcome_str = outcome.to_str() if hasattr(outcome, "to_str") else str(outcome)
+        color_kwargs = {
+            "passed": {"green": True},
+            "failed": {"red": True},
+            "error": {"red": True},
+            "skipped": {"yellow": True},
+            "xfailed": {"yellow": True},
+            "xpassed": {"yellow": True},
+            "rerun": {"cyan": True},
+        }.get(outcome_str.lower(), {})
+        write_stat_line(terminalreporter, f"{outcome_str.capitalize()}", value, **color_kwargs)
 
-    if rerun_groups:
-        write_section_header(terminalreporter, "Rerun Analysis")
+    # Flaky test information from insights
+    if summary["flaky_test_count"] > 0:
+        write_section_header(terminalreporter, "Flaky Tests")
         write_stat_line(
             terminalreporter,
             "Tests Requiring Reruns",
-            str(len(rerun_groups)),
+            str(summary["flaky_test_count"]),
             cyan=True,
         )
-        write_stat_line(terminalreporter, "Eventually Passed", str(len(flaky_tests)), green=True)
-        write_stat_line(terminalreporter, "Remained Failed", str(len(unstable_tests)), red=True)
 
-        if most_retried:
-            write_section_header(terminalreporter, "Most Retried Tests")
-            for group in most_retried:
-                color_kwargs = {"green": True} if group.final_outcome == TestOutcome.PASSED else {"red": True}
+        # Display most flaky tests
+        if summary["most_flaky"]:
+            write_section_header(terminalreporter, "Most Flaky Tests")
+            for nodeid, data in summary["most_flaky"][:3]:
                 write_stat_line(
                     terminalreporter,
-                    group.nodeid,
-                    f"{len(group.tests)} attempts ({group.final_outcome.to_str().capitalize()})",
-                    **color_kwargs,
+                    nodeid,
+                    f"{data['reruns']} reruns (Pass rate: {data['pass_rate']*100:.1f}%)",
+                    yellow=True,
                 )
 
-    if top_duration_tests:
+    # Slowest tests from insights
+    if summary["slowest_tests"]:
         write_section_header(terminalreporter, "Longest Running Tests")
-        for test in top_duration_tests:
+        for nodeid, duration in summary["slowest_tests"]:
+            # Find the test outcome for coloring
+            test_outcome = None
+            for test in test_results:
+                if test.nodeid == nodeid:
+                    test_outcome = test.outcome
+                    break
+
             color_kwargs = {
                 TestOutcome.PASSED: {"green": True},
                 TestOutcome.FAILED: {"red": True},
                 TestOutcome.ERROR: {"red": True},
                 TestOutcome.SKIPPED: {"yellow": True},
-            }.get(test.outcome, {})
+            }.get(test_outcome, {})
+
             write_stat_line(
                 terminalreporter,
-                test.nodeid,
-                f"{test.duration:.2f}s ({test.outcome.to_str().capitalize()})",
+                nodeid,
+                f"{duration:.2f}s ({test_outcome.to_str().capitalize() if test_outcome else 'Unknown'})",
                 **color_kwargs,
             )
+
+    # Failure trend information if available
+    if summary["failure_trend"]["change"] != 0:
+        write_section_header(terminalreporter, "Trend Analysis")
+        trend_text = f"{abs(summary['failure_trend']['change']):.1f}% "
+        if summary["failure_trend"]["improving"]:
+            trend_text += "decrease in failures"
+            color_kwargs = {"green": True}
+        else:
+            trend_text += "increase in failures"
+            color_kwargs = {"red": True}
+
+        write_stat_line(terminalreporter, "Failure Trend", trend_text, **color_kwargs)
 
     # Add final spacing
     terminalreporter.write_line("")
