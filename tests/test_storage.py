@@ -264,3 +264,72 @@ def test_get_storage_instance_invalid_type():
     """Test get_storage_instance with invalid storage type."""
     with pytest.raises(ValueError, match="Unsupported storage type"):
         get_storage_instance("invalid_type")
+
+
+def test_selective_clear_sessions_json(json_storage, get_test_time):
+    """Test selectively clearing specific sessions in JSONStorage."""
+    # Create multiple test sessions
+    sessions = []
+    for i in range(5):
+        session = TestSession(
+            sut_name=f"clear-test-{i}",
+            session_id=f"clear-test-{i}",
+            session_start_time=get_test_time(i * 600),
+            session_duration=30,
+            test_results=[],
+        )
+        json_storage.save_session(session)
+        sessions.append(session)
+
+    # Verify all sessions were saved
+    assert len(json_storage.load_sessions()) == 5
+
+    # Selectively clear sessions 1 and 3
+    sessions_to_clear = [sessions[1], sessions[3]]
+    removed_count = json_storage.clear_sessions(sessions_to_clear)
+
+    # Verify correct number of sessions were removed
+    assert removed_count == 2
+
+    # Verify the right sessions remain
+    remaining_sessions = json_storage.load_sessions()
+    assert len(remaining_sessions) == 3
+    remaining_ids = {s.session_id for s in remaining_sessions}
+    assert remaining_ids == {"clear-test-0", "clear-test-2", "clear-test-4"}
+
+    # Clear all remaining sessions
+    removed_count = json_storage.clear_sessions()
+    assert removed_count == 3
+    assert len(json_storage.load_sessions()) == 0
+
+
+def test_selective_clear_sessions_in_memory(in_memory_storage, get_test_time):
+    """Test selectively clearing specific sessions in InMemoryStorage."""
+    # Create multiple test sessions
+    sessions = []
+    for i in range(5):
+        session = TestSession(
+            sut_name=f"clear-test-{i}",
+            session_id=f"clear-test-{i}",
+            session_start_time=get_test_time(i * 600),
+            session_duration=30,
+            test_results=[],
+        )
+        in_memory_storage.save_session(session)
+        sessions.append(session)
+
+    # Verify all sessions were saved
+    assert len(in_memory_storage.load_sessions()) == 5
+
+    # Selectively clear sessions 0, 2, and 4
+    sessions_to_clear = [sessions[0], sessions[2], sessions[4]]
+    removed_count = in_memory_storage.clear_sessions(sessions_to_clear)
+
+    # Verify correct number of sessions were removed
+    assert removed_count == 3
+
+    # Verify the right sessions remain
+    remaining_sessions = in_memory_storage.load_sessions()
+    assert len(remaining_sessions) == 2
+    remaining_ids = {s.session_id for s in remaining_sessions}
+    assert remaining_ids == {"clear-test-1", "clear-test-3"}

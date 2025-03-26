@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pytest_insight.constants import DEFAULT_STORAGE_PATH
 from pytest_insight.models import TestSession
@@ -19,8 +19,16 @@ class BaseStorage:
         """Retrieve past test sessions."""
         raise NotImplementedError
 
-    def clear_sessions(self) -> None:
-        """Remove all stored sessions."""
+    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
+        """Remove stored sessions.
+
+        Args:
+            sessions_to_clear: Optional list of TestSession objects to remove.
+                              If None, removes all sessions.
+
+        Returns:
+            Number of sessions removed
+        """
         raise NotImplementedError
 
     def get_last_session(self) -> Optional[TestSession]:
@@ -50,9 +58,33 @@ class InMemoryStorage(BaseStorage):
         """Save a test session."""
         self._sessions.append(session)
 
-    def clear_sessions(self) -> None:
-        """Remove all stored test sessions."""
-        self._sessions.clear()
+    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
+        """Remove stored sessions.
+
+        Args:
+            sessions_to_clear: Optional list of TestSession objects to remove.
+                              If None, removes all sessions.
+
+        Returns:
+            Number of sessions removed
+        """
+        if sessions_to_clear is None:
+            # Clear all sessions
+            initial_count = len(self._sessions)
+            self._sessions.clear()
+            return initial_count
+        else:
+            # Get current sessions
+            initial_count = len(self._sessions)
+
+            # Create a set of session IDs to clear
+            session_ids_to_clear = {session.session_id for session in sessions_to_clear}
+
+            # Keep only sessions not in the clear list
+            self._sessions = [session for session in self._sessions if session.session_id not in session_ids_to_clear]
+
+            # Return number of sessions removed
+            return initial_count - len(self._sessions)
 
 
 class JSONStorage(BaseStorage):
@@ -120,13 +152,167 @@ class JSONStorage(BaseStorage):
         except Exception as e:
             print(f"Warning: Failed to save sessions to {self.file_path}: {e}")
 
+    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
+        """Remove stored sessions.
+
+        Args:
+            sessions_to_clear: Optional list of TestSession objects to remove.
+                              If None, removes all sessions.
+
+        Returns:
+            Number of sessions removed
+        """
+        if sessions_to_clear is None:
+            # Clear all sessions
+            current_sessions = self.load_sessions()
+            count = len(current_sessions)
+            self._write_json_safely([])
+            return count
+        else:
+            # Get current sessions
+            current_sessions = self.load_sessions()
+            initial_count = len(current_sessions)
+
+            # Create a set of session IDs to clear
+            session_ids_to_clear = {session.session_id for session in sessions_to_clear}
+
+            # Keep only sessions not in the clear list
+            remaining_sessions = [
+                session for session in current_sessions if session.session_id not in session_ids_to_clear
+            ]
+
+            # Save the filtered sessions
+            self._write_json_safely([s.to_dict() for s in remaining_sessions])
+
+            # Return number of sessions removed
+            return initial_count - len(remaining_sessions)
+
     def clear(self) -> None:
         """Clear all sessions from storage."""
         self._write_json_safely([])
 
-    def clear_sessions(self) -> None:
-        """Remove all stored sessions."""
-        self.clear()
+    def export_sessions(self, export_path: str, days: Optional[int] = None, output_format: str = "json"):
+        """Export test sessions to a file.
+
+        Args:
+            export_path: Path to export file
+            days: Optional number of days to include in export
+            output_format: Optional output format (json or csv)
+        """
+        # Get sessions
+        sessions = self.load_sessions()
+
+        # Filter by days if specified
+        if days is not None:
+            from datetime import datetime, timedelta
+
+            cutoff_date = datetime.now() - timedelta(days=days)
+            sessions = [s for s in sessions if s.session_start_time > cutoff_date]
+
+        # Export to file
+        if output_format.lower() == "json":
+            with open(export_path, "w") as f:
+                json.dump([s.to_dict() for s in sessions], f, indent=2)
+        elif output_format.lower() == "csv":
+            import csv
+
+            with open(export_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=TestSession.csv_fields())
+                writer.writeheader()
+                for session in sessions:
+                    writer.writerow(session.to_dict())
+        else:
+            raise ValueError(f"Unsupported output format: {output_format}")
+
+    def import_sessions(self, import_path: str, merge_strategy: str = "skip_existing") -> Dict[str, int]:
+        """Import sessions from a file exported by another instance.
+
+        Args:
+            import_path: Path to the file containing exported sessions
+            merge_strategy: How to handle duplicate session IDs:
+                - "skip_existing": Skip sessions that already exist (default)
+                - "replace_existing": Replace existing sessions with imported ones
+                - "keep_both": Keep both versions, appending a suffix to imported IDs
+
+        Returns:
+            Dictionary with import statistics:
+                - total: Total number of sessions in the import file
+                - imported: Number of sessions successfully imported
+                - skipped: Number of sessions skipped
+                - errors: Number of sessions with errors during import
+        """
+        # Initialize stats
+        stats = {"total": 0, "imported": 0, "skipped": 0, "errors": 0}
+
+        # Check if file exists
+        import_path = Path(import_path)
+        if not import_path.exists():
+            raise FileNotFoundError(f"Import file not found: {import_path}")
+
+        # Load existing sessions
+        existing_sessions = self.load_sessions()
+        existing_ids = {session.session_id for session in existing_sessions}
+
+        # Load imported data
+        try:
+            with open(import_path, "r") as f:
+                imported_data = json.load(f)
+        except json.JSONDecodeError:
+            raise ValueError("Invalid JSON in import file")
+
+        # Update stats
+        stats["total"] = len(imported_data)
+
+        # Process imported sessions
+        imported_sessions = []
+        for session_data in imported_data:
+            try:
+                # Create TestSession from dict
+                session = TestSession.from_dict(session_data)
+
+                # Check for duplicate ID
+                if session.session_id in existing_ids:
+                    if merge_strategy == "skip_existing":
+                        stats["skipped"] += 1
+                        continue
+                    elif merge_strategy == "replace_existing":
+                        # Will be replaced, so count as imported
+                        stats["imported"] += 1
+                        imported_sessions.append(session)
+                    elif merge_strategy == "keep_both":
+                        # Modify ID to avoid collision
+                        suffix = 1
+                        new_id = f"{session.session_id}_imported_{suffix}"
+                        while new_id in existing_ids:
+                            suffix += 1
+                            new_id = f"{session.session_id}_imported_{suffix}"
+
+                        session.session_id = new_id
+                        stats["imported"] += 1
+                        imported_sessions.append(session)
+                    else:
+                        raise ValueError(f"Invalid merge strategy: {merge_strategy}")
+                else:
+                    # New session, import it
+                    stats["imported"] += 1
+                    imported_sessions.append(session)
+            except Exception as e:
+                stats["errors"] += 1
+                print(f"Error importing session: {e}")
+
+        # Apply the changes based on merge strategy
+        if merge_strategy == "replace_existing":
+            # Remove existing sessions that will be replaced
+            imported_ids = {session.session_id for session in imported_sessions}
+            existing_sessions = [s for s in existing_sessions if s.session_id not in imported_ids]
+
+        # Combine existing and imported sessions
+        all_sessions = existing_sessions + imported_sessions
+
+        # Save to storage
+        self._write_json_safely([s.to_dict() for s in all_sessions])
+
+        return stats
 
     def _write_json_safely(self, data):
         """Write JSON data to file using atomic operations."""
@@ -134,9 +320,7 @@ class JSONStorage(BaseStorage):
         temp_dir = self.file_path.parent
         temp_dir.mkdir(parents=True, exist_ok=True)
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", dir=temp_dir, delete=False
-        ) as temp_file:
+        with tempfile.NamedTemporaryFile(mode="w", dir=temp_dir, delete=False) as temp_file:
             # Write data to the temporary file
             json.dump(data, temp_file, indent=2)
             temp_path = Path(temp_file.name)
@@ -155,9 +339,7 @@ class JSONStorage(BaseStorage):
         try:
             data = json.loads(self.file_path.read_text())
             if not isinstance(data, list):
-                print(
-                    f"Warning: Invalid data format in {self.file_path}, expected list"
-                )
+                print(f"Warning: Invalid data format in {self.file_path}, expected list")
                 return []
             return data
         except json.JSONDecodeError as e:
@@ -169,9 +351,7 @@ class JSONStorage(BaseStorage):
             return []
 
 
-def get_storage_instance(
-    storage_type: str = None, file_path: str = None
-) -> BaseStorage:
+def get_storage_instance(storage_type: str = None, file_path: str = None) -> BaseStorage:
     """Get storage instance based on configuration."""
     # Get storage type from args, env, or default
     storage_type = storage_type or os.environ.get("PYTEST_INSIGHT_STORAGE_TYPE", "json")
