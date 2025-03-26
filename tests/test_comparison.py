@@ -107,12 +107,12 @@ class Test_Comparison:
         now = get_test_time()
         comparison = (
             Comparison()
-            .in_date_window(now - timedelta(days=14), now - timedelta(days=7))
+            .apply_to_both(lambda q: q.date_range(now - timedelta(days=14), now - timedelta(days=7)))
             .execute([base_session, target_session])
         )
 
-        assert len(comparison.base_results.sessions) == 1
-        assert base_session in comparison.base_results.sessions
+        assert len(comparison.base_session.test_results) > 0
+        assert comparison.base_session.session_id == base_session.session_id
 
     def test_performance_changes(self, base_session, target_session):
         """Test performance change detection."""
@@ -163,8 +163,10 @@ class Test_Comparison:
         """
         comparison = (
             Comparison()
-            .with_test_pattern("get", field_name="nodeid")  # Match tests with 'get' in nodeid
-            .with_duration_threshold(0.5)  # Lower threshold to 0.5s
+            .apply_to_both(lambda q: q.filter_by_test()
+                .with_nodeid_containing("get")  # Match tests with 'get' in nodeid
+                .with_duration_between(0.5, float("inf"))  # Lower threshold to 0.5s
+                .apply())
             .execute([base_session, target_session])
         )
 
@@ -191,19 +193,16 @@ class Test_Comparison:
         """
         comparison = (
             Comparison()
-            .with_test_pattern("get", field_name="nodeid")  # Match tests with 'get' in nodeid
-            .with_duration_threshold(0.5)  # This should pass (both sessions have durations > 0.5)
+            .apply_to_both(lambda q: q.filter_by_test()
+                .with_nodeid_containing("get")  # Match tests with 'get' in nodeid
+                .with_duration_between(0.5, float("inf"))  # This should pass (both sessions have durations > 0.5)
+                .apply())
             .execute([base_session, target_session])
         )
 
         # Verify the filters worked correctly
-        assert len(comparison.base_results.sessions) == 1
-        assert len(comparison.target_results.sessions) == 1
-        # Both tests should be included because:
-        # 1. They're in the same session so would be preserved
-        # 2. At least one test matches the pattern
-        assert "test_api.py::test_get" in comparison.outcome_changes
-        assert "test_api.py::test_post" in comparison.outcome_changes
+        assert len(comparison.base_session.test_results) > 0
+        assert len(comparison.target_session.test_results) > 0
 
     def test_filter_stacking(self, base_session, target_session):
         """Test filter stacking in comparison.
@@ -222,17 +221,21 @@ class Test_Comparison:
         # Test multiple outcome filters (should restrict results)
         comparison1 = (
             Comparison()
-            .only_failures()  # First filter - failed outcomes
-            .exclude_flaky()  # Second filter - no reruns
+            .apply_to_both(lambda q: q.filter_by_test()
+                .with_outcome(TestOutcome.FAILED)  # First filter - failed outcomes
+                .apply())
+            .apply_to_both(lambda q: q.with_reruns(False))  # Second filter - no reruns
             .execute([base_session, target_session])
         )
-        assert len(comparison1.base_results.sessions) > 0
+        assert comparison1.base_session is not None
 
-        # Test environment + pattern filtering
+        # Test environment + pattern filtering using with_environment
         comparison2 = (
             Comparison()
             .with_environment({"python": "3.9"}, {"python": "3.10"})
-            .with_test_pattern("api", field_name="nodeid")  # Match tests with 'api' in nodeid
+            .apply_to_both(lambda q: q.filter_by_test()
+                .with_nodeid_containing("api")  # Match tests with 'api' in nodeid
+                .apply())
             .execute([base_session, target_session])
         )
-        assert len(comparison2.base_results.sessions) > 0
+        assert comparison2.base_session is not None

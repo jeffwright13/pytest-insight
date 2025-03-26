@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any, Callable
 
 from pytest_insight.models import TestOutcome, TestSession
 from pytest_insight.query import Query, QueryResult
@@ -23,20 +23,19 @@ class ComparisonResult:
         base_session: Selected base session for comparison
         target_session: Selected target session for comparison
         new_failures: Test nodeids that failed in target but passed in base
-        fixed_tests: Test nodeids that passed in target but failed in base
+        new_passes: Test nodeids that passed in target but failed in base
         flaky_tests: Test nodeids that changed outcome between sessions
         slower_tests: Test nodeids that took longer in target
         faster_tests: Test nodeids that ran faster in target
         missing_tests: Test nodeids present in base but missing in target
         new_tests: Test nodeids present in target but missing in base
         outcome_changes: All outcome changes with (base_outcome, target_outcome)
-        new_passes: Alias for fixed_tests (nodeids that passed in target but failed in base)
 
     Note:
         Categories are NOT mutually exclusive. A test can belong to multiple categories:
         1. New failure + Flaky test (failed in target but not base)
         2. Performance regression + Warning (slow test with resource warning)
-        3. Fixed test + Rerun (passed after multiple attempts)
+        3. New pass + Rerun (passed after multiple attempts)
 
         The Query system preserves full session context to make it easy to:
         1. Track all test outcomes, not just failures
@@ -50,7 +49,7 @@ class ComparisonResult:
     base_session: TestSession
     target_session: TestSession
     new_failures: List[str]  # Test nodeids that failed in target but passed in base
-    fixed_tests: List[str]  # Test nodeids that passed in target but failed in base
+    new_passes: List[str]  # Test nodeids that passed in target but failed in base
     flaky_tests: List[str]  # Test nodeids that changed outcome between sessions
     slower_tests: List[str]  # Test nodeids that took longer in target
     faster_tests: List[str]  # Test nodeids that ran faster in target
@@ -58,12 +57,11 @@ class ComparisonResult:
     new_tests: List[str]  # Test nodeids present in target but missing in base
     outcome_changes: Dict[str, Tuple[TestOutcome, TestOutcome]]  # All outcome changes
 
-    @property
     def has_changes(self) -> bool:
         """Check if any differences were found between sessions."""
         return bool(
             self.new_failures
-            or self.fixed_tests
+            or self.new_passes
             or self.flaky_tests
             or self.slower_tests
             or self.faster_tests
@@ -71,14 +69,30 @@ class ComparisonResult:
             or self.new_tests
         )
 
-    @property
-    def new_passes(self) -> List[str]:
-        """Alias for fixed_tests (nodeids that passed in target but failed in base)."""
-        return self.fixed_tests
-
 
 class Comparison:
-    """Builder for test comparison operations."""
+    """Builder for test comparison operations.
+
+    This class provides a fluent interface for comparing test sessions using the Query system.
+    It exposes two Query objects (base_query and target_query) that can be configured
+    independently, along with convenience methods that apply filters to both queries.
+
+    Example usage:
+        # Configure queries separately
+        comparison = Comparison()
+        comparison.base_query.for_sut("service-v1").in_last_days(7)
+        comparison.target_query.for_sut("service-v2").in_last_days(7)
+        result = comparison.execute()
+
+        # Use convenience methods
+        comparison = Comparison()
+        result = comparison.between_suts("service-v1", "service-v2").execute()
+
+        # Apply filters to both queries
+        comparison = Comparison()
+        comparison.apply_to_both(lambda q: q.in_last_days(7))
+        result = comparison.execute()
+    """
 
     def __init__(self, sessions: Optional[List[TestSession]] = None):
         """Initialize comparison with optional test sessions.
@@ -91,8 +105,15 @@ class Comparison:
             storage = JSONStorage()
             sessions = storage.load_sessions()
 
-        self._base_query = Query(sessions)
-        self._target_query = Query(sessions)
+        self.base_query = Query(sessions)
+        self.target_query = Query(sessions)
+
+        # Store sessions for later use in execute()
+        self._sessions = sessions
+
+        # Default performance thresholds
+        self._slower_threshold = 1.2  # 20% slower
+        self._faster_threshold = 0.8  # 20% faster
 
     def between_suts(self, base_sut: str, target_sut: str) -> "Comparison":
         """Compare between two SUTs.
@@ -108,103 +129,51 @@ class Comparison:
             comparison = Comparison()
             result = comparison.between_suts("service-v1", "service-v2").execute()
         """
-        self._base_query.for_sut(base_sut).with_session_id_pattern("base-*")
-        self._target_query.for_sut(target_sut).with_session_id_pattern("target-*")
+        self.base_query.for_sut(base_sut).with_session_id_pattern("base-*")
+        self.target_query.for_sut(target_sut).with_session_id_pattern("target-*")
         return self
 
-    def in_last_days(self, days: int) -> "Comparison":
-        """Filter both base and target sessions from last N days."""
-        self._base_query.in_last_days(days)
-        self._target_query.in_last_days(days)
-        return self
-
-    def in_date_window(self, start_date: datetime, end_date: datetime) -> "Comparison":
-        """Filter sessions within a specific date window.
-
-        This is a session-level filter that operates on session_start_time.
-        It preserves full session context while filtering by date range.
+    def with_performance_thresholds(self, slower_percent: float = 20, faster_percent: float = 20) -> "Comparison":
+        """Set custom performance thresholds for detecting slower and faster tests.
 
         Args:
-            start_date: Start of date window (inclusive)
-            end_date: End of date window (inclusive)
+            slower_percent: Percentage increase in duration to consider a test slower (default: 20%)
+            faster_percent: Percentage decrease in duration to consider a test faster (default: 20%)
 
         Returns:
             Comparison instance for chaining.
-
-        Raises:
-            ComparisonError: If start_date is after end_date.
         """
-        if start_date > end_date:
-            raise ComparisonError("Start date must be before end date")
+        if slower_percent <= 0:
+            raise ComparisonError("Slower threshold percentage must be positive")
+        if faster_percent <= 0 or faster_percent >= 100:
+            raise ComparisonError("Faster threshold percentage must be between 0 and 100")
 
-        # Apply date window to both base and target queries
-        self._base_query._session_filters.append(
-            lambda s: start_date <= s.session_start_time <= end_date
-        )
-        self._target_query._session_filters.append(
-            lambda s: start_date <= s.session_start_time <= end_date
-        )
+        self._slower_threshold = 1 + (slower_percent / 100)
+        self._faster_threshold = 1 - (faster_percent / 100)
         return self
 
-    def with_test_pattern(self, pattern: str, *, field_name: str) -> "Comparison":
-        """Filter tests by pattern match.
+    def apply_to_both(self, query_modifier: Callable[[Query], Query]) -> "Comparison":
+        """Apply the same filter function to both base and target queries.
 
-        This is a test-level filter that:
-        1. Uses simple substring matching on the specified field
-        2. Returns sessions containing ANY matching test
-        3. Preserves ALL tests in matching sessions
-        4. Maintains session context (metadata, relationships)
+        This is a flexible way to apply any Query method to both queries at once.
 
         Args:
-            pattern: Pattern to match against test field
-            field_name: Name of the test field to match against (e.g. 'nodeid', 'caplog')
+            query_modifier: A function that takes a Query and returns a Query
+
+        Example:
+            # Apply in_last_days to both queries
+            comparison.apply_to_both(lambda q: q.in_last_days(7))
+
+            # Apply complex filters to both queries
+            comparison.apply_to_both(lambda q: q.filter_by_test()
+                                              .with_duration_between(1.0, 10.0)
+                                              .apply())
 
         Returns:
             Comparison instance for chaining.
         """
-        self._base_query.filter_by_test().with_pattern(
-            pattern, field_name=field_name
-        ).apply()
-        self._target_query.filter_by_test().with_pattern(
-            pattern, field_name=field_name
-        ).apply()
-        return self
-
-    def with_duration_threshold(self, min_secs: float) -> "Comparison":
-        """Filter tests by minimum duration.
-
-        Args:
-            min_secs: Minimum duration in seconds.
-
-        Returns:
-            Comparison instance for chaining.
-        """
-        self._base_query.filter_by_test().with_duration_between(
-            min_secs, float("inf")
-        ).apply()
-        self._target_query.filter_by_test().with_duration_between(
-            min_secs, float("inf")
-        ).apply()
-        return self
-
-    def only_failures(self) -> "Comparison":
-        """Filter to show only failed tests.
-
-        Returns:
-            Comparison instance for chaining.
-        """
-        self._base_query.filter_by_test().with_outcome(TestOutcome.FAILED).apply()
-        self._target_query.filter_by_test().with_outcome(TestOutcome.FAILED).apply()
-        return self
-
-    def exclude_flaky(self) -> "Comparison":
-        """Filter out flaky tests (tests with reruns).
-
-        Returns:
-            Comparison instance for chaining.
-        """
-        self._base_query.with_reruns(False)
-        self._target_query.with_reruns(False)
+        query_modifier(self.base_query)
+        query_modifier(self.target_query)
         return self
 
     def with_environment(
@@ -220,9 +189,9 @@ class Comparison:
             Comparison instance for chaining.
         """
         for key, value in base_env.items():
-            self._base_query.with_session_tag(key, value)
+            self.base_query.with_session_tag(key, value)
         for key, value in target_env.items():
-            self._target_query.with_session_tag(key, value)
+            self.target_query.with_session_tag(key, value)
         return self
 
     def execute(self, sessions: Optional[List[TestSession]] = None) -> ComparisonResult:
@@ -248,7 +217,7 @@ class Comparison:
             result = comparison.execute([base_session, target_session])
         """
         if not sessions and not (
-            self._base_query._session_filters or self._target_query._session_filters
+            self.base_query._session_filters or self.target_query._session_filters
         ):
             raise ComparisonError("No sessions provided and no filters configured")
 
@@ -271,9 +240,12 @@ class Comparison:
             base_results = Query().execute([base_session])
             target_results = Query().execute([target_session])
         else:
+            # Use the stored sessions from initialization
+            sessions_to_query = self._sessions
+
             # Use queries to find sessions
-            base_results = self._base_query.execute()
-            target_results = self._target_query.execute()
+            base_results = self.base_query.execute(sessions_to_query)
+            target_results = self.target_query.execute(sessions_to_query)
 
             if not base_results.sessions or not target_results.sessions:
                 raise ComparisonError("No matching base and target sessions found")
@@ -292,7 +264,7 @@ class Comparison:
 
         # Find all test changes
         new_failures = []
-        fixed_tests = []
+        new_passes = []
         flaky_tests = []
         slower_tests = []
         faster_tests = []
@@ -312,7 +284,7 @@ class Comparison:
             if base_test.outcome != target_test.outcome:
                 outcome_changes[nodeid] = (base_test.outcome, target_test.outcome)
 
-                # A test can be both flaky and a new failure/fixed test
+                # A test can be both flaky and a new failure/new pass
                 flaky_tests.append(nodeid)
 
                 if (
@@ -324,12 +296,13 @@ class Comparison:
                     base_test.outcome == TestOutcome.FAILED
                     and target_test.outcome == TestOutcome.PASSED
                 ):
-                    fixed_tests.append(nodeid)
+                    new_passes.append(nodeid)
 
             # Track performance changes (independent of outcome changes)
-            if target_test.duration > base_test.duration * 1.2:  # 20% slower
+            # Use configurable thresholds
+            if target_test.duration > base_test.duration * self._slower_threshold:
                 slower_tests.append(nodeid)
-            elif target_test.duration < base_test.duration * 0.8:  # 20% faster
+            elif target_test.duration < base_test.duration * self._faster_threshold:
                 faster_tests.append(nodeid)
 
         return ComparisonResult(
@@ -338,7 +311,7 @@ class Comparison:
             base_session=base_session,
             target_session=target_session,
             new_failures=new_failures,
-            fixed_tests=fixed_tests,
+            new_passes=new_passes,
             flaky_tests=flaky_tests,
             slower_tests=slower_tests,
             faster_tests=faster_tests,
