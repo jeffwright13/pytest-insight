@@ -9,12 +9,43 @@ A pytest plugin for analyzing test health, performance, and patterns across test
 - **Cross-Version Comparison**: Compare test behavior across Python versions
 - **Performance Analysis**: Identify slow tests and track runtime trends
 - **Session Context**: Preserve test relationships and session metadata
+- **Metrics Visualization**: Expose metrics via REST API and visualize in Grafana
 
-## Quick Start
+## Installation
+
+### Basic Installation
+
+For the core plugin functionality:
 
 ```bash
 pip install pytest-insight
 ```
+
+### Installation Options
+
+pytest-insight is organized with optional dependencies for different use cases:
+
+```bash
+# Basic plugin only
+pip install pytest-insight
+
+# With metrics server for Grafana integration
+pip install pytest-insight[metrics]
+
+# For development
+pip install pytest-insight[dev]
+
+# For demo notebooks
+pip install pytest-insight[demo]
+
+# For Jupyter notebook integration
+pip install pytest-insight[jupyter]
+
+# For all features
+pip install pytest-insight[all]
+```
+
+## Quick Start
 
 ```python
 from pytest_insight.query import Query
@@ -50,6 +81,20 @@ regex_tests = (query
     .apply()
     .execute())
 ```
+
+### Metrics Server
+
+If you've installed the metrics dependencies, you can run the metrics server:
+
+```bash
+# Start the metrics server
+insight-metrics
+
+# Or with custom options
+insight-metrics --host 0.0.0.0 --port 8000 --db-path /path/to/db.json
+```
+
+The metrics server provides a REST API with Swagger documentation at `/docs` and can be integrated with Grafana for visualization.
 
 ## Documentation
 

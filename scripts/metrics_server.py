@@ -10,7 +10,7 @@ import uvicorn
 def start_server(port: int = 8000, reload: bool = True) -> None:
     """Start the FastAPI metrics server."""
     print(f"Starting metrics server on port {port}")
-    uvicorn.run("pytest_insight.server:app", port=port, reload=reload)
+    # uvicorn.run("pytest_insight.server:app", port=port, reload=reload)
 
 
 def check_status(port: int = 8000) -> None:

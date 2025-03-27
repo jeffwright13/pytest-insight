@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-DASHBOARD_FILE="/Users/jwr003/coding/pytest-insight/pytest_insight/grafana/dashboards/dashboard_complete.json"
+DASHBOARD_FILE="/Users/jwr003/coding/pytest-insight/grafana/pytest_insight_dashboard.json"
 GRAFANA_URL="http://localhost:3000"
 GRAFANA_USER="admin"
 GRAFANA_PASSWORD="admin"

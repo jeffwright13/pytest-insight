@@ -57,6 +57,8 @@ Examples:
 import dataclasses
 
 # Import the real datetime class for isinstance checks
+from typing import Dict, List, Optional, Set, Tuple, Union, Callable, Any
+
 import datetime as dt_module
 import fnmatch
 import re
@@ -66,6 +68,14 @@ from typing import Callable, Dict, List, Optional, Protocol, Union
 
 from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.storage import BaseStorage, get_storage_instance
+from pytest_insight.utils import (
+    create_equals_filter,
+    create_not_equals_filter,
+    create_before_filter,
+    create_before_or_equals_filter,
+    create_after_filter,
+    create_after_or_equals_filter,
+)
 
 
 class InvalidQueryParameterError(Exception):
@@ -861,7 +871,7 @@ class Query:
         if not isinstance(days, int) or days < 0:
             raise InvalidQueryParameterError("Days must be a non-negative integer")
         cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(days=days)
-        self._session_filters.append(lambda s: s.session_start_time >= cutoff)
+        self._session_filters.append(create_after_or_equals_filter(cutoff))
         return self
 
     def in_last_hours(self, hours: int) -> "Query":
@@ -879,7 +889,7 @@ class Query:
         if not isinstance(hours, int) or hours < 0:
             raise InvalidQueryParameterError("Hours must be a non-negative integer")
         cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(hours=hours)
-        self._session_filters.append(lambda s: s.session_start_time >= cutoff)
+        self._session_filters.append(create_after_or_equals_filter(cutoff))
         return self
 
     def in_last_minutes(self, minutes: int) -> "Query":
@@ -897,7 +907,7 @@ class Query:
         if not isinstance(minutes, int) or minutes < 0:
             raise InvalidQueryParameterError("Minutes must be a non-negative integer")
         cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(minutes=minutes)
-        self._session_filters.append(lambda s: s.session_start_time >= cutoff)
+        self._session_filters.append(create_after_or_equals_filter(cutoff))
         return self
 
     def in_last_seconds(self, seconds: int) -> "Query":
@@ -915,7 +925,7 @@ class Query:
         if not isinstance(seconds, int) or seconds < 0:
             raise InvalidQueryParameterError("Seconds must be a non-negative integer")
         cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(seconds=seconds)
-        self._session_filters.append(lambda s: s.session_start_time >= cutoff)
+        self._session_filters.append(create_after_or_equals_filter(cutoff))
         return self
 
     def date_range(self, start: dt_module.datetime, end: dt_module.datetime) -> "Query":
@@ -940,13 +950,12 @@ class Query:
         """
         if not isinstance(start, dt_module.datetime) or not isinstance(end, dt_module.datetime):
             raise InvalidQueryParameterError("Start and end must be datetime objects")
-        if bool(start.tzinfo) != bool(end.tzinfo):
-            raise InvalidQueryParameterError("Start and end dates must both be naive or both be timezone-aware")
-        if start.tzinfo and end.tzinfo and start.tzinfo != end.tzinfo:
-            raise InvalidQueryParameterError("Start and end dates must be in the same timezone")
         if start > end:
             raise InvalidQueryParameterError("Start date must be before end date")
-        self._session_filters.append(lambda s: start <= s.session_start_time <= end)
+
+        # We no longer need to check timezone compatibility as our NormalizedDatetime class handles that
+        self._session_filters.append(create_after_or_equals_filter(start))
+        self._session_filters.append(create_before_or_equals_filter(end))
         return self
 
     def before(self, timestamp: dt_module.datetime) -> "Query":
@@ -967,7 +976,7 @@ class Query:
         if not isinstance(timestamp, dt_module.datetime):
             raise InvalidQueryParameterError("Timestamp must be a datetime object")
 
-        self._session_filters.append(lambda s: s.session_start_time < timestamp)
+        self._session_filters.append(create_before_filter(timestamp))
         return self
 
     def after(self, timestamp: dt_module.datetime) -> "Query":
@@ -988,7 +997,7 @@ class Query:
         if not isinstance(timestamp, dt_module.datetime):
             raise InvalidQueryParameterError("Timestamp must be a datetime object")
 
-        self._session_filters.append(lambda s: s.session_start_time > timestamp)
+        self._session_filters.append(create_after_filter(timestamp))
         return self
 
     def with_outcome(self, outcome: Union[str, TestOutcome]) -> "Query":
