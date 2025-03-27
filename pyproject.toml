@@ -40,8 +40,8 @@ jupyter = ["notebook", "ipykernel"]
 insight = "pytest_insight.plugin"
 
 [project.scripts]
-insight = "pytest_insight.__main__:app"
-insight-gen = "pytest_insight.db_generator:app"
+insights = "pytest_insight.scripts.analyze_test_data:main"
+insight-gen = "pytest_insight.scripts.db_generator:app"
 
 [build-system]
 requires = ["hatchling"]

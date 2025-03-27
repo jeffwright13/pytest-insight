@@ -691,7 +691,7 @@ class Insights:
 
         # Add note about single-session insights
         output.append("Note: This summary shows insights for the current test session only.")
-        output.append("For multi-session analysis, use the analyze_test_data.py script or the Insights API.")
+        output.append("For multi-session analysis, use the 'insights' script or the Insights API.")
 
         # Session Info Section
         output.append(section_header("Test Session Info"))
