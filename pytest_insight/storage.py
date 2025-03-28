@@ -2,10 +2,214 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pytest_insight.constants import DEFAULT_STORAGE_PATH
 from pytest_insight.models import TestSession
+
+
+class StorageProfile:
+    """Represents a storage configuration profile."""
+
+    def __init__(self, name: str, storage_type: str = "json", file_path: Optional[str] = None):
+        """Initialize a storage profile.
+
+        Args:
+            name: Unique name for the profile
+            storage_type: Type of storage (json, memory, etc.)
+            file_path: Optional custom path for storage
+        """
+        self.name = name
+        self.storage_type = storage_type
+        self.file_path = file_path
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert profile to dictionary for serialization."""
+        return {
+            "name": self.name,
+            "storage_type": self.storage_type,
+            "file_path": self.file_path,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "StorageProfile":
+        """Create profile from dictionary."""
+        return cls(
+            name=data["name"],
+            storage_type=data.get("storage_type", "json"),
+            file_path=data.get("file_path"),
+        )
+
+
+class ProfileManager:
+    """Manages storage profiles for pytest-insight."""
+
+    def __init__(self, config_path: Optional[Path] = None):
+        """Initialize profile manager.
+
+        Args:
+            config_path: Optional custom path for profile configuration
+        """
+        self.config_path = config_path or Path.home() / ".pytest_insight" / "profiles.json"
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        self.profiles = {}
+        self.active_profile_name = None
+        self._load_profiles()
+
+    def _load_profiles(self) -> None:
+        """Load profiles from configuration file."""
+        if not self.config_path.exists():
+            # Create default profile
+            default_profile = StorageProfile("default", "json")
+            self.profiles = {"default": default_profile}
+            self.active_profile_name = "default"
+            self._save_profiles()
+            return
+
+        try:
+            data = json.loads(self.config_path.read_text())
+            self.profiles = {
+                name: StorageProfile.from_dict(profile_data) for name, profile_data in data.get("profiles", {}).items()
+            }
+            self.active_profile_name = data.get("active_profile", "default")
+
+            # Ensure default profile exists
+            if "default" not in self.profiles:
+                self.profiles["default"] = StorageProfile("default", "json")
+
+            # Ensure active profile exists
+            if self.active_profile_name not in self.profiles:
+                self.active_profile_name = "default"
+        except Exception as e:
+            print(f"Warning: Failed to load profiles from {self.config_path}: {e}")
+            # Create default profile
+            self.profiles = {"default": StorageProfile("default", "json")}
+            self.active_profile_name = "default"
+            self._save_profiles()
+
+    def _save_profiles(self) -> None:
+        """Save profiles to configuration file."""
+        data = {
+            "profiles": {name: profile.to_dict() for name, profile in self.profiles.items()},
+            "active_profile": self.active_profile_name,
+        }
+
+        # Create a temporary file in the same directory
+        temp_dir = self.config_path.parent
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        with tempfile.NamedTemporaryFile(mode="w", dir=temp_dir, delete=False) as temp_file:
+            # Write data to the temporary file
+            json.dump(data, temp_file, indent=2)
+            temp_path = Path(temp_file.name)
+
+        try:
+            # Rename is atomic on POSIX systems
+            temp_path.replace(self.config_path)
+        except Exception as e:
+            print(f"Warning: Failed to save profiles to {self.config_path}: {e}")
+            if temp_path.exists():
+                temp_path.unlink()  # Clean up temp file
+            raise
+
+    def create_profile(self, name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
+        """Create a new storage profile.
+
+        Args:
+            name: Unique name for the profile
+            storage_type: Type of storage (json, memory, etc.)
+            file_path: Optional custom path for storage
+
+        Returns:
+            The created profile
+        """
+        if name in self.profiles:
+            raise ValueError(f"Profile '{name}' already exists")
+
+        profile = StorageProfile(name, storage_type, file_path)
+        self.profiles[name] = profile
+        self._save_profiles()
+        return profile
+
+    def get_profile(self, name: Optional[str] = None) -> StorageProfile:
+        """Get a profile by name.
+
+        Args:
+            name: Name of the profile to get, or None for active profile
+
+        Returns:
+            The requested profile
+
+        Raises:
+            ValueError: If profile does not exist
+        """
+        profile_name = name or self.active_profile_name or "default"
+
+        # Check environment variable override
+        env_profile = os.environ.get("PYTEST_INSIGHT_PROFILE")
+        if env_profile and not name:
+            profile_name = env_profile
+
+        if profile_name not in self.profiles:
+            raise ValueError(f"Profile '{profile_name}' does not exist")
+
+        return self.profiles[profile_name]
+
+    def switch_profile(self, name: str) -> StorageProfile:
+        """Switch to a different profile.
+
+        Args:
+            name: Name of the profile to switch to
+
+        Returns:
+            The activated profile
+
+        Raises:
+            ValueError: If profile does not exist
+        """
+        if name not in self.profiles:
+            raise ValueError(f"Profile '{name}' does not exist")
+
+        self.active_profile_name = name
+        self._save_profiles()
+        return self.profiles[name]
+
+    def delete_profile(self, name: str) -> None:
+        """Delete a profile.
+
+        Args:
+            name: Name of the profile to delete
+
+        Raises:
+            ValueError: If profile does not exist or is the active profile
+        """
+        if name not in self.profiles:
+            raise ValueError(f"Profile '{name}' does not exist")
+
+        if name == "default":
+            raise ValueError("Cannot delete the default profile")
+
+        if name == self.active_profile_name:
+            raise ValueError("Cannot delete the active profile")
+
+        del self.profiles[name]
+        self._save_profiles()
+
+    def list_profiles(self) -> Dict[str, StorageProfile]:
+        """List all available profiles.
+
+        Returns:
+            Dictionary of profile names to profile objects
+        """
+        return self.profiles
+
+    def get_active_profile(self) -> StorageProfile:
+        """Get the currently active profile.
+
+        Returns:
+            The active profile
+        """
+        return self.get_profile(self.active_profile_name)
 
 
 class BaseStorage:
@@ -351,8 +555,28 @@ class JSONStorage(BaseStorage):
             return []
 
 
-def get_storage_instance(storage_type: str = None, file_path: str = None) -> BaseStorage:
-    """Get storage instance based on configuration."""
+def get_storage_instance(storage_type: str = None, file_path: str = None, profile_name: str = None) -> BaseStorage:
+    """Get storage instance based on configuration.
+
+    Args:
+        storage_type: Optional storage type override
+        file_path: Optional file path override
+        profile_name: Optional profile name to use
+
+    Returns:
+        Configured storage instance
+    """
+    # Check for profile-based configuration
+    env_profile = os.environ.get("PYTEST_INSIGHT_PROFILE")
+    if profile_name or (env_profile and env_profile != ""):
+        # Use profile manager to get configuration
+        profile_manager = get_profile_manager()
+        profile = profile_manager.get_profile(profile_name)
+
+        # Profile settings override direct parameters
+        storage_type = profile.storage_type
+        file_path = profile.file_path
+
     # Get storage type from args, env, or default
     storage_type = storage_type or os.environ.get("PYTEST_INSIGHT_STORAGE_TYPE", "json")
 
@@ -363,5 +587,67 @@ def get_storage_instance(storage_type: str = None, file_path: str = None) -> Bas
     # Create appropriate storage instance
     if storage_type.lower() == "json":
         return JSONStorage(file_path)
+    elif storage_type.lower() == "memory":
+        return InMemoryStorage()
     else:
         raise ValueError(f"Unsupported storage type: {storage_type}")
+
+
+# Global profile manager instance
+_profile_manager = None
+
+
+def get_profile_manager() -> ProfileManager:
+    """Get the global profile manager instance.
+
+    Returns:
+        ProfileManager instance
+    """
+    global _profile_manager
+    if _profile_manager is None:
+        _profile_manager = ProfileManager()
+    return _profile_manager
+
+
+def create_profile(name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
+    """Create a new storage profile.
+
+    Args:
+        name: Unique name for the profile
+        storage_type: Type of storage (json, memory, etc.)
+        file_path: Optional custom path for storage
+
+    Returns:
+        The created profile
+    """
+    return get_profile_manager().create_profile(name, storage_type, file_path)
+
+
+def switch_profile(name: str) -> StorageProfile:
+    """Switch to a different profile.
+
+    Args:
+        name: Name of the profile to switch to
+
+    Returns:
+        The activated profile
+    """
+    return get_profile_manager().switch_profile(name)
+
+
+def list_profiles() -> Dict[str, StorageProfile]:
+    """List all available profiles.
+
+    Returns:
+        Dictionary of profile names to profile objects
+    """
+    return get_profile_manager().list_profiles()
+
+
+def get_active_profile() -> StorageProfile:
+    """Get the currently active profile.
+
+    Returns:
+        The active profile
+    """
+    return get_profile_manager().get_active_profile()

@@ -68,7 +68,17 @@ def test_get_session_by_id(json_storage, test_session_basic):
 
 def test_get_storage_instance_json(mocker, tmp_path):
     """Test get_storage_instance correctly returns JSONStorage."""
-    mocker.patch("os.environ.get", return_value=str(tmp_path / "sessions.json"))
+
+    # Mock environment variables with a side_effect function to handle different keys
+    def mock_environ_get(key, default=None):
+        if key == "PYTEST_INSIGHT_DB_PATH":
+            return str(tmp_path / "sessions.json")
+        elif key == "PYTEST_INSIGHT_PROFILE":
+            return None
+        else:
+            return default
+
+    mocker.patch("os.environ.get", side_effect=mock_environ_get)
 
     storage = get_storage_instance("json")
     assert isinstance(storage, JSONStorage)
@@ -333,3 +343,286 @@ def test_selective_clear_sessions_in_memory(in_memory_storage, get_test_time):
     assert len(remaining_sessions) == 2
     remaining_ids = {s.session_id for s in remaining_sessions}
     assert remaining_ids == {"clear-test-1", "clear-test-3"}
+
+
+@pytest.fixture
+def profile_manager(tmp_path):
+    """Fixture to create a ProfileManager with a temporary config file."""
+    from pytest_insight.storage import ProfileManager
+
+    config_path = tmp_path / "profiles.json"
+    return ProfileManager(config_path=config_path)
+
+
+class TestStorageProfile:
+    """Tests for the StorageProfile class."""
+
+    def test_storage_profile_creation(self):
+        """Test creating a StorageProfile."""
+        from pytest_insight.storage import StorageProfile
+
+        # Create with defaults
+        profile = StorageProfile("test-profile")
+        assert profile.name == "test-profile"
+        assert profile.storage_type == "json"
+        assert profile.file_path is None
+
+        # Create with custom values
+        profile = StorageProfile("custom", "memory", "/custom/path")
+        assert profile.name == "custom"
+        assert profile.storage_type == "memory"
+        assert profile.file_path == "/custom/path"
+
+    def test_storage_profile_serialization(self):
+        """Test serializing and deserializing a StorageProfile."""
+        from pytest_insight.storage import StorageProfile
+
+        # Create a profile
+        profile = StorageProfile("test", "json", "/test/path")
+
+        # Serialize to dict
+        profile_dict = profile.to_dict()
+        assert profile_dict["name"] == "test"
+        assert profile_dict["storage_type"] == "json"
+        assert profile_dict["file_path"] == "/test/path"
+
+        # Deserialize from dict
+        new_profile = StorageProfile.from_dict(profile_dict)
+        assert new_profile.name == "test"
+        assert new_profile.storage_type == "json"
+        assert new_profile.file_path == "/test/path"
+
+
+class TestProfileManager:
+    """Tests for the ProfileManager class."""
+
+    def test_profile_manager_initialization(self, profile_manager):
+        """Test initializing a ProfileManager."""
+        # Default profile should be created
+        profiles = profile_manager.list_profiles()
+        assert "default" in profiles
+        assert profile_manager.active_profile_name == "default"
+
+    def test_create_profile(self, profile_manager):
+        """Test creating a new profile."""
+        # Create a new profile
+        profile = profile_manager.create_profile("test", "json", "/test/path")
+        assert profile.name == "test"
+        assert profile.storage_type == "json"
+        assert profile.file_path == "/test/path"
+
+        # Profile should be in the list
+        profiles = profile_manager.list_profiles()
+        assert "test" in profiles
+        assert profiles["test"].file_path == "/test/path"
+
+        # Creating a duplicate profile should raise an error
+        with pytest.raises(ValueError, match="Profile 'test' already exists"):
+            profile_manager.create_profile("test", "memory")
+
+    def test_get_profile(self, profile_manager):
+        """Test getting a profile."""
+        # Create a test profile
+        profile_manager.create_profile("test", "json", "/test/path")
+
+        # Get by name
+        profile = profile_manager.get_profile("test")
+        assert profile.name == "test"
+        assert profile.file_path == "/test/path"
+
+        # Get active profile
+        profile = profile_manager.get_profile()
+        assert profile.name == "default"
+
+        # Get non-existent profile
+        with pytest.raises(ValueError, match="Profile 'nonexistent' does not exist"):
+            profile_manager.get_profile("nonexistent")
+
+    def test_switch_profile(self, profile_manager):
+        """Test switching between profiles."""
+        # Create test profiles
+        profile_manager.create_profile("test1", "json", "/test1/path")
+        profile_manager.create_profile("test2", "memory", "/test2/path")
+
+        # Switch to test1
+        profile = profile_manager.switch_profile("test1")
+        assert profile.name == "test1"
+        assert profile_manager.active_profile_name == "test1"
+        assert profile_manager.get_active_profile().name == "test1"
+
+        # Switch to test2
+        profile = profile_manager.switch_profile("test2")
+        assert profile.name == "test2"
+        assert profile_manager.active_profile_name == "test2"
+        assert profile_manager.get_active_profile().name == "test2"
+
+        # Switch to non-existent profile
+        with pytest.raises(ValueError, match="Profile 'nonexistent' does not exist"):
+            profile_manager.switch_profile("nonexistent")
+
+    def test_delete_profile(self, profile_manager):
+        """Test deleting a profile."""
+        # Create test profiles
+        profile_manager.create_profile("test1", "json", "/test1/path")
+        profile_manager.create_profile("test2", "memory", "/test2/path")
+
+        # Delete test1
+        profile_manager.delete_profile("test1")
+        profiles = profile_manager.list_profiles()
+        assert "test1" not in profiles
+        assert "test2" in profiles
+
+        # Cannot delete default profile
+        with pytest.raises(ValueError, match="Cannot delete the default profile"):
+            profile_manager.delete_profile("default")
+
+        # Switch to test2 and try to delete it
+        profile_manager.switch_profile("test2")
+        with pytest.raises(ValueError, match="Cannot delete the active profile"):
+            profile_manager.delete_profile("test2")
+
+    def test_profile_persistence(self, tmp_path):
+        """Test that profiles are persisted to disk."""
+        from pytest_insight.storage import ProfileManager
+
+        # Create a profile manager and add profiles
+        config_path = tmp_path / "profiles.json"
+        manager1 = ProfileManager(config_path=config_path)
+        manager1.create_profile("test1", "json", "/test1/path")
+        manager1.create_profile("test2", "memory", "/test2/path")
+        manager1.switch_profile("test1")
+
+        # Create a new profile manager with the same config path
+        manager2 = ProfileManager(config_path=config_path)
+
+        # Profiles should be loaded
+        profiles = manager2.list_profiles()
+        assert "test1" in profiles
+        assert "test2" in profiles
+        assert profiles["test1"].file_path == "/test1/path"
+        assert profiles["test2"].file_path == "/test2/path"
+        assert manager2.active_profile_name == "test1"
+
+    def test_env_var_override(self, profile_manager, monkeypatch):
+        """Test environment variable override for active profile."""
+        # Create test profiles
+        profile_manager.create_profile("test1", "json", "/test1/path")
+        profile_manager.create_profile("env-profile", "memory", "/env/path")
+
+        # Set environment variable
+        monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "env-profile")
+
+        # Get profile should use env var
+        profile = profile_manager.get_profile()
+        assert profile.name == "env-profile"
+
+        # Explicit name should override env var
+        profile = profile_manager.get_profile("test1")
+        assert profile.name == "test1"
+
+        # Non-existent profile in env var
+        monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "nonexistent")
+        with pytest.raises(ValueError, match="Profile 'nonexistent' does not exist"):
+            profile_manager.get_profile()
+
+
+class TestStorageWithProfiles:
+    """Tests for storage integration with profiles."""
+
+    def test_get_storage_instance_with_profile(self, tmp_path, monkeypatch):
+        """Test get_storage_instance with profile name."""
+        from pytest_insight.storage import InMemoryStorage, JSONStorage, ProfileManager, get_storage_instance
+
+        # Create a profile manager with a temporary config
+        config_path = tmp_path / "profiles.json"
+        profile_manager = ProfileManager(config_path=config_path)
+
+        # Patch the get_profile_manager function to return our test instance
+        monkeypatch.setattr("pytest_insight.storage.get_profile_manager", lambda: profile_manager)
+
+        # Create test profiles
+        profile_manager.create_profile("json-profile", "json", str(tmp_path / "json-db.json"))
+        profile_manager.create_profile("memory-profile", "memory")
+
+        # Get storage with json profile
+        storage = get_storage_instance(profile_name="json-profile")
+        assert isinstance(storage, JSONStorage)
+        assert storage.file_path == tmp_path / "json-db.json"
+
+        # Get storage with memory profile
+        storage = get_storage_instance(profile_name="memory-profile")
+        assert isinstance(storage, InMemoryStorage)
+
+        # Profile overrides direct parameters
+        storage = get_storage_instance(storage_type="memory", profile_name="json-profile")
+        assert isinstance(storage, JSONStorage)  # Profile takes precedence
+
+        # Direct parameters used when no profile specified
+        storage = get_storage_instance(storage_type="memory")
+        assert isinstance(storage, InMemoryStorage)
+
+    def test_env_var_profile_override(self, tmp_path, monkeypatch):
+        """Test environment variable override for profile in get_storage_instance."""
+        from pytest_insight.storage import JSONStorage, ProfileManager, get_storage_instance
+
+        # Create a profile manager with a temporary config
+        config_path = tmp_path / "profiles.json"
+        profile_manager = ProfileManager(config_path=config_path)
+
+        # Patch the get_profile_manager function to return our test instance
+        monkeypatch.setattr("pytest_insight.storage.get_profile_manager", lambda: profile_manager)
+
+        # Create test profile
+        profile_manager.create_profile("env-profile", "json", str(tmp_path / "env-db.json"))
+
+        # Set environment variable
+        monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "env-profile")
+
+        # Get storage should use env profile
+        storage = get_storage_instance()
+        assert isinstance(storage, JSONStorage)
+        assert storage.file_path == tmp_path / "env-db.json"
+
+        # Explicit profile should override env var
+        profile_manager.create_profile("explicit-profile", "json", str(tmp_path / "explicit-db.json"))
+        storage = get_storage_instance(profile_name="explicit-profile")
+        assert storage.file_path == tmp_path / "explicit-db.json"
+
+    def test_convenience_functions(self, tmp_path, monkeypatch):
+        """Test convenience functions for profile management."""
+        from pytest_insight.storage import (
+            ProfileManager,
+            create_profile,
+            get_active_profile,
+            list_profiles,
+            switch_profile,
+        )
+
+        # Create a profile manager with a temporary config
+        config_path = tmp_path / "profiles.json"
+        profile_manager = ProfileManager(config_path=config_path)
+
+        # Patch the get_profile_manager function to return our test instance
+        monkeypatch.setattr("pytest_insight.storage.get_profile_manager", lambda: profile_manager)
+
+        # Create profiles using the convenience functions
+        # These will use our mocked profile manager
+        profile1 = create_profile("profile1", "json", "/profile1/path")
+        assert profile1.name == "profile1"
+
+        profile2 = create_profile("profile2", "memory")
+        assert profile2.name == "profile2"
+
+        # List profiles
+        profiles = list_profiles()
+        assert "default" in profiles
+        assert "profile1" in profiles
+        assert "profile2" in profiles
+
+        # Switch profile
+        active = switch_profile("profile1")
+        assert active.name == "profile1"
+
+        # Get active profile
+        active = get_active_profile()
+        assert active.name == "profile1"
