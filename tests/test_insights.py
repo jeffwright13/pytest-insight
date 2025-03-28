@@ -213,32 +213,185 @@ class TestInsightsModuleTests:
         assert "late_period" in time_comp
         assert "health_difference" in time_comp
 
-    def test_console_summary(self, monkeypatch, sample_sessions):
+    def test_console_summary(self, monkeypatch, mocker, sample_sessions):
         """Test the console summary functionality."""
+        # Create a mock Analysis instance with our sample sessions
+        mock_analysis = mocker.MagicMock()
+        mock_analysis._sessions = sample_sessions
 
-        # Mock the Analysis class
-        class MockAnalysis:
-            def __init__(self):
-                self._sessions = sample_sessions
+        # Mock health_report to return a simple dict
+        mock_analysis.health_report.return_value = {
+            "health_score": {
+                "overall_score": 85,
+                "stability_score": 90,
+                "performance_score": 80,
+                "warning_score": 85,
+            },
+            "recommendations": ["Fix flaky tests", "Improve test performance"],
+        }
 
-            def health_report(self):
-                return {"health_score": {"overall_score": 85}}
+        # Create insights with our mock analysis
+        insights = Insights(analysis=mock_analysis)
 
-            def compare_health(self, base_sessions, target_sessions):
-                return {
-                    "base_health": {"health_score": {"overall_score": 80}},
-                    "target_health": {"health_score": {"overall_score": 85}},
-                    "health_difference": 5,
-                    "improved": True,
-                }
+        # Mock the component insights methods to return test data
+        mock_test_insights = mocker.MagicMock()
+        mock_test_insights.outcome_distribution.return_value = {
+            "total_tests": 10,
+            "outcomes": {
+                TestOutcome.PASSED: {"count": 7},
+                TestOutcome.FAILED: {"count": 2},
+                TestOutcome.SKIPPED: {"count": 1},
+            },
+        }
+        mock_test_insights.flaky_tests.return_value = {
+            "total_flaky": 1,
+            "most_flaky": [("test_module.py::test_flaky", {"reruns": 2, "pass_rate": 0.5})],
+        }
+        mock_test_insights.slowest_tests.return_value = {
+            "slowest_tests": [
+                ("test_module.py::test_one", 1.5),
+                ("test_module.py::test_two", 2.5),
+            ]
+        }
 
-        monkeypatch.setattr("pytest_insight.insights.Analysis", MockAnalysis)
+        mock_session_insights = mocker.MagicMock()
+        mock_session_insights.session_metrics.return_value = {
+            "avg_duration": 5.0,
+            "failure_rate": 0.2,
+            "warning_rate": 0.1,
+        }
 
-        insights = Insights()
+        mock_trend_insights = mocker.MagicMock()
+        mock_trend_insights.failure_trends.return_value = {
+            "trend_percentage": 5.0,
+            "improving": True,
+        }
+
+        # Replace the component insights with our mocks
+        insights.tests = mock_test_insights
+        insights.sessions = mock_session_insights
+        insights.trends = mock_trend_insights
+
+        # Get the summary
         summary = insights.console_summary()
 
+        # Verify the summary contains the expected keys
         assert "health_score" in summary
+        assert "stability_score" in summary
+        assert "performance_score" in summary
+        assert "warning_score" in summary
         assert "failure_rate" in summary
+        assert "warning_rate" in summary
+        assert "avg_duration" in summary
         assert "outcome_distribution" in summary
         assert "slowest_tests" in summary
         assert "failure_trend" in summary
+
+    def test_insights_with_profiles(self, monkeypatch, mocker):
+        """Test insights initialization with profiles."""
+        # Create a mock storage
+        mock_storage = mocker.MagicMock()
+
+        # Mock the get_storage_instance function to return our mock storage directly
+        mock_get_storage = mocker.patch("pytest_insight.insights.get_storage_instance")
+        mock_get_storage.return_value = mock_storage
+
+        # Mock the Analysis class
+        mock_analysis = mocker.MagicMock()
+        monkeypatch.setattr("pytest_insight.insights.Analysis", mock_analysis)
+
+        # Initialize insights with profile
+        insights = Insights(profile_name="test_profile")
+
+        # Verify get_storage_instance was called with correct profile
+        mock_get_storage.assert_called_once_with(profile_name="test_profile")
+
+        # Verify Analysis was created with the mock storage
+        mock_analysis.assert_called_once_with(storage=mock_storage)
+
+        # Verify profile name was stored
+        assert insights._profile_name == "test_profile"
+
+    def test_with_profile_method(self, monkeypatch, mocker):
+        """Test with_profile method."""
+        # Create a mock storage
+        mock_storage = mocker.MagicMock()
+
+        # Mock the get_storage_instance function to return our mock storage directly
+        mock_get_storage = mocker.patch("pytest_insight.insights.get_storage_instance")
+        mock_get_storage.return_value = mock_storage
+
+        # Mock the Analysis class
+        mock_analysis = mocker.MagicMock()
+        mock_analysis_instance = mocker.MagicMock()
+        mock_analysis.return_value = mock_analysis_instance
+        monkeypatch.setattr("pytest_insight.insights.Analysis", mock_analysis)
+
+        # Create insights and call with_profile
+        insights = Insights()
+        result = insights.with_profile("test_profile")
+
+        # Verify get_storage_instance was called with correct profile
+        mock_get_storage.assert_called_once_with(profile_name="test_profile")
+
+        # Verify Analysis was created with the mock storage
+        mock_analysis.assert_called_with(storage=mock_storage)
+
+        # Verify profile name was stored
+        assert insights._profile_name == "test_profile"
+
+        # Verify method returns self for chaining
+        assert result is insights
+
+    def test_with_query_preserves_profile(self, monkeypatch, mocker, sample_sessions):
+        """Test with_query method preserves profile."""
+        # Create a mock storage
+        mock_storage = mocker.MagicMock()
+
+        # Mock the get_storage_instance function to return our mock storage directly
+        mock_get_storage = mocker.patch("pytest_insight.insights.get_storage_instance")
+        mock_get_storage.return_value = mock_storage
+
+        # Mock the Analysis class
+        mock_analysis = mocker.MagicMock()
+        mock_analysis_instance = mocker.MagicMock()
+        mock_analysis_instance._sessions = sample_sessions
+
+        # Mock the with_query method to return a new mock analysis
+        filtered_analysis = mocker.MagicMock()
+        filtered_analysis._sessions = sample_sessions
+        mock_analysis_instance.with_query.return_value = filtered_analysis
+
+        mock_analysis.return_value = mock_analysis_instance
+        monkeypatch.setattr("pytest_insight.insights.Analysis", mock_analysis)
+
+        # Create insights with profile and call with_query
+        insights = Insights(profile_name="test_profile")
+        result = insights.with_query(lambda q: q.for_sut("test-sut"))
+
+        # Verify the profile was preserved in the new Insights instance
+        assert result._profile_name == "test_profile"
+
+    def test_convenience_functions(self, monkeypatch, mocker):
+        """Test module-level convenience functions."""
+        # Create a mock storage
+        mock_storage = mocker.MagicMock()
+
+        # Mock the get_storage_instance function to return our mock storage directly
+        mock_get_storage = mocker.patch("pytest_insight.insights.get_storage_instance")
+        mock_get_storage.return_value = mock_storage
+
+        # Import the convenience functions
+        from pytest_insight.insights import insights, insights_with_profile
+
+        # Mock the Insights class
+        mock_insights_class = mocker.MagicMock()
+        monkeypatch.setattr("pytest_insight.insights.Insights", mock_insights_class)
+
+        # Test insights function
+        insights(profile_name="test_profile")
+        mock_insights_class.assert_called_with(analysis=None, profile_name="test_profile")
+
+        # Test insights_with_profile function
+        insights_with_profile("test_profile")
+        mock_insights_class.assert_called_with(profile_name="test_profile")

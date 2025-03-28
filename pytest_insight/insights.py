@@ -16,6 +16,9 @@ from typing import Any, Dict, Optional
 
 from pytest_insight.analysis import Analysis
 from pytest_insight.models import TestOutcome
+from pytest_insight.storage import (
+    get_storage_instance,
+)
 
 
 class TestInsights:
@@ -535,9 +538,6 @@ class Insights:
         if analysis is None:
             # Create a new Analysis instance
             if profile_name is not None:
-                # We need to import get_storage_instance to create a storage with the profile
-                from pytest_insight.storage import get_storage_instance
-
                 storage = get_storage_instance(profile_name=profile_name)
                 self.analysis = Analysis(storage=storage)
             else:
@@ -566,7 +566,7 @@ class Insights:
             insights.with_query(lambda q: q.in_last_days(7).for_sut("service"))
         """
         filtered_analysis = self.analysis.with_query(query_func)
-        return Insights(analysis=filtered_analysis)
+        return Insights(analysis=filtered_analysis, profile_name=self._profile_name)
 
     def with_profile(self, profile_name: str) -> "Insights":
         """Set the storage profile for insights.
@@ -584,8 +584,6 @@ class Insights:
         self._profile_name = profile_name
 
         # Create a new storage with the profile
-        from pytest_insight.storage import get_storage_instance
-
         storage = get_storage_instance(profile_name=profile_name)
 
         # Update the analysis with the new storage
@@ -635,7 +633,7 @@ class Insights:
         }
 
     def console_summary(self) -> Dict[str, Any]:
-        """Generate a concise summary suitable for console output.
+        """Generate a summary of insights for console display.
 
         Returns:
             Dict containing the most important metrics and insights
@@ -684,7 +682,19 @@ class Insights:
         failure_rate = session_metrics.get("failure_rate", 0) * 100
         warning_rate = session_metrics.get("warning_rate", 0) * 100
 
+        # Get session info
+        sut_name = "Unknown"
+        session_id = "Unknown"
+        storage_path = None
+        if self.analysis._sessions and len(self.analysis._sessions) > 0:
+            session = self.analysis._sessions[0]
+            sut_name = session.sut_name
+            session_id = session.session_id
+
         return {
+            "sut_name": sut_name,
+            "session_id": session_id,
+            "storage_path": storage_path,
             "health_score": health_score,
             "stability_score": stability_score,
             "performance_score": performance_score,
@@ -892,3 +902,34 @@ class Insights:
 
         # Join all lines and return
         return "\n".join(output)
+
+
+def insights(analysis: Optional[Analysis] = None, profile_name: Optional[str] = None) -> Insights:
+    """Create a new Insights instance.
+
+    Args:
+        analysis: Optional Analysis instance to use
+        profile_name: Optional profile name to use for storage configuration
+
+    Returns:
+        Insights instance
+
+    Example:
+        insights(profile_name="production").summary_report()
+    """
+    return Insights(analysis=analysis, profile_name=profile_name)
+
+
+def insights_with_profile(profile_name: str) -> Insights:
+    """Create a new Insights instance with a specific profile.
+
+    Args:
+        profile_name: Name of the profile to use
+
+    Returns:
+        Insights instance
+
+    Example:
+        insights_with_profile("production").summary_report()
+    """
+    return Insights(profile_name=profile_name)

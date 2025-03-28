@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 from pytest_insight import InsightAPI, get_storage_instance
-from pytest_insight.db_generator import PracticeDataGenerator
+from pytest_insight.scripts.db_generator import PracticeDataGenerator
 
 
 def setup_environment():
