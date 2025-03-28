@@ -247,3 +247,110 @@ class Test_Comparison:
             .execute([base_session, target_session])
         )
         assert comparison2.base_session is not None
+
+    def test_comparison_with_profiles(self, base_session, target_session, mocker):
+        """Test comparison initialization with profiles."""
+        # Mock the Query class to verify profile parameters are passed
+        mock_query = mocker.patch("pytest_insight.comparison.Query")
+
+        # Initialize comparison with profiles
+        Comparison(
+            sessions=[base_session, target_session],
+            base_profile="profile1",
+            target_profile="profile2",
+        )
+
+        # Verify Query was called with correct profile parameters
+        assert mock_query.call_args_list[0].kwargs["profile_name"] == "profile1"
+        assert mock_query.call_args_list[1].kwargs["profile_name"] == "profile2"
+
+    def test_with_base_profile_method(self, base_session, target_session, mocker):
+        """Test with_base_profile method."""
+        # Mock the Query.with_profile method
+        mock_with_profile = mocker.patch.object(Query, "with_profile")
+
+        # Create comparison and call with_base_profile
+        comparison = Comparison([base_session, target_session])
+        result = comparison.with_base_profile("test_profile")
+
+        # Verify with_profile was called on base_query
+        mock_with_profile.assert_called_once_with("test_profile")
+        # Verify method returns self for chaining
+        assert result is comparison
+        # Verify profile is stored
+        assert comparison._base_profile == "test_profile"
+
+    def test_with_target_profile_method(self, base_session, target_session, mocker):
+        """Test with_target_profile method."""
+        # Mock the Query.with_profile method
+        mock_with_profile = mocker.patch.object(Query, "with_profile")
+
+        # Create comparison and call with_target_profile
+        comparison = Comparison([base_session, target_session])
+        result = comparison.with_target_profile("test_profile")
+
+        # Verify with_profile was called on target_query
+        mock_with_profile.assert_called_once_with("test_profile")
+        # Verify method returns self for chaining
+        assert result is comparison
+        # Verify profile is stored
+        assert comparison._target_profile == "test_profile"
+
+    def test_with_profiles_method(self, base_session, target_session, mocker):
+        """Test with_profiles method."""
+        # Mock the with_base_profile and with_target_profile methods
+        mock_base = mocker.patch.object(Comparison, "with_base_profile")
+        mock_target = mocker.patch.object(Comparison, "with_target_profile")
+
+        # Create comparison and call with_profiles
+        comparison = Comparison([base_session, target_session])
+        result = comparison.with_profiles("profile1", "profile2")
+
+        # Verify both methods were called with correct profiles
+        mock_base.assert_called_once_with("profile1")
+        mock_target.assert_called_once_with("profile2")
+        # Verify method returns self for chaining
+        assert result is comparison
+
+    def test_execute_with_profiles(self, base_session, target_session, mocker):
+        """Test execute method with profiles."""
+        # Mock the ProfileManager.get_profile method to avoid profile not found error
+        mock_profile = mocker.patch("pytest_insight.storage.ProfileManager.get_profile")
+        mock_profile.return_value = mocker.MagicMock(storage_type="json", file_path="test_path")
+
+        # Mock the Query.execute method to return expected results
+        mock_execute = mocker.patch.object(Query, "execute")
+        mock_execute.return_value.sessions = [base_session]
+
+        # Create comparison with profiles
+        comparison = Comparison(base_profile="profile1", target_profile="profile2")
+
+        # Add some filters to avoid validation error
+        comparison.base_query._session_filters = ["dummy_filter"]
+        comparison.target_query._session_filters = ["dummy_filter"]
+
+        # Execute comparison
+        try:
+            comparison.execute()
+        except Exception:
+            # We expect an exception since we're mocking the execute method
+            pass
+
+        # Verify execute was called without sessions parameter
+        assert any(call.args == () for call in mock_execute.call_args_list)
+
+    def test_convenience_functions(self, mocker):
+        """Test module-level convenience functions."""
+        # Mock the Comparison class
+        mock_comparison = mocker.patch("pytest_insight.comparison.Comparison")
+
+        # Import the convenience functions
+        from pytest_insight.comparison import comparison, comparison_with_profiles
+
+        # Test comparison function
+        comparison(base_profile="profile1", target_profile="profile2")
+        mock_comparison.assert_called_with(sessions=None, base_profile="profile1", target_profile="profile2")
+
+        # Test comparison_with_profiles function
+        comparison_with_profiles("profile1", "profile2")
+        mock_comparison.assert_called_with(base_profile="profile1", target_profile="profile2")

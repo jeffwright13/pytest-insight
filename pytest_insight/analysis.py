@@ -43,7 +43,7 @@ from zoneinfo import ZoneInfo
 
 from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.query import Query
-from pytest_insight.storage import BaseStorage
+from pytest_insight.storage import BaseStorage, get_storage_instance
 
 
 class SessionAnalysis:
@@ -697,6 +697,9 @@ class Analysis:
     This class follows the fluent interface pattern used by Query and Comparison,
     allowing for intuitive method chaining while preserving session context.
 
+    Storage profiles can be specified to analyze data from different environments
+    or configurations.
+
     Example usage:
         # Basic analysis with Query
         analysis = Analysis()
@@ -715,23 +718,35 @@ class Analysis:
         # Combining with Comparison
         comparison = Comparison().between_suts("service-v1", "service-v2").execute()
         analysis_result = Analysis(sessions=[comparison.base_session, comparison.target_session]).compare_health()
+
+        # Using storage profiles
+        analysis = Analysis(profile_name="production")
+        prod_report = analysis.health_report()
+
+        # Switch profiles during analysis
+        analysis = Analysis()
+        dev_report = analysis.with_profile("development").health_report()
     """
 
     def __init__(
         self,
         storage: Optional[BaseStorage] = None,
         sessions: Optional[List[TestSession]] = None,
+        profile_name: Optional[str] = None,
     ):
         """Initialize analysis components.
 
         Args:
-            storage: Storage instance for accessing test data. If None, uses default storage.
+            storage: Storage instance for accessing test data.
+                    If None, uses storage from profile_name or default storage.
             sessions: Optional list of sessions to analyze
+            profile_name: Optional profile name to use for storage configuration.
+                         Takes precedence over storage parameter if both are provided.
         """
-        if storage is None:
-            from pytest_insight.storage import JSONStorage
+        self._profile_name = profile_name
 
-            storage = JSONStorage()
+        if storage is None:
+            storage = get_storage_instance(profile_name=profile_name)
 
         self.storage = storage
         self._sessions = sessions
@@ -740,6 +755,28 @@ class Analysis:
         self.sessions = SessionAnalysis(storage, sessions)
         self.tests = TestAnalysis(storage, sessions)
         self.metrics = MetricsAnalysis(storage, sessions)
+
+    def with_profile(self, profile_name: str) -> "Analysis":
+        """Set the storage profile for analysis.
+
+        Args:
+            profile_name: Name of the profile to use
+
+        Returns:
+            Analysis instance for chaining
+
+        Example:
+            analysis.with_profile("production").health_report()
+        """
+        self._profile_name = profile_name
+        self.storage = get_storage_instance(profile_name=profile_name)
+
+        # Update analysis components with new storage
+        self.sessions = SessionAnalysis(self.storage, self._sessions)
+        self.tests = TestAnalysis(self.storage, self._sessions)
+        self.metrics = MetricsAnalysis(self.storage, self._sessions)
+
+        return self
 
     def with_query(self, query_func: Callable[[Query], Query]) -> "Analysis":
         """Apply a query function to filter sessions.
@@ -756,10 +793,14 @@ class Analysis:
         Example:
             analysis.with_query(lambda q: q.in_last_days(7).for_sut("service"))
         """
-        query = Query(storage=self.storage)
+        query = Query(storage=self.storage, profile_name=self._profile_name)
         filtered_query = query_func(query)
         filtered_sessions = filtered_query.execute(sessions=self._sessions).sessions
-        return Analysis(storage=self.storage, sessions=filtered_sessions)
+        return Analysis(
+            storage=self.storage,
+            sessions=filtered_sessions,
+            profile_name=self._profile_name,
+        )
 
     def health_report(self, days: Optional[int] = None) -> Dict[str, Any]:
         """Generate a comprehensive health report for the test suite.
@@ -863,3 +904,53 @@ class Analysis:
             "improved": health_diff > 0,
             "timestamp": datetime.now(ZoneInfo("UTC")),
         }
+
+
+# Helper functions for creating analysis instances
+def analysis(
+    storage: Optional[BaseStorage] = None,
+    sessions: Optional[List[TestSession]] = None,
+    profile_name: Optional[str] = None,
+) -> Analysis:
+    """Create a new Analysis instance.
+
+    This is a convenience function for creating a new Analysis instance,
+    which is the entry point for the fluent analysis API.
+
+    Args:
+        storage: Optional storage instance for accessing test data.
+                If None, uses storage from profile_name or default storage.
+        sessions: Optional list of sessions to analyze.
+        profile_name: Optional profile name to use for storage configuration.
+                     Takes precedence over storage parameter if both are provided.
+
+    Returns:
+        New Analysis instance ready for building analysis
+
+    Examples:
+        # Basic usage
+        result = analysis().health_report()
+
+        # With profile
+        result = analysis(profile_name="prod").health_report()
+    """
+    return Analysis(storage=storage, sessions=sessions, profile_name=profile_name)
+
+
+def analysis_with_profile(profile_name: str) -> Analysis:
+    """Create a new Analysis instance with a specific profile.
+
+    This is a convenience function for creating a new Analysis instance
+    that uses a specific storage profile.
+
+    Args:
+        profile_name: Name of the profile to use
+
+    Returns:
+        New Analysis instance configured with the specified profile
+
+    Examples:
+        # Analyze production data
+        result = analysis_with_profile("prod").health_report()
+    """
+    return Analysis(profile_name=profile_name)

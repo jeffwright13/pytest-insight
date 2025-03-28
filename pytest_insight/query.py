@@ -21,6 +21,11 @@ Key Behaviors:
    - To apply independent filters, create new Query instances for each filter set
    - Once execute() is called, the Query instance retains all previously added filters
 
+4. Storage Profile Support:
+   - Queries can be executed against specific storage profiles
+   - Use with_profile() to switch profiles during query building
+   - Profiles can be specified at initialization or via environment variables
+
 Examples:
     # Session-level only
     # Get TestSessions for the last 7 days for all SUTs with 'service' in name
@@ -40,6 +45,9 @@ Examples:
         .apply()
         .execute()
 
+    # Using a specific profile
+    query.with_profile("prod").in_last_days(7).execute()
+
     # IMPORTANT: Filters accumulate, so these are NOT equivalent:
 
     # Example 1: Single query with two filters (returns sessions with BOTH env=prod AND region=us-east)
@@ -55,26 +63,22 @@ Examples:
 """
 
 import dataclasses
-
-# Import the real datetime class for isinstance checks
-from typing import Dict, List, Optional, Set, Tuple, Union, Callable, Any
-
 import datetime as dt_module
 import fnmatch
 import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
+
+# Import the real datetime class for isinstance checks
 from typing import Callable, Dict, List, Optional, Protocol, Union
 
 from pytest_insight.models import TestOutcome, TestResult, TestSession
 from pytest_insight.storage import BaseStorage, get_storage_instance
 from pytest_insight.utils import (
-    create_equals_filter,
-    create_not_equals_filter,
-    create_before_filter,
-    create_before_or_equals_filter,
     create_after_filter,
     create_after_or_equals_filter,
+    create_before_filter,
+    create_before_or_equals_filter,
 )
 
 
@@ -679,6 +683,11 @@ class Query:
        - To apply independent filters, create new Query instances for each filter set
        - Once execute() is called, the Query instance retains all previously added filters
 
+    4. Storage Profile Support:
+       - Queries can be executed against specific storage profiles
+       - Use with_profile() to switch profiles during query building
+       - Profiles can be specified at initialization or via environment variables
+
     Examples:
         # Session-level only
         # Get TestSessions for the last 7 days for all SUTs with 'service' in name
@@ -698,6 +707,9 @@ class Query:
             .apply()
             .execute()
 
+        # Using a specific profile
+        query.with_profile("prod").in_last_days(7).execute()
+
         # IMPORTANT: Filters accumulate, so these are NOT equivalent:
 
         # Example 1: Single query with two filters (returns sessions with BOTH env=prod AND region=us-east)
@@ -712,17 +724,25 @@ class Query:
         result2 = query2.with_session_tag("region", "us-east").execute()
     """
 
-    def __init__(self, storage: Optional[BaseStorage] = None):
+    def __init__(self, storage: Optional[BaseStorage] = None, profile_name: Optional[str] = None):
         """Initialize a new Query instance.
 
         Args:
             storage: Optional storage instance to use. If not provided, will use get_storage_instance().
                    This is primarily used for testing to inject mock storage.
+            profile_name: Optional profile name to use for storage configuration.
+                         If provided, overrides any storage instance passed directly.
         """
         self._session_filters = []  # Session-level filters (SUT, time range, warnings)
         self._test_filters = []  # Test-level filters (pattern, duration, outcome)
         self._sessions = []  # Cached sessions from storage
-        self.storage = storage or get_storage_instance()
+        self._profile_name = profile_name
+
+        # If profile_name is provided, it takes precedence over direct storage instance
+        if profile_name:
+            self.storage = get_storage_instance(profile_name=profile_name)
+        else:
+            self.storage = storage or get_storage_instance()
 
     def execute(self, sessions: Optional[List[TestSession]] = None) -> QueryResult:
         """Execute query and return results as QueryResult class instance.
@@ -803,9 +823,14 @@ class Query:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict, storage: Optional[BaseStorage] = None) -> "Query":
+    def from_dict(
+        cls,
+        data: Dict,
+        storage: Optional[BaseStorage] = None,
+        profile_name: Optional[str] = None,
+    ) -> "Query":
         """Create query from dictionary."""
-        query = cls(storage)
+        query = cls(storage, profile_name)
         filter_map = {
             FilterType.SHELL_PATTERN.name: ShellPatternFilter,
             FilterType.REGEX_PATTERN.name: RegexPatternFilter,
@@ -1112,4 +1137,28 @@ class Query:
             raise InvalidQueryParameterError("Tag value must be a non-empty string")
 
         self._session_filters.append(lambda s: s.session_tags.get(tag_key) == tag_value)
+        return self
+
+    def with_profile(self, profile_name: str) -> "Query":
+        """Switch to a different storage profile for this query.
+
+        This method allows changing the storage profile during query building,
+        which is useful for comparing data across different environments or
+        configurations.
+
+        Args:
+            profile_name: Name of the profile to use
+
+        Returns:
+            Query instance for chaining
+
+        Raises:
+            ValueError: If profile does not exist
+        """
+        if not isinstance(profile_name, str) or not profile_name.strip():
+            raise InvalidQueryParameterError("Profile name must be a non-empty string")
+
+        # Update the profile name and reconfigure storage
+        self._profile_name = profile_name
+        self.storage = get_storage_instance(profile_name=profile_name)
         return self

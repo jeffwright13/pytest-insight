@@ -531,7 +531,12 @@ class TestStorageWithProfiles:
 
     def test_get_storage_instance_with_profile(self, tmp_path, monkeypatch):
         """Test get_storage_instance with profile name."""
-        from pytest_insight.storage import InMemoryStorage, JSONStorage, ProfileManager, get_storage_instance
+        from pytest_insight.storage import (
+            InMemoryStorage,
+            JSONStorage,
+            ProfileManager,
+            get_storage_instance,
+        )
 
         # Create a profile manager with a temporary config
         config_path = tmp_path / "profiles.json"
@@ -563,7 +568,11 @@ class TestStorageWithProfiles:
 
     def test_env_var_profile_override(self, tmp_path, monkeypatch):
         """Test environment variable override for profile in get_storage_instance."""
-        from pytest_insight.storage import JSONStorage, ProfileManager, get_storage_instance
+        from pytest_insight.storage import (
+            JSONStorage,
+            ProfileManager,
+            get_storage_instance,
+        )
 
         # Create a profile manager with a temporary config
         config_path = tmp_path / "profiles.json"

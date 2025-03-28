@@ -8,7 +8,7 @@ from pytest_insight.query import Query
 
 @pytest.fixture
 def analysis_sessions(get_test_time):
-    """Fixture providing test sessions for analysis testing."""
+    """Fixture providing test sessions for analysis."""
     base_time = get_test_time() - timedelta(days=30)
 
     # Create sessions with different characteristics for analysis
@@ -248,3 +248,85 @@ class Test_Analysis:
         health_report = analysis.health_report()
         assert "health_score" in health_report
         assert "session_metrics" in health_report
+
+    def test_analysis_with_profiles(self, analysis_sessions, mocker):
+        """Test analysis initialization with profiles."""
+        # Mock the get_storage_instance function to verify profile parameter is passed
+        mock_get_storage = mocker.patch("pytest_insight.analysis.get_storage_instance")
+        mock_storage = mocker.MagicMock()
+        mock_get_storage.return_value = mock_storage
+
+        # Initialize analysis with profile
+        analysis = Analysis(profile_name="test_profile")
+
+        # Verify get_storage_instance was called with correct profile
+        mock_get_storage.assert_called_once_with(profile_name="test_profile")
+
+        # Verify storage was correctly set
+        assert analysis.storage == mock_storage
+        assert analysis._profile_name == "test_profile"
+
+    def test_with_profile_method(self, analysis_sessions, mocker):
+        """Test with_profile method."""
+        # Mock the get_storage_instance function
+        mock_get_storage = mocker.patch("pytest_insight.analysis.get_storage_instance")
+        mock_storage1 = mocker.MagicMock()
+        mock_storage2 = mocker.MagicMock()
+        # Return different mock storage for each call
+        mock_get_storage.side_effect = [mock_storage1, mock_storage2]
+
+        # Create analysis and call with_profile
+        analysis = Analysis()
+        result = analysis.with_profile("test_profile")
+
+        # Verify get_storage_instance was called with correct profiles
+        assert mock_get_storage.call_count == 2
+        mock_get_storage.assert_any_call(profile_name=None)
+        mock_get_storage.assert_any_call(profile_name="test_profile")
+
+        # Verify storage was correctly set after with_profile
+        assert analysis.storage == mock_storage2
+        assert analysis._profile_name == "test_profile"
+
+        # Verify method returns self for chaining
+        assert result is analysis
+
+    def test_with_query_with_profile(self, analysis_sessions, mocker):
+        """Test with_query method with profile."""
+        # Mock the storage system
+        mock_get_storage = mocker.patch("pytest_insight.analysis.get_storage_instance")
+        mock_storage = mocker.MagicMock()
+        mock_get_storage.return_value = mock_storage
+
+        # Mock the Query class to verify profile parameter is passed
+        mock_query = mocker.patch("pytest_insight.analysis.Query")
+        mock_query_instance = mocker.MagicMock()
+        mock_query.return_value = mock_query_instance
+
+        # Mock execute to return sessions
+        mock_query_result = mocker.MagicMock()
+        mock_query_result.sessions = analysis_sessions
+        mock_query_instance.execute.return_value = mock_query_result
+
+        # Create analysis with profile and call with_query
+        analysis = Analysis(profile_name="test_profile")
+        analysis.with_query(lambda q: q.for_sut("api-service"))
+
+        # Verify Query was called with correct profile at least once
+        mock_query.assert_any_call(storage=mock_storage, profile_name="test_profile")
+
+    def test_convenience_functions(self, mocker):
+        """Test module-level convenience functions."""
+        # Mock the Analysis class
+        mock_analysis = mocker.patch("pytest_insight.analysis.Analysis")
+
+        # Import the convenience functions
+        from pytest_insight.analysis import analysis, analysis_with_profile
+
+        # Test analysis function
+        analysis(profile_name="test_profile")
+        mock_analysis.assert_called_with(storage=None, sessions=None, profile_name="test_profile")
+
+        # Test analysis_with_profile function
+        analysis_with_profile("test_profile")
+        mock_analysis.assert_called_with(profile_name="test_profile")

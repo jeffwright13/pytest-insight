@@ -12,13 +12,11 @@ The script follows the fluent interface pattern established in the pytest-insigh
 
 import argparse
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
 from pytest_insight.analysis import Analysis
 from pytest_insight.models import TestOutcome, TestSession
-from pytest_insight.storage import get_storage_instance
 
 
 def analyze_test_data(data_path=None, sut_filter=None, days=None):
@@ -49,6 +47,7 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None):
             # Apply days filter if specified
             if days:
                 from datetime import datetime, timedelta
+
                 cutoff = datetime.now() - timedelta(days=days)
                 sessions = [s for s in sessions if s.session_start_time >= cutoff]
                 print(f"Filtered to {len(sessions)} sessions from the last {days} days")
@@ -279,7 +278,12 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None):
 def main():
     """Main function to run the analysis CLI."""
     parser = argparse.ArgumentParser(description="Analyze pytest-insight test data")
-    parser.add_argument("--path", "-p", type=str, help="Path to the JSON data file (default: ~/.pytest_insight/practice.json)")
+    parser.add_argument(
+        "--path",
+        "-p",
+        type=str,
+        help="Path to the JSON data file (default: ~/.pytest_insight/practice.json)",
+    )
     parser.add_argument("--sut", "-s", type=str, help="Filter by System Under Test name")
     parser.add_argument("--days", "-d", type=int, help="Filter to sessions from the last N days")
     parser.add_argument("--version", "-v", action="store_true", help="Show version information")
@@ -288,6 +292,7 @@ def main():
 
     if args.version:
         from importlib.metadata import version
+
         try:
             ver = version("pytest-insight")
             print(f"pytest-insight version: {ver}")

@@ -520,13 +520,30 @@ class Insights:
         }
     """
 
-    def __init__(self, analysis: Optional[Analysis] = None):
+    def __init__(self, analysis: Optional[Analysis] = None, profile_name: Optional[str] = None):
         """Initialize insight components.
 
         Args:
             analysis: Optional Analysis instance to use. If None, creates a new one.
+            profile_name: Optional profile name to use for storage configuration.
+                         Takes precedence over analysis parameter if both are provided.
         """
-        self.analysis = analysis or Analysis()
+        # Store the profile name
+        self._profile_name = profile_name
+
+        # Create or use the analysis instance
+        if analysis is None:
+            # Create a new Analysis instance
+            if profile_name is not None:
+                # We need to import get_storage_instance to create a storage with the profile
+                from pytest_insight.storage import get_storage_instance
+
+                storage = get_storage_instance(profile_name=profile_name)
+                self.analysis = Analysis(storage=storage)
+            else:
+                self.analysis = Analysis()
+        else:
+            self.analysis = analysis
 
         # Initialize insight components
         self.tests = TestInsights(self.analysis)
@@ -550,6 +567,36 @@ class Insights:
         """
         filtered_analysis = self.analysis.with_query(query_func)
         return Insights(analysis=filtered_analysis)
+
+    def with_profile(self, profile_name: str) -> "Insights":
+        """Set the storage profile for insights.
+
+        Args:
+            profile_name: Name of the profile to use
+
+        Returns:
+            Insights instance for chaining
+
+        Example:
+            insights.with_profile("production").summary_report()
+        """
+        # Store the new profile name
+        self._profile_name = profile_name
+
+        # Create a new storage with the profile
+        from pytest_insight.storage import get_storage_instance
+
+        storage = get_storage_instance(profile_name=profile_name)
+
+        # Update the analysis with the new storage
+        self.analysis = Analysis(storage=storage)
+
+        # Reinitialize insight components with the updated analysis
+        self.tests = TestInsights(self.analysis)
+        self.sessions = SessionInsights(self.analysis)
+        self.trends = TrendInsights(self.analysis)
+
+        return self
 
     def summary_report(self) -> Dict[str, Any]:
         """Generate a comprehensive summary report.

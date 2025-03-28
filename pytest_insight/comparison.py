@@ -3,7 +3,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from pytest_insight.models import TestOutcome, TestSession
 from pytest_insight.query import Query, QueryResult
-from pytest_insight.storage import JSONStorage
 
 
 class ComparisonError(Exception):
@@ -76,6 +75,9 @@ class Comparison:
     It exposes two Query objects (base_query and target_query) that can be configured
     independently, along with convenience methods that apply filters to both queries.
 
+    Storage profiles can be specified for each query, allowing comparison between
+    different environments, configurations, or test runs stored in separate profiles.
+
     Example usage:
         # Configure queries separately
         comparison = Comparison()
@@ -91,28 +93,88 @@ class Comparison:
         comparison = Comparison()
         comparison.apply_to_both(lambda q: q.in_last_days(7))
         result = comparison.execute()
+
+        # Compare across different profiles
+        comparison = Comparison(base_profile="prod", target_profile="dev")
+        result = comparison.execute()
+
+        # Switch profiles during query building
+        comparison = Comparison()
+        comparison.with_base_profile("prod").with_target_profile("dev")
+        result = comparison.execute()
     """
 
-    def __init__(self, sessions: Optional[List[TestSession]] = None):
-        """Initialize comparison with optional test sessions.
+    def __init__(
+        self,
+        sessions: Optional[List[TestSession]] = None,
+        base_profile: Optional[str] = None,
+        target_profile: Optional[str] = None,
+    ):
+        """Initialize comparison with optional test sessions and storage profiles.
 
         Args:
             sessions: Optional list of test sessions to search through.
-                     If not provided, loads sessions from default storage.
+                     If not provided, loads sessions from storage.
+            base_profile: Optional profile name for base query.
+            target_profile: Optional profile name for target query.
         """
-        if sessions is None:
-            storage = JSONStorage()
-            sessions = storage.load_sessions()
+        self._base_profile = base_profile
+        self._target_profile = target_profile
 
-        self.base_query = Query(sessions)
-        self.target_query = Query(sessions)
-
-        # Store sessions for later use in execute()
-        self._sessions = sessions
+        if sessions is not None:
+            # If sessions are provided, use them for both queries
+            self.base_query = Query(sessions, profile_name=base_profile)
+            self.target_query = Query(sessions, profile_name=target_profile)
+            self._sessions = sessions
+        else:
+            # Otherwise, create queries with appropriate profiles
+            self.base_query = Query(profile_name=base_profile)
+            self.target_query = Query(profile_name=target_profile)
+            self._sessions = None
 
         # Default performance thresholds
         self._slower_threshold = 1.2  # 20% slower
         self._faster_threshold = 0.8  # 20% faster
+
+    def with_base_profile(self, profile_name: str) -> "Comparison":
+        """Set the storage profile for the base query.
+
+        Args:
+            profile_name: Name of the profile to use for base query
+
+        Returns:
+            Comparison instance for chaining
+        """
+        self._base_profile = profile_name
+        self.base_query.with_profile(profile_name)
+        return self
+
+    def with_target_profile(self, profile_name: str) -> "Comparison":
+        """Set the storage profile for the target query.
+
+        Args:
+            profile_name: Name of the profile to use for target query
+
+        Returns:
+            Comparison instance for chaining
+        """
+        self._target_profile = profile_name
+        self.target_query.with_profile(profile_name)
+        return self
+
+    def with_profiles(self, base_profile: str, target_profile: str) -> "Comparison":
+        """Set storage profiles for both base and target queries.
+
+        Args:
+            base_profile: Name of the profile to use for base query
+            target_profile: Name of the profile to use for target query
+
+        Returns:
+            Comparison instance for chaining
+        """
+        self.with_base_profile(base_profile)
+        self.with_target_profile(target_profile)
+        return self
 
     def between_suts(self, base_sut: str, target_sut: str) -> "Comparison":
         """Compare between two SUTs.
@@ -210,6 +272,10 @@ class Comparison:
             comparison = Comparison()
             result = comparison.between_suts("service-v1", "service-v2").execute()
 
+            # Using profiles:
+            comparison = Comparison(base_profile="prod", target_profile="dev")
+            result = comparison.execute()
+
             # Direct comparison:
             result = comparison.execute([base_session, target_session])
         """
@@ -231,12 +297,17 @@ class Comparison:
             base_results = Query().execute([base_session])
             target_results = Query().execute([target_session])
         else:
-            # Use the stored sessions from initialization
-            sessions_to_query = self._sessions
+            # If we have pre-loaded sessions, use them
+            if self._sessions is not None:
+                sessions_to_query = self._sessions
 
-            # Use queries to find sessions
-            base_results = self.base_query.execute(sessions_to_query)
-            target_results = self.target_query.execute(sessions_to_query)
+                # Use queries to find sessions
+                base_results = self.base_query.execute(sessions_to_query)
+                target_results = self.target_query.execute(sessions_to_query)
+            else:
+                # Otherwise, let each query use its own storage
+                base_results = self.base_query.execute()
+                target_results = self.target_query.execute()
 
             if not base_results.sessions or not target_results.sessions:
                 raise ComparisonError("No matching base and target sessions found")
@@ -300,3 +371,53 @@ class Comparison:
             new_tests=new_tests,
             outcome_changes=outcome_changes,
         )
+
+
+# Helper functions for creating comparisons
+def comparison(
+    sessions: Optional[List[TestSession]] = None,
+    base_profile: Optional[str] = None,
+    target_profile: Optional[str] = None,
+) -> Comparison:
+    """Create a new Comparison instance.
+
+    This is a convenience function for creating a new Comparison instance,
+    which is the entry point for the fluent comparison API.
+
+    Args:
+        sessions: Optional list of test sessions to search through.
+                 If not provided, loads sessions from storage.
+        base_profile: Optional profile name for base query.
+        target_profile: Optional profile name for target query.
+
+    Returns:
+        New Comparison instance ready for building filters
+
+    Examples:
+        # Basic usage
+        result = comparison().between_suts("service-v1", "service-v2").execute()
+
+        # With profiles
+        result = comparison(base_profile="prod", target_profile="dev").execute()
+    """
+    return Comparison(sessions=sessions, base_profile=base_profile, target_profile=target_profile)
+
+
+def comparison_with_profiles(base_profile: str, target_profile: str) -> Comparison:
+    """Create a new Comparison instance with specific profiles.
+
+    This is a convenience function for creating a new Comparison instance
+    that uses specific storage profiles for base and target queries.
+
+    Args:
+        base_profile: Name of the profile to use for base query
+        target_profile: Name of the profile to use for target query
+
+    Returns:
+        New Comparison instance configured with the specified profiles
+
+    Examples:
+        # Compare prod vs dev
+        result = comparison_with_profiles("prod", "dev").execute()
+    """
+    return Comparison(base_profile=base_profile, target_profile=target_profile)

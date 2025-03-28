@@ -27,8 +27,7 @@ class NormalizedDatetime:
 
     @staticmethod
     def _normalize_for_comparison(
-        dt1: dt_module.datetime,
-        dt2: dt_module.datetime
+        dt1: dt_module.datetime, dt2: dt_module.datetime
     ) -> Tuple[dt_module.datetime, dt_module.datetime]:
         """Normalize two datetime objects for comparison.
 
@@ -53,7 +52,9 @@ class NormalizedDatetime:
         # If dt2 is timezone-aware but dt1 is naive, convert dt2 to naive
         return dt1, dt2.replace(tzinfo=None)
 
-    def _get_normalized_pair(self, other: Union['NormalizedDatetime', dt_module.datetime]) -> Tuple[dt_module.datetime, dt_module.datetime]:
+    def _get_normalized_pair(
+        self, other: Union["NormalizedDatetime", dt_module.datetime]
+    ) -> Tuple[dt_module.datetime, dt_module.datetime]:
         """Get normalized pair of datetime objects for comparison.
 
         Args:
@@ -71,36 +72,36 @@ class NormalizedDatetime:
 
         return self._normalize_for_comparison(self.dt, other_dt)
 
-    def __eq__(self, other: Union['NormalizedDatetime', dt_module.datetime]) -> bool:
+    def __eq__(self, other: Union["NormalizedDatetime", dt_module.datetime]) -> bool:
         """Equal comparison with proper timezone handling."""
         if other is None:
             return False
         dt1, dt2 = self._get_normalized_pair(other)
         return dt1 == dt2
 
-    def __ne__(self, other: Union['NormalizedDatetime', dt_module.datetime]) -> bool:
+    def __ne__(self, other: Union["NormalizedDatetime", dt_module.datetime]) -> bool:
         """Not equal comparison with proper timezone handling."""
         if other is None:
             return True
         dt1, dt2 = self._get_normalized_pair(other)
         return dt1 != dt2
 
-    def __lt__(self, other: Union['NormalizedDatetime', dt_module.datetime]) -> bool:
+    def __lt__(self, other: Union["NormalizedDatetime", dt_module.datetime]) -> bool:
         """Less than comparison with proper timezone handling."""
         dt1, dt2 = self._get_normalized_pair(other)
         return dt1 < dt2
 
-    def __le__(self, other: Union['NormalizedDatetime', dt_module.datetime]) -> bool:
+    def __le__(self, other: Union["NormalizedDatetime", dt_module.datetime]) -> bool:
         """Less than or equal comparison with proper timezone handling."""
         dt1, dt2 = self._get_normalized_pair(other)
         return dt1 <= dt2
 
-    def __gt__(self, other: Union['NormalizedDatetime', dt_module.datetime]) -> bool:
+    def __gt__(self, other: Union["NormalizedDatetime", dt_module.datetime]) -> bool:
         """Greater than comparison with proper timezone handling."""
         dt1, dt2 = self._get_normalized_pair(other)
         return dt1 > dt2
 
-    def __ge__(self, other: Union['NormalizedDatetime', dt_module.datetime]) -> bool:
+    def __ge__(self, other: Union["NormalizedDatetime", dt_module.datetime]) -> bool:
         """Greater than or equal comparison with proper timezone handling."""
         dt1, dt2 = self._get_normalized_pair(other)
         return dt1 >= dt2
