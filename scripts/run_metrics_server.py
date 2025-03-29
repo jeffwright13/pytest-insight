@@ -30,7 +30,7 @@ def start_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = True)
         print("Using default database location")
 
     # Run the server - pointing to the correct module
-    uvicorn.run("pytest_insight.api:app", host=host, port=port, reload=reload)
+    uvicorn.run("pytest_insight.web_api:app", host=host, port=port, reload=reload)
 
 
 def open_grafana_dashboard(host: str = "127.0.0.1", port: int = 3000) -> None:

@@ -1,0 +1,144 @@
+"""Core API for pytest-insight.
+
+This module provides the main entry points for the pytest-insight Core API,
+which follows a fluent interface design with three main operations:
+1. Query - Find and filter test sessions
+2. Compare - Compare between versions/times
+3. Analyze - Extract insights and metrics
+
+Example usage:
+    from pytest_insight.core_api import query, compare, analyze, insights
+
+    # Query for specific tests
+    results = query().for_sut("my-service").in_last_days(7).execute()
+
+    # Compare between versions
+    diff = compare().between_suts("v1", "v2").execute()
+
+    # Analyze patterns
+    health_report = analyze().health_report()
+
+    # Get comprehensive insights
+    report = insights().with_query(lambda q: q.for_sut("service")).summary_report()
+"""
+
+from typing import Optional
+
+from pytest_insight.analysis import Analysis, analysis, analysis_with_profile
+from pytest_insight.comparison import Comparison, comparison, comparison_with_profiles
+from pytest_insight.insights import Insights, insights, insights_with_profile
+from pytest_insight.query import Query
+from pytest_insight.storage import get_storage_instance
+
+
+class InsightAPI:
+    """
+    Unified API for pytest-insight providing access to all core components.
+
+    This class serves as a single entry point for all pytest-insight functionality,
+    maintaining the fluent interface design pattern while providing a consistent
+    interface for users.
+    """
+
+    def __init__(self, profile_name: Optional[str] = None):
+        """
+        Initialize the InsightAPI with an optional profile name.
+
+        Args:
+            profile_name: Optional name of the storage profile to use
+        """
+        self._profile_name = profile_name
+
+    def with_profile(self, profile_name: str) -> "InsightAPI":
+        """
+        Create a new InsightAPI instance with the specified profile.
+
+        Args:
+            profile_name: Name of the storage profile to use
+
+        Returns:
+            A new InsightAPI instance configured with the specified profile
+        """
+        return InsightAPI(profile_name=profile_name)
+
+    def query(self) -> Query:
+        """
+        Create a new Query instance for finding and filtering test sessions.
+
+        Returns:
+            A new Query instance configured with the current profile
+        """
+        if self._profile_name:
+            storage = get_storage_instance(profile_name=self._profile_name)
+            return Query(storage)
+        return query()
+
+    def compare(self) -> Comparison:
+        """
+        Create a new Comparison instance for comparing test results.
+
+        Returns:
+            A new Comparison instance configured with the current profile
+        """
+        if self._profile_name:
+            return comparison_with_profiles(self._profile_name, self._profile_name)
+        return compare()
+
+    def analyze(self) -> Analysis:
+        """
+        Create a new Analysis instance for analyzing test results.
+
+        Returns:
+            A new Analysis instance configured with the current profile
+        """
+        if self._profile_name:
+            return analysis_with_profile(self._profile_name)
+        return analyze()
+
+    def insights(self) -> Insights:
+        """
+        Create a new Insights instance for comprehensive test insights.
+
+        Returns:
+            A new Insights instance configured with the current profile
+        """
+        if self._profile_name:
+            return insights_with_profile(self._profile_name)
+        return get_insights()
+
+
+# Re-export the factory functions with consistent naming
+def query(storage=None, profile_name=None):
+    """Create a new Query instance for finding and filtering test sessions.
+
+    Args:
+        storage: Optional storage instance to use
+        profile_name: Optional profile name to use for storage configuration
+
+    Returns:
+        A new Query instance
+    """
+    return Query(storage=storage, profile_name=profile_name)
+
+
+compare = comparison
+analyze = analysis
+get_insights = insights
+
+__all__ = [
+    # Main entry points
+    "query",
+    "compare",
+    "analyze",
+    "get_insights",
+    # Classes for advanced usage
+    "Query",
+    "Comparison",
+    "Analysis",
+    "Insights",
+    "InsightAPI",
+    # Profile-specific variants
+    "comparison_with_profiles",
+    "analysis_with_profile",
+    "insights_with_profile",
+]

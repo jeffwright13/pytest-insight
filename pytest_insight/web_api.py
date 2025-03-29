@@ -8,7 +8,9 @@ It follows a fluent interface design with three main operations:
 """
 
 import datetime as dt_module  # Import for datetime operations
+import json
 import logging
+import os
 from collections import defaultdict
 from datetime import datetime, timedelta
 from statistics import mean, stdev
@@ -24,11 +26,17 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from pytest_insight.analysis import Analysis
-from pytest_insight.comparison import Comparison
+from pytest_insight.comparison import Comparison, ComparisonError
 from pytest_insight.insights import TrendInsights
 from pytest_insight.models import TestOutcome
 from pytest_insight.query import Query
-from pytest_insight.storage import BaseStorage, get_storage_instance
+
+# Import get_profile_manager at the module level so it can be properly patched in tests
+from pytest_insight.storage import (
+    BaseStorage,
+    get_profile_manager,
+    get_storage_instance,
+)
 
 # Create FastAPI app for metrics visualization and REST API
 app = FastAPI(
@@ -100,7 +108,7 @@ async def get_open_api_endpoint():
         },
         {
             "name": "insights",
-            "description": "Operations related to the Insights module, providing consolidated analytics and health scores",
+            "description": "Operations related to the Insights module: consolidated analytics and health scores",
         },
         {
             "name": "profiles",
@@ -125,6 +133,10 @@ async def get_open_api_endpoint():
         {
             "name": "settings",
             "description": "Operations for managing global settings",
+        },
+        {
+            "name": "debug",
+            "description": "Debug endpoints for troubleshooting and testing",
         },
     ]
 
@@ -543,13 +555,13 @@ async def get_sessions(
                 "error_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.ERROR),
                 "test_results": [
                     {
-                        "name": test.name if hasattr(test, "name") else test.nodeid.split("::")[-1],
+                        "name": (test.name if hasattr(test, "name") else test.nodeid.split("::")[-1]),
                         "outcome": (test.outcome.name if hasattr(test.outcome, "name") else str(test.outcome)),
                         "duration": test.duration,
                         "nodeid": test.nodeid,
                         "markers": test.markers if hasattr(test, "markers") else [],
                         "reruns": test.reruns if hasattr(test, "reruns") else 0,
-                        "error_message": test.error_message if hasattr(test, "error_message") else test.longreprtext,
+                        "error_message": (test.error_message if hasattr(test, "error_message") else test.longreprtext),
                     }
                     for test in session.test_results
                 ],
@@ -662,13 +674,13 @@ async def get_tests(
 
             results.append(
                 {
-                    "name": test.name if hasattr(test, "name") else test.nodeid.split("::")[-1],
+                    "name": (test.name if hasattr(test, "name") else test.nodeid.split("::")[-1]),
                     "outcome": (test.outcome.name if hasattr(test.outcome, "name") else str(test.outcome)),
                     "duration": test.duration,
                     "nodeid": test.nodeid,
                     "markers": test.markers if hasattr(test, "markers") else [],
                     "reruns": test.reruns if hasattr(test, "reruns") else 0,
-                    "error_message": test.error_message if hasattr(test, "error_message") else test.longreprtext,
+                    "error_message": (test.error_message if hasattr(test, "error_message") else test.longreprtext),
                 }
             )
 
@@ -707,6 +719,7 @@ async def get_health_report(
 
     # Initialize Analysis with the sessions
     from pytest_insight.analysis import Analysis
+
     analysis_with_sessions = Analysis(storage=api.storage, sessions=sessions.sessions)
     health_report = analysis_with_sessions.health_report()
 
@@ -754,6 +767,7 @@ async def get_stability_report(
 
     # Create a new Analysis instance with the sessions
     from pytest_insight.analysis import Analysis
+
     analysis = Analysis(storage=api.storage, sessions=sessions.sessions)
 
     # Get stability report from the tests component
@@ -810,8 +824,11 @@ async def get_performance_report(
     performance_report = analysis.performance_report()
 
     # Extract and filter the data from the report
-    slow_tests = [test for test in performance_report.get("performance", {}).get("slow_tests", [])
-                 if test.get("duration", 0) >= min_duration][:max_tests]
+    slow_tests = [
+        test
+        for test in performance_report.get("performance", {}).get("slow_tests", [])
+        if test.get("duration", 0) >= min_duration
+    ][:max_tests]
 
     # Get performance metrics from the report
     performance_metrics = performance_report.get("session_metrics", {})
@@ -981,7 +998,7 @@ async def get_coverage_report(
     coverage_by_marker = defaultdict(list)
     for test in all_tests.values():
         # Check if markers attribute exists, otherwise use an empty list
-        markers = getattr(test, 'markers', [])
+        markers = getattr(test, "markers", [])
         if not markers:
             coverage_by_marker["no_marker"].append(test)
         else:
@@ -1333,14 +1350,14 @@ async def compare_suts(
     if not base_sessions:
         raise HTTPException(
             status_code=404,
-            detail=f"No test sessions found for SUT '{sut1}' in the last {days} days"
+            detail=f"No test sessions found for SUT '{sut1}' in the last {days} days",
         )
 
     target_sessions = api.query().for_sut(sut2).in_last_days(days).execute()
     if not target_sessions:
         raise HTTPException(
             status_code=404,
-            detail=f"No test sessions found for SUT '{sut2}' in the last {days} days"
+            detail=f"No test sessions found for SUT '{sut2}' in the last {days} days",
         )
 
     # Create a comparison instance
@@ -1358,7 +1375,7 @@ async def compare_suts(
     except ComparisonError:
         raise HTTPException(
             status_code=404,
-            detail=f"Could not find suitable sessions to compare for SUTs '{sut1}' and '{sut2}' in the last {days} days"
+            detail=f"Could not find suitable sessions to compare for SUTs '{sut1}' and '{sut2}' in the last {days} days",
         )
 
     # Extract comparison data from the ComparisonResult object
@@ -1374,13 +1391,17 @@ async def compare_suts(
         if base_test and target_test:
             duration_change = target_test.duration - base_test.duration
             if abs(duration_change) >= min_duration_change:
-                performance_changes.append({
-                    "nodeid": nodeid,
-                    "base_duration": base_test.duration,
-                    "target_duration": target_test.duration,
-                    "duration_change": duration_change,
-                    "percent_change": (duration_change / base_test.duration) * 100 if base_test.duration > 0 else 0
-                })
+                performance_changes.append(
+                    {
+                        "nodeid": nodeid,
+                        "base_duration": base_test.duration,
+                        "target_duration": target_test.duration,
+                        "duration_change": duration_change,
+                        "percent_change": (
+                            (duration_change / base_test.duration) * 100 if base_test.duration > 0 else 0
+                        ),
+                    }
+                )
 
     # Include or exclude detailed test results
     if not include_tests:
@@ -1393,51 +1414,27 @@ async def compare_suts(
         # Get base session metrics
         base_metrics = {
             "total_tests": len(result.base_session.test_results),
-            "passed_tests": sum(
-                1
-                for t in result.base_session.test_results
-                if t.outcome == TestOutcome.PASSED
+            "passed_tests": sum(1 for t in result.base_session.test_results if t.outcome == TestOutcome.PASSED),
+            "failed_tests": sum(1 for t in result.base_session.test_results if t.outcome == TestOutcome.FAILED),
+            "skipped_tests": sum(1 for t in result.base_session.test_results if t.outcome == TestOutcome.SKIPPED),
+            "avg_duration": (
+                mean([t.duration for t in result.base_session.test_results if t.duration])
+                if result.base_session.test_results
+                else 0
             ),
-            "failed_tests": sum(
-                1
-                for t in result.base_session.test_results
-                if t.outcome == TestOutcome.FAILED
-            ),
-            "skipped_tests": sum(
-                1
-                for t in result.base_session.test_results
-                if t.outcome == TestOutcome.SKIPPED
-            ),
-            "avg_duration": mean(
-                [t.duration for t in result.base_session.test_results if t.duration]
-            )
-            if result.base_session.test_results
-            else 0,
         }
 
         # Get target session metrics
         target_metrics = {
             "total_tests": len(result.target_session.test_results),
-            "passed_tests": sum(
-                1
-                for t in result.target_session.test_results
-                if t.outcome == TestOutcome.PASSED
+            "passed_tests": sum(1 for t in result.target_session.test_results if t.outcome == TestOutcome.PASSED),
+            "failed_tests": sum(1 for t in result.target_session.test_results if t.outcome == TestOutcome.FAILED),
+            "skipped_tests": sum(1 for t in result.target_session.test_results if t.outcome == TestOutcome.SKIPPED),
+            "avg_duration": (
+                mean([t.duration for t in result.target_session.test_results if t.duration])
+                if result.target_session.test_results
+                else 0
             ),
-            "failed_tests": sum(
-                1
-                for t in result.target_session.test_results
-                if t.outcome == TestOutcome.FAILED
-            ),
-            "skipped_tests": sum(
-                1
-                for t in result.target_session.test_results
-                if t.outcome == TestOutcome.SKIPPED
-            ),
-            "avg_duration": mean(
-                [t.duration for t in result.target_session.test_results if t.duration]
-            )
-            if result.target_session.test_results
-            else 0,
         }
 
         metrics_comparison = {
@@ -1464,37 +1461,144 @@ async def compare_suts(
 
 
 @app.get("/api/suts", response_model=SUTsResponse, tags=["query"])
-async def get_available_suts():
+async def get_available_suts(all_profiles: bool = False):
     """Get a list of all available Systems Under Test (SUTs).
 
     This endpoint helps users discover what SUTs are available in the system
     without needing to know them in advance.
 
+    Args:
+        all_profiles: If True, return SUTs from all defined profiles.
+                     If False (default), only return SUTs from the active profile.
+
     Returns:
         A list of all unique SUT names found in the test sessions.
     """
-    api = InsightAPI()
+    # Get profile information
+    profile_manager = get_profile_manager()
+    active_profile = profile_manager.get_active_profile()
 
-    try:
-        # Get all sessions using the query system
-        all_sessions = api.query().execute()
+    # Log active profile for debugging
+    logging.info(f"Active profile: {active_profile.name}, all_profiles={all_profiles}")
 
-        # Extract unique SUTs
-        suts = sorted(list({session.sut_name for session in all_sessions.sessions if session.sut_name}))
+    # Collect SUTs
+    all_suts = set()
 
-        # If no SUTs found, provide a default example
-        if not suts:
-            suts = ["example-sut"]
+    # Function to extract SUTs directly from storage file
+    def get_suts_from_file(profile_name):
+        file_suts = set()
+        try:
+            profile_obj = profile_manager.get_profile(profile_name)
+            if profile_obj and profile_obj.file_path:
+                logging.info(f"Checking file path for profile {profile_name}: {profile_obj.file_path}")
+                if os.path.exists(profile_obj.file_path):
+                    try:
+                        with open(profile_obj.file_path, "r") as f:
+                            data = json.load(f)
+                            if isinstance(data, list):
+                                for session in data:
+                                    if isinstance(session, dict) and "sut_name" in session and session["sut_name"]:
+                                        file_suts.add(session["sut_name"])
+                        logging.info(f"SUTs found in profile {profile_name} via file: {file_suts}")
+                    except json.JSONDecodeError:
+                        logging.warning(f"Invalid JSON format in {profile_obj.file_path}")
+                    except Exception as e:
+                        logging.warning(f"Error reading {profile_obj.file_path}: {str(e)}")
+                else:
+                    logging.warning(f"File does not exist: {profile_obj.file_path}")
+            else:
+                logging.warning(f"Profile {profile_name} has no valid file path")
+        except Exception as ex:
+            logging.warning(f"Error accessing profile {profile_name}: {str(ex)}")
 
-        return {"suts": suts, "count": len(suts)}
-    except Exception as e:
-        # Log the error but return a default example rather than an empty list
-        logging.warning(f"Error retrieving SUTs: {str(e)}")
-        return {"suts": ["example-sut"], "count": 1}
+        return file_suts
+
+    # Function to extract SUTs from a profile using API
+    def get_suts_from_api(profile_name):
+        api_suts = set()
+        api_error = False
+
+        try:
+            # Create a new InsightAPI instance for each profile
+            api = InsightAPI()
+
+            # Only call with_profile if not using the active profile
+            if profile_name != active_profile.name:
+                api = api.with_profile(profile_name)
+
+            profile_sessions = api.query().execute()
+            api_suts = {session.sut_name for session in profile_sessions.sessions if session.sut_name}
+            logging.info(f"SUTs found in profile {profile_name} via API: {api_suts}")
+        except Exception as e:
+            logging.warning(f"Error retrieving SUTs from profile {profile_name} via API: {str(e)}")
+            api_error = True
+
+        return api_suts, api_error
+
+    # Process profiles based on the all_profiles flag
+    if all_profiles:
+        # Get SUTs from all defined profiles
+        profiles_dict = profile_manager.list_profiles()
+        for profile_name in profiles_dict.keys():
+            # Try API first
+            api_suts, api_error = get_suts_from_api(profile_name)
+
+            # Always check file SUTs, especially if API had an error
+            file_suts = get_suts_from_file(profile_name)
+
+            # If API had an error, prioritize file SUTs
+            if api_error and file_suts:
+                all_suts.update(file_suts)
+            else:
+                # Otherwise combine results from both sources
+                all_suts.update(api_suts)
+                all_suts.update(file_suts)
+    else:
+        # Get SUTs from the active profile - try both API and file
+        active_api_suts, active_api_error = get_suts_from_api(active_profile.name)
+        active_file_suts = get_suts_from_file(active_profile.name)
+
+        # If API had an error, prioritize file SUTs
+        if active_api_error and active_file_suts:
+            all_suts.update(active_file_suts)
+        else:
+            # Otherwise combine results from both sources
+            all_suts.update(active_api_suts)
+            all_suts.update(active_file_suts)
+
+        # Also check environment variable override if it exists
+        env_profile = os.environ.get("PYTEST_INSIGHT_PROFILE")
+        if env_profile and env_profile != active_profile.name:
+            logging.info(f"Checking environment profile: {env_profile}")
+
+            # Try both API and file for env profile
+            env_api_suts, env_api_error = get_suts_from_api(env_profile)
+            env_file_suts = get_suts_from_file(env_profile)
+
+            # If API had an error, prioritize file SUTs
+            if env_api_error and env_file_suts:
+                all_suts.update(env_file_suts)
+            else:
+                # Otherwise combine results from both sources
+                all_suts.update(env_api_suts)
+                all_suts.update(env_file_suts)
+
+    # Convert to sorted list
+    suts = sorted(list(all_suts))
+
+    # Log final list of SUTs
+    logging.info(f"Final list of SUTs: {suts}")
+
+    # If no SUTs found, provide a default example
+    if not suts:
+        suts = ["example-sut"]
+
+    return {"suts": suts, "count": len(suts)}
 
 
 class InsightsResponse(BaseModel):
     """Model for insights response."""
+
     health_score: Dict[str, Any]
     stability_score: Dict[str, Any]
     performance_score: Dict[str, Any]
@@ -1538,6 +1642,7 @@ def get_insights(
 
         # Apply query if SUT or days are specified
         if sut or days:
+
             def query_filter(q):
                 query_obj = q
                 if sut:
@@ -1559,15 +1664,13 @@ def get_insights(
             "warning_rate": summary.get("warning_rate", 0),
             "avg_duration": summary.get("avg_duration", 0),
             "outcome_distribution": {
-                str(outcome): {"count": count}
-                for outcome, count in summary.get("outcome_distribution", [])
+                str(outcome): {"count": count} for outcome, count in summary.get("outcome_distribution", [])
             },
             "slowest_tests": [
-                {"nodeid": nodeid, "duration": duration}
-                for nodeid, duration in summary.get("slowest_tests", [])
+                {"nodeid": nodeid, "duration": duration} for nodeid, duration in summary.get("slowest_tests", [])
             ],
             "failure_trend": summary.get("failure_trend", {}),
-            "timestamp": datetime.now()
+            "timestamp": datetime.now(),
         }
 
         return transformed_summary
@@ -1630,6 +1733,7 @@ def get_insights_with_profile(
 
         # Apply query if SUT or days are specified
         if sut or days:
+
             def query_filter(q):
                 query_obj = q
                 if sut:
@@ -1651,15 +1755,13 @@ def get_insights_with_profile(
             "warning_rate": summary.get("warning_rate", 0),
             "avg_duration": summary.get("avg_duration", 0),
             "outcome_distribution": {
-                str(outcome): {"count": count}
-                for outcome, count in summary.get("outcome_distribution", [])
+                str(outcome): {"count": count} for outcome, count in summary.get("outcome_distribution", [])
             },
             "slowest_tests": [
-                {"nodeid": nodeid, "duration": duration}
-                for nodeid, duration in summary.get("slowest_tests", [])
+                {"nodeid": nodeid, "duration": duration} for nodeid, duration in summary.get("slowest_tests", [])
             ],
             "failure_trend": summary.get("failure_trend", {}),
-            "timestamp": datetime.now()
+            "timestamp": datetime.now(),
         }
 
         return transformed_summary
@@ -1695,7 +1797,7 @@ def create_profile(
             "name": profile.name,
             "storage_type": profile.storage_type,
             "file_path": profile.file_path,
-            "created": True
+            "created": True,
         }
 
     except Exception as e:
@@ -1724,10 +1826,7 @@ def delete_profile(
         if not success:
             raise HTTPException(status_code=404, detail=f"Profile {profile_name} not found")
 
-        return {
-            "name": profile_name,
-            "deleted": True
-        }
+        return {"name": profile_name, "deleted": True}
 
     except Exception as e:
         logging.exception(f"Error deleting profile {profile_name}")
@@ -1942,6 +2041,7 @@ async def global_selector():
 # Global settings endpoints
 class GlobalSettings(BaseModel):
     """Model for global settings."""
+
     profile: Optional[str] = None
     sut: Optional[str] = None
 
@@ -1970,11 +2070,15 @@ async def set_global_settings(settings: GlobalSettings):
         # Validate profile if provided
         if settings.profile:
             from pytest_insight.storage import get_profile_manager
+
             profile_manager = get_profile_manager()
             profiles = profile_manager.list_profiles()
 
             if settings.profile not in profiles:
-                return {"success": False, "message": f"Profile '{settings.profile}' does not exist"}
+                return {
+                    "success": False,
+                    "message": f"Profile '{settings.profile}' does not exist",
+                }
 
         # Validate SUT if provided
         if settings.sut:
@@ -1983,16 +2087,15 @@ async def set_global_settings(settings: GlobalSettings):
             suts = {session.sut_name for session in sessions if session.sut_name}
 
             if settings.sut not in suts:
-                return {"success": False, "message": f"SUT '{settings.sut}' does not exist"}
+                return {
+                    "success": False,
+                    "message": f"SUT '{settings.sut}' does not exist",
+                }
 
         # Save settings
         global_settings = settings
 
-        return {
-            "success": True,
-            "profile": settings.profile,
-            "sut": settings.sut
-        }
+        return {"success": True, "profile": settings.profile, "sut": settings.sut}
 
     except Exception as e:
         logging.exception("Error setting global settings")
@@ -2477,6 +2580,7 @@ async def test_data_generator():
 # Add generator API endpoint
 class GeneratorOptions(BaseModel):
     """Model for test data generator options."""
+
     days: int = Field(7, description="Number of days to generate data for")
     targets: int = Field(3, description="Maximum number of target sessions per base session")
     start_date: Optional[str] = Field(None, description="Start date for data generation (YYYY-MM-DD)")
@@ -2506,7 +2610,6 @@ async def generate_test_data(options: GeneratorOptions):
     try:
         import subprocess
         import sys
-        from pathlib import Path
 
         # Build command arguments
         cmd = [sys.executable, "-m", "pytest_insight.scripts.db_generator"]
@@ -2523,6 +2626,7 @@ async def generate_test_data(options: GeneratorOptions):
         elif options.profile:
             # If profile is specified but no output, use the profile's path
             from pytest_insight.storage import get_profile_manager
+
             profile_manager = get_profile_manager()
             profile = profile_manager.get_profile(options.profile)
             if profile and profile.file_path:
@@ -2555,9 +2659,9 @@ async def generate_test_data(options: GeneratorOptions):
                     parts = line.split()
                     for i, part in enumerate(parts):
                         if part == "Generated":
-                            sessions_count = int(parts[i+1])
+                            sessions_count = int(parts[i + 1])
                         elif part == "with":
-                            tests_count = int(parts[i+1])
+                            tests_count = int(parts[i + 1])
                             break
 
             return {
@@ -2565,21 +2669,18 @@ async def generate_test_data(options: GeneratorOptions):
                 "sessions": sessions_count,
                 "tests": tests_count,
                 "message": "Test data generated successfully",
-                "details": output
+                "details": output,
             }
         else:
             return {
                 "success": False,
                 "message": f"Error generating test data: {result.stderr}",
-                "details": result.stderr
+                "details": result.stderr,
             }
 
     except Exception as e:
         logging.exception("Error generating test data")
-        return {
-            "success": False,
-            "message": str(e)
-        }
+        return {"success": False, "message": str(e)}
 
 
 # InsightAPI class
@@ -2680,3 +2781,112 @@ class InsightAPI:
                .stability()
         """
         return Analysis(storage=self.storage)
+
+
+@app.get("/api/debug/suts", response_model=Dict[str, Any], tags=["debug"])
+async def debug_available_suts():
+    """Debug endpoint to directly inspect database files for SUTs.
+
+    This is a diagnostic endpoint that bypasses the normal API and directly
+    inspects the database files to find all available SUTs.
+
+    Returns:
+        Detailed information about SUTs found in each database file
+    """
+    result = {"profiles": {}, "direct_files": {}, "all_suts": set()}
+
+    try:
+        # Import necessary modules
+        import json
+        from pathlib import Path
+
+        from pytest_insight.constants import DEFAULT_STORAGE_PATH
+        from pytest_insight.storage import get_profile_manager
+
+        # Get profile information
+        profile_manager = get_profile_manager()
+        profiles_dict = profile_manager.list_profiles()
+        result["profile_names"] = list(profiles_dict.keys())
+
+        # Check default storage path
+        default_path = Path(DEFAULT_STORAGE_PATH)
+        result["default_path"] = str(default_path)
+        result["default_path_exists"] = default_path.exists()
+
+        if default_path.exists():
+            try:
+                with open(default_path, "r") as f:
+                    data = json.load(f)
+                    suts = set()
+                    for session in data:
+                        if "sut_name" in session and session["sut_name"]:
+                            suts.add(session["sut_name"])
+                    result["direct_files"]["default"] = {
+                        "path": str(default_path),
+                        "suts": list(suts),
+                        "session_count": len(data),
+                    }
+                    result["all_suts"].update(suts)
+            except Exception as e:
+                result["direct_files"]["default"] = {
+                    "path": str(default_path),
+                    "error": str(e),
+                }
+
+        # Check profile storage paths
+        for profile_name, profile in profiles_dict.items():
+            result["profiles"][profile_name] = {
+                "storage_type": profile.storage_type,
+                "file_path": profile.file_path,
+            }
+
+            if profile.file_path and Path(profile.file_path).exists():
+                try:
+                    with open(profile.file_path, "r") as f:
+                        data = json.load(f)
+                        suts = set()
+                        for session in data:
+                            if "sut_name" in session and session["sut_name"]:
+                                suts.add(session["sut_name"])
+                        result["profiles"][profile_name]["suts"] = list(suts)
+                        result["profiles"][profile_name]["session_count"] = len(data)
+                        result["all_suts"].update(suts)
+                except Exception as e:
+                    result["profiles"][profile_name]["error"] = str(e)
+
+        # Look for any other JSON files that might contain sessions
+        home_dir = Path.home()
+        pytest_insight_dirs = [
+            home_dir / ".pytest_insight",
+            home_dir / ".config" / "pytest_insight",
+            Path("/tmp/pytest_insight"),
+        ]
+
+        for directory in pytest_insight_dirs:
+            if directory.exists():
+                json_files = list(directory.glob("*.json"))
+                for json_file in json_files:
+                    if str(json_file) not in [str(default_path)] + [
+                        p.file_path for p in profiles_dict.values() if p.file_path
+                    ]:
+                        try:
+                            with open(json_file, "r") as f:
+                                data = json.load(f)
+                                if isinstance(data, list):
+                                    for session in data:
+                                        if isinstance(session, dict) and "sut_name" in session and session["sut_name"]:
+                                            result["all_suts"].add(session["sut_name"])
+                            result["direct_files"][str(json_file)] = {
+                                "path": str(json_file),
+                                "suts": list(result["all_suts"]),
+                                "session_count": len(data),
+                            }
+                        except Exception:
+                            # Skip files that can't be parsed as JSON or don't contain sessions
+                            pass
+
+        # Convert set to list for JSON serialization
+        result["all_suts"] = sorted(list(result["all_suts"]))
+        return result
+    except Exception as e:
+        return {"error": str(e)}

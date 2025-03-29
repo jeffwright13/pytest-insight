@@ -1,7 +1,7 @@
 from pytest_insight.analysis import Analysis
-from pytest_insight.api import InsightAPI
 from pytest_insight.comparison import Comparison
 from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
+from pytest_insight.core_api import InsightAPI as CoreInsightAPI
 from pytest_insight.models import (
     RerunTestGroup,
     TestOutcome,
@@ -10,6 +10,7 @@ from pytest_insight.models import (
 )
 from pytest_insight.query import InvalidQueryParameterError, Query, QueryTestFilter
 from pytest_insight.storage import JSONStorage, get_storage_instance
+from pytest_insight.web_api import InsightAPI as WebInsightAPI
 
 __all__ = [
     # Core models
@@ -31,5 +32,6 @@ __all__ = [
     # Analysis
     "Analysis",
     # API
-    "InsightAPI",
+    "WebInsightAPI",
+    "CoreInsightAPI",
 ]
