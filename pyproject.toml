@@ -1,6 +1,6 @@
 [project]
 name = "pytest-insight"
-version = "0.1.0"
+version = "0.2.0"
 description = "A pytest plugin for collecting, analyzing, and visualizing test metrics"
 readme = "README.md"
 authors = [
@@ -60,7 +60,7 @@ dev = [
 
 # All dependencies combined
 all = [
-    "pytest-insight[metrics,demo,jupyter,dev]",
+    "pytest-insight[metrics,jupyter,dev]",
 ]
 
 [project.entry-points.pytest11]
@@ -69,7 +69,7 @@ insight = "pytest_insight.plugin"
 [project.scripts]
 insights = "pytest_insight.scripts.analyze_test_data:main"
 insight-gen = "pytest_insight.scripts.db_generator:app"
-insight-metrics = "pytest_insight.scripts.run_metrics_server:main"
+insight-metrics = "pytest_insight.server_launcher:main"
 
 [build-system]
 requires = ["hatchling"]
