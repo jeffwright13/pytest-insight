@@ -828,25 +828,45 @@ class Insights:
 
         # Outcome Distribution
         output.append(section_header("Outcome Distribution"))
-        for outcome, count in summary["outcome_distribution"]:
-            # Get the percentage from the count and total tests
-            percentage = (count / summary["total_tests"]) * 100 if summary["total_tests"] else 0
-            value = f"{count} ({percentage:.1f}%)"
-            outcome_str = outcome.to_str() if hasattr(outcome, "to_str") else str(outcome)
+        if isinstance(summary["outcome_distribution"], dict):
+            # Handle dictionary format (from console_summary)
+            for outcome, data in summary["outcome_distribution"].items():
+                count = data.get("count", 0)
+                percentage = data.get("percentage", 0)
+                value = f"{count} ({percentage:.1f}%)"
+                outcome_str = outcome if isinstance(outcome, str) else (outcome.to_str() if hasattr(outcome, "to_str") else str(outcome))
 
-            # Choose color based on outcome
-            color = GREEN
-            if outcome_str.lower() in ["failed", "error"]:
-                color = RED
-            elif outcome_str.lower() in ["skipped", "xfailed", "xpassed"]:
-                color = YELLOW
-            elif outcome_str.lower() == "rerun":
-                color = CYAN
+                # Choose color based on outcome
+                color = GREEN
+                if outcome_str.lower() in ["failed", "error"]:
+                    color = RED
+                elif outcome_str.lower() in ["skipped", "xfailed", "xpassed"]:
+                    color = YELLOW
+                elif outcome_str.lower() == "rerun":
+                    color = CYAN
 
-            output.append(f"    {outcome_str.capitalize()}: {colorize(value, color)}")
+                output.append(f"    {outcome_str.capitalize()}: {colorize(value, color)}")
+        else:
+            # Handle list of tuples format (original format)
+            for outcome, count in summary["outcome_distribution"]:
+                # Get the percentage from the count and total tests
+                percentage = (count / summary["total_tests"]) * 100 if summary["total_tests"] else 0
+                value = f"{count} ({percentage:.1f}%)"
+                outcome_str = outcome.to_str() if hasattr(outcome, "to_str") else str(outcome)
+
+                # Choose color based on outcome
+                color = GREEN
+                if outcome_str.lower() in ["failed", "error"]:
+                    color = RED
+                elif outcome_str.lower() in ["skipped", "xfailed", "xpassed"]:
+                    color = YELLOW
+                elif outcome_str.lower() == "rerun":
+                    color = CYAN
+
+                output.append(f"    {outcome_str.capitalize()}: {colorize(value, color)}")
 
         # Flaky Tests
-        if summary["flaky_test_count"] > 0:
+        if "flaky_test_count" in summary and summary["flaky_test_count"] > 0:
             output.append(section_header("Flaky Tests"))
             output.append(f"    Tests Requiring Reruns: {colorize(str(summary['flaky_test_count']), CYAN)}")
 
