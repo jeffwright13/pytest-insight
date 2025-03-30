@@ -12,11 +12,8 @@ The script follows the fluent interface pattern established in the pytest-insigh
 
 import argparse
 import json
-import sys
-from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -24,62 +21,95 @@ from rich.table import Table
 
 from pytest_insight.analysis import Analysis
 from pytest_insight.core_api import InsightAPI
-from pytest_insight.models import TestOutcome, TestSession
+from pytest_insight.models import TestSession
 from pytest_insight.storage import ProfileManager, get_storage_instance
 
 
-def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format="text",
-                      test_pattern=None, profile=None, compare_with=None, show_trends=False):
+def analyze_test_data(
+    data_path=None,
+    sut_filter=None,
+    days=None,
+    output_format="text",
+    test_pattern=None,
+    profile=None,
+    compare_with=None,
+    show_trends=False,
+):
     """Analyze test data using the Analysis class."""
     console = Console()
 
     with console.status("[bold green]Analyzing test data..."):
         try:
-            # Load the data file first to validate it
-            with open(data_path, "r") as f:
-                try:
-                    raw_data = json.load(f)
-                except json.JSONDecodeError:
-                    console.print(f"[bold red]Error:[/bold red] Invalid JSON format in {data_path}")
-                    return
-
-            # Determine the data structure and extract sessions
+            # Initialize sessions list
             sessions = []
 
-            # Case 1: Direct list of session dictionaries
-            if isinstance(raw_data, list):
+            # Use profile if specified, otherwise load from file
+            if profile:
+                console.print(f"[bold]Using profile:[/bold] {profile}")
                 try:
-                    sessions = [TestSession.from_dict(session) for session in raw_data]
+                    # Get storage instance for the specified profile
+                    storage = get_storage_instance(profile_name=profile)
+                    # Load sessions from the profile's storage
+                    sessions = storage.load_sessions()
+                    if not sessions:
+                        console.print(f"[bold yellow]Warning:[/bold yellow] No sessions found in profile '{profile}'.")
+                        return
                 except Exception as e:
-                    console.print(f"[bold red]Error:[/bold red] Failed to parse sessions from list: {str(e)}")
+                    console.print(f"[bold red]Error loading from profile '{profile}':[/bold red] {str(e)}")
+                    console.print("Falling back to file-based loading...")
+                    # Fall back to file loading if profile loading fails
+                    if data_path is None:
+                        console.print("[bold red]Error:[/bold red] No data path specified and profile loading failed.")
+                        return
+
+            # Load from file if no profile or profile loading failed
+            if not profile or not sessions:
+                if not data_path:
+                    console.print("[bold red]Error:[/bold red] No data path specified.")
                     return
 
-            # Case 2: Dictionary with a 'sessions' key
-            elif isinstance(raw_data, dict) and "sessions" in raw_data and isinstance(raw_data["sessions"], list):
-                try:
-                    sessions = [TestSession.from_dict(session) for session in raw_data["sessions"]]
-                except Exception as e:
-                    console.print(f"[bold red]Error:[/bold red] Failed to parse sessions from 'sessions' key: {str(e)}")
-                    return
+                # Load the data file
+                with open(data_path, "r") as f:
+                    try:
+                        raw_data = json.load(f)
+                    except json.JSONDecodeError:
+                        console.print(f"[bold red]Error:[/bold red] Invalid JSON format in {data_path}")
+                        return
 
-            # Case 3: Unknown format
-            else:
-                console.print(f"[bold red]Error:[/bold red] Unknown data format in {data_path}. Expected a list of sessions or a dictionary with a 'sessions' key.")
-                console.print("\nTo generate valid test data, run:")
-                console.print("  [bold]insight-gen --days 14[/bold]")
-                return
+                # Determine the data structure and extract sessions
+                # Case 1: Direct list of session dictionaries
+                if isinstance(raw_data, list):
+                    try:
+                        sessions = [TestSession.from_dict(session) for session in raw_data]
+                    except Exception as e:
+                        console.print(f"[bold red]Error:[/bold red] Failed to parse sessions from list: {str(e)}")
+                        return
+
+                # Case 2: Dictionary with a 'sessions' key
+                elif isinstance(raw_data, dict) and "sessions" in raw_data and isinstance(raw_data["sessions"], list):
+                    try:
+                        sessions = [TestSession.from_dict(session) for session in raw_data["sessions"]]
+                    except Exception as e:
+                        console.print(
+                            f"[bold red]Error:[/bold red] Failed to parse sessions from 'sessions' key: {str(e)}"
+                        )
+                        return
+
+                # Case 3: Unknown format
+                else:
+                    console.print(
+                        f"[bold red]Error:[/bold red] Unknown data format in {data_path}. Expected a list of sessions or a dictionary with a 'sessions' key."
+                    )
+                    console.print("\nTo generate valid test data, run:")
+                    console.print("  [bold]insight-gen --days 14[/bold]")
+                    return
 
             if not sessions:
-                console.print("[bold yellow]Warning:[/bold yellow] No sessions found in the data file.")
+                console.print("[bold yellow]Warning:[/bold yellow] No sessions found in the data source.")
                 return
 
             # Now use the InsightAPI for a consistent interface
             api = InsightAPI()
-
-            # Use profile if specified
-            if profile:
-                api = api.with_profile(profile)
-                console.print(f"[bold]Using profile:[/bold] {profile}")
 
             # Apply filters to the loaded sessions
             filtered_sessions = sessions
@@ -98,6 +128,7 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
             # Apply test pattern filter if specified
             if test_pattern:
                 import re
+
                 pattern = re.compile(test_pattern.replace("*", ".*"))
 
                 # We need to filter at the test level, not the session level
@@ -111,11 +142,17 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
                         filtered_sessions_by_test.append(session_copy)
 
                 filtered_sessions = filtered_sessions_by_test
-                console.print(f"[bold]Filtered to:[/bold] {len(filtered_sessions)} sessions with tests matching '{test_pattern}'")
+                console.print(
+                    f"[bold]Filtered to:[/bold] {len(filtered_sessions)} sessions with tests matching '{test_pattern}'"
+                )
 
             if not filtered_sessions:
-                console.print(Panel("[bold red]No test sessions found with the current filters.[/bold red]\n"
-                                  "Try adjusting your filters or using a different data source."))
+                console.print(
+                    Panel(
+                        "[bold red]No test sessions found with the current filters.[/bold red]\n"
+                        "Try adjusting your filters or using a different data source."
+                    )
+                )
                 return
 
             # Basic statistics
@@ -137,7 +174,7 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
             predominantly_failing = analysis.identify_consistently_failing_tests_with_hysteresis(
                 min_consecutive_failures=2,
                 hysteresis_threshold=0.2,  # Allow up to 20% passes
-                min_failure_rate=0.7       # At least 70% failures
+                min_failure_rate=0.7,  # At least 70% failures
             )
 
             # Display basic metrics
@@ -177,8 +214,12 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
 
             # Display consistently failing tests
             if consistently_failing:
-                console.print(Panel("[bold red]Consistently Failing Tests[/bold red]",
-                                   subtitle="Tests that have failed in consecutive sessions"))
+                console.print(
+                    Panel(
+                        "[bold red]Consistently Failing Tests[/bold red]",
+                        subtitle="Tests that have failed in consecutive sessions",
+                    )
+                )
 
                 consistent_table = Table()
                 consistent_table.add_column("Test Name", style="cyan")
@@ -207,19 +248,15 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
 
                     # Format duration
                     duration_seconds = test["failure_duration"]
-                    if duration_seconds < 60*60:  # Less than an hour
+                    if duration_seconds < 60 * 60:  # Less than an hour
                         duration = f"{duration_seconds//60} min"
-                    elif duration_seconds < 24*60*60:  # Less than a day
+                    elif duration_seconds < 24 * 60 * 60:  # Less than a day
                         duration = f"{duration_seconds//(60*60)} hours"
                     else:  # Days
                         duration = f"{duration_seconds//(24*60*60)} days"
 
                     consistent_table.add_row(
-                        test["nodeid"],
-                        str(test["consecutive_failures"]),
-                        first_failure,
-                        last_failure,
-                        duration
+                        test["nodeid"], str(test["consecutive_failures"]), first_failure, last_failure, duration
                     )
 
                 console.print(consistent_table)
@@ -229,8 +266,12 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
 
             # Display predominantly failing tests with hysteresis
             if predominantly_failing:
-                console.print(Panel("[bold red]Predominantly Failing Tests with Hysteresis[/bold red]",
-                                   subtitle="Tests that predominantly fail but occasionally pass"))
+                console.print(
+                    Panel(
+                        "[bold red]Predominantly Failing Tests with Hysteresis[/bold red]",
+                        subtitle="Tests that predominantly fail but occasionally pass",
+                    )
+                )
 
                 hysteresis_table = Table()
                 hysteresis_table.add_column("Test Name", style="cyan")
@@ -243,14 +284,18 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
 
                 for test in predominantly_failing[:5]:  # Show top 5
                     # Format timestamps
-                    first_occurrence = test["first_occurrence"].strftime("%Y-%m-%d %H:%M") if test["first_occurrence"] else "Unknown"
-                    last_occurrence = test["last_occurrence"].strftime("%Y-%m-%d %H:%M") if test["last_occurrence"] else "Unknown"
+                    first_occurrence = (
+                        test["first_occurrence"].strftime("%Y-%m-%d %H:%M") if test["first_occurrence"] else "Unknown"
+                    )
+                    last_occurrence = (
+                        test["last_occurrence"].strftime("%Y-%m-%d %H:%M") if test["last_occurrence"] else "Unknown"
+                    )
 
                     # Format duration
                     duration_seconds = test["streak_duration"]
-                    if duration_seconds < 60*60:  # Less than an hour
+                    if duration_seconds < 60 * 60:  # Less than an hour
                         duration = f"{duration_seconds//60} min"
-                    elif duration_seconds < 24*60*60:  # Less than a day
+                    elif duration_seconds < 24 * 60 * 60:  # Less than a day
                         duration = f"{duration_seconds//(60*60)} hours"
                     else:  # Days
                         duration = f"{duration_seconds//(24*60*60)} days"
@@ -262,13 +307,15 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
                         f"{test['failure_rate']:.2%}",
                         first_occurrence,
                         last_occurrence,
-                        duration
+                        duration,
                     )
 
                 console.print(hysteresis_table)
 
                 if len(predominantly_failing) > 5:
-                    console.print(f"[dim]...and {len(predominantly_failing) - 5} more predominantly failing tests with hysteresis[/dim]")
+                    console.print(
+                        f"[dim]...and {len(predominantly_failing) - 5} more predominantly failing tests with hysteresis[/dim]"
+                    )
 
             # Comparison analysis if requested
             if compare_with:
@@ -297,15 +344,17 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
                         if test_pattern:
                             prev_query = prev_query.filter_by_test_name(test_pattern)
 
-                        prev_query = prev_query.filter_by_date(before=cutoff_date,
-                                                              after=cutoff_date - timedelta(days=days_ago))
+                        prev_query = prev_query.filter_by_date(
+                            before=cutoff_date, after=cutoff_date - timedelta(days=days_ago)
+                        )
                         previous_sessions = prev_query.execute()
 
                         # Compare the two sets
                         comparison_result = comparison.compare_sessions(
-                            current_sessions, previous_sessions,
+                            current_sessions,
+                            previous_sessions,
                             label_a=f"Last {days} days",
-                            label_b=f"Previous {days_ago} days"
+                            label_b=f"Previous {days_ago} days",
                         )
 
                         # Display comparison results
@@ -328,14 +377,14 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
                             "Pass Rate",
                             f"{current_pass_rate:.2%}",
                             f"{previous_pass_rate:.2%}",
-                            f"{pass_rate_change:+.2%}"
+                            f"{pass_rate_change:+.2%}",
                         )
 
                         comp_table.add_row(
                             "Avg Duration",
                             f"{current_duration:.3f}s",
                             f"{previous_duration:.3f}s",
-                            f"{duration_change:+.3f}s"
+                            f"{duration_change:+.3f}s",
                         )
 
                         console.print(comp_table)
@@ -362,9 +411,7 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
 
                     if version_sessions:
                         comparison_result = comparison.compare_sessions(
-                            filtered_sessions, version_sessions,
-                            label_a="Current",
-                            label_b=f"Version {compare_value}"
+                            filtered_sessions, version_sessions, label_a="Current", label_b=f"Version {compare_value}"
                         )
 
                         # Display comparison results (similar to above)
@@ -403,11 +450,7 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
                 trend_table.add_column("Avg Duration (s)", style="yellow")
 
                 for i, date in enumerate(dates):
-                    trend_table.add_row(
-                        date.strftime("%Y-%m-%d"),
-                        f"{pass_rates[i]:.2%}",
-                        f"{durations[i]:.3f}"
-                    )
+                    trend_table.add_row(date.strftime("%Y-%m-%d"), f"{pass_rates[i]:.2%}", f"{durations[i]:.3f}")
 
                 console.print(trend_table)
 
@@ -420,11 +463,11 @@ def analyze_test_data(data_path=None, sut_filter=None, days=None, output_format=
                         "total_tests": total_tests,
                         "pass_rate": pass_rate,
                         "avg_duration": avg_duration,
-                        "flaky_tests_count": len(flaky_tests)
+                        "flaky_tests_count": len(flaky_tests),
                     },
                     "slowest_tests": [{"name": name, "duration": dur} for name, dur in slowest_tests],
                     "most_failing": [{"name": name, "failures": count} for name, count in most_failing],
-                    "flaky_tests": [name for name in flaky_tests]
+                    "flaky_tests": [name for name in flaky_tests],
                 }
 
                 # Print JSON output
@@ -448,14 +491,15 @@ def main():
     parser.add_argument("--days", "-d", type=int, help="Filter to sessions from the last N days")
     parser.add_argument("--test", "-t", type=str, help="Filter by test name pattern (supports wildcards)")
     parser.add_argument("--profile", type=str, help="Use a specific storage profile")
-    parser.add_argument("--format", "-f", choices=["text", "json"], default="text",
-                      help="Output format (default: text)")
-    parser.add_argument("--compare", "-c", type=str,
-                      help="Compare with previous data (format: days:N or version:X.Y.Z)")
+    parser.add_argument(
+        "--format", "-f", choices=["text", "json"], default="text", help="Output format (default: text)"
+    )
+    parser.add_argument(
+        "--compare", "-c", type=str, help="Compare with previous data (format: days:N or version:X.Y.Z)"
+    )
     parser.add_argument("--trends", action="store_true", help="Show trends over time")
     parser.add_argument("--list-profiles", action="store_true", help="List available storage profiles")
-    parser.add_argument("--generate-sample", action="store_true",
-                      help="Generate sample test data if none exists")
+    parser.add_argument("--generate-sample", action="store_true", help="Generate sample test data if none exists")
     parser.add_argument("--version", "-v", action="store_true", help="Show version information")
 
     args = parser.parse_args()
@@ -489,12 +533,7 @@ def main():
 
         for name, profile in profiles.items():
             is_active = name == active_profile.name if active_profile else False
-            profile_table.add_row(
-                name,
-                profile.storage_type,
-                str(profile.file_path),
-                "✓" if is_active else ""
-            )
+            profile_table.add_row(name, profile.storage_type, str(profile.file_path), "✓" if is_active else "")
 
         console.print(profile_table)
         return
@@ -529,8 +568,8 @@ def main():
         default_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate sample data
-        from datetime import datetime, timedelta
         import random
+        from datetime import datetime, timedelta
 
         # Create sample test sessions
         sample_data = []
@@ -547,26 +586,28 @@ def main():
                     "version": "1.0.0",
                     "timestamp": (session_date - timedelta(hours=random.randint(0, 23))).isoformat(),
                     "session_duration": random.uniform(5.0, 30.0),
-                    "test_results": []
+                    "test_results": [],
                 }
 
                 # Add 10-20 tests per session
                 for test_num in range(random.randint(10, 20)):
                     test_type = random.choice(["api", "ui", "unit", "integration"])
-                    test_name = f"test_{test_type}_{random.choice(['login', 'logout', 'create', 'update', 'delete', 'search'])}"
+                    test_name = (
+                        f"test_{test_type}_{random.choice(['login', 'logout', 'create', 'update', 'delete', 'search'])}"
+                    )
 
                     # Randomize outcomes with a bias toward passing
                     outcome = random.choices(
-                        ["passed", "failed", "skipped", "xfailed", "xpassed"],
-                        weights=[0.7, 0.15, 0.1, 0.03, 0.02]
+                        ["passed", "failed", "skipped", "xfailed", "xpassed"], weights=[0.7, 0.15, 0.1, 0.03, 0.02]
                     )[0]
 
                     test = {
                         "nodeid": f"tests/{test_type}/{test_name}.py::test_function_{test_num}",
                         "outcome": outcome,
                         "duration": random.uniform(0.1, 5.0),
-                        "timestamp": (session_date - timedelta(hours=random.randint(0, 23),
-                                                              minutes=random.randint(0, 59))).isoformat()
+                        "timestamp": (
+                            session_date - timedelta(hours=random.randint(0, 23), minutes=random.randint(0, 59))
+                        ).isoformat(),
                     }
 
                     session["test_results"].append(test)
@@ -581,13 +622,17 @@ def main():
         console.print(f"[green]Sample data generated at {data_path}[/green]")
 
     if data_path is None or not data_path.exists():
-        console.print(Panel("[bold red]Error: No test data found.[/bold red]\n\n"
-                          "To generate test data, run:\n"
-                          "  [bold]insight-gen --days 14[/bold]\n\n"
-                          "Or generate sample data with:\n"
-                          "  [bold]insights --generate-sample[/bold]\n\n"
-                          "Or specify a custom path:\n"
-                          "  [bold]insights --path /path/to/your/data.json[/bold]"))
+        console.print(
+            Panel(
+                "[bold red]Error: No test data found.[/bold red]\n\n"
+                "To generate test data, run:\n"
+                "  [bold]insight-gen --days 14[/bold]\n\n"
+                "Or generate sample data with:\n"
+                "  [bold]insights --generate-sample[/bold]\n\n"
+                "Or specify a custom path:\n"
+                "  [bold]insights --path /path/to/your/data.json[/bold]"
+            )
+        )
         return
 
     # Analyze the data
@@ -599,23 +644,25 @@ def main():
         test_pattern=args.test,
         profile=args.profile,
         compare_with=args.compare,
-        show_trends=args.trends
+        show_trends=args.trends,
     )
 
-    console.print(Panel(
-        "[bold green]Analysis complete![/bold green]\n\n"
-        "[bold]Advanced Usage Examples:[/bold]\n"
-        "  • Compare with previous period:\n"
-        "    [cyan]insights --days 7 --compare days:7[/cyan]\n\n"
-        "  • Compare with specific version:\n"
-        "    [cyan]insights --sut my-app --compare version:1.2.3[/cyan]\n\n"
-        "  • Show trends over time:\n"
-        "    [cyan]insights --days 30 --trends[/cyan]\n\n"
-        "  • Filter by test pattern:\n"
-        "    [cyan]insights --test 'test_login*'[/cyan]\n\n"
-        "  • Output as JSON for further processing:\n"
-        "    [cyan]insights --format json > analysis.json[/cyan]"
-    ))
+    console.print(
+        Panel(
+            "[bold green]Analysis complete![/bold green]\n\n"
+            "[bold]Advanced Usage Examples:[/bold]\n"
+            "  • Compare with previous period:\n"
+            "    [cyan]insights --days 7 --compare days:7[/cyan]\n\n"
+            "  • Compare with specific version:\n"
+            "    [cyan]insights --sut my-app --compare version:1.2.3[/cyan]\n\n"
+            "  • Show trends over time:\n"
+            "    [cyan]insights --days 30 --trends[/cyan]\n\n"
+            "  • Filter by test pattern:\n"
+            "    [cyan]insights --test 'test_login*'[/cyan]\n\n"
+            "  • Output as JSON for further processing:\n"
+            "    [cyan]insights --format json > analysis.json[/cyan]"
+        )
+    )
 
 
 if __name__ == "__main__":

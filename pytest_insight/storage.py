@@ -9,7 +9,7 @@ from pytest_insight.models import TestSession
 
 
 class StorageProfile:
-    """Represents a storage configuration profile."""
+    """Represents a storage configuration profile, which is a named storage configuration used to differentiate between different storage backends, different file paths, different SUTs/setups/environments, etc."""
 
     def __init__(self, name: str, storage_type: str = "json", file_path: Optional[str] = None):
         """Initialize a storage profile.
@@ -42,7 +42,8 @@ class StorageProfile:
 
 
 class ProfileManager:
-    """Manages storage profiles for pytest-insight."""
+    """Manages storage profiles for pytest-insight. Profiles are used to differentiate between different storage
+    backends, different file paths, different SUTs/setups/environments, etc."""
 
     def __init__(self, config_path: Optional[Path] = None):
         """Initialize profile manager.
