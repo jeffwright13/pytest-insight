@@ -58,7 +58,7 @@ def main():
             json.dump(config, f)
         print(f"Created config at {config_path}")
 
-    uvicorn.run("pytest_insight.web_api:app", host=args.host, port=args.port, reload=args.reload)
+    uvicorn.run("pytest_insight.web_api.web_api:app", host=args.host, port=args.port, reload=args.reload)
 
 
 if __name__ == "__main__":

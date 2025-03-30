@@ -70,7 +70,7 @@ insight = "pytest_insight.plugin"
 insights = "pytest_insight.scripts.analyze_test_data:main"
 insight-gen = "pytest_insight.scripts.db_generator:app"
 insight-api = "pytest_insight.server_launcher:main"
-insight-dynamic-api = "pytest_insight.web_api_instrospect:main"
+insight-api-introspect = "pytest_insight.server_launcher_introspect:main"
 
 [build-system]
 requires = ["hatchling"]

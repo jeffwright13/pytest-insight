@@ -58,7 +58,8 @@ def main():
             json.dump(config, f)
         print(f"Created config at {config_path}")
 
-    uvicorn.run("pytest_insight.web_api_instrospect:app", host=args.host, port=args.port, reload=args.reload)
+    # Updated import path to reflect the new folder structure
+    uvicorn.run("pytest_insight.web_api.web_api_introspect:introspected_app", host=args.host, port=args.port, reload=args.reload)
 
 
 if __name__ == "__main__":

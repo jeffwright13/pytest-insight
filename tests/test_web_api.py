@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 from pytest_insight.storage import ProfileManager, StorageProfile
-from pytest_insight.web_api import app
+from pytest_insight.web_api.web_api import app
 
 # Create a test client
 client = TestClient(app)
@@ -38,14 +38,14 @@ class TestAPIEndpoints:
             "test_profile": self.test_profile,
         }
 
-    @patch("pytest_insight.web_api.get_profile_manager")
+    @patch("pytest_insight.web_api.web_api.get_profile_manager")
     def test_get_available_suts_active_profile(self, mock_get_profile_manager):
         """Test that get_available_suts returns SUTs from the active profile."""
         # Arrange
         mock_get_profile_manager.return_value = self.mock_profile_manager
 
         # Mock the InsightAPI.query().execute() call
-        with patch("pytest_insight.web_api.InsightAPI") as mock_api_class:
+        with patch("pytest_insight.web_api.web_api.InsightAPI") as mock_api_class:
             mock_api = MagicMock()
             mock_api_class.return_value = mock_api
 
@@ -73,14 +73,14 @@ class TestAPIEndpoints:
             mock_api.query.assert_called_once()
             mock_query.execute.assert_called_once()
 
-    @patch("pytest_insight.web_api.get_profile_manager")
+    @patch("pytest_insight.web_api.web_api.get_profile_manager")
     def test_get_available_suts_all_profiles(self, mock_get_profile_manager):
         """Test that get_available_suts returns SUTs from all profiles when all_profiles=True."""
         # Arrange
         mock_get_profile_manager.return_value = self.mock_profile_manager
 
         # Mock the InsightAPI.with_profile().query().execute() calls
-        with patch("pytest_insight.web_api.InsightAPI") as mock_api_class:
+        with patch("pytest_insight.web_api.web_api.InsightAPI") as mock_api_class:
             # Setup for default profile
             mock_default_api = MagicMock()
             mock_api_class.return_value = mock_default_api
@@ -118,7 +118,7 @@ class TestAPIEndpoints:
             self.mock_profile_manager.list_profiles.assert_called_once()
             mock_default_api.with_profile.assert_called_with("test_profile")
 
-    @patch("pytest_insight.web_api.get_profile_manager")
+    @patch("pytest_insight.web_api.web_api.get_profile_manager")
     def test_get_available_suts_api_error_fallback(self, mock_get_profile_manager):
         """Test that get_available_suts falls back to direct file access if API fails."""
         # Arrange
@@ -140,7 +140,7 @@ class TestAPIEndpoints:
                 json.dump(test_data, f)
 
             # Mock the InsightAPI to raise an exception
-            with patch("pytest_insight.web_api.InsightAPI") as mock_api_class:
+            with patch("pytest_insight.web_api.web_api.InsightAPI") as mock_api_class:
                 mock_api = MagicMock()
                 mock_api_class.return_value = mock_api
 
@@ -169,14 +169,14 @@ class TestAPIEndpoints:
             if os.path.exists(test_file_path):
                 os.remove(test_file_path)
 
-    @patch("pytest_insight.web_api.get_profile_manager")
+    @patch("pytest_insight.web_api.web_api.get_profile_manager")
     def test_get_available_suts_env_profile(self, mock_get_profile_manager):
         """Test that get_available_suts checks environment variable profile."""
         # Arrange
         mock_get_profile_manager.return_value = self.mock_profile_manager
 
         # Mock the InsightAPI calls
-        with patch("pytest_insight.web_api.InsightAPI") as mock_api_class, patch.dict(
+        with patch("pytest_insight.web_api.web_api.InsightAPI") as mock_api_class, patch.dict(
             os.environ, {"PYTEST_INSIGHT_PROFILE": "env_profile"}
         ):
             # Setup for active profile
@@ -223,14 +223,14 @@ class TestAPIEndpoints:
                 if os.path.exists(env_file_path):
                     os.remove(env_file_path)
 
-    @patch("pytest_insight.web_api.get_profile_manager")
+    @patch("pytest_insight.web_api.web_api.get_profile_manager")
     def test_get_available_suts_no_suts_found(self, mock_get_profile_manager):
         """Test that get_available_suts returns a default example when no SUTs are found."""
         # Arrange
         mock_get_profile_manager.return_value = self.mock_profile_manager
 
         # Mock the InsightAPI to return no SUTs
-        with patch("pytest_insight.web_api.InsightAPI") as mock_api_class:
+        with patch("pytest_insight.web_api.web_api.InsightAPI") as mock_api_class:
             mock_api = MagicMock()
             mock_api_class.return_value = mock_api
 

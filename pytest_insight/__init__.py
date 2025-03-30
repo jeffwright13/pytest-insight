@@ -10,7 +10,7 @@ from pytest_insight.models import (
 )
 from pytest_insight.query import InvalidQueryParameterError, Query, QueryTestFilter
 from pytest_insight.storage import JSONStorage, get_storage_instance
-from pytest_insight.web_api import InsightAPI as WebInsightAPI
+from pytest_insight.web_api.web_api import InsightAPI as WebInsightAPI
 
 __all__ = [
     # Core models

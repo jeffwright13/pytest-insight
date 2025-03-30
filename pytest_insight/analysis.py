@@ -910,6 +910,397 @@ class Analysis:
             "timestamp": datetime.now(ZoneInfo("UTC")),
         }
 
+    def count_total_tests(self) -> int:
+        """Count the total number of tests across all sessions.
+
+        Returns:
+            Total number of tests
+        """
+        if not self._sessions:
+            return 0
+
+        return sum(len(session.test_results) for session in self._sessions)
+
+    def calculate_pass_rate(self) -> float:
+        """Calculate the overall pass rate across all sessions.
+
+        Returns:
+            Pass rate as a float between 0.0 and 1.0
+        """
+        if not self._sessions:
+            return 0.0
+
+        total_tests = 0
+        passed_tests = 0
+
+        for session in self._sessions:
+            for test in session.test_results:
+                total_tests += 1
+                if test.outcome == TestOutcome.PASSED:
+                    passed_tests += 1
+
+        return passed_tests / total_tests if total_tests > 0 else 0.0
+
+    def calculate_average_duration(self) -> float:
+        """Calculate the average test duration across all sessions.
+
+        Returns:
+            Average duration in seconds
+        """
+        if not self._sessions:
+            return 0.0
+
+        total_duration = 0.0
+        total_tests = 0
+
+        for session in self._sessions:
+            for test in session.test_results:
+                total_duration += test.duration
+                total_tests += 1
+
+        return total_duration / total_tests if total_tests > 0 else 0.0
+
+    def identify_flaky_tests(self) -> List[str]:
+        """Identify tests that have inconsistent outcomes across sessions.
+
+        Returns:
+            List of test nodeids that are considered flaky
+        """
+        if not self._sessions:
+            return []
+
+        # Track outcomes per test across all sessions
+        test_outcomes = defaultdict(set)
+
+        for session in self._sessions:
+            session_timestamp = session.session_start_time
+
+            # Process regular test results
+            for test in session.test_results:
+                test_outcomes[test.nodeid].add(test.outcome)
+
+            # Process rerun groups if available
+            if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
+                for rerun_group in session.rerun_test_groups:
+                    nodeid = rerun_group.nodeid
+
+                    # For rerun groups, use the final outcome
+                    if rerun_group.tests and len(rerun_group.tests) > 0:
+                        final_test = rerun_group.tests[-1]
+                        final_outcome = final_test.outcome
+
+                        if nodeid not in test_outcomes:
+                            test_outcomes[nodeid] = set()
+
+                        # Override any previous entry for this test in this session
+                        # with the final outcome from the rerun group
+                        test_outcomes[nodeid].add(final_outcome)
+
+        # Tests with multiple outcomes are considered flaky
+        flaky_tests = [nodeid for nodeid, outcomes in test_outcomes.items() if len(outcomes) > 1]
+        return flaky_tests
+
+    def identify_slowest_tests(self, limit: int = 5) -> List[tuple]:
+        """Identify the slowest tests based on average duration.
+
+        Args:
+            limit: Maximum number of tests to return
+
+        Returns:
+            List of (test_nodeid, avg_duration) tuples, sorted by duration (descending)
+        """
+        if not self._sessions:
+            return []
+
+        # Track durations per test
+        test_durations = defaultdict(list)
+
+        for session in self._sessions:
+            session_timestamp = session.session_start_time
+
+            # Process regular test results
+            for test in session.test_results:
+                test_durations[test.nodeid].append(test.duration)
+
+            # Process rerun groups if available
+            if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
+                for rerun_group in session.rerun_test_groups:
+                    nodeid = rerun_group.nodeid
+
+                    # For rerun groups, use the final outcome
+                    if rerun_group.tests and len(rerun_group.tests) > 0:
+                        final_test = rerun_group.tests[-1]
+                        final_duration = final_test.duration
+
+                        if nodeid not in test_durations:
+                            test_durations[nodeid] = []
+
+                        # Override any previous entry for this test in this session
+                        # with the final duration from the rerun group
+                        test_durations[nodeid].append(final_duration)
+
+        # Calculate average duration per test
+        avg_durations = [(nodeid, sum(durations) / len(durations))
+                         for nodeid, durations in test_durations.items()]
+
+        # Sort by duration (descending) and return top N
+        return sorted(avg_durations, key=lambda x: x[1], reverse=True)[:limit]
+
+    def identify_most_failing_tests(self, limit: int = 5) -> List[tuple]:
+        """Identify tests with the highest failure counts.
+
+        Args:
+            limit: Maximum number of tests to return
+
+        Returns:
+            List of (test_nodeid, failure_count) tuples, sorted by count (descending)
+        """
+        if not self._sessions:
+            return []
+
+        # Count failures per test
+        failure_counts = defaultdict(int)
+
+        for session in self._sessions:
+            session_timestamp = session.session_start_time
+
+            # Process regular test results
+            for test in session.test_results:
+                if test.outcome == TestOutcome.FAILED:
+                    failure_counts[test.nodeid] += 1
+
+            # Process rerun groups if available
+            if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
+                for rerun_group in session.rerun_test_groups:
+                    nodeid = rerun_group.nodeid
+
+                    # For rerun groups, use the final outcome
+                    if rerun_group.tests and len(rerun_group.tests) > 0:
+                        final_test = rerun_group.tests[-1]
+                        final_outcome = final_test.outcome
+
+                        if final_outcome == TestOutcome.FAILED:
+                            failure_counts[nodeid] += 1
+
+        # Sort by failure count (descending) and return top N
+        return sorted(failure_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
+
+    def identify_consistently_failing_tests(self, min_consecutive_failures: int = 2) -> List[dict]:
+        """Identify tests that have consistently failed over time.
+
+        This method tracks tests that have failed in consecutive sessions,
+        including tests that were part of rerun groups with a final failure outcome.
+
+        Args:
+            min_consecutive_failures: Minimum number of consecutive sessions
+                                     where the test must have failed
+
+        Returns:
+            List of dicts with details about consistently failing tests, including:
+            - nodeid: Test identifier
+            - consecutive_failures: Number of consecutive sessions with failures
+            - first_failure: Timestamp of first failure in the streak
+            - last_failure: Timestamp of most recent failure
+            - failure_duration: Time period over which the test has been failing
+        """
+        if not self._sessions:
+            return []
+
+        # Sort sessions by timestamp for proper chronological analysis
+        sorted_sessions = sorted(self._sessions, key=lambda s: s.session_start_time)
+
+        # Track test outcomes across sessions
+        test_history = {}  # {nodeid: [(session_timestamp, outcome), ...]}
+
+        # First pass: collect test outcomes for each session
+        for session in sorted_sessions:
+            session_timestamp = session.session_start_time
+
+            # Process regular test results
+            for test in session.test_results:
+                nodeid = test.nodeid
+                if nodeid not in test_history:
+                    test_history[nodeid] = []
+
+                # Record the outcome
+                test_history[nodeid].append((session_timestamp, test.outcome))
+
+            # Process rerun groups if available
+            if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
+                for rerun_group in session.rerun_test_groups:
+                    nodeid = rerun_group.nodeid
+
+                    # For rerun groups, use the final outcome
+                    if rerun_group.tests and len(rerun_group.tests) > 0:
+                        final_test = rerun_group.tests[-1]
+                        final_outcome = final_test.outcome
+
+                        if nodeid not in test_history:
+                            test_history[nodeid] = []
+
+                        # Override any previous entry for this test in this session
+                        # with the final outcome from the rerun group
+                        test_history[nodeid].append((session_timestamp, final_outcome))
+
+        # Second pass: analyze consecutive failures
+        consistently_failing = []
+
+        for nodeid, history in test_history.items():
+            # Sort by timestamp to ensure chronological order
+            sorted_history = sorted(history, key=lambda x: x[0])
+
+            # Find streaks of consecutive failures
+            current_streak = 0
+            streak_start = None
+            streak_end = None
+
+            for timestamp, outcome in sorted_history:
+                if outcome == TestOutcome.FAILED:
+                    # Start or continue a streak
+                    current_streak += 1
+                    if streak_start is None:
+                        streak_start = timestamp
+                    streak_end = timestamp
+                else:
+                    # Reset the streak
+                    if current_streak >= min_consecutive_failures:
+                        # Record the completed streak before resetting
+                        consistently_failing.append({
+                            "nodeid": nodeid,
+                            "consecutive_failures": current_streak,
+                            "first_failure": streak_start,
+                            "last_failure": streak_end,
+                            "failure_duration": (streak_end - streak_start).total_seconds()
+                        })
+
+                    current_streak = 0
+                    streak_start = None
+                    streak_end = None
+
+            # Check if we ended with an active streak
+            if current_streak >= min_consecutive_failures:
+                consistently_failing.append({
+                    "nodeid": nodeid,
+                    "consecutive_failures": current_streak,
+                    "first_failure": streak_start,
+                    "last_failure": streak_end,
+                    "failure_duration": (streak_end - streak_start).total_seconds()
+                })
+
+        # Sort by consecutive failures (descending) and then by failure duration (descending)
+        return sorted(consistently_failing,
+                     key=lambda x: (x["consecutive_failures"], x["failure_duration"]),
+                     reverse=True)
+
+    def identify_consistently_failing_tests_with_hysteresis(
+            self,
+            min_consecutive_failures: int = 2,
+            hysteresis_threshold: float = 0.2,
+            min_failure_rate: float = 0.7
+        ) -> List[dict]:
+        """Identify tests that have consistently failed over time, allowing for some passes.
+
+        This method tracks tests that have predominantly failed over time, but allows
+        for occasional passes (hysteresis). This is useful for identifying tests that
+        are problematic but might occasionally pass due to timing or environmental factors.
+
+        Args:
+            min_consecutive_failures: Minimum number of sessions where the test must have failed
+            hysteresis_threshold: Maximum fraction of passes allowed within a failure streak
+                                 (0.0 means no passes allowed, 1.0 means all passes allowed)
+            min_failure_rate: Minimum overall failure rate required for a test to be considered
+
+        Returns:
+            List of dicts with details about consistently failing tests, including:
+            - nodeid: Test identifier
+            - failure_count: Number of failures in the streak
+            - pass_count: Number of passes in the streak
+            - failure_rate: Fraction of failures in the streak
+            - first_occurrence: Timestamp of first occurrence in the streak
+            - last_occurrence: Timestamp of most recent occurrence
+            - streak_duration: Time period over which the test has been tracked
+        """
+        if not self._sessions:
+            return []
+
+        # Sort sessions by timestamp for proper chronological analysis
+        sorted_sessions = sorted(self._sessions, key=lambda s: s.session_start_time)
+
+        # Track test outcomes across sessions
+        test_history = {}  # {nodeid: [(session_timestamp, outcome), ...]}
+
+        # First pass: collect test outcomes for each session
+        for session in sorted_sessions:
+            session_timestamp = session.session_start_time
+
+            # Process regular test results
+            for test in session.test_results:
+                nodeid = test.nodeid
+                if nodeid not in test_history:
+                    test_history[nodeid] = []
+
+                # Record the outcome
+                test_history[nodeid].append((session_timestamp, test.outcome))
+
+            # Process rerun groups if available
+            if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
+                for rerun_group in session.rerun_test_groups:
+                    nodeid = rerun_group.nodeid
+
+                    # For rerun groups, use the final outcome
+                    if rerun_group.tests and len(rerun_group.tests) > 0:
+                        final_test = rerun_group.tests[-1]
+                        final_outcome = final_test.outcome
+
+                        if nodeid not in test_history:
+                            test_history[nodeid] = []
+
+                        # Override any previous entry for this test in this session
+                        # with the final outcome from the rerun group
+                        test_history[nodeid].append((session_timestamp, final_outcome))
+
+        # Second pass: analyze failure patterns with hysteresis
+        failing_with_hysteresis = []
+
+        for nodeid, history in test_history.items():
+            # Skip tests with too few occurrences
+            if len(history) < min_consecutive_failures:
+                continue
+
+            # Sort by timestamp to ensure chronological order
+            sorted_history = sorted(history, key=lambda x: x[0])
+
+            # Analyze the entire history as a single streak with hysteresis
+            failure_count = sum(1 for _, outcome in sorted_history if outcome == TestOutcome.FAILED)
+            total_count = len(sorted_history)
+
+            # Calculate failure rate
+            failure_rate = failure_count / total_count if total_count > 0 else 0.0
+
+            # Check if this test meets the criteria
+            if (failure_count >= min_consecutive_failures and
+                failure_rate >= min_failure_rate and
+                (1.0 - failure_rate) <= hysteresis_threshold):
+
+                # This test is consistently failing with allowed hysteresis
+                first_timestamp = sorted_history[0][0]
+                last_timestamp = sorted_history[-1][0]
+
+                failing_with_hysteresis.append({
+                    "nodeid": nodeid,
+                    "failure_count": failure_count,
+                    "pass_count": total_count - failure_count,
+                    "failure_rate": failure_rate,
+                    "first_occurrence": first_timestamp,
+                    "last_occurrence": last_timestamp,
+                    "streak_duration": (last_timestamp - first_timestamp).total_seconds()
+                })
+
+        # Sort by failure rate (descending) and then by streak duration (descending)
+        return sorted(failing_with_hysteresis,
+                     key=lambda x: (x["failure_rate"], x["streak_duration"]),
+                     reverse=True)
+
 
 # Helper functions for creating analysis instances
 def analysis(
@@ -923,9 +1314,9 @@ def analysis(
     which is the entry point for the fluent analysis API.
 
     Args:
-        storage: Optional storage instance for accessing test data.
+        storage: Storage instance for accessing test data.
                 If None, uses storage from profile_name or default storage.
-        sessions: Optional list of sessions to analyze.
+        sessions: Optional list of sessions to analyze
         profile_name: Optional profile name to use for storage configuration.
                      Takes precedence over storage parameter if both are provided.
 
