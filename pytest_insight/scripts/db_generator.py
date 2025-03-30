@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import typer
 
 from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+from pytest_insight.storage import get_profile_manager, get_storage_instance
 
 
 class TextGenerator:
@@ -41,10 +42,26 @@ class TextGenerator:
 
 
 class PracticeDataGenerator:
-    """Generates practice test data with variations for learning and exploration."""
+    """
+    Generates practice test data with variations for learning and exploration.
+
+    Parameters:
+        storage_profile (Optional[str]): Storage profile to use.
+        target_path (Optional[Path]): Path to save the generated data.
+        days (int): Number of days to generate data for.
+        targets_per_base (int): Number of targets per base SUT.
+        start_date (Optional[datetime]): Start date for the data generation.
+        pass_rate (float): Percentage of passing tests.
+        flaky_rate (float): Percentage of flaky tests.
+        warning_rate (float): Percentage of warning tests.
+        sut_filter (Optional[str]): Filter SUTs by prefix.
+        test_categories (Optional[list[str]]): List of test categories.
+
+    """
 
     def __init__(
         self,
+        storage_profile: Optional[str] = None,
         target_path: Optional[Path] = None,
         days: int = 7,
         targets_per_base: int = 3,
@@ -55,9 +72,8 @@ class PracticeDataGenerator:
         sut_filter: Optional[str] = None,
         test_categories: Optional[list[str]] = None,
     ):
-        self.target_path = (
-            target_path or Path.home() / ".pytest_insight" / "practice.json"
-        )
+        self.storage_profile = storage_profile
+        self.target_path = target_path or Path.home() / ".pytest_insight" / "practice.json"
         self.days = days
         self.targets_per_base = targets_per_base
         self.start_date = start_date
@@ -82,9 +98,7 @@ class PracticeDataGenerator:
 
         # Filter SUTs if specified
         if sut_filter:
-            self.sut_variations = [
-                sut for sut in self.sut_variations if sut.startswith(sut_filter)
-            ]
+            self.sut_variations = [sut for sut in self.sut_variations if sut.startswith(sut_filter)]
             if not self.sut_variations:
                 raise ValueError(f"No SUTs found matching prefix '{sut_filter}'")
 
@@ -127,9 +141,7 @@ class PracticeDataGenerator:
             invalid_categories = set(test_categories) - set(self.test_patterns.keys())
             if invalid_categories:
                 raise ValueError(f"Invalid test categories: {invalid_categories}")
-            self.test_patterns = {
-                k: v for k, v in self.test_patterns.items() if k in test_categories
-            }
+            self.test_patterns = {k: v for k, v in self.test_patterns.items() if k in test_categories}
 
     def _get_test_time(self, offset_seconds: int = 0) -> datetime:
         """Get a consistent timezone-aware timestamp for tests.
@@ -163,17 +175,9 @@ class PracticeDataGenerator:
             start_time = start_time.replace(tzinfo=ZoneInfo("UTC"))
 
         caplog = self.text_gen.sentence()
-        capstderr = (
-            self.text_gen.sentence()
-            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-            else ""
-        )
+        capstderr = self.text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
         capstdout = self.text_gen.sentence()
-        longreprtext = (
-            self.text_gen.paragraph()
-            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-            else ""
-        )
+        longreprtext = self.text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
 
         return TestResult(
             nodeid=nodeid,
@@ -280,6 +284,62 @@ class PracticeDataGenerator:
             rerun_test_groups=rerun_groups,
         )
 
+    def _ensure_valid_profile(self, profile_name):
+        """Ensure that the profile exists and has a valid file path."""
+        profile_manager = get_profile_manager()
+
+        try:
+            # Try to get the existing profile
+            profile = profile_manager.get_profile(profile_name)
+            print(f"Using existing profile: {profile_name}")
+
+            # Check if the profile has a valid file path
+            if profile.file_path is None:
+                # Create a default path for this profile
+                default_path = str(Path.home() / ".pytest_insight" / f"{profile_name}.json")
+                print(f"Profile has no file path. Creating a new profile with path: {default_path}")
+
+                # We can't modify the existing profile directly, so we need to create a new one
+                # First, remember if this was the active profile
+                was_active = profile_manager.active_profile_name == profile_name
+
+                try:
+                    # Try to delete the profile (might fail if it's the active profile)
+                    profile_manager.delete_profile(profile_name)
+                except ValueError as e:
+                    if "active profile" in str(e):
+                        # It's the active profile, so we need to switch to another one first
+                        print("Temporarily switching to default profile")
+                        profile_manager.switch_profile("default")
+                        profile_manager.delete_profile(profile_name)
+                    else:
+                        raise
+
+                # Create a new profile with the same name but a valid file path
+                profile = profile_manager.create_profile(name=profile_name, storage_type="json", file_path=default_path)
+
+                # If it was the active profile, switch back to it
+                if was_active:
+                    profile_manager.switch_profile(profile_name)
+
+            return profile
+
+        except ValueError:
+            # Profile doesn't exist, create it
+            print(f"Creating new profile: {profile_name}")
+            default_path = str(Path.home() / ".pytest_insight" / f"{profile_name}.json")
+            return profile_manager.create_profile(name=profile_name, storage_type="json", file_path=default_path)
+
+    def _save_to_file(self, all_sessions):
+        # Save to file directly (backward compatibility)
+        self.target_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.target_path, "w") as f:
+            json.dump(
+                {"sessions": [session.to_dict() for session in all_sessions]},
+                f,
+                indent=2,
+            )
+
     def generate_practice_data(self) -> None:
         """Generate practice data with various test scenarios."""
         all_sessions = []
@@ -314,14 +374,30 @@ class PracticeDataGenerator:
         # Sort sessions by start time
         all_sessions.sort(key=lambda x: x.session_start_time)
 
-        # Save to file
-        self.target_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.target_path, "w") as f:
-            json.dump(
-                {"sessions": [session.to_dict() for session in all_sessions]},
-                f,
-                indent=2,
-            )
+        # Save to file or storage profile
+        if self.storage_profile:
+            try:
+                # Ensure the profile exists and has a valid file path
+                profile = self._ensure_valid_profile(self.storage_profile)
+
+                # Get a storage instance for this profile
+                storage = get_storage_instance(profile_name=self.storage_profile)
+
+                # Save the sessions (storage expects TestSession objects)
+                storage.save_sessions(all_sessions)
+
+                print(f"Data saved to storage profile: {self.storage_profile}")
+                print(f"Profile path: {profile.file_path}")
+
+                # Update target_path to match the profile's path
+                self.target_path = Path(profile.file_path)
+            except Exception as e:
+                print(f"Error saving to profile {self.storage_profile}: {e}")
+                print("Falling back to direct file save")
+                self._save_to_file(all_sessions)
+        else:
+            # Save to file directly (backward compatibility)
+            self._save_to_file(all_sessions)
 
 
 app = typer.Typer(
@@ -402,6 +478,11 @@ def main(
         "-q",
         help="Suppress detailed output, only show essential information",
     ),
+    storage_profile: str = typer.Option(
+        None,
+        "--storage-profile",
+        help="Storage profile to use for data generation",
+    ),
 ):
     """Generate practice test data with configurable parameters.
 
@@ -435,9 +516,7 @@ def main(
                 # Use datetime(2023, 1, 1) as base like conftest.py
                 base = datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
                 parsed_date = datetime.strptime(start_date, "%Y-%m-%d")
-                parsed_start_date = base + timedelta(
-                    days=(parsed_date - datetime(2023, 1, 1)).days
-                )
+                parsed_start_date = base + timedelta(days=(parsed_date - datetime(2023, 1, 1)).days)
             except ValueError as e:
                 if "format" in str(e):
                     raise typer.BadParameter("Start date must be in YYYY-MM-DD format")
@@ -457,6 +536,7 @@ def main(
 
         # Create generator instance
         generator = PracticeDataGenerator(
+            storage_profile=storage_profile,
             target_path=Path(output) if output else None,
             days=days,
             targets_per_base=targets,
