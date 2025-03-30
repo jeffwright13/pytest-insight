@@ -132,8 +132,12 @@ def create_introspected_api() -> FastAPI:
 introspected_app = create_introspected_api()
 
 
-# Example usage:
-if __name__ == "__main__":
+def main():
     import uvicorn
 
     uvicorn.run(introspected_app, host="0.0.0.0", port=8001)
+
+
+# Example usage:
+if __name__ == "__main__":
+    main()
