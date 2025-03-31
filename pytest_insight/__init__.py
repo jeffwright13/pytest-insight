@@ -34,4 +34,11 @@ __all__ = [
     # API
     "WebInsightAPI",
     "CoreInsightAPI",
+    # Version
+    "__version__",
 ]
+
+# Import version at the end to avoid circular imports
+import importlib.metadata
+
+__version__ = importlib.metadata.version("pytest-insight")

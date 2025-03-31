@@ -4,6 +4,7 @@ This module demonstrates how to use Python's introspection capabilities to
 dynamically generate FastAPI endpoints from the pytest-insight API classes.
 """
 
+import importlib.metadata
 import inspect
 import re
 from pathlib import Path
@@ -15,6 +16,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, create_model
+
+# Get version directly from package metadata to avoid circular imports
+__version__ = importlib.metadata.version("pytest-insight")
 
 from pytest_insight.analysis import Analysis
 from pytest_insight.comparison import Comparison
@@ -30,10 +34,11 @@ from pytest_insight.storage import get_storage_instance
 
 # ---- Utility Functions for Introspection ----
 
+
 def camel_to_snake(name: str) -> str:
     """Convert camelCase to snake_case."""
-    name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
+    name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
 
 
 def create_endpoint_name(class_name: str, method_name: str) -> str:
@@ -87,6 +92,7 @@ def create_parameter_model(method: Callable, prefix: str = "") -> Type[BaseModel
 
 # ---- API Categorization ----
 
+
 class EndpointCategory:
     """Represents a category of related API endpoints."""
 
@@ -97,11 +103,7 @@ class EndpointCategory:
 
     def add_endpoint(self, path: str, method: str, summary: str):
         """Add an endpoint to this category."""
-        self.endpoints.append({
-            "path": path,
-            "method": method,
-            "summary": summary
-        })
+        self.endpoints.append({"path": path, "method": method, "summary": summary})
 
 
 def categorize_endpoints(api_class: Type, prefix: str = "") -> Dict[str, EndpointCategory]:
@@ -112,12 +114,13 @@ def categorize_endpoints(api_class: Type, prefix: str = "") -> Dict[str, Endpoin
         "compare": EndpointCategory("Comparison Operations", "Methods for comparing test results"),
         "analyze": EndpointCategory("Analysis Operations", "Methods for analyzing test patterns"),
         "config": EndpointCategory("Configuration", "Methods for configuring the API"),
-        "other": EndpointCategory("Other Operations", "Miscellaneous operations")
+        "other": EndpointCategory("Other Operations", "Miscellaneous operations"),
     }
 
     # Get all public methods
     methods = [
-        method for name, method in inspect.getmembers(api_class, predicate=inspect.isfunction)
+        method
+        for name, method in inspect.getmembers(api_class, predicate=inspect.isfunction)
         if not name.startswith("_") and name not in ["__init__"]
     ]
 
@@ -147,6 +150,7 @@ def categorize_endpoints(api_class: Type, prefix: str = "") -> Dict[str, Endpoin
 
 # ---- Core API Router Generators ----
 
+
 def generate_api_router(api_class: Type, prefix: str = "") -> Tuple[APIRouter, Dict[str, EndpointCategory]]:
     """Generate a FastAPI router from an API class with categorized endpoints."""
     router = APIRouter()
@@ -156,7 +160,8 @@ def generate_api_router(api_class: Type, prefix: str = "") -> Tuple[APIRouter, D
 
     # Get all public methods that aren't special methods
     methods = [
-        method for name, method in inspect.getmembers(api_class, predicate=inspect.isfunction)
+        method
+        for name, method in inspect.getmembers(api_class, predicate=inspect.isfunction)
         if not name.startswith("_") and name not in ["__init__"]
     ]
 
@@ -195,13 +200,14 @@ def generate_api_router(api_class: Type, prefix: str = "") -> Tuple[APIRouter, D
             response_model=Dict[str, Any],
             summary=f"{api_class.__name__}.{method.__name__}",
             description=method.__doc__,
-            tags=[category_tag]
+            tags=[category_tag],
         )
 
     return router, categories
 
 
 # ---- High-Level Operation Routers ----
+
 
 def create_query_router() -> APIRouter:
     """Create a high-level query router with user-friendly endpoints."""
@@ -314,6 +320,7 @@ def create_analysis_router() -> APIRouter:
 
 # ---- Category Index Endpoints ----
 
+
 def create_category_index(app: FastAPI, all_categories: Dict[str, Dict[str, EndpointCategory]]):
     """Create an index endpoint that shows all endpoint categories."""
 
@@ -324,10 +331,8 @@ def create_category_index(app: FastAPI, all_categories: Dict[str, Dict[str, Endp
 
         for api_name, categories in all_categories.items():
             result[api_name] = {
-                cat_name: {
-                    "description": cat.description,
-                    "endpoints": cat.endpoints
-                } for cat_name, cat in categories.items()
+                cat_name: {"description": cat.description, "endpoints": cat.endpoints}
+                for cat_name, cat in categories.items()
             }
 
         return result
@@ -340,11 +345,8 @@ def create_category_index(app: FastAPI, all_categories: Dict[str, Dict[str, Endp
                 @app.get(f"/api/categories/{a_name}/{c_name}", tags=["API Index"])
                 async def get_category_detail():
                     """Get details for a specific endpoint category."""
-                    return {
-                        "name": cat.name,
-                        "description": cat.description,
-                        "endpoints": cat.endpoints
-                    }
+                    return {"name": cat.name, "description": cat.description, "endpoints": cat.endpoints}
+
                 return get_category_detail
 
             # Execute the function to create and register the endpoint
@@ -363,12 +365,13 @@ def create_category_index(app: FastAPI, all_categories: Dict[str, Dict[str, Endp
 
 # ---- Main FastAPI App ----
 
+
 def create_introspected_api() -> FastAPI:
     """Create a FastAPI app with both introspected and high-level endpoints."""
     app = FastAPI(
         title="pytest-insight Dynamic API",
         description="Dynamically generated API from pytest-insight classes",
-        version="0.1.0",
+        version=__version__,
     )
 
     # Add CORS middleware
@@ -460,7 +463,8 @@ def create_introspected_api() -> FastAPI:
     dashboard_template = templates_dir / "dashboard.html"
     if not dashboard_template.exists():
         with open(dashboard_template, "w") as f:
-            f.write("""
+            f.write(
+                """
 <!DOCTYPE html>
 <html>
 <head>
@@ -685,7 +689,8 @@ def create_introspected_api() -> FastAPI:
     </script>
 </body>
 </html>
-            """)
+            """
+            )
 
     # Add dashboard routes
     @app.get("/dashboard", response_class=HTMLResponse)
@@ -706,7 +711,7 @@ def create_introspected_api() -> FastAPI:
             sessions = [
                 {"id": "session1", "name": "Test Run 1 - March 29, 2025", "date": "2025-03-29"},
                 {"id": "session2", "name": "Test Run 2 - March 28, 2025", "date": "2025-03-28"},
-                {"id": "session3", "name": "Test Run 3 - March 27, 2025", "date": "2025-03-27"}
+                {"id": "session3", "name": "Test Run 3 - March 27, 2025", "date": "2025-03-27"},
             ]
             return {"sessions": sessions}
         except Exception as e:
@@ -727,11 +732,7 @@ def create_introspected_api() -> FastAPI:
             if query.get("filter") != "all" and query.get("filter") != status:
                 continue
 
-            results.append({
-                "name": f"test_function_{i}",
-                "status": status,
-                "duration": random.uniform(0.1, 2.0)
-            })
+            results.append({"name": f"test_function_{i}", "status": status, "duration": random.uniform(0.1, 2.0)})
 
         return {"results": results}
 

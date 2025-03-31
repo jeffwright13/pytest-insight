@@ -22,13 +22,24 @@ Example usage:
     report = insights().with_query(lambda q: q.for_sut("service")).summary_report()
 """
 
+import importlib.metadata
 from typing import Optional
 
 from pytest_insight.analysis import Analysis, analysis, analysis_with_profile
 from pytest_insight.comparison import Comparison, comparison, comparison_with_profiles
 from pytest_insight.insights import Insights, insights, insights_with_profile
 from pytest_insight.query import Query
-from pytest_insight.storage import get_storage_instance
+from pytest_insight.storage import (
+    create_profile,
+    get_active_profile,
+    get_profile_manager,
+    get_storage_instance,
+    list_profiles,
+    switch_profile,
+)
+
+# Get version directly from package metadata to avoid circular imports
+__version__ = importlib.metadata.version("pytest-insight")
 
 
 class InsightAPI:
@@ -141,4 +152,12 @@ __all__ = [
     "comparison_with_profiles",
     "analysis_with_profile",
     "insights_with_profile",
+    # Storage profile management
+    "get_profile_manager",
+    "create_profile",
+    "list_profiles",
+    "get_active_profile",
+    "switch_profile",
+    # Version information
+    "__version__",
 ]

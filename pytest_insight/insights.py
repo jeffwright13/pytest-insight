@@ -749,7 +749,7 @@ class Insights:
         # Add note about single-session insights
         output.append("Note: This summary shows insights for the current test session only.")
         output.append("For multi-session analysis, use the 'insights' script or the Insights API.")
-        output.append("More advance users may use the Q-C-A (Query-Compare-Analyze) Python API.")
+        output.append("More advanced users may use the Q-C-A (Query-Compare-Analyze) Python API.")
 
         # Session Info Section
         output.append(section_header("Test Session Info"))
@@ -834,7 +834,11 @@ class Insights:
                 count = data.get("count", 0)
                 percentage = data.get("percentage", 0)
                 value = f"{count} ({percentage:.1f}%)"
-                outcome_str = outcome if isinstance(outcome, str) else (outcome.to_str() if hasattr(outcome, "to_str") else str(outcome))
+                outcome_str = (
+                    outcome
+                    if isinstance(outcome, str)
+                    else (outcome.to_str() if hasattr(outcome, "to_str") else str(outcome))
+                )
 
                 # Choose color based on outcome
                 color = GREEN
