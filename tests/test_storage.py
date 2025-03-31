@@ -359,13 +359,16 @@ class TestStorageProfile:
 
     def test_storage_profile_creation(self):
         """Test creating a StorageProfile."""
+        from pathlib import Path
+
         from pytest_insight.storage import StorageProfile
 
         # Create with defaults
         profile = StorageProfile("test-profile")
         assert profile.name == "test-profile"
         assert profile.storage_type == "json"
-        assert profile.file_path is None
+        expected_path = str(Path.home() / ".pytest_insight" / "test-profile.json")
+        assert profile.file_path == expected_path
 
         # Create with custom values
         profile = StorageProfile("custom", "memory", "/custom/path")

@@ -17,11 +17,17 @@ class StorageProfile:
         Args:
             name: Unique name for the profile
             storage_type: Type of storage (json, memory, etc.)
-            file_path: Optional custom path for storage
+            file_path: Optional custom path for storage. If None, a default path will be generated based on the profile name.
         """
         self.name = name
         self.storage_type = storage_type
-        self.file_path = file_path
+
+        # Generate default file path based on profile name if none provided
+        if file_path is None:
+            default_dir = Path.home() / ".pytest_insight"
+            self.file_path = str(default_dir / f"{name}.json")
+        else:
+            self.file_path = file_path
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert profile to dictionary for serialization."""
@@ -556,28 +562,60 @@ class JSONStorage(BaseStorage):
             return []
 
 
-def get_storage_instance(storage_type: str = None, file_path: str = None, profile_name: str = None) -> BaseStorage:
+def get_storage_instance(
+    storage_type: str = None, file_path: str = None, profile_name: str = None, _from_profile: bool = False
+) -> BaseStorage:
     """Get storage instance based on configuration.
 
+    Precedence order for configuration:
+    1. Profile settings (if profile_name is provided)
+    2. Direct parameters (storage_type, file_path)
+    3. Environment variables (PYTEST_INSIGHT_PROFILE, PYTEST_INSIGHT_STORAGE_TYPE, PYTEST_INSIGHT_DB_PATH)
+    4. Default values (json storage type, ~/.pytest_insight/sessions.json)
+
     Args:
-        storage_type: Optional storage type override
-        file_path: Optional file path override
+        storage_type: Optional storage type override (ignored if profile_name is provided)
+        file_path: Optional file path override (ignored if profile_name is provided)
         profile_name: Optional profile name to use
+        _from_profile: Internal parameter to prevent infinite recursion
 
     Returns:
         Configured storage instance
     """
-    # Check for profile-based configuration
-    env_profile = os.environ.get("PYTEST_INSIGHT_PROFILE")
-    if profile_name or (env_profile and env_profile != ""):
+    # Step 1: Check for profile-based configuration (highest precedence)
+    if profile_name is not None and not _from_profile:
         # Use profile manager to get configuration
         profile_manager = get_profile_manager()
-        profile = profile_manager.get_profile(profile_name)
+        try:
+            profile = profile_manager.get_profile(profile_name)
+            # Profile settings override direct parameters
+            return get_storage_instance(
+                storage_type=profile.storage_type,
+                file_path=profile.file_path,
+                _from_profile=True,  # Prevent further profile lookup
+            )
+        except ValueError as e:
+            print(f"Warning: Profile '{profile_name}' not found: {e}")
+            print("Falling back to direct parameters or defaults")
 
-        # Profile settings override direct parameters
-        storage_type = profile.storage_type
-        file_path = profile.file_path
+    # Step 2: Check environment variable for profile (if no explicit profile_name and not from profile)
+    env_profile = os.environ.get("PYTEST_INSIGHT_PROFILE")
+    if profile_name is None and env_profile and env_profile != "" and not _from_profile:
+        # Use profile manager to get configuration
+        profile_manager = get_profile_manager()
+        try:
+            profile = profile_manager.get_profile(env_profile)
+            # Profile settings override direct parameters
+            return get_storage_instance(
+                storage_type=profile.storage_type,
+                file_path=profile.file_path,
+                _from_profile=True,  # Prevent further profile lookup
+            )
+        except ValueError as e:
+            print(f"Warning: Environment profile '{env_profile}' not found: {e}")
+            print("Falling back to direct parameters or defaults")
 
+    # Step 3: Use direct parameters or environment variables
     # Get storage type from args, env, or default
     storage_type = storage_type or os.environ.get("PYTEST_INSIGHT_STORAGE_TYPE", "json")
 
@@ -585,7 +623,7 @@ def get_storage_instance(storage_type: str = None, file_path: str = None, profil
     if not file_path:
         file_path = os.environ.get("PYTEST_INSIGHT_DB_PATH")
 
-    # Create appropriate storage instance
+    # Step 4: Create appropriate storage instance
     if storage_type.lower() == "json":
         return JSONStorage(file_path)
     elif storage_type.lower() == "memory":

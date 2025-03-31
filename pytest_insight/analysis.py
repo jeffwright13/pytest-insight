@@ -973,7 +973,6 @@ class Analysis:
         test_outcomes = defaultdict(set)
 
         for session in self._sessions:
-            session_timestamp = session.session_start_time
 
             # Process regular test results
             for test in session.test_results:
@@ -1016,7 +1015,6 @@ class Analysis:
         test_durations = defaultdict(list)
 
         for session in self._sessions:
-            session_timestamp = session.session_start_time
 
             # Process regular test results
             for test in session.test_results:
@@ -1062,7 +1060,6 @@ class Analysis:
         failure_counts = defaultdict(int)
 
         for session in self._sessions:
-            session_timestamp = session.session_start_time
 
             # Process regular test results
             for test in session.test_results:

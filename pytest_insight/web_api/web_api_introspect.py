@@ -6,22 +6,23 @@ dynamically generate FastAPI endpoints from the pytest-insight API classes.
 
 import inspect
 import re
-from typing import Any, Callable, Dict, List, Optional, Type, get_type_hints, Tuple
 from pathlib import Path
+from typing import Any, Callable, Dict, Optional, Tuple, Type, get_type_hints
 
-from fastapi import APIRouter, Depends, FastAPI, Query, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, create_model
 
+from pytest_insight.analysis import Analysis
+from pytest_insight.comparison import Comparison
+
 # Import API classes for introspection
 from pytest_insight.core_api import InsightAPI
 from pytest_insight.query import Query as PyTestQuery
-from pytest_insight.comparison import Comparison
-from pytest_insight.analysis import Analysis
-from pytest_insight.storage import get_storage_instance, BaseStorage
+from pytest_insight.storage import get_storage_instance
 
 # Note: This file will be moved to pytest_insight/web_api/instrospect.py
 # The imports above will remain the same, but this module will be accessed differently
@@ -442,8 +443,6 @@ def create_introspected_api() -> FastAPI:
     create_category_index(app, all_categories)
 
     # Setup templates and static files
-    from pathlib import Path
-    import os
 
     # Create templates directory if it doesn't exist
     templates_dir = Path(__file__).parent / "templates"
@@ -698,7 +697,7 @@ def create_introspected_api() -> FastAPI:
     async def get_recent_sessions():
         """Get a list of recent test sessions."""
         # Get the storage instance
-        storage = get_storage_instance()
+        get_storage_instance()
 
         # Get recent sessions (placeholder implementation)
         try:
@@ -745,8 +744,9 @@ introspected_app = create_introspected_api()
 
 def main():
     """Run the introspected API server."""
-    import uvicorn
     import argparse
+
+    import uvicorn
 
     parser = argparse.ArgumentParser(description="Run pytest-insight introspected API server")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind the server to")
