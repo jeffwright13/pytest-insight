@@ -41,9 +41,9 @@ from statistics import mean, stdev
 from typing import Any, Callable, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
-from pytest_insight.models import TestOutcome, TestResult, TestSession
-from pytest_insight.query import Query
-from pytest_insight.storage import BaseStorage, get_storage_instance
+from pytest_insight.core.models import TestOutcome, TestResult, TestSession
+from pytest_insight.core.query import Query
+from pytest_insight.core.storage import BaseStorage, get_storage_instance
 
 
 class SessionAnalysis:

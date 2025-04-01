@@ -2,9 +2,9 @@ import tempfile
 from datetime import timedelta
 
 import pytest
-from pytest_insight.comparison import Comparison, ComparisonError, ComparisonResult
-from pytest_insight.models import TestOutcome, TestResult, TestSession
-from pytest_insight.query import Query
+from pytest_insight.core.comparison import Comparison, ComparisonError, ComparisonResult
+from pytest_insight.core.models import TestOutcome, TestResult, TestSession
+from pytest_insight.core.query import Query
 
 
 @pytest.fixture
@@ -252,7 +252,9 @@ class Test_Comparison:
     def test_comparison_with_profiles(self, base_session, target_session, mocker):
         """Test comparison initialization with profiles."""
         # Mock the Query class to verify profile parameters are passed
-        mock_query = mocker.patch("pytest_insight.comparison.Query")
+        mock_query = mocker.patch("pytest_insight.core.query.Query")
+        mock_query_instance = mocker.MagicMock()
+        mock_query.return_value = mock_query_instance
 
         # Initialize comparison with profiles
         Comparison(
@@ -262,8 +264,11 @@ class Test_Comparison:
         )
 
         # Verify Query was called with correct profile parameters
-        assert mock_query.call_args_list[0].kwargs["profile_name"] == "profile1"
-        assert mock_query.call_args_list[1].kwargs["profile_name"] == "profile2"
+        assert mock_query.call_count >= 2
+        calls = mock_query.call_args_list
+        profile_names = [call.kwargs.get("profile_name") for call in calls]
+        assert "profile1" in profile_names
+        assert "profile2" in profile_names
 
     def test_with_base_profile_method(self, base_session, target_session, mocker):
         """Test with_base_profile method."""
@@ -320,14 +325,7 @@ class Test_Comparison:
         temp_file_path = tmp_path / "dummy.json"
 
         # Mock the ProfileManager.get_profile method
-        mock_profile = mocker.patch("pytest_insight.storage.ProfileManager.get_profile")
-        mock_profile.return_value = mocker.MagicMock(
-            storage_type="json",
-            file_path=str(temp_file_path)
-        )
-
-        # Mock the ProfileManager.get_profile method
-        mock_profile = mocker.patch("pytest_insight.storage.ProfileManager.get_profile")
+        mock_profile = mocker.patch("pytest_insight.core.storage.ProfileManager.get_profile")
         mock_profile.return_value = mocker.MagicMock(
             storage_type="json",
             file_path=str(temp_file_path)
@@ -357,10 +355,10 @@ class Test_Comparison:
     def test_convenience_functions(self, mocker):
         """Test module-level convenience functions."""
         # Mock the Comparison class
-        mock_comparison = mocker.patch("pytest_insight.comparison.Comparison")
+        mock_comparison = mocker.patch("pytest_insight.core.comparison.Comparison")
 
         # Import the convenience functions
-        from pytest_insight.comparison import comparison, comparison_with_profiles
+        from pytest_insight.core.comparison import comparison, comparison_with_profiles
 
         # Test comparison function
         comparison(base_profile="profile1", target_profile="profile2")

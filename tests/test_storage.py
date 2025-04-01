@@ -3,8 +3,8 @@ import os
 from datetime import timedelta
 
 import pytest
-from pytest_insight.models import TestSession
-from pytest_insight.storage import InMemoryStorage, JSONStorage, get_storage_instance
+from pytest_insight.core.models import TestSession
+from pytest_insight.core.storage import InMemoryStorage, JSONStorage, get_storage_instance
 
 
 @pytest.fixture
@@ -348,7 +348,7 @@ def test_selective_clear_sessions_in_memory(in_memory_storage, get_test_time):
 @pytest.fixture
 def profile_manager(tmp_path):
     """Fixture to create a ProfileManager with a temporary config file."""
-    from pytest_insight.storage import ProfileManager
+    from pytest_insight.core.storage import ProfileManager
 
     config_path = tmp_path / "profiles.json"
     return ProfileManager(config_path=config_path)
@@ -361,7 +361,7 @@ class TestStorageProfile:
         """Test creating a StorageProfile."""
         from pathlib import Path
 
-        from pytest_insight.storage import StorageProfile
+        from pytest_insight.core.storage import StorageProfile
 
         # Create with defaults
         profile = StorageProfile("test-profile")
@@ -378,7 +378,7 @@ class TestStorageProfile:
 
     def test_storage_profile_serialization(self):
         """Test serializing and deserializing a StorageProfile."""
-        from pytest_insight.storage import StorageProfile
+        from pytest_insight.core.storage import StorageProfile
 
         # Create a profile
         profile = StorageProfile("test", "json", "/test/path")
@@ -486,7 +486,7 @@ class TestProfileManager:
 
     def test_profile_persistence(self, tmp_path):
         """Test that profiles are persisted to disk."""
-        from pytest_insight.storage import ProfileManager
+        from pytest_insight.core.storage import ProfileManager
 
         # Create a profile manager and add profiles
         config_path = tmp_path / "profiles.json"
@@ -534,7 +534,7 @@ class TestStorageWithProfiles:
 
     def test_get_storage_instance_with_profile(self, tmp_path, monkeypatch):
         """Test get_storage_instance with profile name."""
-        from pytest_insight.storage import (
+        from pytest_insight.core.storage import (
             InMemoryStorage,
             JSONStorage,
             ProfileManager,
@@ -546,7 +546,7 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr("pytest_insight.storage.get_profile_manager", lambda: profile_manager)
+        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
         # Create test profiles
         profile_manager.create_profile("json-profile", "json", str(tmp_path / "json-db.json"))
@@ -571,7 +571,7 @@ class TestStorageWithProfiles:
 
     def test_env_var_profile_override(self, tmp_path, monkeypatch):
         """Test environment variable override for profile in get_storage_instance."""
-        from pytest_insight.storage import (
+        from pytest_insight.core.storage import (
             JSONStorage,
             ProfileManager,
             get_storage_instance,
@@ -582,7 +582,7 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr("pytest_insight.storage.get_profile_manager", lambda: profile_manager)
+        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
         # Create test profile
         profile_manager.create_profile("env-profile", "json", str(tmp_path / "env-db.json"))
@@ -602,7 +602,7 @@ class TestStorageWithProfiles:
 
     def test_convenience_functions(self, tmp_path, monkeypatch):
         """Test convenience functions for profile management."""
-        from pytest_insight.storage import (
+        from pytest_insight.core.storage import (
             ProfileManager,
             create_profile,
             get_active_profile,
@@ -615,7 +615,7 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr("pytest_insight.storage.get_profile_manager", lambda: profile_manager)
+        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
         # Create profiles using the convenience functions
         # These will use our mocked profile manager

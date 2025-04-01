@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
-from pytest_insight.models import (
+from pytest_insight.core.models import (
     RerunTestGroup,
     TestOutcome,
     TestResult,

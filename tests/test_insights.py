@@ -3,8 +3,8 @@
 from datetime import datetime, timedelta
 
 import pytest
-from pytest_insight.insights import Insights
-from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+from pytest_insight.core.insights import Insights
+from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
 
 
 @pytest.fixture
@@ -122,7 +122,7 @@ class TestInsightsModuleTests:
             def __init__(self):
                 self._sessions = sample_sessions
 
-        monkeypatch.setattr("pytest_insight.insights.Analysis", MockAnalysis)
+        monkeypatch.setattr("pytest_insight.core.insights.Analysis", MockAnalysis)
 
         insights = Insights()
         assert insights.tests is not None
@@ -138,7 +138,7 @@ class TestInsightsModuleTests:
             def __init__(self):
                 self._sessions = sample_sessions
 
-        monkeypatch.setattr("pytest_insight.insights.Analysis", MockAnalysis)
+        monkeypatch.setattr("pytest_insight.core.insights.Analysis", MockAnalysis)
 
         insights = Insights()
 
@@ -172,7 +172,7 @@ class TestInsightsModuleTests:
                     "improved": True,
                 }
 
-        monkeypatch.setattr("pytest_insight.insights.Analysis", MockAnalysis)
+        monkeypatch.setattr("pytest_insight.core.insights.Analysis", MockAnalysis)
 
         insights = Insights()
 
@@ -198,7 +198,7 @@ class TestInsightsModuleTests:
                     "improved": True,
                 }
 
-        monkeypatch.setattr("pytest_insight.insights.Analysis", MockAnalysis)
+        monkeypatch.setattr("pytest_insight.core.insights.Analysis", MockAnalysis)
 
         insights = Insights()
 
@@ -293,12 +293,12 @@ class TestInsightsModuleTests:
         mock_storage = mocker.MagicMock()
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch("pytest_insight.insights.get_storage_instance")
+        mock_get_storage = mocker.patch("pytest_insight.core.insights.get_storage_instance")
         mock_get_storage.return_value = mock_storage
 
         # Mock the Analysis class
         mock_analysis = mocker.MagicMock()
-        monkeypatch.setattr("pytest_insight.insights.Analysis", mock_analysis)
+        monkeypatch.setattr("pytest_insight.core.insights.Analysis", mock_analysis)
 
         # Initialize insights with profile
         insights = Insights(profile_name="test_profile")
@@ -318,14 +318,14 @@ class TestInsightsModuleTests:
         mock_storage = mocker.MagicMock()
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch("pytest_insight.insights.get_storage_instance")
+        mock_get_storage = mocker.patch("pytest_insight.core.insights.get_storage_instance")
         mock_get_storage.return_value = mock_storage
 
         # Mock the Analysis class
         mock_analysis = mocker.MagicMock()
         mock_analysis_instance = mocker.MagicMock()
         mock_analysis.return_value = mock_analysis_instance
-        monkeypatch.setattr("pytest_insight.insights.Analysis", mock_analysis)
+        monkeypatch.setattr("pytest_insight.core.insights.Analysis", mock_analysis)
 
         # Create insights and call with_profile
         insights = Insights()
@@ -349,7 +349,7 @@ class TestInsightsModuleTests:
         mock_storage = mocker.MagicMock()
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch("pytest_insight.insights.get_storage_instance")
+        mock_get_storage = mocker.patch("pytest_insight.core.insights.get_storage_instance")
         mock_get_storage.return_value = mock_storage
 
         # Mock the Analysis class
@@ -363,7 +363,7 @@ class TestInsightsModuleTests:
         mock_analysis_instance.with_query.return_value = filtered_analysis
 
         mock_analysis.return_value = mock_analysis_instance
-        monkeypatch.setattr("pytest_insight.insights.Analysis", mock_analysis)
+        monkeypatch.setattr("pytest_insight.core.insights.Analysis", mock_analysis)
 
         # Create insights with profile and call with_query
         insights = Insights(profile_name="test_profile")
@@ -378,15 +378,15 @@ class TestInsightsModuleTests:
         mock_storage = mocker.MagicMock()
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch("pytest_insight.insights.get_storage_instance")
+        mock_get_storage = mocker.patch("pytest_insight.core.insights.get_storage_instance")
         mock_get_storage.return_value = mock_storage
 
         # Import the convenience functions
-        from pytest_insight.insights import insights, insights_with_profile
+        from pytest_insight.core.insights import insights, insights_with_profile
 
         # Mock the Insights class
         mock_insights_class = mocker.MagicMock()
-        monkeypatch.setattr("pytest_insight.insights.Insights", mock_insights_class)
+        monkeypatch.setattr("pytest_insight.core.insights.Insights", mock_insights_class)
 
         # Test insights function
         insights(profile_name="test_profile")

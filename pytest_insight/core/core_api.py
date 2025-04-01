@@ -7,7 +7,7 @@ which follows a fluent interface design with three main operations:
 3. Analyze - Extract insights and metrics
 
 Example usage:
-    from pytest_insight.core_api import query, compare, analyze, insights
+    from pytest_insight.core.core_api import InsightAPI, query, compare, analyze, get_insights
 
     # Query for specific tests
     results = query().for_sut("my-service").in_last_days(7).execute()
@@ -19,17 +19,17 @@ Example usage:
     health_report = analyze().health_report()
 
     # Get comprehensive insights
-    report = insights().with_query(lambda q: q.for_sut("service")).summary_report()
+    report = get_insights().with_query(lambda q: q.for_sut("service")).summary_report()
 """
 
 import importlib.metadata
 from typing import Optional
 
-from pytest_insight.analysis import Analysis, analysis, analysis_with_profile
-from pytest_insight.comparison import Comparison, comparison, comparison_with_profiles
-from pytest_insight.insights import Insights, insights, insights_with_profile
-from pytest_insight.query import Query
-from pytest_insight.storage import (
+from pytest_insight.core.analysis import Analysis, analysis, analysis_with_profile
+from pytest_insight.core.comparison import Comparison, comparison, comparison_with_profiles
+from pytest_insight.core.insights import Insights, insights, insights_with_profile
+from pytest_insight.core.query import Query
+from pytest_insight.core.storage import (
     create_profile,
     get_active_profile,
     get_profile_manager,

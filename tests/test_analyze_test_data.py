@@ -3,9 +3,9 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pytest_insight.comparison import ComparisonResult
-from pytest_insight.models import TestOutcome, TestResult, TestSession
-from pytest_insight.scripts.analyze_test_data import analyze_test_data
+from pytest_insight.core.comparison import ComparisonResult
+from pytest_insight.core.models import TestOutcome, TestResult, TestSession
+from pytest_insight.utils.analyze_test_data import analyze_test_data
 from rich.console import Console
 
 
@@ -135,8 +135,8 @@ def mock_api():
 class TestAnalyzeTestData:
     """Test suite for analyze_test_data.py script."""
 
-    @patch("pytest_insight.scripts.analyze_test_data.InsightAPI")
-    @patch("pytest_insight.scripts.analyze_test_data.Console")
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_profile_comparison(self, mock_console_class, mock_insight_api, mock_args, mock_api):
         """Test analyze_test_data function with profile comparison."""
         # Setup
@@ -176,8 +176,8 @@ class TestAnalyzeTestData:
         panel_calls = [call for call in mock_console.print.call_args_list if "Panel" in str(call)]
         assert any("Comparison Analysis" in str(call) for call in panel_calls)
 
-    @patch("pytest_insight.scripts.analyze_test_data.InsightAPI")
-    @patch("pytest_insight.scripts.analyze_test_data.Console")
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_profile_comparison_no_current_profile(
         self, mock_console_class, mock_insight_api, mock_args, mock_api
     ):
@@ -206,8 +206,8 @@ class TestAnalyzeTestData:
         # 2. Verify InsightAPI was created with the comparison profile
         mock_insight_api.assert_any_call(profile="other-profile")
 
-    @patch("pytest_insight.scripts.analyze_test_data.InsightAPI")
-    @patch("pytest_insight.scripts.analyze_test_data.Console")
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_profile_comparison_no_sessions(
         self, mock_console_class, mock_insight_api, mock_args, mock_api
     ):
@@ -250,8 +250,8 @@ class TestAnalyzeTestData:
         ]
         assert len(warning_calls) > 0
 
-    @patch("pytest_insight.scripts.analyze_test_data.InsightAPI")
-    @patch("pytest_insight.scripts.analyze_test_data.Console")
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_profile_comparison_error(
         self, mock_console_class, mock_insight_api, mock_args, mock_api
     ):
@@ -284,8 +284,8 @@ class TestAnalyzeTestData:
         ]
         assert len(error_calls) > 0
 
-    @patch("pytest_insight.scripts.analyze_test_data.InsightAPI")
-    @patch("pytest_insight.scripts.analyze_test_data.Console")
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_unknown_comparison_type(self, mock_console_class, mock_insight_api, mock_args, mock_api):
         """Test analyze_test_data function with an unknown comparison type."""
         # Setup

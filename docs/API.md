@@ -132,3 +132,46 @@ performance_report = analysis.performance_report()
 
 # Find flaky tests
 flaky_tests = analysis.find_flaky_tests()
+```
+
+## Web API
+
+pytest-insight provides two web API interfaces that expose different aspects of the Core API:
+
+### 1. High-Level API
+
+The High-Level API provides a structured REST interface with predefined endpoints for common operations. This API is ideal for integration with dashboards, CI/CD pipelines, and other systems that need a stable interface.
+
+### 2. Introspected API
+
+The Introspected API dynamically exposes the fluent interface methods of the Core API as REST endpoints. This provides maximum flexibility for building custom queries and analyses through HTTP requests while maintaining the same "stackability" of filters that's available in the Python code.
+
+The Introspected API automatically categorizes endpoints based on method names:
+- **Query Operations** - Methods for querying and filtering test data (find, get, list)
+- **Filtering Operations** - Methods for filtering test results (filter, with)
+- **Comparison Operations** - Methods for comparing test results (compare, diff, between)
+- **Analysis Operations** - Methods for analyzing test patterns (analyze, report, insight)
+- **Configuration** - Methods for configuring the API (config, profile, setting)
+
+### Running the API Servers
+
+Both APIs can be run simultaneously using the combined server launcher:
+
+```bash
+# Start both API servers (High-Level on port 8000, Introspected on port 8001)
+insight-api
+
+# Run only the High-Level API
+insight-api --high-level-only
+
+# Run only the Introspected API
+insight-api --introspected-only
+
+# Customize ports
+insight-api --high-level-port 9000 --introspected-port 9001
+
+# Specify a custom database path
+insight-api --db-path /path/to/sessions.json
+```
+
+Both APIs provide Swagger documentation at `/docs` for exploring available endpoints.

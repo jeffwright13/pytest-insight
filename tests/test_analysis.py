@@ -1,9 +1,9 @@
 from datetime import timedelta
 
 import pytest
-from pytest_insight.analysis import Analysis
-from pytest_insight.models import TestOutcome, TestResult, TestSession
-from pytest_insight.query import Query
+from pytest_insight.core.analysis import Analysis
+from pytest_insight.core.models import TestOutcome, TestResult, TestSession
+from pytest_insight.core.query import Query
 
 
 @pytest.fixture
@@ -251,9 +251,11 @@ class Test_Analysis:
 
     def test_analysis_with_profiles(self, analysis_sessions, mocker):
         """Test analysis initialization with profiles."""
-        # Mock the get_storage_instance function to verify profile parameter is passed
-        mock_get_storage = mocker.patch("pytest_insight.analysis.get_storage_instance")
+        # Mock the storage to control its behavior
         mock_storage = mocker.MagicMock()
+
+        # Mock the get_storage_instance function to return our mock storage directly
+        mock_get_storage = mocker.patch("pytest_insight.core.analysis.get_storage_instance")
         mock_get_storage.return_value = mock_storage
 
         # Initialize analysis with profile
@@ -267,13 +269,13 @@ class Test_Analysis:
         assert analysis._profile_name == "test_profile"
 
     def test_with_profile_method(self, analysis_sessions, mocker):
-        """Test with_profile method."""
-        # Mock the get_storage_instance function
-        mock_get_storage = mocker.patch("pytest_insight.analysis.get_storage_instance")
-        mock_storage1 = mocker.MagicMock()
-        mock_storage2 = mocker.MagicMock()
-        # Return different mock storage for each call
-        mock_get_storage.side_effect = [mock_storage1, mock_storage2]
+        """Test the with_profile method."""
+        # Mock the storage to control its behavior
+        mock_storage = mocker.MagicMock()
+
+        # Mock the get_storage_instance function to return our mock storage directly
+        mock_get_storage = mocker.patch("pytest_insight.core.analysis.get_storage_instance")
+        mock_get_storage.return_value = mock_storage
 
         # Create analysis and call with_profile
         analysis = Analysis()
@@ -285,21 +287,23 @@ class Test_Analysis:
         mock_get_storage.assert_any_call(profile_name="test_profile")
 
         # Verify storage was correctly set after with_profile
-        assert analysis.storage == mock_storage2
+        assert analysis.storage == mock_storage
         assert analysis._profile_name == "test_profile"
 
         # Verify method returns self for chaining
         assert result is analysis
 
     def test_with_query_with_profile(self, analysis_sessions, mocker):
-        """Test with_query method with profile."""
-        # Mock the storage system
-        mock_get_storage = mocker.patch("pytest_insight.analysis.get_storage_instance")
+        """Test combining with_query and with_profile methods."""
+        # Mock the storage to control its behavior
         mock_storage = mocker.MagicMock()
+
+        # Mock the get_storage_instance function to return our mock storage directly
+        mock_get_storage = mocker.patch("pytest_insight.core.analysis.get_storage_instance")
         mock_get_storage.return_value = mock_storage
 
-        # Mock the Query class to verify profile parameter is passed
-        mock_query = mocker.patch("pytest_insight.analysis.Query")
+        # Mock the Query class to verify profile parameters are passed
+        mock_query = mocker.patch("pytest_insight.core.analysis.Query")
         mock_query_instance = mocker.MagicMock()
         mock_query.return_value = mock_query_instance
 
@@ -318,10 +322,10 @@ class Test_Analysis:
     def test_convenience_functions(self, mocker):
         """Test module-level convenience functions."""
         # Mock the Analysis class
-        mock_analysis = mocker.patch("pytest_insight.analysis.Analysis")
+        mock_analysis = mocker.patch("pytest_insight.core.analysis.Analysis")
 
         # Import the convenience functions
-        from pytest_insight.analysis import analysis, analysis_with_profile
+        from pytest_insight.core.analysis import analysis, analysis_with_profile
 
         # Test analysis function
         analysis(profile_name="test_profile")

@@ -16,7 +16,7 @@ SFE provides a straightforward way to:
 To export test sessions, use the `export_sessions` method of the JSONStorage class:
 
 ```python
-from pytest_insight.storage import get_storage_instance
+from pytest_insight.core.storage import get_storage_instance
 
 # Get the storage instance
 storage = get_storage_instance()
@@ -43,7 +43,7 @@ print(f"Exported {count} sessions for my-service from the last 7 days")
 To import test sessions, use the `import_sessions` method of the JSONStorage class:
 
 ```python
-from pytest_insight.storage import get_storage_instance
+from pytest_insight.core.storage import get_storage_instance
 
 # Get the storage instance
 storage = get_storage_instance()
@@ -73,8 +73,8 @@ keep_both: Keep both versions, appending a suffix to imported session IDs
 You can selectively clear sessions using the clear_sessions method:
 
 ```python
-from pytest_insight.storage import get_storage_instance
-from pytest_insight.query import Query
+from pytest_insight.core.storage import get_storage_instance
+from pytest_insight.core.query import Query
 
 # Get the storage instance
 storage = get_storage_instance()
@@ -200,8 +200,8 @@ The SFE functionality integrates seamlessly with pytest-insight's query system. 
 
 1. Use queries to filter sessions for export:
    ```python
-   from pytest_insight.storage import get_storage_instance
-   from pytest_insight.query import Query
+   from pytest_insight.core.storage import get_storage_instance
+   from pytest_insight.core.query import Query
 
    storage = get_storage_instance()
    query = Query(storage)

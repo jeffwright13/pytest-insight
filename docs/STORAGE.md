@@ -66,7 +66,7 @@ Each profile contains:
 ### Profile Management
 
 ```python
-from pytest_insight.storage import create_profile, switch_profile, list_profiles, get_active_profile
+from pytest_insight.core.storage import create_profile, switch_profile, list_profiles, get_active_profile
 
 # Create profiles for different purposes
 create_profile("production", "json", "/path/to/production/data.json")
@@ -86,7 +86,7 @@ active_profile = get_active_profile()
 ### Using Profiles with Storage
 
 ```python
-from pytest_insight.storage import get_storage_instance
+from pytest_insight.core.storage import get_storage_instance
 
 # Get storage using the active profile
 storage = get_storage_instance()
@@ -188,7 +188,7 @@ storage.import_sessions("/tmp/export.json")
 ### Storage Instance
 
 ```python
-from pytest_insight.storage import get_storage_instance
+from pytest_insight.core.storage import get_storage_instance
 
 # Get storage with defaults
 storage = get_storage_instance()
@@ -228,7 +228,7 @@ storage.clear_sessions(sessions_to_clear=[session1, session2])
 ### Profile Management
 
 ```python
-from pytest_insight.storage import (
+from pytest_insight.core.storage import (
     create_profile,
     switch_profile,
     list_profiles,

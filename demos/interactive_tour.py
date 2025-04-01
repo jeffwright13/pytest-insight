@@ -11,8 +11,8 @@ from typing import Optional
 
 from bullet import Bullet, YesNo, colors
 from pytest_insight import InsightAPI, get_storage_instance
-from pytest_insight.models import TestSession
-from pytest_insight.query import InvalidQueryParameterError
+from pytest_insight.core.models import TestSession
+from pytest_insight.core.query import InvalidQueryParameterError
 
 from tour.steps.analyze_steps import AnalyzeTourSteps
 from tour.steps.compare_steps import CompareTourSteps

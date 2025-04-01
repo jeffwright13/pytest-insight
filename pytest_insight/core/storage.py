@@ -4,8 +4,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from pytest_insight.constants import DEFAULT_STORAGE_PATH
-from pytest_insight.models import TestSession
+from pytest_insight.core.models import TestSession
+from pytest_insight.utils.constants import DEFAULT_STORAGE_PATH
 
 
 class StorageProfile:

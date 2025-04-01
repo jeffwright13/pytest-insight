@@ -1,7 +1,7 @@
 import pytest
-from pytest_insight.models import TestOutcome, TestResult, TestSession
-from pytest_insight.query import InvalidQueryParameterError, Query
-from pytest_insight.storage import InMemoryStorage
+from pytest_insight.core.models import TestOutcome, TestResult, TestSession
+from pytest_insight.core.query import InvalidQueryParameterError, Query
+from pytest_insight.core.storage import InMemoryStorage
 
 
 def test_session_with_tags(get_test_time):
@@ -66,8 +66,8 @@ def test_session_with_tags(get_test_time):
     )
 
     # Create a Query instance with InMemoryStorage
-    from pytest_insight.query import Query
-    from pytest_insight.storage import InMemoryStorage
+    from pytest_insight.core.query import Query
+    from pytest_insight.core.storage import InMemoryStorage
 
     # Initialize InMemoryStorage with our test sessions
     storage = InMemoryStorage(sessions=[prod_session, staging_session, dev_session])
@@ -188,8 +188,8 @@ def test_time_based_filtering(get_test_time):
     )
 
     # Create a Query instance with InMemoryStorage
-    from pytest_insight.query import Query
-    from pytest_insight.storage import InMemoryStorage
+    from pytest_insight.core.query import Query
+    from pytest_insight.core.storage import InMemoryStorage
 
     # Initialize InMemoryStorage with our test sessions
     storage = InMemoryStorage(sessions=[session1, session2, session3, session4])
@@ -290,8 +290,8 @@ def test_pattern_based_filtering(get_test_time):
     )
 
     # Create a Query instance with InMemoryStorage
-    from pytest_insight.query import Query
-    from pytest_insight.storage import InMemoryStorage
+    from pytest_insight.core.query import Query
+    from pytest_insight.core.storage import InMemoryStorage
 
     # Initialize InMemoryStorage with our test sessions
     storage = InMemoryStorage(sessions=[api_session, ui_session])
@@ -445,8 +445,8 @@ def test_duration_based_filtering(get_test_time):
     )
 
     # Create a Query instance with InMemoryStorage
-    from pytest_insight.query import Query
-    from pytest_insight.storage import InMemoryStorage
+    from pytest_insight.core.query import Query
+    from pytest_insight.core.storage import InMemoryStorage
 
     # Initialize InMemoryStorage with our test sessions
     storage = InMemoryStorage(sessions=[session1, session2])

@@ -25,14 +25,14 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from pytest_insight.analysis import Analysis
-from pytest_insight.comparison import Comparison, ComparisonError
-from pytest_insight.insights import TrendInsights
-from pytest_insight.models import TestOutcome
-from pytest_insight.query import Query
+from pytest_insight.core.analysis import Analysis
+from pytest_insight.core.comparison import Comparison, ComparisonError
+from pytest_insight.core.insights import TrendInsights
+from pytest_insight.core.models import TestOutcome
+from pytest_insight.core.query import Query
 
 # Import get_profile_manager at the module level so it can be properly patched in tests
-from pytest_insight.storage import (
+from pytest_insight.core.storage import (
     BaseStorage,
     get_profile_manager,
     get_storage_instance,
@@ -718,7 +718,7 @@ async def get_health_report(
         raise HTTPException(status_code=404, detail="No sessions found matching the criteria")
 
     # Initialize Analysis with the sessions
-    from pytest_insight.analysis import Analysis
+    from pytest_insight.core.analysis import Analysis
 
     analysis_with_sessions = Analysis(storage=api.storage, sessions=sessions.sessions)
     health_report = analysis_with_sessions.health_report()
@@ -766,7 +766,7 @@ async def get_stability_report(
         raise HTTPException(status_code=404, detail="No sessions found matching the criteria")
 
     # Create a new Analysis instance with the sessions
-    from pytest_insight.analysis import Analysis
+    from pytest_insight.core.analysis import Analysis
 
     analysis = Analysis(storage=api.storage, sessions=sessions.sessions)
 
@@ -1633,7 +1633,7 @@ def get_insights(
     """
     try:
         # Use the insights convenience function with profile if specified
-        from pytest_insight.insights import insights, insights_with_profile
+        from pytest_insight.core.insights import insights, insights_with_profile
 
         if profile_name:
             insight = insights_with_profile(profile_name)
@@ -1691,7 +1691,7 @@ def get_available_profiles():
         A list of all profile names in the system.
     """
     try:
-        from pytest_insight.storage import get_profile_manager
+        from pytest_insight.core.storage import get_profile_manager
 
         profile_manager = get_profile_manager()
         profiles = list(profile_manager.list_profiles().keys())
@@ -1727,7 +1727,7 @@ def get_insights_with_profile(
     """
     try:
         # Use the insights_with_profile convenience function
-        from pytest_insight.insights import insights_with_profile
+        from pytest_insight.core.insights import insights_with_profile
 
         insight = insights_with_profile(profile_name)
 
@@ -1788,7 +1788,7 @@ def create_profile(
         The created profile information
     """
     try:
-        from pytest_insight.storage import get_profile_manager
+        from pytest_insight.core.storage import get_profile_manager
 
         profile_manager = get_profile_manager()
         profile = profile_manager.create_profile(name, storage_type=storage_type, file_path=file_path)
@@ -1818,7 +1818,7 @@ def delete_profile(
         Confirmation of deletion
     """
     try:
-        from pytest_insight.storage import get_profile_manager
+        from pytest_insight.core.storage import get_profile_manager
 
         profile_manager = get_profile_manager()
         success = profile_manager.delete_profile(profile_name)
@@ -2069,7 +2069,7 @@ async def set_global_settings(settings: GlobalSettings):
     try:
         # Validate profile if provided
         if settings.profile:
-            from pytest_insight.storage import get_profile_manager
+            from pytest_insight.core.storage import get_profile_manager
 
             profile_manager = get_profile_manager()
             profiles = profile_manager.list_profiles()
@@ -2625,7 +2625,7 @@ async def generate_test_data(options: GeneratorOptions):
             cmd.extend(["--output", options.output])
         elif options.profile:
             # If profile is specified but no output, use the profile's path
-            from pytest_insight.storage import get_profile_manager
+            from pytest_insight.core.storage import get_profile_manager
 
             profile_manager = get_profile_manager()
             profile = profile_manager.get_profile(options.profile)
@@ -2800,8 +2800,8 @@ async def debug_available_suts():
         import json
         from pathlib import Path
 
-        from pytest_insight.constants import DEFAULT_STORAGE_PATH
-        from pytest_insight.storage import get_profile_manager
+        from pytest_insight.utils.constants import DEFAULT_STORAGE_PATH
+        from pytest_insight.core.storage import get_profile_manager
 
         # Get profile information
         profile_manager = get_profile_manager()

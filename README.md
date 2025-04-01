@@ -48,7 +48,7 @@ pip install pytest-insight[all]
 ## Quick Start
 
 ```python
-from pytest_insight.query import Query
+from pytest_insight.core.query import Query
 
 # Basic test health analysis
 query = Query()
@@ -95,6 +95,31 @@ insight-metrics --host 0.0.0.0 --port 8000 --db-path /path/to/db.json
 ```
 
 The metrics server provides a REST API with Swagger documentation at `/docs` and can be integrated with Grafana for visualization.
+
+### API Servers
+
+pytest-insight provides two API interfaces:
+
+1. **High-Level API** - A structured REST API with predefined endpoints
+2. **Introspected API** - A dynamic API that directly exposes the fluent interface methods
+
+You can run both APIs simultaneously with a single command:
+
+```bash
+# Start both API servers (High-Level on port 8000, Introspected on port 8001)
+insight-api
+
+# Run only the High-Level API
+insight-api --high-level-only
+
+# Run only the Introspected API
+insight-api --introspected-only
+
+# Customize ports
+insight-api --high-level-port 9000 --introspected-port 9001
+```
+
+Both APIs provide Swagger documentation at `/docs` for exploring available endpoints.
 
 ## Documentation
 

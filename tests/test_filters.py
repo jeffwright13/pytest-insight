@@ -4,9 +4,9 @@ import datetime as dt_module
 from datetime import timedelta
 
 import pytest
-from pytest_insight.models import TestOutcome, TestResult, TestSession
-from pytest_insight.query import Query
-from pytest_insight.storage import InMemoryStorage
+from pytest_insight.core.models import TestOutcome, TestResult, TestSession
+from pytest_insight.core.query import Query
+from pytest_insight.core.storage import InMemoryStorage
 
 
 @pytest.fixture

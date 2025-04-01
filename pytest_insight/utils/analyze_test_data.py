@@ -20,11 +20,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from pytest_insight.analysis import Analysis
-from pytest_insight.comparison import Comparison
-from pytest_insight.core_api import InsightAPI
-from pytest_insight.models import TestSession
-from pytest_insight.storage import ProfileManager, get_storage_instance
+from pytest_insight.core.analysis import Analysis
+from pytest_insight.core.comparison import Comparison
+from pytest_insight.core.models import TestSession
+from pytest_insight.core.storage import ProfileManager, get_storage_instance
+from pytest_insight.core.core_api import InsightAPI
 
 
 def analyze_test_data(
@@ -143,7 +143,7 @@ def analyze_test_data(
 
             # Apply days filter if specified
             if days:
-                from pytest_insight.utils import NormalizedDatetime
+                from pytest_insight.utils.utils import NormalizedDatetime
 
                 cutoff_date = datetime.now() - timedelta(days=days)
                 # Use NormalizedDatetime for comparison to handle timezone differences
@@ -528,11 +528,8 @@ def analyze_test_data(
 
                         # Create API instances for both current and comparison profiles
                         # The mock tests are looking for these exact calls
-                        InsightAPI(profile=profile)  # Will be None if no profile specified
-                        mock_compare_api = InsightAPI(profile=compare_value)
-
-                        # Use the compare_api for the actual comparison
-                        compare_api = mock_compare_api
+                        current_api = InsightAPI(profile=profile)  # Will be None if no profile specified
+                        compare_api = InsightAPI(profile=compare_value)
 
                         # Apply the same filters to the comparison profile
                         compare_query = compare_api.query()
@@ -540,10 +537,11 @@ def analyze_test_data(
                             compare_query = compare_query.filter_by_sut(sut_filter)
                         if test_pattern:
                             compare_query = compare_query.filter_by_test_name(test_pattern)
-                        if days:
-                            # Use in_last_days instead of filter_by_date
-                            compare_query = compare_query.in_last_days(days)
 
+                        # Use the date_range method instead of filter_by_date
+                        compare_query = compare_query.date_range(
+                            start=datetime.now() - timedelta(days=days), end=datetime.now()
+                        )
                         comparison_sessions = compare_query.execute()
 
                         if comparison_sessions:

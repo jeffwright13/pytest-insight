@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
-from pytest_insight.models import TestOutcome, TestSession
-from pytest_insight.query import Query, QueryResult
+from pytest_insight.core.models import TestOutcome, TestSession
+from pytest_insight.core.query import Query, QueryResult
 
 
 class ComparisonError(Exception):

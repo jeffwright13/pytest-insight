@@ -20,13 +20,13 @@ from pydantic import BaseModel, Field, create_model
 # Get version directly from package metadata to avoid circular imports
 __version__ = importlib.metadata.version("pytest-insight")
 
-from pytest_insight.analysis import Analysis
-from pytest_insight.comparison import Comparison
+from pytest_insight.core.analysis import Analysis
+from pytest_insight.core.comparison import Comparison
 
 # Import API classes for introspection
-from pytest_insight.core_api import InsightAPI
-from pytest_insight.query import Query as PyTestQuery
-from pytest_insight.storage import get_storage_instance
+from pytest_insight.core.core_api import InsightAPI
+from pytest_insight.core.query import Query as PyTestQuery
+from pytest_insight.core.storage import get_storage_instance
 
 # Note: This file will be moved to pytest_insight/web_api/instrospect.py
 # The imports above will remain the same, but this module will be accessed differently

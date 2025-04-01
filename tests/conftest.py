@@ -5,8 +5,8 @@ from importlib.metadata import version
 from pathlib import Path
 
 import pytest
-from pytest_insight.models import TestOutcome, TestResult, TestSession
-from pytest_insight.storage import JSONStorage
+from pytest_insight.core.models import TestOutcome, TestResult, TestSession
+from pytest_insight.core.storage import JSONStorage
 from pytest_insight.test_data import (
     NodeId,
     TextGenerator,

@@ -39,7 +39,7 @@ An important aspect of the Query API is that both levels of filtering return com
 ### Example Workflow
 
 ```python
-from pytest_insight.query import Query
+from pytest_insight.core.query import Query
 
 # Create a query from all available sessions
 query = Query.from_storage()

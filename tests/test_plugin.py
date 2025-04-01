@@ -3,9 +3,9 @@
 from datetime import timedelta
 
 import pytest
-from pytest_insight.models import TestOutcome, TestSession
-from pytest_insight.query import InvalidQueryParameterError, Query
-from pytest_insight.storage import InMemoryStorage
+from pytest_insight.core.models import TestOutcome, TestSession
+from pytest_insight.core.query import InvalidQueryParameterError, Query
+from pytest_insight.core.storage import InMemoryStorage
 
 
 class Test_SessionCapture:

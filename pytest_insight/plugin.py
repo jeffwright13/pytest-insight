@@ -9,10 +9,10 @@ from _pytest.reports import TestReport
 from _pytest.terminal import TerminalReporter, WarningReport
 from pytest import ExitCode
 
-from pytest_insight.constants import DEFAULT_STORAGE_TYPE, StorageType
-from pytest_insight.insights import Insights
-from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
-from pytest_insight.storage import get_storage_instance
+from pytest_insight.core.insights import Insights
+from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+from pytest_insight.core.storage import get_storage_instance
+from pytest_insight.utils.constants import DEFAULT_STORAGE_TYPE, StorageType
 
 _INSIGHT_INITIALIZED: bool = False
 _INSIGHT_ENABLED: bool = False
@@ -189,7 +189,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         terminalreporter.write_line(f"[pytest-insight] Error details: {str(e)}", red=True)
 
     # Import Analysis class here to avoid circular imports
-    from pytest_insight.analysis import Analysis
+    from pytest_insight.core.analysis import Analysis
 
     # Create an Analysis instance with the current session
     analysis = Analysis(storage=storage, sessions=[session])

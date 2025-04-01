@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 
 import typer
 
-from pytest_insight.models import RerunTestGroup, TestOutcome, TestResult, TestSession
-from pytest_insight.storage import get_profile_manager, get_storage_instance
+from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+from pytest_insight.core.storage import get_profile_manager, get_storage_instance
 
 
 class TextGenerator:

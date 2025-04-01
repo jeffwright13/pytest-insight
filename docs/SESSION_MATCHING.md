@@ -74,7 +74,7 @@ This feature would integrate well with our new storage profiles system:
 
 ```python
 # Compare sessions across different profiles
-from pytest_insight.comparison import Comparison
+from pytest_insight.core.comparison import Comparison
 
 comparison = Comparison()
 result = comparison.between_profiles("production", "development")
@@ -259,7 +259,7 @@ class TestIdentifier:
 The session matching functionality would be exposed through a clean, fluent API:
 
 ```python
-from pytest_insight.comparison import Comparison, matchers
+from pytest_insight.core.comparison import Comparison, matchers
 
 # Basic usage with default matcher
 comparison = Comparison()

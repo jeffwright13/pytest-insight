@@ -14,9 +14,9 @@ allowing for intuitive method chaining while preserving session context.
 from collections import Counter, defaultdict
 from typing import Any, Dict, Optional
 
-from pytest_insight.analysis import Analysis
-from pytest_insight.models import TestOutcome
-from pytest_insight.storage import (
+from pytest_insight.core.analysis import Analysis
+from pytest_insight.core.models import TestOutcome
+from pytest_insight.core.storage import (
     get_storage_instance,
 )
 

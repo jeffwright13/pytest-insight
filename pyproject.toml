@@ -67,10 +67,9 @@ all = [
 insight = "pytest_insight.plugin"
 
 [project.scripts]
-insights = "pytest_insight.scripts.analyze_test_data:main"
-insight-gen = "pytest_insight.scripts.db_generator:app"
-insight-api = "pytest_insight.server_launcher:main"
-insight-api-introspect = "pytest_insight.server_launcher_introspect:main"
+insights = "pytest_insight.utils.analyze_test_data:main"
+insight-gen = "pytest_insight.utils.db_generator:app"
+insight-api = "pytest_insight.utils.server_launcher:main"
 
 [build-system]
 requires = ["hatchling"]
