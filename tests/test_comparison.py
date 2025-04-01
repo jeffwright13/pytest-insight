@@ -1,3 +1,4 @@
+import tempfile
 from datetime import timedelta
 
 import pytest
@@ -312,11 +313,25 @@ class Test_Comparison:
         # Verify method returns self for chaining
         assert result is comparison
 
-    def test_execute_with_profiles(self, base_session, target_session, mocker):
+    def test_execute_with_profiles(self, base_session, target_session, mocker, tmp_path):
         """Test execute method with profiles."""
-        # Mock the ProfileManager.get_profile method to avoid profile not found error
+
+        # Create a temporary file path (file doesn't need to exist if only the path is needed)
+        temp_file_path = tmp_path / "dummy.json"
+
+        # Mock the ProfileManager.get_profile method
         mock_profile = mocker.patch("pytest_insight.storage.ProfileManager.get_profile")
-        mock_profile.return_value = mocker.MagicMock(storage_type="json", file_path="test_path")
+        mock_profile.return_value = mocker.MagicMock(
+            storage_type="json",
+            file_path=str(temp_file_path)
+        )
+
+        # Mock the ProfileManager.get_profile method
+        mock_profile = mocker.patch("pytest_insight.storage.ProfileManager.get_profile")
+        mock_profile.return_value = mocker.MagicMock(
+            storage_type="json",
+            file_path=str(temp_file_path)
+        )
 
         # Mock the Query.execute method to return expected results
         mock_execute = mocker.patch.object(Query, "execute")

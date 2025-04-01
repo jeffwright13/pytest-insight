@@ -191,4 +191,11 @@ async def search():
 5. Use present tense for ongoing measurements
 6. Use adjectives for patterns
 7. Use underscores for compound metrics
-```
+
+### Method Naming Conventions
+Expand your style guide to formalize method naming patterns:
+
+- Query methods: `for_*, with_*, in_*, filter_by_*`
+- Comparison methods: `between_*, compare_*, diff_*`
+- Analysis methods: `analyze_*, identify_*, calculate_*`
+- Insight methods: `summarize_*, report_*, visualize_*`
