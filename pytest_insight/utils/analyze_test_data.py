@@ -740,6 +740,77 @@ def analyze_test_data(
             health_score = sum(health_factors.values())
             health_score = min(100, max(0, health_score))  # Clamp between 0-100
 
+            # Calculate reliability index
+            environment_consistency = 0.8  # Default value if we can't calculate from data
+            test_consistency = 0.8  # Default value if we can't calculate from data
+
+            # Check if we have environment information in session tags
+            environments = {}
+            for session in filtered_sessions:
+                env = session.session_tags.get("environment", "unknown")
+                if env not in environments:
+                    environments[env] = {"pass_rates": []}
+
+                # Calculate pass rate for this session
+                session_results = session.test_results
+                if session_results:
+                    session_pass_rate = sum(1 for t in session_results if t.outcome == "passed") / len(session_results)
+                    environments[env]["pass_rates"].append(session_pass_rate)
+
+            # Calculate variance in pass rates across environments
+            if len(environments) > 1:
+                env_pass_rates = []
+                for env, data in environments.items():
+                    if data["pass_rates"]:
+                        avg_env_pass_rate = sum(data["pass_rates"]) / len(data["pass_rates"])
+                        env_pass_rates.append(avg_env_pass_rate)
+
+                if env_pass_rates:
+                    mean_env_pass_rate = sum(env_pass_rates) / len(env_pass_rates)
+                    env_variance = sum((r - mean_env_pass_rate) ** 2 for r in env_pass_rates) / len(env_pass_rates)
+                    # Lower variance = higher consistency
+                    environment_consistency = 1 / (1 + 10 * env_variance)  # Scale factor of 10 for better distribution
+
+            # Calculate test result consistency (how consistently individual tests pass/fail)
+            # Group test results by nodeid to analyze consistency
+            test_results_by_nodeid = {}
+            for session in filtered_sessions:
+                for test_result in session.test_results:
+                    nodeid = getattr(test_result, "nodeid", None)
+                    if not nodeid:  # Skip if no nodeid attribute
+                        continue
+                    if nodeid not in test_results_by_nodeid:
+                        test_results_by_nodeid[nodeid] = []
+                    test_results_by_nodeid[nodeid].append(test_result)
+
+            # Calculate consistency scores
+            if test_results_by_nodeid:
+                consistency_scores = []
+                for nodeid, results in test_results_by_nodeid.items():
+                    if results:  # Ensure we have outcomes to analyze
+                        # Calculate the proportion of the dominant outcome
+                        outcomes = [getattr(r, "outcome", "unknown") for r in results]
+                        outcome_counts = {}
+                        for outcome in outcomes:
+                            outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
+
+                        if outcome_counts:  # Make sure we have outcomes
+                            dominant_outcome_count = max(outcome_counts.values())
+                            consistency = dominant_outcome_count / len(outcomes)
+                            consistency_scores.append(consistency)
+
+                if consistency_scores:
+                    test_consistency = sum(consistency_scores) / len(consistency_scores)
+
+            # Combine factors for reliability index (0-100)
+            reliability_index = (
+                pass_rate * 0.4  # 40% weight to pass rate
+                + (1 - len(flaky_tests) / max(1, total_tests)) * 0.3  # 30% weight to lack of flakiness
+                + environment_consistency * 0.15  # 15% weight to environment consistency
+                + test_consistency * 0.15  # 15% weight to test result consistency
+            ) * 100
+            reliability_index = min(100, max(0, reliability_index))
+
             if not json_mode:
                 health_color = "green" if health_score >= 80 else "yellow" if health_score >= 60 else "red"
                 console.print(
@@ -752,16 +823,62 @@ def analyze_test_data(
                 health_table.add_column("Score", style="yellow")
                 health_table.add_column("Weight", style="blue")
 
-                for component, score in health_factors.items():
+                # Raw scores (before weight multiplication)
+                raw_health_factors = {
+                    "pass_rate": pass_rate * 100,
+                    "flakiness": (1 - len(flaky_tests) / max(1, total_tests)) * 100,
+                    "duration_stability": min(
+                        100, health_factors["duration_stability"] * 100 / 15
+                    ),  # Convert back to percentage, max 100%
+                    "failure_pattern": min(
+                        100, health_factors["failure_pattern"] * 100 / 15
+                    ),  # Convert back to percentage, max 100%
+                }
+
+                for component, score in raw_health_factors.items():
                     weight = {
                         "pass_rate": "50%",
                         "flakiness": "20%",
                         "duration_stability": "15%",
                         "failure_pattern": "15%",
                     }
-                    health_table.add_row(component.replace("_", " ").title(), f"{score:.1f}", weight[component])
+                    health_table.add_row(component.replace("_", " ").title(), f"{score:.1f}%", weight[component])
 
                 console.print(health_table)
+
+            # 2. Reliability Index
+            if not json_mode:
+                reliability_color = (
+                    "green" if reliability_index >= 80 else "yellow" if reliability_index >= 60 else "red"
+                )
+                console.print(
+                    f"[bold]Reliability Index:[/bold] [{reliability_color}]{reliability_index:.1f}/100[/{reliability_color}]"
+                )
+
+                # Show reliability factors
+                reliability_table = Table(title="Reliability Factors")
+                reliability_table.add_column("Factor", style="cyan")
+                reliability_table.add_column("Score", style="yellow")
+                reliability_table.add_column("Weight", style="blue")
+
+                # Raw scores (before weight multiplication)
+                raw_reliability_factors = {
+                    "Pass Rate": pass_rate * 100,
+                    "Flakiness Resistance": (1 - len(flaky_tests) / max(1, total_tests)) * 100,
+                    "Environment Consistency": environment_consistency * 100,
+                    "Test Result Consistency": test_consistency * 100,
+                }
+
+                for factor, score in raw_reliability_factors.items():
+                    weight = {
+                        "Pass Rate": "40%",
+                        "Flakiness Resistance": "30%",
+                        "Environment Consistency": "15%",
+                        "Test Result Consistency": "15%",
+                    }
+                    reliability_table.add_row(factor, f"{score:.1f}%", weight[factor])
+
+                console.print(reliability_table)
 
             # Output format handling
             if output_format == "json":
@@ -775,6 +892,15 @@ def analyze_test_data(
                     "slowest_tests": [{"name": name, "duration": dur} for name, dur in slowest_tests],
                     "most_failing": [{"name": name, "failures": count} for name, count in most_failing],
                     "flaky_tests_list": [name for name in flaky_tests],
+                    "health_score": health_score,
+                    "health_factors": health_factors,
+                    "reliability_index": reliability_index,
+                    "reliability_factors": {
+                        "pass_rate": pass_rate * 0.4 * 100,
+                        "flakiness_resistance": (1 - len(flaky_tests) / max(1, total_tests)) * 0.3 * 100,
+                        "environment_consistency": environment_consistency * 0.15 * 100,
+                        "test_result_consistency": test_consistency * 0.15 * 100,
+                    },
                 }
 
                 # Print JSON output only (no Rich console output)
