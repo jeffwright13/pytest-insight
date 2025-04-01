@@ -22,9 +22,9 @@ from rich.table import Table
 
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.comparison import Comparison
+from pytest_insight.core.core_api import InsightAPI
 from pytest_insight.core.models import TestSession
 from pytest_insight.core.storage import ProfileManager, get_storage_instance
-from pytest_insight.core.core_api import InsightAPI
 
 
 def analyze_test_data(
@@ -528,7 +528,7 @@ def analyze_test_data(
 
                         # Create API instances for both current and comparison profiles
                         # The mock tests are looking for these exact calls
-                        current_api = InsightAPI(profile=profile)  # Will be None if no profile specified
+                        InsightAPI(profile=profile)  # Will be None if no profile specified
                         compare_api = InsightAPI(profile=compare_value)
 
                         # Apply the same filters to the comparison profile
@@ -707,6 +707,61 @@ def analyze_test_data(
                     trend_table.add_row(date.strftime("%Y-%m-%d"), f"{pass_rates[i]:.2%}", f"{durations[i]:.3f}")
 
                 console.print(trend_table)
+
+            # Additional high-level metrics
+            if not json_mode:
+                console.print(Panel("[bold cyan]Advanced Metrics & Insights[/bold cyan]"))
+
+            # 1. Test Health Score - composite score from 0-100
+            health_factors = {
+                "pass_rate": pass_rate * 50,  # 50% weight to pass rate
+                "flakiness": (1 - len(flaky_tests) / max(1, total_tests)) * 20,  # 20% weight to lack of flakiness
+                "duration_stability": 15,  # Default value, will be calculated below
+                "failure_pattern": 15,  # Default value, will be calculated below
+            }
+
+            # Calculate duration stability component (lower variance = higher score)
+            if slowest_tests:
+                durations = [duration for _, duration in slowest_tests]
+                if durations:
+                    mean_duration = sum(durations) / len(durations)
+                    variance = sum((d - mean_duration) ** 2 for d in durations) / len(durations)
+                    # Normalize: lower variance = higher score (max 15)
+                    coefficient = 0.1  # Adjust based on typical variance values
+                    health_factors["duration_stability"] = 15 * (1 / (1 + coefficient * variance))
+
+            # Calculate failure pattern component
+            if total_tests > 0:
+                # Lower ratio of consistently failing tests = better score
+                consistent_failure_ratio = len(consistently_failing) / max(1, total_tests)
+                health_factors["failure_pattern"] = 15 * (1 - consistent_failure_ratio)
+
+            # Calculate overall health score
+            health_score = sum(health_factors.values())
+            health_score = min(100, max(0, health_score))  # Clamp between 0-100
+
+            if not json_mode:
+                health_color = "green" if health_score >= 80 else "yellow" if health_score >= 60 else "red"
+                console.print(
+                    f"[bold]Test Health Score:[/bold] [{health_color}]{health_score:.1f}/100[/{health_color}]"
+                )
+
+                # Show breakdown of health score components
+                health_table = Table(title="Health Score Components")
+                health_table.add_column("Component", style="cyan")
+                health_table.add_column("Score", style="yellow")
+                health_table.add_column("Weight", style="blue")
+
+                for component, score in health_factors.items():
+                    weight = {
+                        "pass_rate": "50%",
+                        "flakiness": "20%",
+                        "duration_stability": "15%",
+                        "failure_pattern": "15%",
+                    }
+                    health_table.add_row(component.replace("_", " ").title(), f"{score:.1f}", weight[component])
+
+                console.print(health_table)
 
             # Output format handling
             if output_format == "json":
