@@ -1,6 +1,6 @@
 # Creating a Cohesive pytest-insight Ecosystem
 
-As pytest-insight moves toward an Alpha release, ensuring cohesiveness across all components is critical for providing a seamless user experience. This document outlines strategies for unifying the various components (plugin, FastAPI interface, Query-Compare-Analyze-Insight system, console wrapper scripts) into a cohesive whole.
+As pytest-insight moves toward an Alpha release, ensuring cohesiveness across all components is critical for providing a seamless user experience. This document outlines strategies for unifying the various components (plugin, core API (Query-Compare-Analyze-Insight system), storage profiles, Simple File Exchange system, FastAPI interface, console wrapper scripts) into a cohesive whole.
 
 ## Unified Entry Point and API
 
