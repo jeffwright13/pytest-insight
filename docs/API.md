@@ -9,6 +9,41 @@ pytest-insight provides two distinct API interfaces:
 1. **Core API** - A programmatic interface following a fluent design pattern for Python code
 2. **Web API** - A FastAPI/uvicorn HTTP interface for remote access and integration
 
+### Project Structure
+
+The pytest-insight project is organized into logical directories:
+
+```
+pytest_insight/
+├── __init__.py
+├── clients/               # Client implementations
+│   ├── __init__.py
+│   ├── cli/               # Command-line interface
+│   ├── grafana/           # Grafana integration
+│   └── web/               # Web client components
+├── core/                  # Core API components
+│   ├── __init__.py
+│   ├── analysis.py        # Test analysis functionality
+│   ├── comparison.py      # Test comparison functionality
+│   ├── core_api.py        # Unified API entry point
+│   ├── insights.py        # Insights generation
+│   ├── models.py          # Data models
+│   ├── query.py           # Query functionality
+│   └── storage.py         # Data storage and retrieval
+├── plugin.py              # Pytest plugin implementation
+├── rest_api/              # REST API implementation
+│   ├── __init__.py
+│   ├── high_level_api.py  # Structured API endpoints
+│   ├── introspective_api.py # Dynamic fluent interface API
+│   └── templates/         # Web UI templates
+├── utils/                 # Utility functions and scripts
+    ├── __init__.py
+    ├── analyze_test_data.py # Test data analysis script
+    ├── constants.py       # Shared constants
+    ├── db_generator.py    # Database generation utilities
+    └── server_launcher.py # Combined API server launcher (runs both APIs)
+```
+
 ## Core API
 
 The Core API is built around three primary operations:
