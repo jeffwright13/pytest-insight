@@ -15,6 +15,7 @@ import json
 from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
+import math
 
 from rich.console import Console
 from rich.panel import Panel
@@ -36,6 +37,7 @@ def analyze_test_data(
     profile=None,
     compare_with=None,
     show_trends=False,
+    show_error_details=False,
 ):
     """Analyze test data using the Analysis class."""
     # Always create the console object for test compatibility
@@ -370,9 +372,6 @@ def analyze_test_data(
 
                 if compare_type == "days":
                     try:
-                        days_ago = int(compare_value)
-                        cutoff_date = datetime.now() - timedelta(days=days_ago)
-
                         # Get current sessions (already filtered above)
                         current_sessions = filtered_sessions
 
@@ -385,7 +384,7 @@ def analyze_test_data(
 
                         # Use the date_range method instead of filter_by_date
                         prev_query = prev_query.date_range(
-                            start=cutoff_date - timedelta(days=days_ago), end=cutoff_date
+                            start=datetime.now() - timedelta(days=int(compare_value)), end=datetime.now()
                         )
                         previous_sessions = prev_query.execute()
 
@@ -396,7 +395,7 @@ def analyze_test_data(
                             session_start_time=datetime.now(),
                             session_stop_time=datetime.now(),
                             test_results=[test for session in current_sessions for test in session.test_results],
-                            session_tags={"label": f"Last {days} days"},
+                            session_tags={"label": f"Last {compare_value} days"},
                         )
 
                         target_session = TestSession(
@@ -405,7 +404,7 @@ def analyze_test_data(
                             session_start_time=datetime.now(),
                             session_stop_time=datetime.now(),
                             test_results=[test for session in previous_sessions for test in session.test_results],
-                            session_tags={"label": f"Previous {days_ago} days"},
+                            session_tags={"label": f"Previous {compare_value} days"},
                         )
 
                         # Execute the comparison
@@ -414,8 +413,8 @@ def analyze_test_data(
                         # Display comparison results
                         comp_table = Table(title="Comparison Results")
                         comp_table.add_column("Metric", style="cyan")
-                        comp_table.add_column(f"Last {days} days", style="green")
-                        comp_table.add_column(f"Previous {days_ago} days", style="blue")
+                        comp_table.add_column(f"Last {compare_value} days", style="green")
+                        comp_table.add_column(f"Previous {compare_value} days", style="blue")
                         comp_table.add_column("Change", style="yellow")
 
                         # Calculate comparison metrics from test results
@@ -880,32 +879,392 @@ def analyze_test_data(
 
                 console.print(reliability_table)
 
-            # Output format handling
-            if output_format == "json":
-                # Create a JSON-friendly structure
-                result = {
-                    "sessions": len(filtered_sessions),
-                    "tests": total_tests,
-                    "pass_rate": pass_rate,
-                    "avg_duration": avg_duration,
-                    "flaky_tests": len(flaky_tests),
-                    "slowest_tests": [{"name": name, "duration": dur} for name, dur in slowest_tests],
-                    "most_failing": [{"name": name, "failures": count} for name, count in most_failing],
-                    "flaky_tests_list": [name for name in flaky_tests],
-                    "health_score": health_score,
-                    "health_factors": health_factors,
-                    "reliability_index": reliability_index,
-                    "reliability_factors": {
-                        "pass_rate": pass_rate * 0.4 * 100,
-                        "flakiness_resistance": (1 - len(flaky_tests) / max(1, total_tests)) * 0.3 * 100,
-                        "environment_consistency": environment_consistency * 0.15 * 100,
-                        "test_result_consistency": test_consistency * 0.15 * 100,
-                    },
-                }
+            # 3. Test Correlation Analysis
+            # Identify tests that frequently fail together
+            if not json_mode:
+                console.print("[bold]Test Correlation Analysis:[/bold] Identifying tests that fail together")
 
-                # Print JSON output only (no Rich console output)
-                print(json.dumps(result, indent=4))
-                return
+            # Create a matrix of test failures by session
+            test_failure_matrix = {}
+            test_failure_counts = {}
+
+            # First, collect all unique test nodeids across all sessions
+            all_test_nodeids = set()
+            for session in filtered_sessions:
+                for test_result in session.test_results:
+                    nodeid = getattr(test_result, "nodeid", None)
+                    if nodeid:
+                        all_test_nodeids.add(nodeid)
+                        if nodeid not in test_failure_counts:
+                            test_failure_counts[nodeid] = 0
+
+            # Then, for each session, record which tests failed
+            for i, session in enumerate(filtered_sessions):
+                # Use session index as a unique identifier
+                session_key = f"session_{i}"
+                test_failure_matrix[session_key] = {}
+
+                # Initialize all tests as not failed for this session
+                for nodeid in all_test_nodeids:
+                    test_failure_matrix[session_key][nodeid] = 0
+
+                # Mark tests that failed in this session
+                for test_result in session.test_results:
+                    nodeid = getattr(test_result, "nodeid", None)
+                    outcome = getattr(test_result, "outcome", None)
+                    if nodeid and outcome:
+                        # Handle both string and enum outcomes
+                        if hasattr(outcome, "value"):
+                            # It's an enum
+                            is_failed = outcome.value == "FAILED"
+                        else:
+                            # It's a string
+                            is_failed = str(outcome).upper() == "FAILED"
+
+                        if is_failed:
+                            test_failure_matrix[session_key][nodeid] = 1
+                            test_failure_counts[nodeid] += 1
+
+            # Calculate correlation between test failures
+            correlated_pairs = []
+
+            # Only analyze tests that have failed at least once
+            failing_tests = [nodeid for nodeid, count in test_failure_counts.items() if count > 0]
+
+            # Calculate correlation coefficient for each pair of tests
+            for i, test1 in enumerate(failing_tests):
+                for test2 in failing_tests[i+1:]:
+                    # Skip self-correlation
+                    if test1 == test2:
+                        continue
+
+                    # Count co-occurrences
+                    both_failed = 0
+                    test1_only = 0
+                    test2_only = 0
+                    neither_failed = 0
+
+                    for session_key in test_failure_matrix:
+                        if test_failure_matrix[session_key][test1] == 1 and test_failure_matrix[session_key][test2] == 1:
+                            both_failed += 1
+                        elif test_failure_matrix[session_key][test1] == 1:
+                            test1_only += 1
+                        elif test_failure_matrix[session_key][test2] == 1:
+                            test2_only += 1
+                        else:
+                            neither_failed += 1
+
+                    # Calculate correlation coefficient (phi coefficient for binary data)
+                    n = both_failed + test1_only + test2_only + neither_failed
+                    if n == 0:
+                        continue
+
+                    # Avoid division by zero
+                    if (both_failed + test1_only) == 0 or (both_failed + test2_only) == 0 or \
+                       (test1_only + neither_failed) == 0 or (test2_only + neither_failed) == 0:
+                        correlation = 0
+                    else:
+                        numerator = (both_failed * neither_failed) - (test1_only * test2_only)
+                        denominator = math.sqrt(
+                            (both_failed + test1_only) *
+                            (both_failed + test2_only) *
+                            (test1_only + neither_failed) *
+                            (test2_only + neither_failed)
+                        )
+                        correlation = numerator / denominator if denominator != 0 else 0
+
+                    # Only include pairs with significant correlation
+                    if abs(correlation) > 0.5 and both_failed > 0:
+                        # Get shortened test names for display
+                        test1_short = test1.split("::")[-1] if "::" in test1 else test1
+                        test2_short = test2.split("::")[-1] if "::" in test2 else test2
+
+                        correlated_pairs.append({
+                            "test1": test1,
+                            "test2": test2,
+                            "test1_short": test1_short,
+                            "test2_short": test2_short,
+                            "correlation": correlation,
+                            "both_failed": both_failed,
+                            "test1_failures": test1_only + both_failed,
+                            "test2_failures": test2_only + both_failed
+                        })
+
+            # Sort by correlation strength (absolute value)
+            correlated_pairs.sort(key=lambda x: abs(x["correlation"]), reverse=True)
+
+            # Display the results
+            if not json_mode and correlated_pairs:
+                correlation_table = Table(title="Correlated Test Failures")
+                correlation_table.add_column("Test 1", style="cyan")
+                correlation_table.add_column("Test 2", style="cyan")
+                correlation_table.add_column("Correlation", style="yellow")
+                correlation_table.add_column("Co-failures", style="red")
+
+                # Show top 10 correlated pairs
+                for pair in correlated_pairs[:10]:
+                    correlation_str = f"{pair['correlation']:.2f}"
+                    correlation_table.add_row(
+                        pair["test1_short"],
+                        pair["test2_short"],
+                        correlation_str,
+                        str(pair["both_failed"])
+                    )
+
+                console.print(correlation_table)
+
+                # Group tests into clusters based on correlation
+                if len(correlated_pairs) > 0:
+                    console.print("[bold]Test Failure Clusters:[/bold]")
+
+                    # Simple clustering based on correlation strength
+                    clusters = []
+                    processed_tests = set()
+
+                    for pair in correlated_pairs:
+                        test1, test2 = pair["test1"], pair["test2"]
+
+                        # Find if either test is already in a cluster
+                        found_cluster = False
+                        for cluster in clusters:
+                            if test1 in cluster or test2 in cluster:
+                                cluster.add(test1)
+                                cluster.add(test2)
+                                found_cluster = True
+                                break
+
+                        # If not, create a new cluster
+                        if not found_cluster and abs(pair["correlation"]) > 0.7:  # Higher threshold for creating new clusters
+                            clusters.append({test1, test2})
+
+                        processed_tests.add(test1)
+                        processed_tests.add(test2)
+
+                    # Display clusters
+                    for i, cluster in enumerate(clusters):
+                        if len(cluster) >= 2:  # Only show clusters with at least 2 tests
+                            console.print(f"[bold]Cluster {i+1}:[/bold] {len(cluster)} tests that tend to fail together")
+                            cluster_table = Table(show_header=False, box=box.SIMPLE)
+                            for test in sorted(cluster):
+                                test_short = test.split("::")[-1] if "::" in test else test
+                                cluster_table.add_row(test_short)
+                            console.print(cluster_table)
+            elif not json_mode:
+                console.print("[italic]No significant test correlations found.[/italic]")
+
+            # Update JSON output with correlation data
+            if output_format == "json":
+                result["test_correlations"] = [
+                    {
+                        "test1": pair["test1"],
+                        "test2": pair["test2"],
+                        "correlation": pair["correlation"],
+                        "both_failed": pair["both_failed"],
+                        "test1_failures": pair["test1_failures"],
+                        "test2_failures": pair["test2_failures"]
+                    }
+                    for pair in correlated_pairs[:20]  # Limit to top 20 for JSON output
+                ]
+
+                # Add cluster information
+                if 'clusters' in locals() and len(clusters) > 0:
+                    result["test_failure_clusters"] = [
+                        {"tests": list(cluster)}
+                        for cluster in clusters
+                        if len(cluster) >= 2
+                    ]
+
+            # 4. Failure Pattern Recognition
+            # Categorize failures by error type
+            if not json_mode:
+                console.print("[bold]Failure Pattern Recognition:[/bold] Identifying common error patterns")
+
+            # Collect error messages from test failures
+            error_patterns = {}
+            error_counts = {}
+            test_to_error_map = {}
+
+            # Track test failure details for debugging
+            failure_details = []
+
+            for session in filtered_sessions:
+                for test_result in session.test_results:
+                    nodeid = getattr(test_result, "nodeid", None)
+                    outcome = getattr(test_result, "outcome", None)
+
+                    # Check if the test failed
+                    is_failed = False
+                    if hasattr(outcome, "value"):
+                        # It's an enum
+                        is_failed = outcome.value == "FAILED"
+                    else:
+                        # It's a string
+                        is_failed = str(outcome).upper() == "FAILED"
+
+                    if is_failed and nodeid:
+                        # Extract error message from longreprtext
+                        error_msg = getattr(test_result, "longreprtext", "")
+
+                        # Store failure details for debugging
+                        failure_details.append({
+                            "nodeid": nodeid,
+                            "error_msg": error_msg,
+                            "session_id": getattr(session, "session_id", "unknown")
+                        })
+
+                        if error_msg:
+                            # Extract meaningful error patterns from the error message
+                            # First, identify the error type
+                            error_type = "Unknown Error"
+                            error_detail = ""
+
+                            # Common Python exceptions to look for
+                            exception_types = [
+                                "AssertionError", "ValueError", "TypeError",
+                                "KeyError", "IndexError", "AttributeError",
+                                "ImportError", "RuntimeError", "NameError",
+                                "SyntaxError", "FileNotFoundError", "ZeroDivisionError",
+                                "PermissionError", "OSError", "IOError"
+                            ]
+
+                            # Find the exception type in the error message
+                            for exc_type in exception_types:
+                                if exc_type in error_msg:
+                                    error_type = exc_type
+                                    # Try to extract the specific error detail
+                                    lines = error_msg.split('\n')
+                                    for line in lines:
+                                        if exc_type in line:
+                                            # Extract the part after the exception type
+                                            parts = line.split(exc_type + ":", 1)
+                                            if len(parts) > 1:
+                                                error_detail = parts[1].strip()
+                                                break
+                                    break
+
+                            # If we couldn't extract a specific detail, use the first non-empty line
+                            if not error_detail and error_msg:
+                                for line in error_msg.split('\n'):
+                                    if line.strip() and not line.startswith('  File "'):
+                                        error_detail = line.strip()
+                                        break
+
+                            # Create a meaningful pattern that combines error type and detail
+                            pattern = f"{error_type}: {error_detail}" if error_detail else error_type
+
+                            # Truncate very long patterns
+                            if len(pattern) > 100:
+                                pattern = pattern[:97] + "..."
+
+                            # Count occurrences of each error pattern
+                            if pattern not in error_patterns:
+                                error_patterns[pattern] = []
+                                error_counts[pattern] = 0
+
+                            error_patterns[pattern].append(nodeid)
+                            error_counts[pattern] += 1
+
+                            # Map tests to their error patterns
+                            if nodeid not in test_to_error_map:
+                                test_to_error_map[nodeid] = []
+
+                            if pattern not in test_to_error_map[nodeid]:
+                                test_to_error_map[nodeid].append(pattern)
+
+            # Sort error patterns by frequency
+            sorted_patterns = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)
+
+            # Display the results
+            if not json_mode:
+                # First, show detailed information about all test failures if requested
+                if failure_details and show_error_details:
+                    console.print("\n[bold]Test Failure Details:[/bold]")
+                    for i, failure in enumerate(failure_details):
+                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(f"[dim]Session: {failure['session_id']}[/dim]")
+
+                        # Format and display the error message
+                        if failure['error_msg']:
+                            # Use Rich's syntax highlighting for the error message
+                            console.print("[yellow]Error Message:[/yellow]")
+                            # Split into lines and add proper indentation
+                            for line in failure['error_msg'].split('\n'):
+                                if line.strip():  # Skip empty lines
+                                    console.print(f"  {line}")
+                        else:
+                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+
+                        console.print()  # Add a blank line between failures
+                elif failure_details:
+                    # Just show a summary if detailed error messages are not requested
+                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
+                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+
+
+                # Then show the error pattern analysis
+                if sorted_patterns:
+                    error_table = Table(title="Common Error Patterns")
+                    error_table.add_column("Error Pattern", style="cyan")
+                    error_table.add_column("Occurrences", style="yellow")
+                    error_table.add_column("Affected Tests", style="red")
+
+                    # Show top error patterns
+                    for pattern, count in sorted_patterns[:10]:  # Limit to top 10
+                        affected_tests = len(set(error_patterns[pattern]))
+                        error_table.add_row(
+                            pattern,
+                            str(count),
+                            str(affected_tests)
+                        )
+
+                    console.print(error_table)
+
+                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    multi_error_tests = {test: patterns for test, patterns in test_to_error_map.items() if len(patterns) > 1}
+
+                    if multi_error_tests:
+                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        multi_error_table = Table(show_header=True)
+                        multi_error_table.add_column("Test", style="cyan")
+                        multi_error_table.add_column("Error Patterns", style="yellow")
+
+                        for test, patterns in sorted(multi_error_tests.items(), key=lambda x: len(x[1]), reverse=True)[:5]:
+                            test_short = test.split("::")[-1] if "::" in test else test
+                            multi_error_table.add_row(
+                                test_short,
+                                str(len(patterns))
+                            )
+
+                        console.print(multi_error_table)
+                else:
+                    if failure_details:
+                        console.print("[italic yellow]No significant error patterns found, but test failures were detected.[/italic yellow]")
+                        console.print("[italic]This may indicate that each test is failing with a unique error message.[/italic]")
+                    else:
+                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+
+            # Update JSON output with error pattern data
+            if output_format == "json":
+                result["error_patterns"] = [
+                    {
+                        "pattern": pattern,
+                        "count": count,
+                        "affected_tests": list(set(error_patterns[pattern]))
+                    }
+                    for pattern, count in sorted_patterns[:20]  # Limit to top 20 for JSON output
+                ]
+
+                result["multi_error_tests"] = [
+                    {
+                        "test": test,
+                        "error_patterns": patterns
+                    }
+                    for test, patterns in test_to_error_map.items()
+                    if len(patterns) > 1
+                ]
+
+                # Include detailed failure information in JSON output
+                result["test_failures"] = failure_details
         except Exception as e:
             # Always display errors for test compatibility, even in JSON mode
             console.print(f"[bold red]Error during analysis:[/bold red] {str(e)}")
@@ -936,8 +1295,8 @@ def main():
         help="Compare with previous data (format: days:N, version:X.Y.Z, or profile:name)",
     )
     parser.add_argument("--trends", action="store_true", help="Show trends over time")
-    parser.add_argument("--list-profiles", action="store_true", help="List available storage profiles")
-    parser.add_argument("--generate-sample", action="store_true", help="Generate sample test data if none exists")
+    parser.add_argument("--generate-sample", action="store_true", help="Generate sample test data")
+    parser.add_argument("--show-errors", action="store_true", help="Show detailed error messages for failed tests")
     parser.add_argument("--version", "-v", action="store_true", help="Show version information")
 
     args = parser.parse_args()
@@ -952,49 +1311,6 @@ def main():
             console.print("[bold]pytest-insight version:[/bold] unknown")
         return
 
-    if args.list_profiles:
-        # List available profiles
-        profile_manager = ProfileManager()
-        profiles = profile_manager.list_profiles()
-
-        if not profiles:
-            console.print("[bold yellow]No storage profiles found.[/bold yellow]")
-            return
-
-        profile_table = Table(title="Available Storage Profiles")
-        profile_table.add_column("Name", style="cyan")
-        profile_table.add_column("Type", style="green")
-        profile_table.add_column("Path", style="blue")
-        profile_table.add_column("Active", style="yellow")
-
-        active_profile = profile_manager.get_active_profile()
-
-        for name, profile in profiles.items():
-            is_active = name == active_profile.name if active_profile else False
-            profile_table.add_row(name, profile.storage_type, str(profile.file_path), "✓" if is_active else "")
-
-        console.print(profile_table)
-        return
-
-    # Prioritize profile-based loading if specified
-    if args.profile:
-        # When profile is specified, path becomes optional
-        data_path = args.path if args.path else None
-
-        # Analyze the data using the specified profile
-        analyze_test_data(
-            data_path=data_path,
-            sut_filter=args.sut,
-            days=args.days,
-            output_format=args.format,
-            test_pattern=args.test,
-            profile=args.profile,
-            compare_with=args.compare,
-            show_trends=args.trends,
-        )
-        return
-
-    # If no profile specified, continue with file-based approach
     # Determine data path
     data_path = None
     if args.path:
@@ -1027,6 +1343,73 @@ def main():
         # Generate sample data
         import random
         from datetime import datetime, timedelta
+
+        # Function to generate realistic error messages
+        def generate_error_message(test_type, test_name):
+            """Generate realistic error messages for failed tests."""
+            # Common Python exceptions with realistic error messages
+            error_types = {
+                "AssertionError": [
+                    "assert actual == expected",
+                    "assert response.status_code == 200",
+                    "assert len(results) > 0",
+                    "assert 'error' not in response.json()",
+                    "assert isinstance(result, dict)",
+                ],
+                "ValueError": [
+                    "invalid literal for int() with base 10",
+                    "time data does not match format",
+                    "invalid token in JSON string",
+                    "could not convert string to float",
+                    "invalid URL for request",
+                ],
+                "TypeError": [
+                    "unsupported operand type(s) for +",
+                    "function takes 2 positional arguments but 3 were given",
+                    "object of type 'NoneType' has no len()",
+                    "string indices must be integers",
+                    "'NoneType' object is not subscriptable",
+                ],
+                "KeyError": [
+                    "'id'",
+                    "'data'",
+                    "'results'",
+                    "'user'",
+                    "'config'",
+                ],
+                "IndexError": [
+                    "list index out of range",
+                    "tuple index out of range",
+                    "string index out of range",
+                    "pop from empty list",
+                    "pop from empty array",
+                ],
+                "AttributeError": [
+                    "'NoneType' object has no attribute",
+                    "module has no attribute",
+                    "object has no attribute",
+                    "'dict' object has no attribute",
+                    "'list' object has no attribute",
+                ],
+            }
+
+            # Select a random error type and message
+            error_type = random.choice(list(error_types.keys()))
+            error_message = random.choice(error_types[error_type])
+
+            # Create a realistic traceback
+            file_path = f"tests/{test_type}/{test_name}.py"
+            line_number = random.randint(10, 200)
+
+            # Create a realistic traceback
+            traceback = f"""Traceback (most recent call last):
+  File "{file_path}", line {line_number}, in test_function
+    result = app.{test_name.split('_')[-1]}()
+  File "/app/core/api.py", line {random.randint(50, 150)}, in {test_name.split('_')[-1]}
+    return self._process_request(data)
+{error_type}: {error_message}"""
+
+            return traceback
 
         # Create sample test sessions
         sample_data = []
@@ -1067,6 +1450,10 @@ def main():
                         ).isoformat(),
                     }
 
+                    # Add realistic error message for failed tests
+                    if outcome == "failed":
+                        test["longreprtext"] = generate_error_message(test_type, test_name)
+
                     session["test_results"].append(test)
 
                 sample_data.append(session)
@@ -1099,9 +1486,10 @@ def main():
         days=args.days,
         output_format=args.format,
         test_pattern=args.test,
-        profile=None,  # No profile when using file path
+        profile=args.profile,
         compare_with=args.compare,
         show_trends=args.trends,
+        show_error_details=args.show_errors,
     )
     console.print(
         Panel(

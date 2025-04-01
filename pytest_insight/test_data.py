@@ -119,6 +119,114 @@ def get_test_time(offset_seconds: int = 0) -> datetime:
     return base + timedelta(seconds=offset_seconds)
 
 
+def generate_realistic_error_message(module_name, test_name):
+    """Generate realistic error messages for failed tests.
+
+    Creates error messages that match common Python exceptions and testing patterns,
+    making them suitable for pattern recognition analysis.
+
+    Args:
+        module_name: The module name being tested (e.g., 'api', 'ui')
+        test_name: The test action being performed (e.g., 'get', 'post')
+
+    Returns:
+        A string containing a realistic error message with traceback
+    """
+    # Common Python exceptions with realistic error messages
+    error_types = {
+        "AssertionError": [
+            "assert actual == expected",
+            "assert response.status_code == 200",
+            "assert len(results) > 0",
+            "assert 'error' not in response.json()",
+            "assert isinstance(result, dict)",
+        ],
+        "ValueError": [
+            "invalid literal for int() with base 10",
+            "time data does not match format",
+            "invalid token in JSON string",
+            "could not convert string to float",
+            "invalid URL for request",
+        ],
+        "TypeError": [
+            "unsupported operand type(s) for +",
+            "function takes 2 positional arguments but 3 were given",
+            "object of type 'NoneType' has no len()",
+            "string indices must be integers",
+            "'NoneType' object is not subscriptable",
+        ],
+        "KeyError": [
+            "'id'",
+            "'data'",
+            "'results'",
+            "'user'",
+            "'config'",
+        ],
+        "IndexError": [
+            "list index out of range",
+            "tuple index out of range",
+            "string index out of range",
+            "pop from empty list",
+            "pop from empty array",
+        ],
+        "AttributeError": [
+            "'NoneType' object has no attribute",
+            "module has no attribute",
+            "object has no attribute",
+            "'dict' object has no attribute",
+            "'list' object has no attribute",
+        ],
+        "ImportError": [
+            "cannot import name",
+            "No module named",
+            "attempted relative import beyond top-level package",
+            "cannot import name from",
+            "DLL load failed while importing",
+        ],
+        "RuntimeError": [
+            "maximum recursion depth exceeded",
+            "generator raised StopIteration",
+            "can't start new thread",
+            "coroutine was never awaited",
+            "cannot reuse already awaited coroutine",
+        ],
+    }
+
+    # Select a random error type and message
+    error_type = random.choice(list(error_types.keys()))
+    error_message = random.choice(error_types[error_type])
+
+    # Create a realistic traceback
+    file_path = f"/path/to/project/{module_name}/test_{module_name}.py"
+    line_number = random.randint(10, 200)
+
+    # Format based on test type
+    if test_name in ["get", "list"]:
+        function_name = f"test_{test_name}_{module_name}"
+        code_context = f"response = client.{test_name}('{module_name}')"
+    elif test_name in ["post", "create"]:
+        function_name = f"test_{test_name}_{module_name}"
+        code_context = f"response = client.{test_name}('{module_name}', data=payload)"
+    elif test_name in ["update"]:
+        function_name = f"test_{test_name}_{module_name}"
+        code_context = f"response = client.put('{module_name}/{id}', data=payload)"
+    else:  # delete
+        function_name = f"test_{test_name}_{module_name}"
+        code_context = f"response = client.{test_name}('{module_name}/{id}')"
+
+    # Create a realistic traceback
+    traceback = f"""Traceback (most recent call last):
+  File "{file_path}", line {line_number}, in {function_name}
+    {code_context}
+  File "/path/to/project/lib/client.py", line {random.randint(50, 150)}, in {test_name}
+    return self._request("{test_name.upper()}", url, **kwargs)
+  File "/path/to/project/lib/client.py", line {random.randint(20, 40)}, in _request
+    response = self.session.{test_name}(url, **kwargs)
+{error_type}: {error_message}"""
+
+    return traceback
+
+
 def random_test_result():
     """Create a random TestResult instance.
 
@@ -158,11 +266,12 @@ def random_test_result():
         else ""
     )
     capstdout = text_gen.sentence()
-    longreprtext = (
-        text_gen.paragraph()
-        if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-        else ""
-    )
+
+    # Generate realistic error messages for failed tests
+    if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]:
+        longreprtext = generate_realistic_error_message(module_name, test_name)
+    else:
+        longreprtext = ""
 
     return TestResult(
         nodeid=nodeid,
