@@ -12,21 +12,21 @@ The script follows the fluent interface pattern established in the pytest-insigh
 
 import argparse
 import json
+import math
 from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
-import math
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich import box
 
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.comparison import Comparison
 from pytest_insight.core.core_api import InsightAPI
 from pytest_insight.core.models import TestSession
-from pytest_insight.core.storage import ProfileManager, get_storage_instance
+from pytest_insight.core.storage import get_storage_instance
 
 
 def analyze_test_data(
@@ -194,7 +194,13 @@ def analyze_test_data(
 
             # Basic statistics
             if not json_mode:
-                console.print(Panel(f"[bold]Found {len(filtered_sessions)} test sessions[/bold]"))
+                # Include the data path in the message
+                if profile:
+                    console.print(
+                        Panel(f"[bold]Found {len(filtered_sessions)} test sessions in profile '{profile}'[/bold]")
+                    )
+                else:
+                    console.print(Panel(f"[bold]Found {len(filtered_sessions)} test sessions in {data_path}[/bold]"))
 
             # Create an analysis object
             analysis = Analysis(sessions=filtered_sessions)
@@ -750,7 +756,9 @@ def analyze_test_data(
                     avg_failures_per_hour = total_failures / 24
                     peak_hours = []
                     for hour, count in enumerate(hour_distribution):
-                        if count > 2 * avg_failures_per_hour and count >= 2:  # At least twice the average and at least 2 occurrences
+                        if (
+                            count > 2 * avg_failures_per_hour and count >= 2
+                        ):  # At least twice the average and at least 2 occurrences
                             peak_hours.append((hour, count, count / total_failures))
 
                     # Check for day-of-week patterns
@@ -766,22 +774,26 @@ def analyze_test_data(
                     avg_failures_per_day = total_failures / 7
                     peak_days = []
                     for day, count in enumerate(day_distribution):
-                        if count > 1.5 * avg_failures_per_day and count >= 2:  # At least 1.5x the average and at least 2 occurrences
+                        if (
+                            count > 1.5 * avg_failures_per_day and count >= 2
+                        ):  # At least 1.5x the average and at least 2 occurrences
                             peak_days.append((day, count, count / total_failures))
 
                     # Only include tests with significant patterns
                     if peak_hours or peak_days:
                         test_short = test_id.split("::")[-1] if "::" in test_id else test_id
 
-                        seasonal_patterns.append({
-                            "test_id": test_id,
-                            "test_short": test_short,
-                            "total_failures": total_failures,
-                            "peak_hours": peak_hours,
-                            "peak_days": peak_days,
-                            "hour_distribution": hour_distribution,
-                            "day_distribution": day_distribution
-                        })
+                        seasonal_patterns.append(
+                            {
+                                "test_id": test_id,
+                                "test_short": test_short,
+                                "total_failures": total_failures,
+                                "peak_hours": peak_hours,
+                                "peak_days": peak_days,
+                                "hour_distribution": hour_distribution,
+                                "day_distribution": day_distribution,
+                            }
+                        )
 
                 # Sort by total failures
                 seasonal_patterns.sort(key=lambda x: x["total_failures"], reverse=True)
@@ -802,22 +814,23 @@ def analyze_test_data(
                         # Format time of day patterns
                         hour_pattern = ""
                         if pattern["peak_hours"]:
-                            hour_pattern = ", ".join([f"{hour}:00 ({int(pct*100)}%)" for hour, count, pct in pattern["peak_hours"]])
+                            hour_pattern = ", ".join(
+                                [f"{hour}:00 ({int(pct*100)}%)" for hour, count, pct in pattern["peak_hours"]]
+                            )
                         else:
                             hour_pattern = "No significant pattern"
 
                         # Format day of week patterns
                         day_pattern = ""
                         if pattern["peak_days"]:
-                            day_pattern = ", ".join([f"{day_names[day]} ({int(pct*100)}%)" for day, count, pct in pattern["peak_days"]])
+                            day_pattern = ", ".join(
+                                [f"{day_names[day]} ({int(pct*100)}%)" for day, count, pct in pattern["peak_days"]]
+                            )
                         else:
                             day_pattern = "No significant pattern"
 
                         seasonal_table.add_row(
-                            pattern["test_short"],
-                            str(pattern["total_failures"]),
-                            hour_pattern,
-                            day_pattern
+                            pattern["test_short"], str(pattern["total_failures"]), hour_pattern, day_pattern
                         )
 
                     console.print(seasonal_table)
@@ -1050,7 +1063,7 @@ def analyze_test_data(
 
             # Calculate correlation coefficient for each pair of tests
             for i, test1 in enumerate(failing_tests):
-                for test2 in failing_tests[i+1:]:
+                for test2 in failing_tests[i + 1 :]:
                     # Skip self-correlation
                     if test1 == test2:
                         continue
@@ -1062,7 +1075,10 @@ def analyze_test_data(
                     neither_failed = 0
 
                     for session_key in test_failure_matrix:
-                        if test_failure_matrix[session_key][test1] == 1 and test_failure_matrix[session_key][test2] == 1:
+                        if (
+                            test_failure_matrix[session_key][test1] == 1
+                            and test_failure_matrix[session_key][test2] == 1
+                        ):
                             both_failed += 1
                         elif test_failure_matrix[session_key][test1] == 1:
                             test1_only += 1
@@ -1077,23 +1093,35 @@ def analyze_test_data(
                         continue
 
                     # Avoid division by zero
-                    if (both_failed + test1_only) == 0 or (both_failed + test2_only) == 0 or \
-                       (test1_only + neither_failed) == 0 or (test2_only + neither_failed) == 0:
+                    if (
+                        (both_failed + test1_only) == 0
+                        or (both_failed + test2_only) == 0
+                        or (test1_only + neither_failed) == 0
+                        or (test2_only + neither_failed) == 0
+                    ):
                         correlation = 0
                     else:
                         numerator = (both_failed * neither_failed) - (test1_only * test2_only)
                         denominator = math.sqrt(
-                            (both_failed + test1_only) *
-                            (both_failed + test2_only) *
-                            (test1_only + neither_failed) *
-                            (test2_only + neither_failed)
+                            (both_failed + test1_only)
+                            * (both_failed + test2_only)
+                            * (test1_only + neither_failed)
+                            * (test2_only + neither_failed)
                         )
                         correlation = numerator / denominator if denominator != 0 else 0
 
                     # Calculate additional correlation metrics
-                    jaccard_similarity = both_failed / (both_failed + test1_only + test2_only) if (both_failed + test1_only + test2_only) > 0 else 0
-                    conditional_prob_1_given_2 = both_failed / (both_failed + test2_only) if (both_failed + test2_only) > 0 else 0
-                    conditional_prob_2_given_1 = both_failed / (both_failed + test1_only) if (both_failed + test1_only) > 0 else 0
+                    jaccard_similarity = (
+                        both_failed / (both_failed + test1_only + test2_only)
+                        if (both_failed + test1_only + test2_only) > 0
+                        else 0
+                    )
+                    conditional_prob_1_given_2 = (
+                        both_failed / (both_failed + test2_only) if (both_failed + test2_only) > 0 else 0
+                    )
+                    conditional_prob_2_given_1 = (
+                        both_failed / (both_failed + test1_only) if (both_failed + test1_only) > 0 else 0
+                    )
 
                     # Only include pairs with significant correlation
                     if (abs(correlation) > 0.3 or jaccard_similarity > 0.3) and both_failed > 0:
@@ -1106,20 +1134,22 @@ def analyze_test_data(
                         test2_module = test2.split("::")[0] if "::" in test2 else ""
                         same_module = test1_module == test2_module and test1_module != ""
 
-                        correlated_pairs.append({
-                            "test1": test1,
-                            "test2": test2,
-                            "test1_short": test1_short,
-                            "test2_short": test2_short,
-                            "correlation": correlation,
-                            "jaccard_similarity": jaccard_similarity,
-                            "conditional_prob_1_given_2": conditional_prob_1_given_2,
-                            "conditional_prob_2_given_1": conditional_prob_2_given_1,
-                            "both_failed": both_failed,
-                            "test1_failures": test1_only + both_failed,
-                            "test2_failures": test2_only + both_failed,
-                            "same_module": same_module
-                        })
+                        correlated_pairs.append(
+                            {
+                                "test1": test1,
+                                "test2": test2,
+                                "test1_short": test1_short,
+                                "test2_short": test2_short,
+                                "correlation": correlation,
+                                "jaccard_similarity": jaccard_similarity,
+                                "conditional_prob_1_given_2": conditional_prob_1_given_2,
+                                "conditional_prob_2_given_1": conditional_prob_2_given_1,
+                                "both_failed": both_failed,
+                                "test1_failures": test1_only + both_failed,
+                                "test2_failures": test2_only + both_failed,
+                                "same_module": same_module,
+                            }
+                        )
 
             # Sort by correlation strength (absolute value)
             correlated_pairs.sort(key=lambda x: abs(x["correlation"]), reverse=True)
@@ -1159,7 +1189,7 @@ def analyze_test_data(
                         correlation_str,
                         jaccard_str,
                         str(pair["both_failed"]),
-                        "✓" if pair["same_module"] else "✗"
+                        "✓" if pair["same_module"] else "✗",
                     )
 
                 console.print(correlation_table)
@@ -1167,7 +1197,9 @@ def analyze_test_data(
                 # Display potential root cause tests
                 if top_root_causes:
                     console.print("\n[bold]Potential Root Cause Tests:[/bold]")
-                    console.print("[italic]These tests frequently appear in correlated failure pairs and may indicate shared dependencies or infrastructure issues[/italic]")
+                    console.print(
+                        "[italic]These tests frequently appear in correlated failure pairs and may indicate shared dependencies or infrastructure issues[/italic]"
+                    )
 
                     root_cause_table = Table(show_header=True)
                     root_cause_table.add_column("Test", style="cyan")
@@ -1234,9 +1266,15 @@ def analyze_test_data(
                                 if module:
                                     modules.add(module)
 
-                            module_info = f" (all from {list(modules)[0]})" if len(modules) == 1 else f" (across {len(modules)} modules)"
+                            module_info = (
+                                f" (all from {list(modules)[0]})"
+                                if len(modules) == 1
+                                else f" (across {len(modules)} modules)"
+                            )
 
-                            console.print(f"[bold]Cluster {i+1}:[/bold] {len(cluster)} tests that tend to fail together{module_info}")
+                            console.print(
+                                f"[bold]Cluster {i+1}:[/bold] {len(cluster)} tests that tend to fail together{module_info}"
+                            )
 
                             # Create a more informative cluster table
                             cluster_table = Table(show_header=True, box=box.SIMPLE)
@@ -1252,7 +1290,10 @@ def analyze_test_data(
                                 # Count failures for this test
                                 failure_count = 0
                                 for session_key in test_failure_matrix:
-                                    if test in test_failure_matrix[session_key] and test_failure_matrix[session_key][test] == 1:
+                                    if (
+                                        test in test_failure_matrix[session_key]
+                                        and test_failure_matrix[session_key][test] == 1
+                                    ):
                                         failure_count += 1
 
                                 cluster_table.add_row(test_short, module, str(failure_count))
@@ -1274,24 +1315,26 @@ def analyze_test_data(
                         "both_failed": pair["both_failed"],
                         "test1_failures": pair["test1_failures"],
                         "test2_failures": pair["test2_failures"],
-                        "same_module": pair["same_module"]
+                        "same_module": pair["same_module"],
                     }
                     for pair in correlated_pairs[:20]  # Limit to top 20 for JSON output
                 ]
 
                 # Add cluster information
-                if 'clusters' in locals() and len(clusters) > 0:
+                if "clusters" in locals() and len(clusters) > 0:
                     result["test_failure_clusters"] = [
-                        {"tests": list(cluster), "module_count": len(set(test.split("::")[0] for test in cluster if "::" in test))}
+                        {
+                            "tests": list(cluster),
+                            "module_count": len(set(test.split("::")[0] for test in cluster if "::" in test)),
+                        }
                         for cluster in clusters
                         if len(cluster) >= 2
                     ]
 
                 # Add root cause candidates
-                if 'top_root_causes' in locals() and top_root_causes:
+                if "top_root_causes" in locals() and top_root_causes:
                     result["potential_root_causes"] = [
-                        {"test": test, "correlation_frequency": freq}
-                        for test, freq in top_root_causes
+                        {"test": test, "correlation_frequency": freq} for test, freq in top_root_causes
                     ]
 
             # Calculate and display test brittleness scores
@@ -1302,12 +1345,18 @@ def analyze_test_data(
                 test_brittleness = {}
                 for test_id in all_test_nodeids:
                     # Skip tests with too few runs
-                    total_runs = sum(1 for session_key in test_failure_matrix if test_id in test_failure_matrix[session_key])
+                    total_runs = sum(
+                        1 for session_key in test_failure_matrix if test_id in test_failure_matrix[session_key]
+                    )
                     if total_runs < 3:
                         continue
 
                     # Count failures
-                    failures = sum(test_failure_matrix[session_key][test_id] for session_key in test_failure_matrix if test_id in test_failure_matrix[session_key])
+                    failures = sum(
+                        test_failure_matrix[session_key][test_id]
+                        for session_key in test_failure_matrix
+                        if test_id in test_failure_matrix[session_key]
+                    )
 
                     # Skip tests that never fail
                     if failures == 0:
@@ -1346,7 +1395,7 @@ def analyze_test_data(
                         "failure_rate": failure_rate,
                         "transitions": transitions,
                         "transition_rate": transition_rate,
-                        "brittleness_score": brittleness_score
+                        "brittleness_score": brittleness_score,
                     }
 
                 # Sort by brittleness score
@@ -1369,7 +1418,7 @@ def analyze_test_data(
                             f"{test['brittleness_score']:.2f}",
                             f"{test['failure_rate']:.2f}",
                             f"{test['transition_rate']:.2f}",
-                            str(test["runs"])
+                            str(test["runs"]),
                         )
 
                     console.print(brittleness_table)
@@ -1418,7 +1467,9 @@ def analyze_test_data(
                     avg_failures_per_hour = total_failures / 24
                     peak_hours = []
                     for hour, count in enumerate(hour_distribution):
-                        if count > 2 * avg_failures_per_hour and count >= 2:  # At least twice the average and at least 2 occurrences
+                        if (
+                            count > 2 * avg_failures_per_hour and count >= 2
+                        ):  # At least twice the average and at least 2 occurrences
                             peak_hours.append((hour, count, count / total_failures))
 
                     # Check for day-of-week patterns
@@ -1434,22 +1485,26 @@ def analyze_test_data(
                     avg_failures_per_day = total_failures / 7
                     peak_days = []
                     for day, count in enumerate(day_distribution):
-                        if count > 1.5 * avg_failures_per_day and count >= 2:  # At least 1.5x the average and at least 2 occurrences
+                        if (
+                            count > 1.5 * avg_failures_per_day and count >= 2
+                        ):  # At least 1.5x the average and at least 2 occurrences
                             peak_days.append((day, count, count / total_failures))
 
                     # Only include tests with significant patterns
                     if peak_hours or peak_days:
                         test_short = test_id.split("::")[-1] if "::" in test_id else test_id
 
-                        seasonal_patterns.append({
-                            "test_id": test_id,
-                            "test_short": test_short,
-                            "total_failures": total_failures,
-                            "peak_hours": peak_hours,
-                            "peak_days": peak_days,
-                            "hour_distribution": hour_distribution,
-                            "day_distribution": day_distribution
-                        })
+                        seasonal_patterns.append(
+                            {
+                                "test_id": test_id,
+                                "test_short": test_short,
+                                "total_failures": total_failures,
+                                "peak_hours": peak_hours,
+                                "peak_days": peak_days,
+                                "hour_distribution": hour_distribution,
+                                "day_distribution": day_distribution,
+                            }
+                        )
 
                 # Sort by total failures
                 seasonal_patterns.sort(key=lambda x: x["total_failures"], reverse=True)
@@ -1470,22 +1525,23 @@ def analyze_test_data(
                         # Format time of day patterns
                         hour_pattern = ""
                         if pattern["peak_hours"]:
-                            hour_pattern = ", ".join([f"{hour}:00 ({int(pct*100)}%)" for hour, count, pct in pattern["peak_hours"]])
+                            hour_pattern = ", ".join(
+                                [f"{hour}:00 ({int(pct*100)}%)" for hour, count, pct in pattern["peak_hours"]]
+                            )
                         else:
                             hour_pattern = "No significant pattern"
 
                         # Format day of week patterns
                         day_pattern = ""
                         if pattern["peak_days"]:
-                            day_pattern = ", ".join([f"{day_names[day]} ({int(pct*100)}%)" for day, count, pct in pattern["peak_days"]])
+                            day_pattern = ", ".join(
+                                [f"{day_names[day]} ({int(pct*100)}%)" for day, count, pct in pattern["peak_days"]]
+                            )
                         else:
                             day_pattern = "No significant pattern"
 
                         seasonal_table.add_row(
-                            pattern["test_short"],
-                            str(pattern["total_failures"]),
-                            hour_pattern,
-                            day_pattern
+                            pattern["test_short"], str(pattern["total_failures"]), hour_pattern, day_pattern
                         )
 
                     console.print(seasonal_table)
@@ -1524,11 +1580,13 @@ def analyze_test_data(
                         error_msg = getattr(test_result, "longreprtext", "")
 
                         # Store failure details for debugging
-                        failure_details.append({
-                            "nodeid": nodeid,
-                            "error_msg": error_msg,
-                            "session_id": getattr(session, "session_id", "unknown")
-                        })
+                        failure_details.append(
+                            {
+                                "nodeid": nodeid,
+                                "error_msg": error_msg,
+                                "session_id": getattr(session, "session_id", "unknown"),
+                            }
+                        )
 
                         if error_msg:
                             # Extract meaningful error patterns from the error message
@@ -1538,11 +1596,21 @@ def analyze_test_data(
 
                             # Common Python exceptions to look for
                             exception_types = [
-                                "AssertionError", "ValueError", "TypeError",
-                                "KeyError", "IndexError", "AttributeError",
-                                "ImportError", "RuntimeError", "NameError",
-                                "SyntaxError", "FileNotFoundError", "ZeroDivisionError",
-                                "PermissionError", "OSError", "IOError"
+                                "AssertionError",
+                                "ValueError",
+                                "TypeError",
+                                "KeyError",
+                                "IndexError",
+                                "AttributeError",
+                                "ImportError",
+                                "RuntimeError",
+                                "NameError",
+                                "SyntaxError",
+                                "FileNotFoundError",
+                                "ZeroDivisionError",
+                                "PermissionError",
+                                "OSError",
+                                "IOError",
                             ]
 
                             # Find the exception type in the error message
@@ -1550,7 +1618,7 @@ def analyze_test_data(
                                 if exc_type in error_msg:
                                     error_type = exc_type
                                     # Try to extract the specific error detail
-                                    lines = error_msg.split('\n')
+                                    lines = error_msg.split("\n")
                                     for line in lines:
                                         if exc_type in line:
                                             # Extract the part after the exception type
@@ -1562,7 +1630,7 @@ def analyze_test_data(
 
                             # If we couldn't extract a specific detail, use the first non-empty line
                             if not error_detail and error_msg:
-                                for line in error_msg.split('\n'):
+                                for line in error_msg.split("\n"):
                                     if line.strip() and not line.startswith('  File "'):
                                         error_detail = line.strip()
                                         break
@@ -1602,11 +1670,11 @@ def analyze_test_data(
                         console.print(f"[dim]Session: {failure['session_id']}[/dim]")
 
                         # Format and display the error message
-                        if failure['error_msg']:
+                        if failure["error_msg"]:
                             # Use Rich's syntax highlighting for the error message
                             console.print("[yellow]Error Message:[/yellow]")
                             # Split into lines and add proper indentation
-                            for line in failure['error_msg'].split('\n'):
+                            for line in failure["error_msg"].split("\n"):
                                 if line.strip():  # Skip empty lines
                                     console.print(f"  {line}")
                         else:
@@ -1618,7 +1686,6 @@ def analyze_test_data(
                     console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
                     console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
 
-
                 # Then show the error pattern analysis
                 if sorted_patterns:
                     error_table = Table(title="Common Error Patterns")
@@ -1629,16 +1696,14 @@ def analyze_test_data(
                     # Show top error patterns
                     for pattern, count in sorted_patterns[:10]:  # Limit to top 10
                         affected_tests = len(set(error_patterns[pattern]))
-                        error_table.add_row(
-                            pattern,
-                            str(count),
-                            str(affected_tests)
-                        )
+                        error_table.add_row(pattern, str(count), str(affected_tests))
 
                     console.print(error_table)
 
                     # Show tests with multiple error patterns (potentially flaky or unstable)
-                    multi_error_tests = {test: patterns for test, patterns in test_to_error_map.items() if len(patterns) > 1}
+                    multi_error_tests = {
+                        test: patterns for test, patterns in test_to_error_map.items() if len(patterns) > 1
+                    }
 
                     if multi_error_tests:
                         console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
@@ -1646,37 +1711,33 @@ def analyze_test_data(
                         multi_error_table.add_column("Test", style="cyan")
                         multi_error_table.add_column("Error Patterns", style="yellow")
 
-                        for test, patterns in sorted(multi_error_tests.items(), key=lambda x: len(x[1]), reverse=True)[:5]:
+                        for test, patterns in sorted(multi_error_tests.items(), key=lambda x: len(x[1]), reverse=True)[
+                            :5
+                        ]:
                             test_short = test.split("::")[-1] if "::" in test else test
-                            multi_error_table.add_row(
-                                test_short,
-                                str(len(patterns))
-                            )
+                            multi_error_table.add_row(test_short, str(len(patterns)))
 
                         console.print(multi_error_table)
                 else:
                     if failure_details:
-                        console.print("[italic yellow]No significant error patterns found, but test failures were detected.[/italic yellow]")
-                        console.print("[italic]This may indicate that each test is failing with a unique error message.[/italic]")
+                        console.print(
+                            "[italic yellow]No significant error patterns found, but test failures were detected.[/italic yellow]"
+                        )
+                        console.print(
+                            "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
+                        )
                     else:
                         console.print("[italic]No test failures found in the analyzed data.[/italic]")
 
             # Update JSON output with error pattern data
             if output_format == "json":
                 result["error_patterns"] = [
-                    {
-                        "pattern": pattern,
-                        "count": count,
-                        "affected_tests": list(set(error_patterns[pattern]))
-                    }
+                    {"pattern": pattern, "count": count, "affected_tests": list(set(error_patterns[pattern]))}
                     for pattern, count in sorted_patterns[:20]  # Limit to top 20 for JSON output
                 ]
 
                 result["multi_error_tests"] = [
-                    {
-                        "test": test,
-                        "error_patterns": patterns
-                    }
+                    {"test": test, "error_patterns": patterns}
                     for test, patterns in test_to_error_map.items()
                     if len(patterns) > 1
                 ]
@@ -1701,7 +1762,9 @@ def analyze_test_data(
                 sorted_dates = sorted(date_sessions.keys())
 
                 if len(sorted_dates) <= 1:
-                    console.print("[yellow]Insufficient data for timeline analysis. Need data from multiple dates.[/yellow]")
+                    console.print(
+                        "[yellow]Insufficient data for timeline analysis. Need data from multiple dates.[/yellow]"
+                    )
                 else:
                     # Track stability metrics over time for the most frequently run tests
                     test_run_counts = {}
@@ -1754,7 +1817,7 @@ def analyze_test_data(
                                     test_stability_timeline[nodeid][date] = {
                                         "total_runs": len(date_results),
                                         "outcome_counts": outcome_counts,
-                                        "stability_score": stability_score
+                                        "stability_score": stability_score,
                                     }
 
                     # Display stability timeline
@@ -1848,15 +1911,12 @@ def analyze_test_data(
 
                             # Track individual test failure counts
                             if nodeid not in test_failures:
-                                test_failures[nodeid] = {
-                                    "count": 0,
-                                    "co_failures": {}
-                                }
+                                test_failures[nodeid] = {"count": 0, "co_failures": {}}
                             test_failures[nodeid]["count"] += 1
 
                     # Record co-failures for each pair of failed tests
                     for i, test1 in enumerate(session_failures):
-                        for test2 in session_failures[i+1:]:
+                        for test2 in session_failures[i + 1 :]:
                             if test1 != test2:
                                 # Update co-failure count for test1
                                 if test2 not in test_failures[test1]["co_failures"]:
@@ -1902,16 +1962,20 @@ def analyze_test_data(
                                 # Bidirectional dependency
                                 direction = f"{test_id} ↔ {co_test}"
                                 strength = (pct_a_with_b + pct_b_with_a) / 2
-                                interpretation = f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
+                                interpretation = (
+                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
+                                )
 
-                            dependencies.append({
-                                "test1": test_id,
-                                "test2": co_test,
-                                "direction": direction,
-                                "strength": strength,
-                                "interpretation": interpretation,
-                                "co_failure_count": co_count
-                            })
+                            dependencies.append(
+                                {
+                                    "test1": test_id,
+                                    "test2": co_test,
+                                    "direction": direction,
+                                    "strength": strength,
+                                    "interpretation": interpretation,
+                                    "co_failure_count": co_count,
+                                }
+                            )
 
                 # Sort dependencies by strength
                 dependencies.sort(key=lambda x: x["strength"], reverse=True)
@@ -1938,10 +2002,7 @@ def analyze_test_data(
                             relationship = f"{test1_short} - {test2_short}"
 
                         dependency_table.add_row(
-                            relationship,
-                            f"{dep['strength']:.2f}",
-                            str(dep["co_failure_count"]),
-                            dep["interpretation"]
+                            relationship, f"{dep['strength']:.2f}", str(dep["co_failure_count"]), dep["interpretation"]
                         )
 
                     console.print(dependency_table)
@@ -1950,7 +2011,9 @@ def analyze_test_data(
 
             # 7. Environment Impact Analysis
             if not json_mode:
-                console.print("\n[bold]Environment Impact Analysis[/bold]: Analyzing how environment affects test results")
+                console.print(
+                    "\n[bold]Environment Impact Analysis[/bold]: Analyzing how environment affects test results"
+                )
 
                 # Collect environment information from session tags
                 environments = {}
@@ -1962,7 +2025,9 @@ def analyze_test_data(
                     # Calculate pass rate for this session
                     session_results = session.test_results
                     if session_results:
-                        session_pass_rate = sum(1 for t in session_results if t.outcome == "passed") / len(session_results)
+                        session_pass_rate = sum(1 for t in session_results if t.outcome == "passed") / len(
+                            session_results
+                        )
                         environments[env]["pass_rates"].append(session_pass_rate)
 
                 # Calculate average pass rate for each environment
@@ -2063,6 +2128,7 @@ def main():
             # Generate sample data
             import random
             from datetime import datetime, timedelta
+
             from rich.traceback import install
 
             # Install rich traceback handler
@@ -2084,75 +2150,113 @@ def main():
                 """
                 # Define error patterns that are consistent based on test type and operation
                 # This ensures similar tests will have similar failures for correlation
-                test_operation = test_name.split('_')[-1] if '_' in test_name else 'default'
+                test_operation = test_name.split("_")[-1] if "_" in test_name else "default"
 
                 # Map test types to specific error patterns
                 type_error_mapping = {
                     "api": {
-                        "login": ["KeyError: 'token'", "AssertionError: assert response.status_code == 200",
-                                 "ValueError: invalid token in JSON string"],
-                        "logout": ["AssertionError: assert response.status_code == 200",
-                                  "TypeError: 'NoneType' object is not subscriptable"],
-                        "create": ["AssertionError: assert 'id' in response.json()",
-                                  "ValueError: invalid literal for int() with base 10"],
-                        "update": ["AssertionError: assert response.status_code == 200",
-                                  "TypeError: object of type 'NoneType' has no len()"],
-                        "delete": ["AssertionError: assert response.status_code == 204",
-                                  "KeyError: 'id'"],
-                        "search": ["AssertionError: assert len(results) > 0",
-                                  "TypeError: string indices must be integers"],
-                        "default": ["AssertionError: assert True is False"]
+                        "login": [
+                            "KeyError: 'token'",
+                            "AssertionError: assert response.status_code == 200",
+                            "ValueError: invalid token in JSON string",
+                        ],
+                        "logout": [
+                            "AssertionError: assert response.status_code == 200",
+                            "TypeError: 'NoneType' object is not subscriptable",
+                        ],
+                        "create": [
+                            "AssertionError: assert 'id' in response.json()",
+                            "ValueError: invalid literal for int() with base 10",
+                        ],
+                        "update": [
+                            "AssertionError: assert response.status_code == 200",
+                            "TypeError: object of type 'NoneType' has no len()",
+                        ],
+                        "delete": ["AssertionError: assert response.status_code == 204", "KeyError: 'id'"],
+                        "search": [
+                            "AssertionError: assert len(results) > 0",
+                            "TypeError: string indices must be integers",
+                        ],
+                        "default": ["AssertionError: assert True is False"],
                     },
                     "ui": {
-                        "login": ["AttributeError: 'NoneType' object has no attribute 'click'",
-                                 "AssertionError: assert 'Welcome' in page_text"],
-                        "logout": ["AssertionError: assert 'Login' in page_text",
-                                  "AttributeError: 'NoneType' object has no attribute 'text'"],
-                        "create": ["AttributeError: 'NoneType' object has no attribute 'send_keys'",
-                                  "AssertionError: assert 'Created successfully' in page_text"],
-                        "update": ["AssertionError: assert 'Updated successfully' in page_text",
-                                  "AttributeError: 'NoneType' object has no attribute 'clear'"],
-                        "delete": ["AssertionError: assert 'Deleted successfully' in page_text",
-                                  "AttributeError: 'NoneType' object has no attribute 'confirm'"],
-                        "search": ["AssertionError: assert len(results) > 0",
-                                  "AttributeError: 'NoneType' object has no attribute 'find_elements'"],
-                        "default": ["AssertionError: assert element.is_displayed()"]
+                        "login": [
+                            "AttributeError: 'NoneType' object has no attribute 'click'",
+                            "AssertionError: assert 'Welcome' in page_text",
+                        ],
+                        "logout": [
+                            "AssertionError: assert 'Login' in page_text",
+                            "AttributeError: 'NoneType' object has no attribute 'text'",
+                        ],
+                        "create": [
+                            "AttributeError: 'NoneType' object has no attribute 'send_keys'",
+                            "AssertionError: assert 'Created successfully' in page_text",
+                        ],
+                        "update": [
+                            "AssertionError: assert 'Updated successfully' in page_text",
+                            "AttributeError: 'NoneType' object has no attribute 'clear'",
+                        ],
+                        "delete": [
+                            "AssertionError: assert 'Deleted successfully' in page_text",
+                            "AttributeError: 'NoneType' object has no attribute 'confirm'",
+                        ],
+                        "search": [
+                            "AssertionError: assert len(results) > 0",
+                            "AttributeError: 'NoneType' object has no attribute 'find_elements'",
+                        ],
+                        "default": ["AssertionError: assert element.is_displayed()"],
                     },
                     "unit": {
-                        "login": ["AssertionError: assert mock_auth.called",
-                                 "TypeError: 'NoneType' object is not callable"],
-                        "logout": ["AssertionError: assert mock_session.clear.called",
-                                  "AttributeError: 'Mock' object has no attribute 'clear'"],
-                        "create": ["AssertionError: assert mock_db.insert.called",
-                                  "TypeError: 'NoneType' object is not callable"],
-                        "update": ["AssertionError: assert mock_db.update.called",
-                                  "KeyError: 'id'"],
-                        "delete": ["AssertionError: assert mock_db.delete.called",
-                                  "ValueError: invalid literal for int() with base 10"],
-                        "search": ["AssertionError: assert len(result) > 0",
-                                  "TypeError: object of type 'NoneType' has no len()"],
-                        "default": ["AssertionError: assert mock.called"]
+                        "login": [
+                            "AssertionError: assert mock_auth.called",
+                            "TypeError: 'NoneType' object is not callable",
+                        ],
+                        "logout": [
+                            "AssertionError: assert mock_session.clear.called",
+                            "AttributeError: 'Mock' object has no attribute 'clear'",
+                        ],
+                        "create": [
+                            "AssertionError: assert mock_db.insert.called",
+                            "TypeError: 'NoneType' object is not callable",
+                        ],
+                        "update": ["AssertionError: assert mock_db.update.called", "KeyError: 'id'"],
+                        "delete": [
+                            "AssertionError: assert mock_db.delete.called",
+                            "ValueError: invalid literal for int() with base 10",
+                        ],
+                        "search": [
+                            "AssertionError: assert len(result) > 0",
+                            "TypeError: object of type 'NoneType' has no len()",
+                        ],
+                        "default": ["AssertionError: assert mock.called"],
                     },
                     "integration": {
-                        "login": ["AssertionError: assert token is not None",
-                                 "KeyError: 'token'"],
-                        "logout": ["AssertionError: assert session is None",
-                                  "AttributeError: 'NoneType' object has no attribute 'clear'"],
-                        "create": ["AssertionError: assert db_record is not None",
-                                  "ValueError: invalid literal for int() with base 10"],
-                        "update": ["AssertionError: assert db_record.updated_at > db_record.created_at",
-                                  "AttributeError: 'NoneType' object has no attribute 'updated_at'"],
-                        "delete": ["AssertionError: assert db_record is None",
-                                  "KeyError: 'id'"],
-                        "search": ["AssertionError: assert len(results) > 0",
-                                  "TypeError: object of type 'NoneType' has no len()"],
-                        "default": ["AssertionError: assert result is not None"]
-                    }
+                        "login": ["AssertionError: assert token is not None", "KeyError: 'token'"],
+                        "logout": [
+                            "AssertionError: assert session is None",
+                            "AttributeError: 'NoneType' object has no attribute 'clear'",
+                        ],
+                        "create": [
+                            "AssertionError: assert db_record is not None",
+                            "ValueError: invalid literal for int() with base 10",
+                        ],
+                        "update": [
+                            "AssertionError: assert db_record.updated_at > db_record.created_at",
+                            "AttributeError: 'NoneType' object has no attribute 'updated_at'",
+                        ],
+                        "delete": ["AssertionError: assert db_record is None", "KeyError: 'id'"],
+                        "search": [
+                            "AssertionError: assert len(results) > 0",
+                            "TypeError: object of type 'NoneType' has no len()",
+                        ],
+                        "default": ["AssertionError: assert result is not None"],
+                    },
                 }
 
                 # Get error patterns for this test type and operation
-                error_patterns = type_error_mapping.get(test_type, {}).get(test_operation,
-                                                                          ["AssertionError: assert True is False"])
+                error_patterns = type_error_mapping.get(test_type, {}).get(
+                    test_operation, ["AssertionError: assert True is False"]
+                )
 
                 # Select one of the error patterns for this test type/operation
                 # Use a deterministic approach based on test name to ensure consistency
@@ -2226,9 +2330,7 @@ def main():
                     # Add 10-20 tests per session
                     for test_num in range(random.randint(10, 20)):
                         test_type = random.choice(["api", "ui", "unit", "integration"])
-                        test_name = (
-                            f"test_{test_type}_{random.choice(['login', 'logout', 'create', 'update', 'delete', 'search'])}"
-                        )
+                        test_name = f"test_{test_type}_{random.choice(['login', 'logout', 'create', 'update', 'delete', 'search'])}"
 
                         # Randomize outcomes with a bias toward passing
                         outcome = random.choices(
@@ -2237,7 +2339,9 @@ def main():
 
                         # Create test start and stop times
                         test_duration = random.uniform(0.1, 5.0)
-                        test_start_time = datetime.fromisoformat(session["session_start_time"]) + timedelta(seconds=random.uniform(0, session_duration/2))
+                        test_start_time = datetime.fromisoformat(session["session_start_time"]) + timedelta(
+                            seconds=random.uniform(0, session_duration / 2)
+                        )
                         test_stop_time = test_start_time + timedelta(seconds=test_duration)
 
                         test = {
@@ -2265,6 +2369,7 @@ def main():
         except Exception as e:
             console.print("[bold red]Error generating sample data:[/bold red]")
             from rich.traceback import Traceback
+
             console.print(Traceback.from_exception(type(e), e, e.__traceback__))
             return
 
