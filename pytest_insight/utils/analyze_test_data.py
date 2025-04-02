@@ -20,6 +20,7 @@ import math
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich import box
 
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.comparison import Comparison
@@ -707,6 +708,122 @@ def analyze_test_data(
 
                 console.print(trend_table)
 
+            # Analyze seasonal patterns in test failures
+            if not json_mode:
+                console.print("\n[bold]Seasonal Failure Patterns[/bold]")
+
+                # Collect timestamp data for all test runs
+                test_timestamps = {}
+                for session in filtered_sessions:
+                    session_date = session.session_start_time
+
+                    for test_result in session.test_results:
+                        if hasattr(test_result, "outcome") and test_result.outcome == "failed":
+                            test_id = test_result.nodeid
+                            if test_id not in test_timestamps:
+                                test_timestamps[test_id] = []
+
+                            # Store the timestamp of this failure
+                            test_timestamps[test_id].append(test_result.start_time)
+
+                # Analyze patterns for tests with sufficient data
+                seasonal_patterns = []
+                for test_id, timestamps in test_timestamps.items():
+                    if len(timestamps) < 3:
+                        continue
+
+                    # Sort timestamps chronologically
+                    timestamps.sort()
+
+                    # Check for time-of-day patterns
+                    hour_distribution = [0] * 24
+                    for timestamp in timestamps:
+                        hour = timestamp.hour
+                        hour_distribution[hour] += 1
+
+                    total_failures = len(timestamps)
+
+                    # Calculate hourly distribution as percentages
+                    hour_percentages = [count / total_failures for count in hour_distribution]
+
+                    # Check for peaks (hours with significantly more failures)
+                    avg_failures_per_hour = total_failures / 24
+                    peak_hours = []
+                    for hour, count in enumerate(hour_distribution):
+                        if count > 2 * avg_failures_per_hour and count >= 2:  # At least twice the average and at least 2 occurrences
+                            peak_hours.append((hour, count, count / total_failures))
+
+                    # Check for day-of-week patterns
+                    day_distribution = [0] * 7  # Monday to Sunday
+                    for timestamp in timestamps:
+                        day = timestamp.weekday()
+                        day_distribution[day] += 1
+
+                    # Calculate day distribution as percentages
+                    day_percentages = [count / total_failures for count in day_distribution]
+
+                    # Check for peak days
+                    avg_failures_per_day = total_failures / 7
+                    peak_days = []
+                    for day, count in enumerate(day_distribution):
+                        if count > 1.5 * avg_failures_per_day and count >= 2:  # At least 1.5x the average and at least 2 occurrences
+                            peak_days.append((day, count, count / total_failures))
+
+                    # Only include tests with significant patterns
+                    if peak_hours or peak_days:
+                        test_short = test_id.split("::")[-1] if "::" in test_id else test_id
+
+                        seasonal_patterns.append({
+                            "test_id": test_id,
+                            "test_short": test_short,
+                            "total_failures": total_failures,
+                            "peak_hours": peak_hours,
+                            "peak_days": peak_days,
+                            "hour_distribution": hour_distribution,
+                            "day_distribution": day_distribution
+                        })
+
+                # Sort by total failures
+                seasonal_patterns.sort(key=lambda x: x["total_failures"], reverse=True)
+
+                # Display the results
+                if seasonal_patterns:
+                    # Map day numbers to names
+                    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+                    seasonal_table = Table(title="Seasonal Failure Patterns", box=box.SIMPLE)
+                    seasonal_table.add_column("Test", style="cyan")
+                    seasonal_table.add_column("Total Failures", style="red")
+                    seasonal_table.add_column("Time of Day Pattern", style="yellow")
+                    seasonal_table.add_column("Day of Week Pattern", style="green")
+
+                    # Show top 10 tests with seasonal patterns
+                    for pattern in seasonal_patterns[:10]:
+                        # Format time of day patterns
+                        hour_pattern = ""
+                        if pattern["peak_hours"]:
+                            hour_pattern = ", ".join([f"{hour}:00 ({int(pct*100)}%)" for hour, count, pct in pattern["peak_hours"]])
+                        else:
+                            hour_pattern = "No significant pattern"
+
+                        # Format day of week patterns
+                        day_pattern = ""
+                        if pattern["peak_days"]:
+                            day_pattern = ", ".join([f"{day_names[day]} ({int(pct*100)}%)" for day, count, pct in pattern["peak_days"]])
+                        else:
+                            day_pattern = "No significant pattern"
+
+                        seasonal_table.add_row(
+                            pattern["test_short"],
+                            str(pattern["total_failures"]),
+                            hour_pattern,
+                            day_pattern
+                        )
+
+                    console.print(seasonal_table)
+                else:
+                    console.print("[yellow]No significant seasonal patterns identified in the dataset.[/yellow]")
+
             # Additional high-level metrics
             if not json_mode:
                 console.print(Panel("[bold cyan]Advanced Metrics & Insights[/bold cyan]"))
@@ -973,11 +1090,21 @@ def analyze_test_data(
                         )
                         correlation = numerator / denominator if denominator != 0 else 0
 
+                    # Calculate additional correlation metrics
+                    jaccard_similarity = both_failed / (both_failed + test1_only + test2_only) if (both_failed + test1_only + test2_only) > 0 else 0
+                    conditional_prob_1_given_2 = both_failed / (both_failed + test2_only) if (both_failed + test2_only) > 0 else 0
+                    conditional_prob_2_given_1 = both_failed / (both_failed + test1_only) if (both_failed + test1_only) > 0 else 0
+
                     # Only include pairs with significant correlation
-                    if abs(correlation) > 0.5 and both_failed > 0:
+                    if (abs(correlation) > 0.3 or jaccard_similarity > 0.3) and both_failed > 0:
                         # Get shortened test names for display
                         test1_short = test1.split("::")[-1] if "::" in test1 else test1
                         test2_short = test2.split("::")[-1] if "::" in test2 else test2
+
+                        # Extract module names for grouping related tests
+                        test1_module = test1.split("::")[0] if "::" in test1 else ""
+                        test2_module = test2.split("::")[0] if "::" in test2 else ""
+                        same_module = test1_module == test2_module and test1_module != ""
 
                         correlated_pairs.append({
                             "test1": test1,
@@ -985,13 +1112,32 @@ def analyze_test_data(
                             "test1_short": test1_short,
                             "test2_short": test2_short,
                             "correlation": correlation,
+                            "jaccard_similarity": jaccard_similarity,
+                            "conditional_prob_1_given_2": conditional_prob_1_given_2,
+                            "conditional_prob_2_given_1": conditional_prob_2_given_1,
                             "both_failed": both_failed,
                             "test1_failures": test1_only + both_failed,
-                            "test2_failures": test2_only + both_failed
+                            "test2_failures": test2_only + both_failed,
+                            "same_module": same_module
                         })
 
             # Sort by correlation strength (absolute value)
             correlated_pairs.sort(key=lambda x: abs(x["correlation"]), reverse=True)
+
+            # Find root cause candidates - tests that most frequently appear in correlations
+            if correlated_pairs:
+                test_frequency = {}
+                for pair in correlated_pairs:
+                    test_frequency[pair["test1"]] = test_frequency.get(pair["test1"], 0) + 1
+                    test_frequency[pair["test2"]] = test_frequency.get(pair["test2"], 0) + 1
+
+                # Sort by frequency
+                root_cause_candidates = sorted(test_frequency.items(), key=lambda x: x[1], reverse=True)
+
+                # Get top 5 candidates
+                top_root_causes = root_cause_candidates[:5]
+            else:
+                top_root_causes = []
 
             # Display the results
             if not json_mode and correlated_pairs:
@@ -999,30 +1145,55 @@ def analyze_test_data(
                 correlation_table.add_column("Test 1", style="cyan")
                 correlation_table.add_column("Test 2", style="cyan")
                 correlation_table.add_column("Correlation", style="yellow")
+                correlation_table.add_column("Jaccard", style="green")
                 correlation_table.add_column("Co-failures", style="red")
+                correlation_table.add_column("Same Module", style="blue")
 
                 # Show top 10 correlated pairs
                 for pair in correlated_pairs[:10]:
                     correlation_str = f"{pair['correlation']:.2f}"
+                    jaccard_str = f"{pair['jaccard_similarity']:.2f}"
                     correlation_table.add_row(
                         pair["test1_short"],
                         pair["test2_short"],
                         correlation_str,
-                        str(pair["both_failed"])
+                        jaccard_str,
+                        str(pair["both_failed"]),
+                        "✓" if pair["same_module"] else "✗"
                     )
 
                 console.print(correlation_table)
 
+                # Display potential root cause tests
+                if top_root_causes:
+                    console.print("\n[bold]Potential Root Cause Tests:[/bold]")
+                    console.print("[italic]These tests frequently appear in correlated failure pairs and may indicate shared dependencies or infrastructure issues[/italic]")
+
+                    root_cause_table = Table(show_header=True)
+                    root_cause_table.add_column("Test", style="cyan")
+                    root_cause_table.add_column("Correlation Frequency", style="yellow")
+
+                    for test, frequency in top_root_causes:
+                        test_short = test.split("::")[-1] if "::" in test else test
+                        root_cause_table.add_row(test_short, str(frequency))
+
+                    console.print(root_cause_table)
+
                 # Group tests into clusters based on correlation
                 if len(correlated_pairs) > 0:
-                    console.print("[bold]Test Failure Clusters:[/bold]")
+                    console.print("\n[bold]Test Failure Clusters:[/bold]")
 
-                    # Simple clustering based on correlation strength
+                    # Enhanced clustering using both correlation and Jaccard similarity
                     clusters = []
                     processed_tests = set()
 
+                    # First pass: create initial clusters with strong correlations
                     for pair in correlated_pairs:
                         test1, test2 = pair["test1"], pair["test2"]
+
+                        # Skip if correlation is too weak
+                        if abs(pair["correlation"]) < 0.5 and pair["jaccard_similarity"] < 0.4:
+                            continue
 
                         # Find if either test is already in a cluster
                         found_cluster = False
@@ -1034,20 +1205,58 @@ def analyze_test_data(
                                 break
 
                         # If not, create a new cluster
-                        if not found_cluster and abs(pair["correlation"]) > 0.7:  # Higher threshold for creating new clusters
+                        if not found_cluster:
                             clusters.append({test1, test2})
 
                         processed_tests.add(test1)
                         processed_tests.add(test2)
 
-                    # Display clusters
+                    # Second pass: merge overlapping clusters
+                    i = 0
+                    while i < len(clusters):
+                        j = i + 1
+                        while j < len(clusters):
+                            if clusters[i].intersection(clusters[j]):
+                                # Merge clusters
+                                clusters[i].update(clusters[j])
+                                clusters.pop(j)
+                            else:
+                                j += 1
+                        i += 1
+
+                    # Display clusters with additional insights
                     for i, cluster in enumerate(clusters):
                         if len(cluster) >= 2:  # Only show clusters with at least 2 tests
-                            console.print(f"[bold]Cluster {i+1}:[/bold] {len(cluster)} tests that tend to fail together")
-                            cluster_table = Table(show_header=False, box=box.SIMPLE)
+                            # Check if tests in this cluster are from the same module
+                            modules = set()
+                            for test in cluster:
+                                module = test.split("::")[0] if "::" in test else ""
+                                if module:
+                                    modules.add(module)
+
+                            module_info = f" (all from {list(modules)[0]})" if len(modules) == 1 else f" (across {len(modules)} modules)"
+
+                            console.print(f"[bold]Cluster {i+1}:[/bold] {len(cluster)} tests that tend to fail together{module_info}")
+
+                            # Create a more informative cluster table
+                            cluster_table = Table(show_header=True, box=box.SIMPLE)
+                            cluster_table.add_column("Test", style="cyan")
+                            cluster_table.add_column("Module", style="blue")
+                            cluster_table.add_column("Failure Count", style="red")
+
+                            # Get failure counts for tests in this cluster
                             for test in sorted(cluster):
                                 test_short = test.split("::")[-1] if "::" in test else test
-                                cluster_table.add_row(test_short)
+                                module = test.split("::")[0] if "::" in test else "Unknown"
+
+                                # Count failures for this test
+                                failure_count = 0
+                                for session_key in test_failure_matrix:
+                                    if test in test_failure_matrix[session_key] and test_failure_matrix[session_key][test] == 1:
+                                        failure_count += 1
+
+                                cluster_table.add_row(test_short, module, str(failure_count))
+
                             console.print(cluster_table)
             elif not json_mode:
                 console.print("[italic]No significant test correlations found.[/italic]")
@@ -1059,9 +1268,13 @@ def analyze_test_data(
                         "test1": pair["test1"],
                         "test2": pair["test2"],
                         "correlation": pair["correlation"],
+                        "jaccard_similarity": pair["jaccard_similarity"],
+                        "conditional_prob_1_given_2": pair["conditional_prob_1_given_2"],
+                        "conditional_prob_2_given_1": pair["conditional_prob_2_given_1"],
                         "both_failed": pair["both_failed"],
                         "test1_failures": pair["test1_failures"],
-                        "test2_failures": pair["test2_failures"]
+                        "test2_failures": pair["test2_failures"],
+                        "same_module": pair["same_module"]
                     }
                     for pair in correlated_pairs[:20]  # Limit to top 20 for JSON output
                 ]
@@ -1069,10 +1282,215 @@ def analyze_test_data(
                 # Add cluster information
                 if 'clusters' in locals() and len(clusters) > 0:
                     result["test_failure_clusters"] = [
-                        {"tests": list(cluster)}
+                        {"tests": list(cluster), "module_count": len(set(test.split("::")[0] for test in cluster if "::" in test))}
                         for cluster in clusters
                         if len(cluster) >= 2
                     ]
+
+                # Add root cause candidates
+                if 'top_root_causes' in locals() and top_root_causes:
+                    result["potential_root_causes"] = [
+                        {"test": test, "correlation_frequency": freq}
+                        for test, freq in top_root_causes
+                    ]
+
+            # Calculate and display test brittleness scores
+            if not json_mode:
+                console.print("\n[bold]Test Brittleness Analysis[/bold]")
+
+                # Calculate brittleness scores
+                test_brittleness = {}
+                for test_id in all_test_nodeids:
+                    # Skip tests with too few runs
+                    total_runs = sum(1 for session_key in test_failure_matrix if test_id in test_failure_matrix[session_key])
+                    if total_runs < 3:
+                        continue
+
+                    # Count failures
+                    failures = sum(test_failure_matrix[session_key][test_id] for session_key in test_failure_matrix if test_id in test_failure_matrix[session_key])
+
+                    # Skip tests that never fail
+                    if failures == 0:
+                        continue
+
+                    # Calculate failure rate
+                    failure_rate = failures / total_runs
+
+                    # Calculate variance in failure patterns
+                    # (tests that alternate between pass/fail are more brittle)
+                    transitions = 0
+                    last_outcome = None
+
+                    # Sort session keys by date for chronological analysis
+                    sorted_sessions = sorted(test_failure_matrix.keys())
+
+                    for session_key in sorted_sessions:
+                        if test_id in test_failure_matrix[session_key]:
+                            current_outcome = test_failure_matrix[session_key][test_id]
+                            if last_outcome is not None and current_outcome != last_outcome:
+                                transitions += 1
+                            last_outcome = current_outcome
+
+                    # Normalize transitions by number of runs
+                    transition_rate = transitions / (total_runs - 1) if total_runs > 1 else 0
+
+                    # Calculate brittleness score (combination of failure rate and transition rate)
+                    # Higher transition rate with moderate failure rate indicates brittleness
+                    brittleness_score = (0.4 * failure_rate + 0.6 * transition_rate) * 10
+
+                    # Store the results
+                    test_brittleness[test_id] = {
+                        "test_id": test_id,
+                        "runs": total_runs,
+                        "failures": failures,
+                        "failure_rate": failure_rate,
+                        "transitions": transitions,
+                        "transition_rate": transition_rate,
+                        "brittleness_score": brittleness_score
+                    }
+
+                # Sort by brittleness score
+                brittle_tests = sorted(test_brittleness.values(), key=lambda x: x["brittleness_score"], reverse=True)
+
+                # Display the results
+                if brittle_tests:
+                    brittleness_table = Table(title="Most Brittle Tests", box=box.SIMPLE)
+                    brittleness_table.add_column("Test", style="cyan")
+                    brittleness_table.add_column("Brittleness Score", style="yellow")
+                    brittleness_table.add_column("Failure Rate", style="red")
+                    brittleness_table.add_column("Transition Rate", style="magenta")
+                    brittleness_table.add_column("Runs", style="blue")
+
+                    # Show top 10 brittle tests
+                    for test in brittle_tests[:10]:
+                        test_short = test["test_id"].split("::")[-1] if "::" in test["test_id"] else test["test_id"]
+                        brittleness_table.add_row(
+                            test_short,
+                            f"{test['brittleness_score']:.2f}",
+                            f"{test['failure_rate']:.2f}",
+                            f"{test['transition_rate']:.2f}",
+                            str(test["runs"])
+                        )
+
+                    console.print(brittleness_table)
+                else:
+                    console.print("[yellow]No brittle tests identified in the dataset.[/yellow]")
+
+            # Analyze seasonal patterns in test failures
+            if not json_mode:
+                console.print("\n[bold]Seasonal Failure Patterns[/bold]")
+
+                # Collect timestamp data for all test runs
+                test_timestamps = {}
+                for session in filtered_sessions:
+                    session_date = session.session_start_time
+
+                    for test_result in session.test_results:
+                        if hasattr(test_result, "outcome") and test_result.outcome == "failed":
+                            test_id = test_result.nodeid
+                            if test_id not in test_timestamps:
+                                test_timestamps[test_id] = []
+
+                            # Store the timestamp of this failure
+                            test_timestamps[test_id].append(test_result.start_time)
+
+                # Analyze patterns for tests with sufficient data
+                seasonal_patterns = []
+                for test_id, timestamps in test_timestamps.items():
+                    if len(timestamps) < 3:
+                        continue
+
+                    # Sort timestamps chronologically
+                    timestamps.sort()
+
+                    # Check for time-of-day patterns
+                    hour_distribution = [0] * 24
+                    for timestamp in timestamps:
+                        hour = timestamp.hour
+                        hour_distribution[hour] += 1
+
+                    total_failures = len(timestamps)
+
+                    # Calculate hourly distribution as percentages
+                    hour_percentages = [count / total_failures for count in hour_distribution]
+
+                    # Check for peaks (hours with significantly more failures)
+                    avg_failures_per_hour = total_failures / 24
+                    peak_hours = []
+                    for hour, count in enumerate(hour_distribution):
+                        if count > 2 * avg_failures_per_hour and count >= 2:  # At least twice the average and at least 2 occurrences
+                            peak_hours.append((hour, count, count / total_failures))
+
+                    # Check for day-of-week patterns
+                    day_distribution = [0] * 7  # Monday to Sunday
+                    for timestamp in timestamps:
+                        day = timestamp.weekday()
+                        day_distribution[day] += 1
+
+                    # Calculate day distribution as percentages
+                    day_percentages = [count / total_failures for count in day_distribution]
+
+                    # Check for peak days
+                    avg_failures_per_day = total_failures / 7
+                    peak_days = []
+                    for day, count in enumerate(day_distribution):
+                        if count > 1.5 * avg_failures_per_day and count >= 2:  # At least 1.5x the average and at least 2 occurrences
+                            peak_days.append((day, count, count / total_failures))
+
+                    # Only include tests with significant patterns
+                    if peak_hours or peak_days:
+                        test_short = test_id.split("::")[-1] if "::" in test_id else test_id
+
+                        seasonal_patterns.append({
+                            "test_id": test_id,
+                            "test_short": test_short,
+                            "total_failures": total_failures,
+                            "peak_hours": peak_hours,
+                            "peak_days": peak_days,
+                            "hour_distribution": hour_distribution,
+                            "day_distribution": day_distribution
+                        })
+
+                # Sort by total failures
+                seasonal_patterns.sort(key=lambda x: x["total_failures"], reverse=True)
+
+                # Display the results
+                if seasonal_patterns:
+                    # Map day numbers to names
+                    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+                    seasonal_table = Table(title="Seasonal Failure Patterns", box=box.SIMPLE)
+                    seasonal_table.add_column("Test", style="cyan")
+                    seasonal_table.add_column("Total Failures", style="red")
+                    seasonal_table.add_column("Time of Day Pattern", style="yellow")
+                    seasonal_table.add_column("Day of Week Pattern", style="green")
+
+                    # Show top 10 tests with seasonal patterns
+                    for pattern in seasonal_patterns[:10]:
+                        # Format time of day patterns
+                        hour_pattern = ""
+                        if pattern["peak_hours"]:
+                            hour_pattern = ", ".join([f"{hour}:00 ({int(pct*100)}%)" for hour, count, pct in pattern["peak_hours"]])
+                        else:
+                            hour_pattern = "No significant pattern"
+
+                        # Format day of week patterns
+                        day_pattern = ""
+                        if pattern["peak_days"]:
+                            day_pattern = ", ".join([f"{day_names[day]} ({int(pct*100)}%)" for day, count, pct in pattern["peak_days"]])
+                        else:
+                            day_pattern = "No significant pattern"
+
+                        seasonal_table.add_row(
+                            pattern["test_short"],
+                            str(pattern["total_failures"]),
+                            hour_pattern,
+                            day_pattern
+                        )
+
+                    console.print(seasonal_table)
+                else:
+                    console.print("[yellow]No significant seasonal patterns identified in the dataset.[/yellow]")
 
             # 4. Failure Pattern Recognition
             # Categorize failures by error type
@@ -1340,144 +1758,228 @@ def main():
         default_dir = Path.home() / ".pytest_insight"
         default_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate sample data
-        import random
-        from datetime import datetime, timedelta
+        try:
+            # Generate sample data
+            import random
+            from datetime import datetime, timedelta
+            from rich.traceback import install
 
-        # Function to generate realistic error messages
-        def generate_error_message(test_type, test_name):
-            """Generate realistic error messages for failed tests."""
-            # Common Python exceptions with realistic error messages
-            error_types = {
-                "AssertionError": [
-                    "assert actual == expected",
-                    "assert response.status_code == 200",
-                    "assert len(results) > 0",
-                    "assert 'error' not in response.json()",
-                    "assert isinstance(result, dict)",
-                ],
-                "ValueError": [
-                    "invalid literal for int() with base 10",
-                    "time data does not match format",
-                    "invalid token in JSON string",
-                    "could not convert string to float",
-                    "invalid URL for request",
-                ],
-                "TypeError": [
-                    "unsupported operand type(s) for +",
-                    "function takes 2 positional arguments but 3 were given",
-                    "object of type 'NoneType' has no len()",
-                    "string indices must be integers",
-                    "'NoneType' object is not subscriptable",
-                ],
-                "KeyError": [
-                    "'id'",
-                    "'data'",
-                    "'results'",
-                    "'user'",
-                    "'config'",
-                ],
-                "IndexError": [
-                    "list index out of range",
-                    "tuple index out of range",
-                    "string index out of range",
-                    "pop from empty list",
-                    "pop from empty array",
-                ],
-                "AttributeError": [
-                    "'NoneType' object has no attribute",
-                    "module has no attribute",
-                    "object has no attribute",
-                    "'dict' object has no attribute",
-                    "'list' object has no attribute",
-                ],
-            }
+            # Install rich traceback handler
+            install(show_locals=True, width=120, word_wrap=True)
 
-            # Select a random error type and message
-            error_type = random.choice(list(error_types.keys()))
-            error_message = random.choice(error_types[error_type])
+            # Function to generate realistic error messages
+            def generate_error_message(test_type, test_name):
+                """Generate realistic error messages for failed tests.
 
-            # Create a realistic traceback
-            file_path = f"tests/{test_type}/{test_name}.py"
-            line_number = random.randint(10, 200)
+                Creates error messages that are consistent for related tests to enable
+                meaningful correlation analysis.
 
-            # Create a realistic traceback
-            traceback = f"""Traceback (most recent call last):
-  File "{file_path}", line {line_number}, in test_function
-    result = app.{test_name.split('_')[-1]}()
-  File "/app/core/api.py", line {random.randint(50, 150)}, in {test_name.split('_')[-1]}
-    return self._process_request(data)
-{error_type}: {error_message}"""
+                Args:
+                    test_type: The type of test (api, ui, unit, integration)
+                    test_name: The name of the test function
 
-            return traceback
+                Returns:
+                    A string containing a realistic error message with traceback
+                """
+                # Define error patterns that are consistent based on test type and operation
+                # This ensures similar tests will have similar failures for correlation
+                test_operation = test_name.split('_')[-1] if '_' in test_name else 'default'
 
-        # Create sample test sessions
-        sample_data = []
-
-        # Generate data for the last 7 days
-        for day in range(7):
-            session_date = datetime.now() - timedelta(days=day)
-
-            # Create 1-3 sessions per day
-            for session_num in range(random.randint(1, 3)):
-                session = {
-                    "session_id": f"sample-{day}-{session_num}",
-                    "sut_name": "sample-app",
-                    "version": "1.0.0",
-                    "timestamp": (session_date - timedelta(hours=random.randint(0, 23))).isoformat(),
-                    "session_duration": random.uniform(5.0, 30.0),
-                    "test_results": [],
+                # Map test types to specific error patterns
+                type_error_mapping = {
+                    "api": {
+                        "login": ["KeyError: 'token'", "AssertionError: assert response.status_code == 200",
+                                 "ValueError: invalid token in JSON string"],
+                        "logout": ["AssertionError: assert response.status_code == 200",
+                                  "TypeError: 'NoneType' object is not subscriptable"],
+                        "create": ["AssertionError: assert 'id' in response.json()",
+                                  "ValueError: invalid literal for int() with base 10"],
+                        "update": ["AssertionError: assert response.status_code == 200",
+                                  "TypeError: object of type 'NoneType' has no len()"],
+                        "delete": ["AssertionError: assert response.status_code == 204",
+                                  "KeyError: 'id'"],
+                        "search": ["AssertionError: assert len(results) > 0",
+                                  "TypeError: string indices must be integers"],
+                        "default": ["AssertionError: assert response.status_code == 200"]
+                    },
+                    "ui": {
+                        "login": ["AttributeError: 'NoneType' object has no attribute 'click'",
+                                 "AssertionError: assert 'Welcome' in page_text"],
+                        "logout": ["AssertionError: assert 'Login' in page_text",
+                                  "AttributeError: 'NoneType' object has no attribute 'text'"],
+                        "create": ["AttributeError: 'NoneType' object has no attribute 'send_keys'",
+                                  "AssertionError: assert 'Created successfully' in page_text"],
+                        "update": ["AssertionError: assert 'Updated successfully' in page_text",
+                                  "AttributeError: 'NoneType' object has no attribute 'clear'"],
+                        "delete": ["AssertionError: assert 'Deleted successfully' in page_text",
+                                  "AttributeError: 'NoneType' object has no attribute 'confirm'"],
+                        "search": ["AssertionError: assert len(results) > 0",
+                                  "AttributeError: 'NoneType' object has no attribute 'find_elements'"],
+                        "default": ["AssertionError: assert element.is_displayed()"]
+                    },
+                    "unit": {
+                        "login": ["AssertionError: assert mock_auth.called",
+                                 "TypeError: 'NoneType' object is not callable"],
+                        "logout": ["AssertionError: assert mock_session.clear.called",
+                                  "AttributeError: 'Mock' object has no attribute 'clear'"],
+                        "create": ["AssertionError: assert mock_db.insert.called",
+                                  "TypeError: 'NoneType' object is not callable"],
+                        "update": ["AssertionError: assert mock_db.update.called",
+                                  "KeyError: 'id'"],
+                        "delete": ["AssertionError: assert mock_db.delete.called",
+                                  "ValueError: invalid literal for int() with base 10"],
+                        "search": ["AssertionError: assert len(result) > 0",
+                                  "TypeError: object of type 'NoneType' has no len()"],
+                        "default": ["AssertionError: assert mock.called"]
+                    },
+                    "integration": {
+                        "login": ["AssertionError: assert token is not None",
+                                 "KeyError: 'token'"],
+                        "logout": ["AssertionError: assert session is None",
+                                  "AttributeError: 'NoneType' object has no attribute 'clear'"],
+                        "create": ["AssertionError: assert db_record is not None",
+                                  "ValueError: invalid literal for int() with base 10"],
+                        "update": ["AssertionError: assert db_record.updated_at > db_record.created_at",
+                                  "AttributeError: 'NoneType' object has no attribute 'updated_at'"],
+                        "delete": ["AssertionError: assert db_record is None",
+                                  "KeyError: 'id'"],
+                        "search": ["AssertionError: assert len(results) > 0",
+                                  "TypeError: object of type 'NoneType' has no len()"],
+                        "default": ["AssertionError: assert result is not None"]
+                    }
                 }
 
-                # Add 10-20 tests per session
-                for test_num in range(random.randint(10, 20)):
-                    test_type = random.choice(["api", "ui", "unit", "integration"])
-                    test_name = (
-                        f"test_{test_type}_{random.choice(['login', 'logout', 'create', 'update', 'delete', 'search'])}"
-                    )
+                # Get error patterns for this test type and operation
+                error_patterns = type_error_mapping.get(test_type, {}).get(test_operation,
+                                                                          ["AssertionError: assert True is False"])
 
-                    # Randomize outcomes with a bias toward passing
-                    outcome = random.choices(
-                        ["passed", "failed", "skipped", "xfailed", "xpassed"], weights=[0.7, 0.15, 0.1, 0.03, 0.02]
-                    )[0]
+                # Select one of the error patterns for this test type/operation
+                # Use a deterministic approach based on test name to ensure consistency
+                # This ensures the same test will get the same error each time
+                error_index = hash(test_name) % len(error_patterns)
+                error_pattern = error_patterns[error_index]
 
-                    test = {
-                        "nodeid": f"tests/{test_type}/{test_name}.py::test_function_{test_num}",
-                        "outcome": outcome,
-                        "duration": random.uniform(0.1, 5.0),
-                        "timestamp": (
-                            session_date - timedelta(hours=random.randint(0, 23), minutes=random.randint(0, 59))
-                        ).isoformat(),
+                # Parse the error pattern
+                if ": " in error_pattern:
+                    error_type, error_message = error_pattern.split(": ", 1)
+                else:
+                    error_type = "AssertionError"
+                    error_message = error_pattern
+
+                # Create a realistic traceback
+                file_path = f"tests/{test_type}/{test_name}.py"
+                line_number = (hash(test_name) % 100) + 10  # Deterministic line number based on test name
+
+                # Format based on test type
+                if test_operation in ["get", "list", "search"]:
+                    function_name = f"test_{test_operation}_{test_type}"
+                    code_context = f"response = client.{test_operation}('{test_type}')"
+                elif test_operation in ["post", "create"]:
+                    function_name = f"test_{test_operation}_{test_type}"
+                    code_context = f"response = client.{test_operation}('{test_type}', data=payload)"
+                elif test_operation in ["update"]:
+                    function_name = f"test_{test_operation}_{test_type}"
+                    code_context = f"response = client.put('{test_type}/{id}', data=payload)"
+                elif test_operation in ["delete"]:
+                    function_name = f"test_{test_operation}_{test_type}"
+                    code_context = f"response = client.{test_operation}('{test_type}/{id}')"
+                else:
+                    function_name = f"test_{test_operation}"
+                    code_context = f"result = {test_operation}()"
+
+                # Create a realistic traceback
+                traceback = f"""Traceback (most recent call last):
+  File "{file_path}", line {line_number}, in {function_name}
+    {code_context}
+  File "/path/to/project/lib/client.py", line {50 + (hash(test_name) % 50)}, in {test_operation}
+    return self._request("{test_operation.upper()}", url, **kwargs)
+  File "/path/to/project/lib/client.py", line {20 + (hash(test_name) % 10)}, in _request
+    response = self.session.{test_operation}(url, **kwargs)
+{error_type}: {error_message}"""
+
+                return traceback
+
+            # Create sample test sessions
+            sample_data = []
+
+            # Generate data for the last 7 days
+            for day in range(7):
+                session_date = datetime.now() - timedelta(days=day)
+
+                # Create 1-3 sessions per day
+                for session_num in range(random.randint(1, 3)):
+                    session_start = session_date - timedelta(hours=random.randint(0, 23))
+                    session_duration = random.uniform(5.0, 30.0)
+                    session_stop = session_start + timedelta(seconds=session_duration)
+
+                    session = {
+                        "session_id": f"sample-{day}-{session_num}",
+                        "sut_name": "sample-app",
+                        "version": "1.0.0",
+                        "session_start_time": session_start.isoformat(),
+                        "session_stop_time": session_stop.isoformat(),
+                        "session_duration": session_duration,
+                        "test_results": [],
                     }
 
-                    # Add realistic error message for failed tests
-                    if outcome == "failed":
-                        test["longreprtext"] = generate_error_message(test_type, test_name)
+                    # Add 10-20 tests per session
+                    for test_num in range(random.randint(10, 20)):
+                        test_type = random.choice(["api", "ui", "unit", "integration"])
+                        test_name = (
+                            f"test_{test_type}_{random.choice(['login', 'logout', 'create', 'update', 'delete', 'search'])}"
+                        )
 
-                    session["test_results"].append(test)
+                        # Randomize outcomes with a bias toward passing
+                        outcome = random.choices(
+                            ["passed", "failed", "skipped", "xfailed", "xpassed"], weights=[0.7, 0.15, 0.1, 0.03, 0.02]
+                        )[0]
 
-                sample_data.append(session)
+                        # Create test start and stop times
+                        test_duration = random.uniform(0.1, 5.0)
+                        test_start_time = datetime.fromisoformat(session["session_start_time"]) + timedelta(seconds=random.uniform(0, session_duration/2))
+                        test_stop_time = test_start_time + timedelta(seconds=test_duration)
 
-        # Save the sample data
-        data_path = default_dir / "practice.json"
-        with open(data_path, "w") as f:
-            json.dump(sample_data, f, indent=2)
+                        test = {
+                            "nodeid": f"tests/{test_type}/{test_name}.py::test_function_{test_num}",
+                            "outcome": outcome,
+                            "duration": test_duration,
+                            "start_time": test_start_time.isoformat(),
+                            "stop_time": test_stop_time.isoformat(),
+                        }
 
-        console.print(f"[green]Sample data generated at {data_path}[/green]")
+                        # Add realistic error message for failed tests
+                        if outcome == "failed":
+                            test["longreprtext"] = generate_error_message(test_type, test_name)
 
-    if data_path is None or not data_path.exists():
-        console.print(
-            Panel(
-                "[bold red]Error: No test data found.[/bold red]\n\n"
-                "To generate test data, run:\n"
-                "  [bold]insight-gen --days 14[/bold]\n\n"
-                "Or generate sample data with:\n"
-                "  [bold]insights --generate-sample[/bold]\n\n"
-                "Or specify a custom path:\n"
-                "  [bold]insights --path /path/to/your/data.json[/bold]"
+                        session["test_results"].append(test)
+
+                    sample_data.append(session)
+
+            # Save the sample data
+            data_path = default_dir / "practice.json"
+            with open(data_path, "w") as f:
+                json.dump(sample_data, f, indent=2)
+
+            console.print(f"[green]Sample data generated at {data_path}[/green]")
+        except Exception as e:
+            console.print("[bold red]Error generating sample data:[/bold red]")
+            from rich.traceback import Traceback
+            console.print(Traceback.from_exception(type(e), e, e.__traceback__))
+            return
+
+        if data_path is None or not data_path.exists():
+            console.print(
+                Panel(
+                    "[bold red]Error: No test data found.[/bold red]\n\n"
+                    "To generate test data, run:\n"
+                    "  [bold]insight-gen --days 14[/bold]\n\n"
+                    "Or generate sample data with:\n"
+                    "  [bold]insights --generate-sample[/bold]\n\n"
+                    "Or specify a custom path:\n"
+                    "  [bold]insights --path /path/to/your/data.json[/bold]"
+                )
             )
-        )
-        return
+            return
 
     # Analyze the data
     analyze_test_data(
