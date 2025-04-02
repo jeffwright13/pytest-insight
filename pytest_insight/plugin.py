@@ -1,3 +1,4 @@
+import socket
 import sys
 import uuid
 from datetime import datetime, timedelta
@@ -43,8 +44,8 @@ def pytest_addoption(parser):
     group.addoption(
         "--insight-sut",
         action="store",
-        default="default_sut",
-        help="Name of the system under test",
+        default=None,
+        help="Name of the system under test (defaults to hostname if not specified)",
     )
     group.addoption(
         "--insight-storage-type",
@@ -103,7 +104,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     if not storage:  # Ensure storage is initialized
         return
 
-    sut_name = config.getoption("insight_sut", "default_sut")  # Get SUT name from pytest option
+    # Get SUT name from pytest option '--insight-sut'; use hostname as default if not specified
+    sut_name = config.getoption("insight_sut") or socket.gethostname()
+
     stats = terminalreporter.stats
     test_results = []
     session_start = None
@@ -170,7 +173,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     # Create and store session with SUT name
     session = TestSession(
         session_id=session_id,
-        sut_name=sut_name,  # Use the SUT name from pytest option
+        sut_name=sut_name,
         session_start_time=session_start or datetime.now(),
         session_stop_time=session_end or datetime.now(),
         test_results=test_results,

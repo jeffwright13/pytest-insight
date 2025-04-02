@@ -249,6 +249,100 @@ class Test_QueryOperations:
         assert test.nodeid == test_session_basic.test_results[0].nodeid
 
 
+class Test_SUTNameBehavior:
+    """Test the SUT name behavior in the plugin."""
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a mock Config object."""
+        class MockConfig:
+            def __init__(self):
+                self.option = type('obj', (object,), {
+                    'insight': True,
+                })
+                self._insight_sut = None
+
+            def getoption(self, name, default=None):
+                if name == "insight_sut":
+                    return self._insight_sut
+                elif name == "insight_storage_type":
+                    return "memory"
+                elif name == "insight_storage_path":
+                    return None
+                elif name == "environment":
+                    return "test"
+                return default
+
+            def set_sut_name(self, name):
+                self._insight_sut = name
+
+        return MockConfig()
+
+    @pytest.fixture
+    def mock_terminalreporter(self):
+        """Create a mock TerminalReporter object."""
+        class MockTerminalReporter:
+            def __init__(self):
+                self.stats = {}
+
+            def write_line(self, line, **kwargs):
+                pass
+
+        return MockTerminalReporter()
+
+    def test_specified_sut_name(self, mock_config, mock_terminalreporter, monkeypatch):
+        """Test that when --insight-sut is specified, that value is used as the SUT name."""
+        from unittest.mock import MagicMock
+
+        import pytest_insight.plugin as plugin
+
+        # Set up the mock config with a specified SUT name
+        mock_config.set_sut_name("custom-sut-name")
+
+        # Mock the storage to capture the session
+        mock_storage = MagicMock()
+        plugin.storage = mock_storage
+
+        # Mock the insight_enabled function to return True
+        monkeypatch.setattr(plugin, "insight_enabled", lambda config: True)
+
+        # Call the terminal summary hook
+        plugin.pytest_terminal_summary(mock_terminalreporter, 0, mock_config)
+
+        # Check that the session was created with the specified SUT name
+        args, _ = mock_storage.save_session.call_args
+        session = args[0]
+        assert session.sut_name == "custom-sut-name"
+
+    def test_default_sut_name(self, mock_config, mock_terminalreporter, monkeypatch):
+        """Test that when --insight-sut is not specified, the hostname is used as the SUT name."""
+        import socket
+        from unittest.mock import MagicMock
+
+        import pytest_insight.plugin as plugin
+
+        # Set up the mock config with no SUT name specified
+        mock_config.set_sut_name(None)
+
+        # Get the hostname for comparison
+        hostname = socket.gethostname()
+
+        # Mock the storage to capture the session
+        mock_storage = MagicMock()
+        plugin.storage = mock_storage
+
+        # Mock the insight_enabled function to return True
+        monkeypatch.setattr(plugin, "insight_enabled", lambda config: True)
+
+        # Call the terminal summary hook
+        plugin.pytest_terminal_summary(mock_terminalreporter, 0, mock_config)
+
+        # Check that the session was created with the hostname as the SUT name
+        args, _ = mock_storage.save_session.call_args
+        session = args[0]
+        assert session.sut_name == hostname
+
+
 class Test_StorageConfiguration:
     """Test storage configuration for persistence."""
 
@@ -310,28 +404,6 @@ class Test_StorageConfiguration:
     #     import json
 
     #     assert json.loads(content), "Storage file should contain valid JSON"
-
-    # def test_storage_path_permissions(self, tester, tmp_path):
-    #     """Test storage path permission validation."""
-
-    #     # Create a test file to ensure we have tests to run
-    #     tester.makepyfile(
-    #         """
-    #         def test_example():
-    #             assert True
-    #         """
-    #     )
-
-    #     # Create read-only directory
-    #     storage_dir = tmp_path / "readonly"
-    #     storage_dir.mkdir()
-    #     storage_path = storage_dir / "test.json"
-    #     storage_dir.chmod(0o555)  # Read and execute only
-
-    #     # Run with read-only directory
-    #     result = tester.runpytest("--insight", f"--insight-json-path={storage_path}")
-    #     assert result.ret == pytest.ExitCode.USAGE_ERROR  # Should fail with usage error
-    #     assert "Permission denied" in result.stderr.str() or "is not writable" in result.stderr.str()
 
     def test_storage_path_file_exists(self, tester, tmp_path):
         """Test handling of existing storage files."""
