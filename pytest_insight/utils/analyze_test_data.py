@@ -1819,6 +1819,171 @@ def analyze_test_data(
                         timeline_table.add_row(*row)
 
                     console.print(timeline_table)
+
+            # 6. Test Dependency Graph
+            # Analyze which tests tend to fail together to identify potential dependencies
+            if not json_mode:
+                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+
+                # Create a matrix of test co-failures
+                test_failures = {}
+                for session in filtered_sessions:
+                    # Get all failed tests in this session
+                    session_failures = []
+                    for test_result in session.test_results:
+                        nodeid = getattr(test_result, "nodeid", None)
+                        outcome = getattr(test_result, "outcome", None)
+
+                        # Check if the test failed
+                        is_failed = False
+                        if hasattr(outcome, "value"):
+                            # It's an enum
+                            is_failed = outcome.value == "FAILED"
+                        else:
+                            # It's a string
+                            is_failed = str(outcome).upper() == "FAILED"
+
+                        if is_failed and nodeid:
+                            session_failures.append(nodeid)
+
+                            # Track individual test failure counts
+                            if nodeid not in test_failures:
+                                test_failures[nodeid] = {
+                                    "count": 0,
+                                    "co_failures": {}
+                                }
+                            test_failures[nodeid]["count"] += 1
+
+                    # Record co-failures for each pair of failed tests
+                    for i, test1 in enumerate(session_failures):
+                        for test2 in session_failures[i+1:]:
+                            if test1 != test2:
+                                # Update co-failure count for test1
+                                if test2 not in test_failures[test1]["co_failures"]:
+                                    test_failures[test1]["co_failures"][test2] = 0
+                                test_failures[test1]["co_failures"][test2] += 1
+
+                                # Update co-failure count for test2
+                                if test1 not in test_failures[test2]["co_failures"]:
+                                    test_failures[test2]["co_failures"][test1] = 0
+                                test_failures[test2]["co_failures"][test1] += 1
+
+                # Identify significant dependencies
+                dependencies = []
+                for test_id, data in test_failures.items():
+                    total_failures = data["count"]
+                    if total_failures < 3:  # Ignore tests with too few failures
+                        continue
+
+                    # Find tests that fail together with this test more than 70% of the time
+                    for co_test, co_count in data["co_failures"].items():
+                        co_test_total = test_failures.get(co_test, {}).get("count", 0)
+                        if co_test_total < 3:  # Ignore tests with too few failures
+                            continue
+
+                        # Calculate dependency metrics
+                        pct_a_with_b = co_count / total_failures
+                        pct_b_with_a = co_count / co_test_total
+
+                        # Only consider strong dependencies
+                        if pct_a_with_b > 0.7 or pct_b_with_a > 0.7:
+                            # Determine dependency direction
+                            if pct_a_with_b > pct_b_with_a + 0.2:
+                                # test_id likely depends on co_test
+                                direction = f"{test_id} → {co_test}"
+                                strength = pct_a_with_b
+                                interpretation = f"{test_id.split('::')[-1]} fails when {co_test.split('::')[-1]} fails"
+                            elif pct_b_with_a > pct_a_with_b + 0.2:
+                                # co_test likely depends on test_id
+                                direction = f"{co_test} → {test_id}"
+                                strength = pct_b_with_a
+                                interpretation = f"{co_test.split('::')[-1]} fails when {test_id.split('::')[-1]} fails"
+                            else:
+                                # Bidirectional dependency
+                                direction = f"{test_id} ↔ {co_test}"
+                                strength = (pct_a_with_b + pct_b_with_a) / 2
+                                interpretation = f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
+
+                            dependencies.append({
+                                "test1": test_id,
+                                "test2": co_test,
+                                "direction": direction,
+                                "strength": strength,
+                                "interpretation": interpretation,
+                                "co_failure_count": co_count
+                            })
+
+                # Sort dependencies by strength
+                dependencies.sort(key=lambda x: x["strength"], reverse=True)
+
+                # Display the results
+                if dependencies:
+                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table.add_column("Test Relationship", style="cyan")
+                    dependency_table.add_column("Strength", style="yellow")
+                    dependency_table.add_column("Co-Failures", style="red")
+                    dependency_table.add_column("Interpretation", style="green")
+
+                    # Show top 10 dependencies
+                    for dep in dependencies[:10]:
+                        # Format test names to be shorter
+                        test1_short = dep["test1"].split("::")[-1]
+                        test2_short = dep["test2"].split("::")[-1]
+
+                        if "→" in dep["direction"]:
+                            relationship = f"{test1_short} → {test2_short}"
+                        elif "↔" in dep["direction"]:
+                            relationship = f"{test1_short} ↔ {test2_short}"
+                        else:
+                            relationship = f"{test1_short} - {test2_short}"
+
+                        dependency_table.add_row(
+                            relationship,
+                            f"{dep['strength']:.2f}",
+                            str(dep["co_failure_count"]),
+                            dep["interpretation"]
+                        )
+
+                    console.print(dependency_table)
+                else:
+                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+
+            # 7. Environment Impact Analysis
+            if not json_mode:
+                console.print("\n[bold]Environment Impact Analysis[/bold]: Analyzing how environment affects test results")
+
+                # Collect environment information from session tags
+                environments = {}
+                for session in filtered_sessions:
+                    env = session.session_tags.get("environment", "unknown")
+                    if env not in environments:
+                        environments[env] = {"pass_rates": []}
+
+                    # Calculate pass rate for this session
+                    session_results = session.test_results
+                    if session_results:
+                        session_pass_rate = sum(1 for t in session_results if t.outcome == "passed") / len(session_results)
+                        environments[env]["pass_rates"].append(session_pass_rate)
+
+                # Calculate average pass rate for each environment
+                env_pass_rates = {}
+                for env, data in environments.items():
+                    if data["pass_rates"]:
+                        env_pass_rates[env] = sum(data["pass_rates"]) / len(data["pass_rates"])
+
+                # Display the results
+                if env_pass_rates:
+                    env_table = Table(title="Environment Impact Analysis", box=box.SIMPLE)
+                    env_table.add_column("Environment", style="cyan")
+                    env_table.add_column("Average Pass Rate", style="yellow")
+
+                    # Show environments with their average pass rates
+                    for env, pass_rate in env_pass_rates.items():
+                        env_table.add_row(env, f"{pass_rate:.2%}")
+
+                    console.print(env_table)
+                else:
+                    console.print("[yellow]No environment information found in the dataset.[/yellow]")
         except Exception as e:
             # Always display errors for test compatibility, even in JSON mode
             console.print(f"[bold red]Error during analysis:[/bold red] {str(e)}")
