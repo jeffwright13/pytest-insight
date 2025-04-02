@@ -132,7 +132,7 @@ def mock_api():
     return mock
 
 
-class TestAnalyzeTestData:
+class Test_AnalyzeTestData:
     """Test suite for analyze_test_data.py script."""
 
     @patch("pytest_insight.core.core_api.InsightAPI")
