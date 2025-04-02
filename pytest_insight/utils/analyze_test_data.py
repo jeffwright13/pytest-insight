@@ -1683,6 +1683,142 @@ def analyze_test_data(
 
                 # Include detailed failure information in JSON output
                 result["test_failures"] = failure_details
+
+            # 5. Test Stability Timeline
+            # Analyze how test stability changes over time
+            if not json_mode:
+                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+
+                # Group sessions by date
+                date_sessions = {}
+                for session in filtered_sessions:
+                    session_date = session.session_start_time.date()
+                    if session_date not in date_sessions:
+                        date_sessions[session_date] = []
+                    date_sessions[session_date].append(session)
+
+                # Sort dates chronologically
+                sorted_dates = sorted(date_sessions.keys())
+
+                if len(sorted_dates) <= 1:
+                    console.print("[yellow]Insufficient data for timeline analysis. Need data from multiple dates.[/yellow]")
+                else:
+                    # Track stability metrics over time for the most frequently run tests
+                    test_run_counts = {}
+                    for session in filtered_sessions:
+                        for test_result in session.test_results:
+                            nodeid = getattr(test_result, "nodeid", None)
+                            if nodeid:
+                                if nodeid not in test_run_counts:
+                                    test_run_counts[nodeid] = 0
+                                test_run_counts[nodeid] += 1
+
+                    # Get the top 10 most frequently run tests
+                    top_tests = sorted(test_run_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+
+                    # Calculate stability for each test on each date
+                    test_stability_timeline = {}
+                    for nodeid, _ in top_tests:
+                        test_stability_timeline[nodeid] = {}
+                        for date in sorted_dates:
+                            # Get all results for this test on this date
+                            date_results = []
+                            for session in date_sessions[date]:
+                                for test_result in session.test_results:
+                                    if getattr(test_result, "nodeid", None) == nodeid:
+                                        outcome = getattr(test_result, "outcome", None)
+                                        # Handle both string and enum outcomes
+                                        if hasattr(outcome, "value"):
+                                            # It's an enum
+                                            result = outcome.value
+                                        else:
+                                            # It's a string
+                                            result = str(outcome).upper()
+                                        date_results.append(result)
+
+                            # Calculate stability metrics if we have results
+                            if date_results:
+                                # Count outcomes
+                                outcome_counts = {}
+                                for result in date_results:
+                                    if result not in outcome_counts:
+                                        outcome_counts[result] = 0
+                                    outcome_counts[result] += 1
+
+                                # Calculate stability score (percentage of consistent results)
+                                if date_results:
+                                    most_common_count = max(outcome_counts.values())
+                                    stability_score = most_common_count / len(date_results)
+
+                                    # Store metrics
+                                    test_stability_timeline[nodeid][date] = {
+                                        "total_runs": len(date_results),
+                                        "outcome_counts": outcome_counts,
+                                        "stability_score": stability_score
+                                    }
+
+                    # Display stability timeline
+                    timeline_table = Table(title="Test Stability Timeline", box=box.SIMPLE)
+                    timeline_table.add_column("Test", style="cyan")
+
+                    # Add date columns
+                    for date in sorted_dates:
+                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+
+                    # Add stability trend column
+                    timeline_table.add_column("Trend", style="green")
+
+                    # Add rows for each test
+                    for nodeid, _ in top_tests:
+                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        row = [test_short]
+
+                        # Track stability scores for trend calculation
+                        stability_scores = []
+
+                        # Add stability score for each date
+                        for date in sorted_dates:
+                            if date in test_stability_timeline[nodeid]:
+                                metrics = test_stability_timeline[nodeid][date]
+                                stability = metrics["stability_score"]
+                                stability_scores.append(stability)
+
+                                # Format cell with stability score and color
+                                if stability >= 0.9:
+                                    cell = f"[green]{stability:.2f}[/green]"
+                                elif stability >= 0.7:
+                                    cell = f"[yellow]{stability:.2f}[/yellow]"
+                                else:
+                                    cell = f"[red]{stability:.2f}[/red]"
+
+                                # Add run count
+                                cell += f" ({metrics['total_runs']})"
+                            else:
+                                cell = "-"
+                                stability_scores.append(None)
+
+                            row.append(cell)
+
+                        # Calculate trend
+                        valid_scores = [s for s in stability_scores if s is not None]
+                        if len(valid_scores) >= 2:
+                            # Simple trend: compare first and last valid scores
+                            first_score = valid_scores[0]
+                            last_score = valid_scores[-1]
+
+                            if last_score > first_score + 0.1:
+                                trend = "[green]↑ Improving[/green]"
+                            elif last_score < first_score - 0.1:
+                                trend = "[red]↓ Declining[/red]"
+                            else:
+                                trend = "[blue]→ Stable[/blue]"
+                        else:
+                            trend = "Insufficient data"
+
+                        row.append(trend)
+                        timeline_table.add_row(*row)
+
+                    console.print(timeline_table)
         except Exception as e:
             # Always display errors for test compatibility, even in JSON mode
             console.print(f"[bold red]Error during analysis:[/bold red] {str(e)}")
@@ -1800,7 +1936,7 @@ def main():
                                   "KeyError: 'id'"],
                         "search": ["AssertionError: assert len(results) > 0",
                                   "TypeError: string indices must be integers"],
-                        "default": ["AssertionError: assert response.status_code == 200"]
+                        "default": ["AssertionError: assert True is False"]
                     },
                     "ui": {
                         "login": ["AttributeError: 'NoneType' object has no attribute 'click'",
