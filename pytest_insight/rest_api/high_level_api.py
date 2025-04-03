@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.comparison import Comparison, ComparisonError
+from pytest_insight.core.core_api import InsightAPI
 from pytest_insight.core.insights import TrendInsights
 from pytest_insight.core.models import TestOutcome
 from pytest_insight.core.query import Query
@@ -522,9 +523,10 @@ async def get_sessions(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(7, description="Number of days to include"),
     limit: int = FastAPIQuery(100, description="Maximum number of sessions to return"),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get test sessions filtered by SUT and time range."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
     query = api.query()
 
     if sut:
@@ -574,9 +576,10 @@ async def get_sessions(
 @app.get("/api/sessions/{session_id}", response_model=TestSessionResponse, tags=["query"])
 async def get_session(
     session_id: str = FastAPIPath(..., description="Session ID"),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get a specific test session by ID."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
     storage = api.storage
     sessions = storage.load_sessions()
 
@@ -622,9 +625,10 @@ async def get_tests(
     min_duration: Optional[float] = FastAPIQuery(None, description="Minimum test duration"),
     max_duration: Optional[float] = FastAPIQuery(None, description="Maximum test duration"),
     limit: int = FastAPIQuery(100, description="Maximum number of tests to return"),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get test results filtered by various criteria."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
     query = api.query()
 
     if sut:
@@ -703,9 +707,10 @@ async def get_health_report(
     min_score_threshold: Optional[float] = FastAPIQuery(
         None, description="Only return results if health score is below this threshold"
     ),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get health report for test sessions with enhanced parametrization."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
     query = api.query()
 
     if sut:
@@ -751,9 +756,10 @@ async def get_stability_report(
     min_flaky_rate: float = FastAPIQuery(0.0, description="Minimum flakiness rate to include a test (0.0-1.0)"),
     max_tests: int = FastAPIQuery(100, description="Maximum number of tests to include in each category"),
     include_patterns: bool = FastAPIQuery(True, description="Include outcome patterns in the report"),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get stability report for test sessions with enhanced parametrization."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
     query = api.query()
 
     if sut:
@@ -803,9 +809,10 @@ async def get_performance_report(
     min_duration: float = FastAPIQuery(0.0, description="Minimum test duration to include (seconds)"),
     max_tests: int = FastAPIQuery(100, description="Maximum number of tests to include"),
     include_trends: bool = FastAPIQuery(True, description="Include duration trends in the report"),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get performance report for test sessions with enhanced parametrization."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
     query = api.query()
 
     if sut:
@@ -860,9 +867,10 @@ async def get_trend_report(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(30, description="Number of days to include"),
     interval: str = FastAPIQuery("day", description="Trend interval (day, week, month)"),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get comprehensive trend report showing how metrics change over time."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
     query = api.query()
 
     if sut:
@@ -948,9 +956,10 @@ async def get_coverage_report(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(7, description="Number of days to include"),
     group_by: str = FastAPIQuery("module", description="How to group coverage (module, package, directory)"),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get test coverage report showing distribution of tests across modules."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
     query = api.query()
 
     if sut:
@@ -1048,9 +1057,10 @@ async def get_regression_report(
     min_duration_change: float = FastAPIQuery(
         0.5, description="Minimum duration change to consider significant (seconds)"
     ),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get regression report comparing recent test runs to a baseline period."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
 
     # Get baseline sessions (older period)
     now = dt_module.datetime.now(dt_module.timezone.utc)
@@ -1191,9 +1201,10 @@ class TestSuiteQualityResponse(BaseModel):
 async def get_quality_report(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(30, description="Number of days to include"),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get test suite quality report analyzing test design and organization."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
     query = api.query()
 
     if sut:
@@ -1341,9 +1352,10 @@ async def compare_suts(
         0.1, description="Minimum duration change to consider significant (seconds)"
     ),
     include_metrics: bool = FastAPIQuery(True, description="Include aggregated metrics comparison"),
+    profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Compare two SUTs and return the differences with enhanced parametrization."""
-    api = InsightAPI()
+    api = InsightAPI(profile_name=profile)
 
     # First check if there are any sessions for each SUT
     base_sessions = api.query().for_sut(sut1).in_last_days(days).execute()
@@ -1461,7 +1473,10 @@ async def compare_suts(
 
 
 @app.get("/api/suts", response_model=SUTsResponse, tags=["query"])
-async def get_available_suts(all_profiles: bool = False):
+async def get_available_suts(
+    all_profiles: bool = FastAPIQuery(False, description="Get SUTs from all profiles"),
+    profile: Optional[str] = FastAPIQuery(None, description="Specific profile to query"),
+):
     """Get a list of all available Systems Under Test (SUTs).
 
     This endpoint helps users discover what SUTs are available in the system
@@ -1520,7 +1535,7 @@ async def get_available_suts(all_profiles: bool = False):
 
         try:
             # Create a new InsightAPI instance for each profile
-            api = InsightAPI()
+            api = InsightAPI(profile_name=profile_name)
 
             # Only call with_profile if not using the active profile
             if profile_name != active_profile.name:
@@ -2683,106 +2698,7 @@ async def generate_test_data(options: GeneratorOptions):
         return {"success": False, "message": str(e)}
 
 
-# InsightAPI class
-class InsightAPI:
-    """Main entry point for pytest-insight.
-
-    This class provides access to the three core operations:
-    1. Query - Find specific tests/sessions
-    2. Compare - Compare between versions/times
-    3. Analyze - Extract insights
-
-    Example:
-        api = InsightAPI()
-
-        # Query tests
-        results = api.query().for_sut("my-service").execute()
-
-        # Compare versions
-        diff = api.compare().between_suts("v1", "v2").execute()
-
-        # Analyze patterns
-        insights = api.analyze().tests().stability()
-    """
-
-    def __init__(self, storage: Optional[BaseStorage] = None, profile_name: Optional[str] = None):
-        """Initialize API with optional storage configuration.
-
-        Args:
-            storage: Optional storage instance to use for all operations.
-                    If not provided, will use default storage from get_storage_instance().
-            profile_name: Optional profile name to use for storage configuration.
-                         Takes precedence over storage parameter if both are provided.
-        """
-        self._active_profile = profile_name
-        self.storage = storage or get_storage_instance(profile_name=profile_name)
-
-    def with_profile(self, profile_name: str) -> "InsightAPI":
-        """Set the active storage profile for all operations.
-
-        Args:
-            profile_name: Name of the profile to use
-
-        Returns:
-            Self for method chaining
-
-        Example:
-            api.with_profile("production").query().execute()
-        """
-        self._active_profile = profile_name
-        self.storage = get_storage_instance(profile_name=profile_name)
-        return self
-
-    def query(self) -> Query:
-        """Build and execute a query to find specific tests/sessions.
-
-        Returns:
-            Query instance for finding and filtering test sessions.
-
-        Example:
-            api.query()
-               .for_sut("my-service")
-               .in_last_days(7)
-               .execute()
-        """
-        return Query(storage=self.storage, profile_name=self._active_profile)
-
-    def compare(self) -> Comparison:
-        """Build and execute a comparison between versions/times.
-
-        Returns:
-            Comparison instance for comparing test sessions.
-
-        Example:
-            api.compare()
-               .between_suts("v1", "v2")
-               .with_test_pattern("test_api")
-               .execute()
-
-            # Compare across different profiles
-            api.compare()
-               .with_base_profile("prod")
-               .with_target_profile("dev")
-               .between_suts("service", "service")
-               .execute()
-        """
-        # Use the active profile from the API instance for both base and target
-        return Comparison(base_profile=self._active_profile, target_profile=self._active_profile)
-
-    def analyze(self) -> Analysis:
-        """Build and execute analysis of test patterns and health.
-
-        Returns:
-            Analysis instance for extracting insights.
-
-        Example:
-            api.analyze()
-               .tests()
-               .stability()
-        """
-        return Analysis(storage=self.storage)
-
-
+# Debug endpoint to directly inspect database files for SUTs
 @app.get("/api/debug/suts", response_model=Dict[str, Any], tags=["debug"])
 async def debug_available_suts():
     """Debug endpoint to directly inspect database files for SUTs.
