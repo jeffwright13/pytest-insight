@@ -181,6 +181,783 @@ class TestInsights:
             "top_prefixes": test_prefixes.most_common(5),
         }
 
+    def stability_timeline(self, days: int = 7, limit: int = 10) -> Dict[str, Any]:
+        """Generate test stability timeline data for the given sessions.
+
+        Tracks the stability of tests over time, showing how consistently tests produce
+        the same results day by day. Stability is measured as the percentage of runs
+        on a given day that produced the same outcome.
+
+        Args:
+            days: Number of most recent days to include in the timeline
+            limit: Maximum number of tests to include in the timeline
+
+        Returns:
+            Dict containing:
+            - timeline: Dict mapping test nodeids to date-based stability metrics
+            - dates: List of dates in chronological order
+            - trends: Dict mapping test nodeids to trend data
+        """
+        sessions = self._sessions
+        if not sessions or len(sessions) <= 1:
+            return {
+                "timeline": {},
+                "dates": [],
+                "trends": {},
+                "error": "Insufficient data for timeline analysis. Need data from multiple sessions."
+            }
+
+        # Group sessions by date
+        date_sessions = {}
+        for session in sessions:
+            session_date = session.session_start_time.date()
+            if session_date not in date_sessions:
+                date_sessions[session_date] = []
+            date_sessions[session_date].append(session)
+
+        # Sort dates chronologically
+        all_dates = sorted(date_sessions.keys())
+
+        # Limit to most recent days if specified
+        if days and days > 0:
+            sorted_dates = all_dates[-days:] if len(all_dates) > days else all_dates
+        else:
+            sorted_dates = all_dates
+
+        if len(sorted_dates) <= 1:
+            return {
+                "timeline": {},
+                "dates": sorted_dates,
+                "trends": {},
+                "error": "Insufficient data for timeline analysis. Need data from multiple dates."
+            }
+
+        # Track stability metrics over time for the most frequently run tests
+        test_run_counts = {}
+        for session in sessions:
+            for test_result in session.test_results:
+                nodeid = getattr(test_result, "nodeid", None)
+                if nodeid:
+                    if nodeid not in test_run_counts:
+                        test_run_counts[nodeid] = 0
+                    test_run_counts[nodeid] += 1
+
+        # Get the top N most frequently run tests
+        top_tests = sorted(test_run_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
+
+        # Calculate stability for each test on each date
+        test_stability_timeline = {}
+        for nodeid, _ in top_tests:
+            test_stability_timeline[nodeid] = {}
+            for date in sorted_dates:
+                # Get all results for this test on this date
+                date_results = []
+                for session in date_sessions[date]:
+                    for test_result in session.test_results:
+                        if getattr(test_result, "nodeid", None) == nodeid:
+                            outcome = getattr(test_result, "outcome", None)
+                            # Handle both string and enum outcomes
+                            if hasattr(outcome, "value"):
+                                # It's an enum
+                                result = outcome.value
+                            else:
+                                # It's a string
+                                result = str(outcome).upper()
+                            date_results.append(result)
+
+                # Calculate stability metrics if we have results
+                if date_results:
+                    # Count outcomes
+                    outcome_counts = {}
+                    for result in date_results:
+                        if result not in outcome_counts:
+                            outcome_counts[result] = 0
+                        outcome_counts[result] += 1
+
+                    # Calculate stability score (percentage of consistent results)
+                    if date_results:
+                        most_common_count = max(outcome_counts.values())
+                        stability_score = most_common_count / len(date_results)
+
+                        # Store metrics
+                        test_stability_timeline[nodeid][date] = {
+                            "total_runs": len(date_results),
+                            "outcome_counts": outcome_counts,
+                            "stability_score": stability_score,
+                        }
+
+        # Calculate trends for each test
+        trends = {}
+        for nodeid, date_data in test_stability_timeline.items():
+            # Track stability scores for trend calculation
+            stability_scores = []
+
+            # Add stability score for each date
+            for date in sorted_dates:
+                if date in date_data:
+                    stability_scores.append(date_data[date]["stability_score"])
+                else:
+                    stability_scores.append(None)
+
+            # Calculate trend
+            valid_scores = [s for s in stability_scores if s is not None]
+            if len(valid_scores) >= 2:
+                # Simple trend: compare first and last valid scores
+                first_score = valid_scores[0]
+                last_score = valid_scores[-1]
+
+                if last_score > first_score + 0.1:
+                    trend_direction = "improving"
+                    trend_value = last_score - first_score
+                elif last_score < first_score - 0.1:
+                    trend_direction = "declining"
+                    trend_value = first_score - last_score
+                else:
+                    trend_direction = "stable"
+                    trend_value = 0
+
+                trends[nodeid] = {
+                    "direction": trend_direction,
+                    "value": trend_value,
+                    "first_score": first_score,
+                    "last_score": last_score
+                }
+            else:
+                trends[nodeid] = {"direction": "insufficient_data", "value": 0}
+
+        return {
+            "timeline": test_stability_timeline,
+            "dates": sorted_dates,
+            "trends": trends,
+            "error": None
+        }
+
+
+    def error_patterns(self) -> Dict[str, Any]:
+        """Analyze common error patterns across test failures.
+
+        Identifies recurring error patterns in test failures and maps them to affected tests.
+        This helps identify common failure modes and potentially unstable tests that
+        fail with multiple different error patterns.
+
+        Returns:
+            Dict containing:
+            - patterns: List of dicts with pattern, count, and affected_tests
+            - multi_error_tests: List of tests with multiple error patterns
+            - failure_details: Detailed information about each test failure
+        """
+        sessions = self._sessions
+        if not sessions:
+            return {
+                "patterns": [],
+                "multi_error_tests": [],
+                "failure_details": []
+            }
+
+        # Track error patterns and their occurrences
+        error_patterns = {}  # Maps patterns to lists of affected tests
+        error_counts = {}    # Maps patterns to occurrence counts
+        test_to_error_map = {}  # Maps tests to their error patterns
+        failure_details = []  # Detailed information about each failure
+
+        # Common Python exceptions to look for
+        exception_types = [
+            "AssertionError",
+            "ValueError",
+            "TypeError",
+            "KeyError",
+            "IndexError",
+            "AttributeError",
+            "ImportError",
+            "RuntimeError",
+            "NameError",
+            "SyntaxError",
+            "FileNotFoundError",
+            "ZeroDivisionError",
+            "PermissionError",
+            "OSError",
+            "IOError",
+        ]
+
+        # Analyze each session for test failures
+        for session in sessions:
+            for test_result in session.test_results:
+                nodeid = getattr(test_result, "nodeid", None)
+                outcome = getattr(test_result, "outcome", None)
+
+                # Check if the test failed
+                is_failed = False
+                if hasattr(outcome, "value"):
+                    is_failed = outcome.value in ["failed", "error", "FAILED", "ERROR"]
+                else:
+                    is_failed = str(outcome).upper() in ["FAILED", "ERROR"]
+
+                if is_failed and nodeid:
+                    # Get the error message
+                    error_msg = getattr(test_result, "longreprtext", "")
+
+                    # Store failure details for debugging
+                    failure_details.append({
+                        "nodeid": nodeid,
+                        "error_msg": error_msg,
+                        "session_id": getattr(session, "session_id", "unknown"),
+                    })
+
+                    if error_msg:
+                        # Extract meaningful error patterns from the error message
+                        # First, identify the error type
+                        error_type = "Unknown Error"
+                        error_detail = ""
+
+                        # Find the exception type in the error message
+                        for exc_type in exception_types:
+                            if exc_type in error_msg:
+                                error_type = exc_type
+                                # Try to extract the specific error detail
+                                lines = error_msg.split("\n")
+                                for line in lines:
+                                    if exc_type in line:
+                                        # Extract the part after the exception type
+                                        parts = line.split(exc_type + ":", 1)
+                                        if len(parts) > 1:
+                                            error_detail = parts[1].strip()
+                                            break
+                                break
+
+                        # If we couldn't extract a specific detail, use the first non-empty line
+                        if not error_detail and error_msg:
+                            for line in error_msg.split("\n"):
+                                if line.strip() and not line.startswith('  File "'):
+                                    error_detail = line.strip()
+                                    break
+
+                        # Create a meaningful pattern that combines error type and detail
+                        pattern = f"{error_type}: {error_detail}" if error_detail else error_type
+
+                        # Truncate very long patterns
+                        if len(pattern) > 100:
+                            pattern = pattern[:97] + "..."
+
+                        # Count occurrences of each error pattern
+                        if pattern not in error_patterns:
+                            error_patterns[pattern] = []
+                            error_counts[pattern] = 0
+
+                        error_patterns[pattern].append(nodeid)
+                        error_counts[pattern] += 1
+
+                        # Map tests to their error patterns
+                        if nodeid not in test_to_error_map:
+                            test_to_error_map[nodeid] = []
+
+                        if pattern not in test_to_error_map[nodeid]:
+                            test_to_error_map[nodeid].append(pattern)
+
+        # Sort error patterns by frequency
+        sorted_patterns = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)
+
+        # Format the results
+        patterns_result = [
+            {
+                "pattern": pattern,
+                "count": count,
+                "affected_tests": list(set(error_patterns[pattern]))
+            }
+            for pattern, count in sorted_patterns
+        ]
+
+        # Find tests with multiple error patterns (potentially flaky or unstable)
+        multi_error_tests = [
+            {
+                "test": test,
+                "patterns": patterns,
+                "pattern_count": len(patterns)
+            }
+            for test, patterns in test_to_error_map.items()
+            if len(patterns) > 1
+        ]
+
+        # Sort by number of patterns (most patterns first)
+        multi_error_tests.sort(key=lambda x: x["pattern_count"], reverse=True)
+
+        return {
+            "patterns": patterns_result,
+            "multi_error_tests": multi_error_tests,
+            "failure_details": failure_details
+        }
+
+
+    def dependency_graph(self) -> Dict[str, Any]:
+        """Analyze which tests tend to fail together to identify potential dependencies.
+
+        This method identifies tests that frequently fail together and determines
+        potential dependency relationships between them. It can help uncover hidden
+        dependencies in the test suite that might not be obvious from the code.
+
+        Returns:
+            Dict containing:
+            - dependencies: List of dicts with test pairs and their dependency metrics
+            - test_failures: Dict mapping test nodeids to their failure data
+        """
+        sessions = self._sessions
+        if not sessions:
+            return {
+                "dependencies": [],
+                "test_failures": {}
+            }
+
+        # Create a matrix of test co-failures
+        test_failures = {}
+        for session in sessions:
+            # Get all failed tests in this session
+            session_failures = []
+            for test_result in session.test_results:
+                nodeid = getattr(test_result, "nodeid", None)
+                outcome = getattr(test_result, "outcome", None)
+
+                # Check if the test failed
+                is_failed = False
+                if hasattr(outcome, "value"):
+                    # It's an enum
+                    is_failed = outcome.value == "FAILED"
+                else:
+                    # It's a string
+                    is_failed = str(outcome).upper() == "FAILED"
+
+                if is_failed and nodeid:
+                    session_failures.append(nodeid)
+
+                    # Track individual test failure counts
+                    if nodeid not in test_failures:
+                        test_failures[nodeid] = {"count": 0, "co_failures": {}}
+                    test_failures[nodeid]["count"] += 1
+
+            # Record co-failures for each pair of failed tests
+            for i, test1 in enumerate(session_failures):
+                for test2 in session_failures[i + 1:]:
+                    if test1 != test2:
+                        # Update co-failure count for test1
+                        if test2 not in test_failures[test1]["co_failures"]:
+                            test_failures[test1]["co_failures"][test2] = 0
+                        test_failures[test1]["co_failures"][test2] += 1
+
+                        # Update co-failure count for test2
+                        if test1 not in test_failures[test2]["co_failures"]:
+                            test_failures[test2]["co_failures"][test1] = 0
+                        test_failures[test2]["co_failures"][test1] += 1
+
+        # Identify significant dependencies
+        dependencies = []
+        for test_id, data in test_failures.items():
+            total_failures = data["count"]
+            if total_failures < 3:  # Ignore tests with too few failures
+                continue
+
+            # Find tests that fail together with this test more than 70% of the time
+            for co_test, co_count in data["co_failures"].items():
+                co_test_total = test_failures.get(co_test, {}).get("count", 0)
+                if co_test_total < 3:  # Ignore tests with too few failures
+                    continue
+
+                # Calculate dependency metrics
+                pct_a_with_b = co_count / total_failures
+                pct_b_with_a = co_count / co_test_total
+
+                # Only consider strong dependencies
+                if pct_a_with_b > 0.7 or pct_b_with_a > 0.7:
+                    # Determine dependency direction
+                    if pct_a_with_b > pct_b_with_a + 0.2:
+                        # test_id likely depends on co_test
+                        direction = f"{test_id} → {co_test}"
+                        strength = pct_a_with_b
+                        interpretation = f"{test_id.split('::')[-1]} fails when {co_test.split('::')[-1]} fails"
+                    elif pct_b_with_a > pct_a_with_b + 0.2:
+                        # co_test likely depends on test_id
+                        direction = f"{co_test} → {test_id}"
+                        strength = pct_b_with_a
+                        interpretation = f"{co_test.split('::')[-1]} fails when {test_id.split('::')[-1]} fails"
+                    else:
+                        # Bidirectional dependency
+                        direction = f"{test_id} ↔ {co_test}"
+                        strength = (pct_a_with_b + pct_b_with_a) / 2
+                        interpretation = f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
+
+                    dependencies.append({
+                        "test1": test_id,
+                        "test2": co_test,
+                        "direction": direction,
+                        "strength": strength,
+                        "interpretation": interpretation,
+                        "co_failure_count": co_count,
+                    })
+
+        # Sort dependencies by strength
+        dependencies.sort(key=lambda x: x["strength"], reverse=True)
+
+        return {
+            "dependencies": dependencies,
+            "test_failures": test_failures
+        }
+
+
+    def test_health_score(self) -> Dict[str, Any]:
+        """Calculate a composite health score for tests.
+
+        The health score is a composite metric from 0-100 that takes into account:
+        - Pass rate (50% weight)
+        - Flakiness (20% weight)
+        - Duration stability (15% weight)
+        - Failure pattern (15% weight)
+
+        Returns:
+            Dict containing:
+            - health_score: Overall health score (0-100)
+            - health_factors: Dict of individual component scores
+            - reliability_index: Reliability index (0-100)
+            - consistently_failing: List of consistently failing tests
+        """
+        sessions = self._sessions
+        if not sessions:
+            return {
+                "health_score": 0,
+                "health_factors": {},
+                "reliability_index": 0,
+                "consistently_failing": []
+            }
+
+        # Calculate pass rate
+        total_tests = 0
+        passed_tests = 0
+        for session in sessions:
+            for test_result in session.test_results:
+                total_tests += 1
+                if test_result.outcome == "passed":
+                    passed_tests += 1
+        
+        pass_rate = passed_tests / total_tests if total_tests > 0 else 0
+
+        # Get flaky tests
+        flaky_tests_data = self.flaky_tests()
+        flaky_tests = flaky_tests_data["flaky_tests"]
+
+        # Get slowest tests for duration stability calculation
+        slowest_tests_data = self.slowest_tests()
+        slowest_tests = slowest_tests_data["slowest_tests"]
+
+        # Find consistently failing tests
+        test_results_by_nodeid = {}
+        for session in sessions:
+            for test_result in session.test_results:
+                nodeid = getattr(test_result, "nodeid", None)
+                if not nodeid:
+                    continue
+                if nodeid not in test_results_by_nodeid:
+                    test_results_by_nodeid[nodeid] = []
+                test_results_by_nodeid[nodeid].append(test_result)
+
+        consistently_failing = []
+        for nodeid, results in test_results_by_nodeid.items():
+            if len(results) >= 3:  # Only consider tests with at least 3 runs
+                failure_count = sum(1 for r in results if r.outcome != "passed")
+                failure_rate = failure_count / len(results)
+                if failure_rate > 0.9:  # More than 90% failure rate
+                    consistently_failing.append(nodeid)
+
+        # Calculate health factors
+        health_factors = {
+            "pass_rate": pass_rate * 50,  # 50% weight to pass rate
+            "flakiness": (1 - len(flaky_tests) / max(1, total_tests)) * 20,  # 20% weight to lack of flakiness
+            "duration_stability": 15,  # Default value, will be calculated below
+            "failure_pattern": 15,  # Default value, will be calculated below
+        }
+
+        # Calculate duration stability component (lower variance = higher score)
+        if slowest_tests:
+            durations = [duration for _, duration in slowest_tests]
+            if durations:
+                mean_duration = sum(durations) / len(durations)
+                variance = sum((d - mean_duration) ** 2 for d in durations) / len(durations)
+                # Normalize: lower variance = higher score (max 15)
+                coefficient = 0.1  # Adjust based on typical variance values
+                health_factors["duration_stability"] = 15 * (1 / (1 + coefficient * variance))
+
+        # Calculate failure pattern component
+        if total_tests > 0:
+            # Lower ratio of consistently failing tests = better score
+            consistent_failure_ratio = len(consistently_failing) / max(1, total_tests)
+            health_factors["failure_pattern"] = 15 * (1 - consistent_failure_ratio)
+
+        # Calculate overall health score
+        health_score = sum(health_factors.values())
+        health_score = min(100, max(0, health_score))  # Clamp between 0-100
+
+        # Calculate reliability index
+        environment_consistency = 0.8  # Default value if we can't calculate from data
+        test_consistency = 0.8  # Default value if we can't calculate from data
+
+        # Get environment consistency from SessionInsights
+        from pytest_insight.core.insights import Insights
+        insights = Insights(analysis=self.analysis)
+        env_impact = insights.sessions.environment_impact()
+        environment_consistency = env_impact["consistency"]
+
+        # Calculate test result consistency (how consistently individual tests pass/fail)
+        if test_results_by_nodeid:
+            consistency_scores = []
+            for nodeid, results in test_results_by_nodeid.items():
+                if results:  # Ensure we have outcomes to analyze
+                    # Calculate the proportion of the dominant outcome
+                    outcomes = [getattr(r, "outcome", "unknown") for r in results]
+                    outcome_counts = {}
+                    for outcome in outcomes:
+                        outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
+
+                    if outcome_counts:  # Make sure we have outcomes
+                        dominant_outcome_count = max(outcome_counts.values())
+                        consistency = dominant_outcome_count / len(outcomes)
+                        consistency_scores.append(consistency)
+
+            if consistency_scores:
+                test_consistency = sum(consistency_scores) / len(consistency_scores)
+
+        # Combine factors for reliability index (0-100)
+        reliability_index = (
+            pass_rate * 0.4  # 40% weight to pass rate
+            + (1 - len(flaky_tests) / max(1, total_tests)) * 0.3  # 30% weight to lack of flakiness
+            + environment_consistency * 0.15  # 15% weight to environment consistency
+            + test_consistency * 0.15  # 15% weight to test result consistency
+        ) * 100
+        reliability_index = min(100, max(0, reliability_index))
+
+        return {
+            "health_score": health_score,
+            "health_factors": health_factors,
+            "reliability_index": reliability_index,
+            "consistently_failing": consistently_failing
+        }
+
+
+    def correlation_analysis(self) -> Dict[str, Any]:
+        """Analyze correlations between test outcomes.
+
+        This method identifies tests that tend to have correlated outcomes,
+        which can help identify hidden dependencies or shared resources.
+
+        Returns:
+            Dict containing:
+            - correlations: List of dicts with test pairs and their correlation coefficients
+            - test_matrix: Dict mapping test nodeids to their outcome vectors
+        """
+        sessions = self._sessions
+        if not sessions:
+            return {
+                "correlations": [],
+                "test_matrix": {}
+            }
+
+        # Create a matrix of test outcomes across sessions
+        test_matrix = {}
+        session_ids = []
+
+        # First pass: identify all tests and sessions
+        for i, session in enumerate(sessions):
+            session_ids.append(session.session_id)
+            for test_result in session.test_results:
+                nodeid = getattr(test_result, "nodeid", None)
+                if nodeid and nodeid not in test_matrix:
+                    test_matrix[nodeid] = {"outcomes": [None] * len(sessions)}
+
+        # Second pass: fill in the outcome matrix
+        for i, session in enumerate(sessions):
+            for test_result in session.test_results:
+                nodeid = getattr(test_result, "nodeid", None)
+                if nodeid:
+                    # Convert outcome to a numeric value for correlation calculation
+                    outcome = getattr(test_result, "outcome", None)
+                    outcome_value = 1 if outcome == "passed" else 0
+                    test_matrix[nodeid]["outcomes"][i] = outcome_value
+
+        # Only include tests that appear in at least 3 sessions
+        valid_tests = {}
+        for nodeid, data in test_matrix.items():
+            outcomes = data["outcomes"]
+            valid_outcomes = [o for o in outcomes if o is not None]
+            if len(valid_outcomes) >= 3:
+                valid_tests[nodeid] = valid_outcomes
+
+        # Calculate correlation coefficients between test pairs
+        correlations = []
+        test_ids = list(valid_tests.keys())
+        for i, test1 in enumerate(test_ids):
+            for test2 in test_ids[i + 1:]:
+                # Get outcome vectors for both tests
+                outcomes1 = valid_tests[test1]
+                outcomes2 = valid_tests[test2]
+
+                # We need to align the vectors to only include sessions where both tests ran
+                # For simplicity, we'll just use sessions where both tests have outcomes
+                min_length = min(len(outcomes1), len(outcomes2))
+                if min_length < 3:
+                    continue  # Skip if we don't have enough common sessions
+
+                # Calculate correlation coefficient
+                try:
+                    # Calculate means
+                    mean1 = sum(outcomes1[:min_length]) / min_length
+                    mean2 = sum(outcomes2[:min_length]) / min_length
+
+                    # Calculate variances and covariance
+                    var1 = sum((x - mean1) ** 2 for x in outcomes1[:min_length]) / min_length
+                    var2 = sum((x - mean2) ** 2 for x in outcomes2[:min_length]) / min_length
+                    cov = sum((outcomes1[i] - mean1) * (outcomes2[i] - mean2) for i in range(min_length)) / min_length
+
+                    # Calculate correlation coefficient
+                    if var1 > 0 and var2 > 0:
+                        corr = cov / (var1 ** 0.5 * var2 ** 0.5)
+                    else:
+                        corr = 0  # No variance in at least one test
+                except Exception:
+                    corr = 0  # Error in calculation
+
+                # Only include significant correlations
+                if abs(corr) > 0.5:
+                    # Get short test names for display
+                    test1_short = test1.split("::")[-1] if "::" in test1 else test1
+                    test2_short = test2.split("::")[-1] if "::" in test2 else test2
+
+                    correlations.append({
+                        "test1": test1,
+                        "test2": test2,
+                        "test1_short": test1_short,
+                        "test2_short": test2_short,
+                        "correlation": corr,
+                        "relationship": "positive" if corr > 0 else "negative",
+                        "strength": abs(corr),
+                    })
+
+        # Sort by correlation strength
+        correlations.sort(key=lambda x: abs(x["correlation"]), reverse=True)
+
+        return {
+            "correlations": correlations,
+            "test_matrix": test_matrix
+        }
+
+
+    def seasonal_patterns(self) -> Dict[str, Any]:
+        """Analyze seasonal patterns in test failures.
+
+        This method identifies tests that tend to fail at specific times of day
+        or days of the week, which can help identify time-dependent issues.
+
+        Returns:
+            Dict containing:
+            - patterns: List of dicts with test nodeids and their seasonal patterns
+            - day_names: List of day names for reference
+        """
+        sessions = self._sessions
+        if not sessions:
+            return {
+                "patterns": [],
+                "day_names": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            }
+
+        # Track timestamps of test failures
+        test_timestamps = defaultdict(list)
+        for session in sessions:
+            for test_result in session.test_results:
+                nodeid = getattr(test_result, "nodeid", None)
+                if not nodeid:
+                    continue
+
+                # Check if the test failed
+                outcome = getattr(test_result, "outcome", None)
+                is_failed = False
+                if hasattr(outcome, "value"):
+                    # It's an enum
+                    is_failed = outcome.value == "FAILED"
+                else:
+                    # It's a string
+                    is_failed = str(outcome).upper() == "FAILED"
+
+                if is_failed:
+                    # Store the timestamp of this failure
+                    start_time = getattr(test_result, "start_time", None)
+                    if start_time:
+                        test_timestamps[nodeid].append(start_time)
+
+        # Analyze patterns for tests with sufficient data
+        seasonal_patterns = []
+        for test_id, timestamps in test_timestamps.items():
+            if len(timestamps) < 3:
+                continue
+
+            # Sort timestamps chronologically
+            timestamps.sort()
+
+            # Check for time-of-day patterns
+            hour_distribution = [0] * 24
+            for timestamp in timestamps:
+                hour = timestamp.hour
+                hour_distribution[hour] += 1
+
+            total_failures = len(timestamps)
+
+            # Calculate hourly distribution as percentages
+            hour_percentages = [count / total_failures for count in hour_distribution]
+
+            # Check for peaks (hours with significantly more failures)
+            avg_failures_per_hour = total_failures / 24
+            peak_hours = []
+            for hour, count in enumerate(hour_distribution):
+                if (
+                    count > 2 * avg_failures_per_hour and count >= 2
+                ):  # At least twice the average and at least 2 occurrences
+                    peak_hours.append((hour, count, count / total_failures))
+
+            # Check for day-of-week patterns
+            day_distribution = [0] * 7  # Monday to Sunday
+            for timestamp in timestamps:
+                day = timestamp.weekday()
+                day_distribution[day] += 1
+
+            # Calculate day distribution as percentages
+            day_percentages = [count / total_failures for count in day_distribution]
+
+            # Check for peak days
+            avg_failures_per_day = total_failures / 7
+            peak_days = []
+            for day, count in enumerate(day_distribution):
+                if (
+                    count > 1.5 * avg_failures_per_day and count >= 2
+                ):  # At least 1.5x the average and at least 2 occurrences
+                    peak_days.append((day, count, count / total_failures))
+
+            # Only include tests with significant patterns
+            if peak_hours or peak_days:
+                test_short = test_id.split("::")[-1] if "::" in test_id else test_id
+
+                seasonal_patterns.append({
+                    "test_id": test_id,
+                    "test_short": test_short,
+                    "total_failures": total_failures,
+                    "peak_hours": peak_hours,
+                    "peak_days": peak_days,
+                    "hour_distribution": hour_distribution,
+                    "day_distribution": day_distribution,
+                })
+
+        # Sort by total failures
+        seasonal_patterns.sort(key=lambda x: x["total_failures"], reverse=True)
+
+        # Map day numbers to names for reference
+        day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+        return {
+            "patterns": seasonal_patterns,
+            "day_names": day_names
+        }
+
 
 class SessionInsights:
     """Session-level insights and analytics.
@@ -296,6 +1073,68 @@ class SessionInsights:
             "avg_tests_per_session": avg_tests,
             "failure_rate": failure_rate,
             "warning_rate": warning_rate,
+        }
+
+    def environment_impact(self) -> Dict[str, Any]:
+        """Analyze how different environments affect test results.
+
+        This method examines how test pass rates vary across different environments,
+        which can help identify environment-specific issues.
+
+        Returns:
+            Dict containing:
+            - environments: Dict mapping environment names to their metrics
+            - pass_rates: Dict mapping environment names to their average pass rates
+            - consistency: Overall environment consistency score (0-1)
+        """
+        sessions = self._sessions
+        if not sessions:
+            return {
+                "environments": {},
+                "pass_rates": {},
+                "consistency": 0
+            }
+
+        # Collect environment information from session tags
+        environments = {}
+        for session in sessions:
+            env = session.session_tags.get("environment", "unknown")
+            if env not in environments:
+                environments[env] = {"pass_rates": [], "sessions": []}
+
+            # Add session to the environment
+            environments[env]["sessions"].append(session.session_id)
+
+            # Calculate pass rate for this session
+            session_results = session.test_results
+            if session_results:
+                session_pass_rate = sum(1 for t in session_results if t.outcome == "passed") / len(session_results)
+                environments[env]["pass_rates"].append(session_pass_rate)
+
+        # Calculate average pass rate for each environment
+        env_pass_rates = {}
+        for env, data in environments.items():
+            if data["pass_rates"]:
+                env_pass_rates[env] = sum(data["pass_rates"]) / len(data["pass_rates"])
+                # Add the average pass rate to the environment data
+                environments[env]["avg_pass_rate"] = env_pass_rates[env]
+            else:
+                environments[env]["avg_pass_rate"] = 0
+
+        # Calculate environment consistency (how consistent results are across environments)
+        consistency = 0
+        if len(env_pass_rates) > 1:
+            env_pass_rate_values = list(env_pass_rates.values())
+            mean_env_pass_rate = sum(env_pass_rate_values) / len(env_pass_rate_values)
+            env_variance = sum((r - mean_env_pass_rate) ** 2 for r in env_pass_rate_values) / len(env_pass_rate_values)
+            # Lower variance = higher consistency
+            consistency = 1 / (1 + 10 * env_variance)  # Scale factor of 10 for better distribution
+            consistency = min(1, max(0, consistency))  # Clamp between 0 and 1
+
+        return {
+            "environments": environments,
+            "pass_rates": env_pass_rates,
+            "consistency": consistency
         }
 
 

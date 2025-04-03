@@ -25,6 +25,7 @@ from rich.table import Table
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.comparison import Comparison
 from pytest_insight.core.core_api import InsightAPI
+from pytest_insight.core.insights import Insights
 from pytest_insight.core.models import TestSession
 from pytest_insight.core.storage import get_storage_instance
 
@@ -432,7 +433,9 @@ def analyze_test_data(
                         # 2. Calculate test outcome metrics (using TestOutcome.PASSED enum value)
                         # Following metric style guide: test.outcome.passed
                         test_outcome_passed_base = sum(1 for test in base_tests if test.outcome.value == "PASSED")
-                        test_outcome_passed_target = sum(1 for test in target_tests if test.outcome.value == "PASSED")
+                        test_outcome_passed_target = sum(
+                            1 for test in target_tests if test.outcome.value == "PASSED"
+                        )
 
                         # Handle empty test collections to avoid division by zero
                         base_test_count = len(base_tests)
@@ -452,7 +455,9 @@ def analyze_test_data(
                         # Following metric style guide: test.duration.average
                         # Filter out None durations for robust calculation
                         test_durations_base = [test.duration for test in base_tests if test.duration is not None]
-                        test_durations_target = [test.duration for test in target_tests if test.duration is not None]
+                        test_durations_target = [
+                            test.duration for test in target_tests if test.duration is not None
+                        ]
 
                         test_duration_average_current = (
                             sum(test_durations_base) / len(test_durations_base) if test_durations_base else 0
@@ -837,6 +842,1309 @@ def analyze_test_data(
                 else:
                     console.print("[yellow]No significant seasonal patterns identified in the dataset.[/yellow]")
 
+            # 5. Test Stability Timeline
+            if not json_mode:
+                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+
+                # Use the core API to get stability timeline data
+                insights = Insights(analysis=analysis)
+                timeline_data = insights.tests.stability_timeline(days=7, limit=10)
+
+                if timeline_data.get("error"):
+                    console.print(f"[yellow]{timeline_data['error']}[/yellow]")
+                else:
+                    # Display stability timeline
+                    timeline_table = Table(title="Test Stability Timeline", box=box.ROUNDED, title_justify="left")
+                    timeline_table.add_column("Test", style="cyan", width=30)
+
+                    # Add date columns
+                    sorted_dates = timeline_data["dates"]
+                    for date in sorted_dates:
+                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+
+                    # Add stability trend column
+                    timeline_table.add_column("Trend", style="green")
+
+                    # Add rows for each test
+                    test_timeline = timeline_data["timeline"]
+                    trends = timeline_data["trends"]
+
+                    for nodeid in test_timeline:
+                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        row = [test_short]
+
+                        # Add stability score for each date
+                        for date in sorted_dates:
+                            if date in test_timeline[nodeid]:
+                                metrics = test_timeline[nodeid][date]
+                                stability = metrics["stability_score"]
+
+                                # Format cell with stability score and color
+                                if stability >= 0.9:
+                                    cell = f"[green]{stability:.2f}[/green]"
+                                elif stability >= 0.7:
+                                    cell = f"[yellow]{stability:.2f}[/yellow]"
+                                else:
+                                    cell = f"[red]{stability:.2f}[/red]"
+
+                                # Add run count
+                                cell += f" ({metrics['total_runs']})"
+                            else:
+                                cell = "-"
+
+                            row.append(cell)
+
+                        # Add trend
+                        trend_info = trends.get(nodeid, {})
+                        direction = trend_info.get("direction", "insufficient_data")
+
+                        if direction == "improving":
+                            trend = "[green]↑ Improving[/green]"
+                        elif direction == "declining":
+                            trend = "[red]↓ Declining[/red]"
+                        elif direction == "stable":
+                            trend = "[blue]→ Stable[/blue]"
+                        else:
+                            trend = "Insufficient data"
+
+                        row.append(trend)
+                        timeline_table.add_row(*row)
+
+                    console.print(timeline_table)
+
+            # 6. Test Dependency Graph
+            # Analyze which tests tend to fail together to identify potential dependencies
+            if not json_mode:
+                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+
+                # Use the TestInsights API to get dependency graph data
+                insights = Insights(analysis=analysis)
+                dependency_data = insights.tests.dependency_graph()
+                dependencies = dependency_data["dependencies"]
+                test_failures = dependency_data["test_failures"]
+
+                # Display the results
+                if dependencies:
+                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table.add_column("Test Relationship", style="cyan")
+                    dependency_table.add_column("Strength", style="yellow")
+                    dependency_table.add_column("Co-Failures", style="red")
+                    dependency_table.add_column("Interpretation", style="green")
+
+                    # Show top 10 dependencies
+                    for dep in dependencies[:10]:
+                        # Format test names to be shorter
+                        test1_short = dep["test1"].split("::")[-1]
+                        test2_short = dep["test2"].split("::")[-1]
+
+                        if "→" in dep["direction"]:
+                            relationship = f"{test1_short} → {test2_short}"
+                        elif "↔" in dep["direction"]:
+                            relationship = f"{test1_short} ↔ {test2_short}"
+                        else:
+                            relationship = f"{test1_short} - {test2_short}"
+
+                        dependency_table.add_row(
+                            relationship, 
+                            f"{dep['strength']:.2f}", 
+                            str(dep["co_failure_count"]), 
+                            dep["interpretation"]
+                        )
+
+                    console.print(dependency_table)
+                else:
+                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+
+            # 7. Environment Impact Analysis
+            if not json_mode:
+                console.print(
+                    "\n[bold]Environment Impact Analysis[/bold]: Analyzing how environment affects test results"
+                )
+
+                # Use the SessionInsights API to get environment impact data
+                insights = Insights(analysis=analysis)
+                env_impact = insights.sessions.environment_impact()
+                environments = env_impact["environments"]
+                env_pass_rates = env_impact["pass_rates"]
+                consistency = env_impact["consistency"]
+
+                # Display the results
+                if environments:
+                    env_table = Table(title="Environment Impact", box=box.SIMPLE)
+                    env_table.add_column("Environment", style="cyan")
+                    env_table.add_column("Sessions", style="yellow")
+                    env_table.add_column("Avg Pass Rate", style="green")
+
+                    for env, data in environments.items():
+                        env_table.add_row(
+                            env,
+                            str(len(data["sessions"])),
+                            f"{data['avg_pass_rate']:.2%}",
+                        )
+
+                    console.print(env_table)
+                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                else:
+                    console.print("[yellow]No environment data available.[/yellow]")
+
+            # 4. Error Pattern Analysis
+            # Analyze common error patterns across test failures
+            if not json_mode:
+                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+
+                # Use the core API to get error pattern data
+                insights = Insights(analysis=analysis)
+                error_data = insights.tests.error_patterns()
+
+                # Get the results
+                patterns = error_data["patterns"]
+                multi_error_tests = error_data["multi_error_tests"]
+                failure_details = error_data["failure_details"]
+
+                # First, show detailed information about all test failures if requested
+                if failure_details and show_error_details:
+                    console.print("\n[bold]Test Failure Details:[/bold]")
+                    for i, failure in enumerate(failure_details):
+                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(f"[dim]Session: {failure['session_id']}[/dim]")
+
+                        # Format and display the error message
+                        if failure["error_msg"]:
+                            # Use Rich's syntax highlighting for the error message
+                            console.print("[yellow]Error Message:[/yellow]")
+                            # Split into lines and add proper indentation
+                            for line in failure["error_msg"].split("\n"):
+                                if line.strip():  # Skip empty lines
+                                    console.print(f"  {line}")
+                        else:
+                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+
+                        console.print()  # Add a blank line between failures
+                elif failure_details:
+                    # Just show a summary if detailed error messages are not requested
+                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
+                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+
+                # Then show the error pattern analysis
+                if patterns:
+                    error_table = Table(title="Common Error Patterns")
+                    error_table.add_column("Error Pattern", style="cyan")
+                    error_table.add_column("Occurrences", style="yellow")
+                    error_table.add_column("Affected Tests", style="red")
+
+                    # Show top error patterns
+                    for pattern_data in patterns[:10]:  # Limit to top 10
+                        pattern = pattern_data["pattern"]
+                        count = pattern_data["count"]
+                        affected_tests = len(pattern_data["affected_tests"])
+                        error_table.add_row(pattern, str(count), str(affected_tests))
+
+                    console.print(error_table)
+
+                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    if multi_error_tests:
+                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        multi_error_table = Table(show_header=True)
+                        multi_error_table.add_column("Test", style="cyan")
+                        multi_error_table.add_column("Error Patterns", style="yellow")
+
+                        for test_data in multi_error_tests[:5]:  # Limit to top 5
+                            test = test_data["test"]
+                            pattern_count = test_data["pattern_count"]
+                            test_short = test.split("::")[-1] if "::" in test else test
+                            multi_error_table.add_row(test_short, str(pattern_count))
+
+                        console.print(multi_error_table)
+                else:
+                    if failure_details:
+                        console.print(
+                            "[italic yellow]No significant error patterns found, but test failures were detected.[/italic yellow]"
+                        )
+                        console.print(
+                            "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
+                        )
+                    else:
+                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+
+            # Update JSON output with error pattern data
+            if output_format == "json":
+                result["error_patterns"] = [
+                    {
+                        "pattern": pattern_data["pattern"],
+                        "count": pattern_data["count"],
+                        "affected_tests": pattern_data["affected_tests"]
+                    }
+                    for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
+                ]
+
+                result["multi_error_tests"] = [
+                    {
+                        "test": test_data["test"],
+                        "error_patterns": test_data["patterns"]
+                    }
+                    for test_data in multi_error_tests
+                ]
+
+                # Include detailed failure information in JSON output
+                result["test_failures"] = failure_details
+
+            # 5. Test Stability Timeline
+            if not json_mode:
+                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+
+                # Use the core API to get stability timeline data
+                insights = Insights(analysis=analysis)
+                timeline_data = insights.tests.stability_timeline(days=7, limit=10)
+
+                if timeline_data.get("error"):
+                    console.print(f"[yellow]{timeline_data['error']}[/yellow]")
+                else:
+                    # Display stability timeline
+                    timeline_table = Table(title="Test Stability Timeline", box=box.ROUNDED, title_justify="left")
+                    timeline_table.add_column("Test", style="cyan", width=30)
+
+                    # Add date columns
+                    sorted_dates = timeline_data["dates"]
+                    for date in sorted_dates:
+                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+
+                    # Add stability trend column
+                    timeline_table.add_column("Trend", style="green")
+
+                    # Add rows for each test
+                    test_timeline = timeline_data["timeline"]
+                    trends = timeline_data["trends"]
+
+                    for nodeid in test_timeline:
+                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        row = [test_short]
+
+                        # Add stability score for each date
+                        for date in sorted_dates:
+                            if date in test_timeline[nodeid]:
+                                metrics = test_timeline[nodeid][date]
+                                stability = metrics["stability_score"]
+
+                                # Format cell with stability score and color
+                                if stability >= 0.9:
+                                    cell = f"[green]{stability:.2f}[/green]"
+                                elif stability >= 0.7:
+                                    cell = f"[yellow]{stability:.2f}[/yellow]"
+                                else:
+                                    cell = f"[red]{stability:.2f}[/red]"
+
+                                # Add run count
+                                cell += f" ({metrics['total_runs']})"
+                            else:
+                                cell = "-"
+
+                            row.append(cell)
+
+                        # Add trend
+                        trend_info = trends.get(nodeid, {})
+                        direction = trend_info.get("direction", "insufficient_data")
+
+                        if direction == "improving":
+                            trend = "[green]↑ Improving[/green]"
+                        elif direction == "declining":
+                            trend = "[red]↓ Declining[/red]"
+                        elif direction == "stable":
+                            trend = "[blue]→ Stable[/blue]"
+                        else:
+                            trend = "Insufficient data"
+
+                        row.append(trend)
+                        timeline_table.add_row(*row)
+
+                    console.print(timeline_table)
+
+            # 6. Test Dependency Graph
+            # Analyze which tests tend to fail together to identify potential dependencies
+            if not json_mode:
+                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+
+                # Create a matrix of test co-failures
+                test_failures = {}
+                for session in filtered_sessions:
+                    # Get all failed tests in this session
+                    session_failures = []
+                    for test_result in session.test_results:
+                        nodeid = getattr(test_result, "nodeid", None)
+                        outcome = getattr(test_result, "outcome", None)
+
+                        # Check if the test failed
+                        is_failed = False
+                        if hasattr(outcome, "value"):
+                            # It's an enum
+                            is_failed = outcome.value == "FAILED"
+                        else:
+                            # It's a string
+                            is_failed = str(outcome).upper() == "FAILED"
+
+                        if is_failed and nodeid:
+                            session_failures.append(nodeid)
+
+                            # Track individual test failure counts
+                            if nodeid not in test_failures:
+                                test_failures[nodeid] = {"count": 0, "co_failures": {}}
+                            test_failures[nodeid]["count"] += 1
+
+                    # Record co-failures for each pair of failed tests
+                    for i, test1 in enumerate(session_failures):
+                        for test2 in session_failures[i + 1 :]:
+                            if test1 != test2:
+                                # Update co-failure count for test1
+                                if test2 not in test_failures[test1]["co_failures"]:
+                                    test_failures[test1]["co_failures"][test2] = 0
+                                test_failures[test1]["co_failures"][test2] += 1
+
+                                # Update co-failure count for test2
+                                if test1 not in test_failures[test2]["co_failures"]:
+                                    test_failures[test2]["co_failures"][test1] = 0
+                                test_failures[test2]["co_failures"][test1] += 1
+
+                # Identify significant dependencies
+                dependencies = []
+                for test_id, data in test_failures.items():
+                    total_failures = data["count"]
+                    if total_failures < 3:  # Ignore tests with too few failures
+                        continue
+
+                    # Find tests that fail together with this test more than 70% of the time
+                    for co_test, co_count in data["co_failures"].items():
+                        co_test_total = test_failures.get(co_test, {}).get("count", 0)
+                        if co_test_total < 3:  # Ignore tests with too few failures
+                            continue
+
+                        # Calculate dependency metrics
+                        pct_a_with_b = co_count / total_failures
+                        pct_b_with_a = co_count / co_test_total
+
+                        # Only consider strong dependencies
+                        if pct_a_with_b > 0.7 or pct_b_with_a > 0.7:
+                            # Determine dependency direction
+                            if pct_a_with_b > pct_b_with_a + 0.2:
+                                # test_id likely depends on co_test
+                                direction = f"{test_id} → {co_test}"
+                                strength = pct_a_with_b
+                                interpretation = f"{test_id.split('::')[-1]} fails when {co_test.split('::')[-1]} fails"
+                            elif pct_b_with_a > pct_a_with_b + 0.2:
+                                # co_test likely depends on test_id
+                                direction = f"{co_test} → {test_id}"
+                                strength = pct_b_with_a
+                                interpretation = f"{co_test.split('::')[-1]} fails when {test_id.split('::')[-1]} fails"
+                            else:
+                                # Bidirectional dependency
+                                direction = f"{test_id} ↔ {co_test}"
+                                strength = (pct_a_with_b + pct_b_with_a) / 2
+                                interpretation = (
+                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
+                                )
+
+                            dependencies.append(
+                                {
+                                    "test1": test_id,
+                                    "test2": co_test,
+                                    "direction": direction,
+                                    "strength": strength,
+                                    "interpretation": interpretation,
+                                    "co_failure_count": co_count,
+                                }
+                            )
+
+                # Sort dependencies by strength
+                dependencies.sort(key=lambda x: x["strength"], reverse=True)
+
+                # Display the results
+                if dependencies:
+                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table.add_column("Test Relationship", style="cyan")
+                    dependency_table.add_column("Strength", style="yellow")
+                    dependency_table.add_column("Co-Failures", style="red")
+                    dependency_table.add_column("Interpretation", style="green")
+
+                    # Show top 10 dependencies
+                    for dep in dependencies[:10]:
+                        # Format test names to be shorter
+                        test1_short = dep["test1"].split("::")[-1]
+                        test2_short = dep["test2"].split("::")[-1]
+
+                        if "→" in dep["direction"]:
+                            relationship = f"{test1_short} → {test2_short}"
+                        elif "↔" in dep["direction"]:
+                            relationship = f"{test1_short} ↔ {test2_short}"
+                        else:
+                            relationship = f"{test1_short} - {test2_short}"
+
+                        dependency_table.add_row(
+                            relationship, f"{dep['strength']:.2f}", str(dep["co_failure_count"]), dep["interpretation"]
+                        )
+
+                    console.print(dependency_table)
+                else:
+                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+
+            # 7. Environment Impact Analysis
+            if not json_mode:
+                console.print(
+                    "\n[bold]Environment Impact Analysis[/bold]: Analyzing how environment affects test results"
+                )
+
+                # Use the SessionInsights API to get environment impact data
+                insights = Insights(analysis=analysis)
+                env_impact = insights.sessions.environment_impact()
+                environments = env_impact["environments"]
+                env_pass_rates = env_impact["pass_rates"]
+                consistency = env_impact["consistency"]
+
+                # Display the results
+                if environments:
+                    env_table = Table(title="Environment Impact", box=box.SIMPLE)
+                    env_table.add_column("Environment", style="cyan")
+                    env_table.add_column("Sessions", style="yellow")
+                    env_table.add_column("Avg Pass Rate", style="green")
+
+                    for env, data in environments.items():
+                        env_table.add_row(
+                            env,
+                            str(len(data["sessions"])),
+                            f"{data['avg_pass_rate']:.2%}",
+                        )
+
+                    console.print(env_table)
+                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                else:
+                    console.print("[yellow]No environment data available.[/yellow]")
+
+            # 4. Error Pattern Analysis
+            # Analyze common error patterns across test failures
+            if not json_mode:
+                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+
+                # Use the core API to get error pattern data
+                insights = Insights(analysis=analysis)
+                error_data = insights.tests.error_patterns()
+
+                # Get the results
+                patterns = error_data["patterns"]
+                multi_error_tests = error_data["multi_error_tests"]
+                failure_details = error_data["failure_details"]
+
+                # First, show detailed information about all test failures if requested
+                if failure_details and show_error_details:
+                    console.print("\n[bold]Test Failure Details:[/bold]")
+                    for i, failure in enumerate(failure_details):
+                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(f"[dim]Session: {failure['session_id']}[/dim]")
+
+                        # Format and display the error message
+                        if failure["error_msg"]:
+                            # Use Rich's syntax highlighting for the error message
+                            console.print("[yellow]Error Message:[/yellow]")
+                            # Split into lines and add proper indentation
+                            for line in failure["error_msg"].split("\n"):
+                                if line.strip():  # Skip empty lines
+                                    console.print(f"  {line}")
+                        else:
+                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+
+                        console.print()  # Add a blank line between failures
+                elif failure_details:
+                    # Just show a summary if detailed error messages are not requested
+                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
+                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+
+                # Then show the error pattern analysis
+                if patterns:
+                    error_table = Table(title="Common Error Patterns")
+                    error_table.add_column("Error Pattern", style="cyan")
+                    error_table.add_column("Occurrences", style="yellow")
+                    error_table.add_column("Affected Tests", style="red")
+
+                    # Show top error patterns
+                    for pattern_data in patterns[:10]:  # Limit to top 10
+                        pattern = pattern_data["pattern"]
+                        count = pattern_data["count"]
+                        affected_tests = len(pattern_data["affected_tests"])
+                        error_table.add_row(pattern, str(count), str(affected_tests))
+
+                    console.print(error_table)
+
+                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    if multi_error_tests:
+                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        multi_error_table = Table(show_header=True)
+                        multi_error_table.add_column("Test", style="cyan")
+                        multi_error_table.add_column("Error Patterns", style="yellow")
+
+                        for test_data in multi_error_tests[:5]:  # Limit to top 5
+                            test = test_data["test"]
+                            pattern_count = test_data["pattern_count"]
+                            test_short = test.split("::")[-1] if "::" in test else test
+                            multi_error_table.add_row(test_short, str(pattern_count))
+
+                        console.print(multi_error_table)
+                else:
+                    if failure_details:
+                        console.print(
+                            "[italic yellow]No significant error patterns found, but test failures were detected.[/italic yellow]"
+                        )
+                        console.print(
+                            "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
+                        )
+                    else:
+                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+
+            # Update JSON output with error pattern data
+            if output_format == "json":
+                result["error_patterns"] = [
+                    {
+                        "pattern": pattern_data["pattern"],
+                        "count": pattern_data["count"],
+                        "affected_tests": pattern_data["affected_tests"]
+                    }
+                    for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
+                ]
+
+                result["multi_error_tests"] = [
+                    {
+                        "test": test_data["test"],
+                        "error_patterns": test_data["patterns"]
+                    }
+                    for test_data in multi_error_tests
+                ]
+
+                # Include detailed failure information in JSON output
+                result["test_failures"] = failure_details
+
+            # 5. Test Stability Timeline
+            if not json_mode:
+                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+
+                # Use the core API to get stability timeline data
+                insights = Insights(analysis=analysis)
+                timeline_data = insights.tests.stability_timeline(days=7, limit=10)
+
+                if timeline_data.get("error"):
+                    console.print(f"[yellow]{timeline_data['error']}[/yellow]")
+                else:
+                    # Display stability timeline
+                    timeline_table = Table(title="Test Stability Timeline", box=box.ROUNDED, title_justify="left")
+                    timeline_table.add_column("Test", style="cyan", width=30)
+
+                    # Add date columns
+                    sorted_dates = timeline_data["dates"]
+                    for date in sorted_dates:
+                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+
+                    # Add stability trend column
+                    timeline_table.add_column("Trend", style="green")
+
+                    # Add rows for each test
+                    test_timeline = timeline_data["timeline"]
+                    trends = timeline_data["trends"]
+
+                    for nodeid in test_timeline:
+                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        row = [test_short]
+
+                        # Add stability score for each date
+                        for date in sorted_dates:
+                            if date in test_timeline[nodeid]:
+                                metrics = test_timeline[nodeid][date]
+                                stability = metrics["stability_score"]
+
+                                # Format cell with stability score and color
+                                if stability >= 0.9:
+                                    cell = f"[green]{stability:.2f}[/green]"
+                                elif stability >= 0.7:
+                                    cell = f"[yellow]{stability:.2f}[/yellow]"
+                                else:
+                                    cell = f"[red]{stability:.2f}[/red]"
+
+                                # Add run count
+                                cell += f" ({metrics['total_runs']})"
+                            else:
+                                cell = "-"
+
+                            row.append(cell)
+
+                        # Add trend
+                        trend_info = trends.get(nodeid, {})
+                        direction = trend_info.get("direction", "insufficient_data")
+
+                        if direction == "improving":
+                            trend = "[green]↑ Improving[/green]"
+                        elif direction == "declining":
+                            trend = "[red]↓ Declining[/red]"
+                        elif direction == "stable":
+                            trend = "[blue]→ Stable[/blue]"
+                        else:
+                            trend = "Insufficient data"
+
+                        row.append(trend)
+                        timeline_table.add_row(*row)
+
+                    console.print(timeline_table)
+
+            # 6. Test Dependency Graph
+            # Analyze which tests tend to fail together to identify potential dependencies
+            if not json_mode:
+                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+
+                # Create a matrix of test co-failures
+                test_failures = {}
+                for session in filtered_sessions:
+                    # Get all failed tests in this session
+                    session_failures = []
+                    for test_result in session.test_results:
+                        nodeid = getattr(test_result, "nodeid", None)
+                        outcome = getattr(test_result, "outcome", None)
+
+                        # Check if the test failed
+                        is_failed = False
+                        if hasattr(outcome, "value"):
+                            # It's an enum
+                            is_failed = outcome.value == "FAILED"
+                        else:
+                            # It's a string
+                            is_failed = str(outcome).upper() == "FAILED"
+
+                        if is_failed and nodeid:
+                            session_failures.append(nodeid)
+
+                            # Track individual test failure counts
+                            if nodeid not in test_failures:
+                                test_failures[nodeid] = {"count": 0, "co_failures": {}}
+                            test_failures[nodeid]["count"] += 1
+
+                    # Record co-failures for each pair of failed tests
+                    for i, test1 in enumerate(session_failures):
+                        for test2 in session_failures[i + 1 :]:
+                            if test1 != test2:
+                                # Update co-failure count for test1
+                                if test2 not in test_failures[test1]["co_failures"]:
+                                    test_failures[test1]["co_failures"][test2] = 0
+                                test_failures[test1]["co_failures"][test2] += 1
+
+                                # Update co-failure count for test2
+                                if test1 not in test_failures[test2]["co_failures"]:
+                                    test_failures[test2]["co_failures"][test1] = 0
+                                test_failures[test2]["co_failures"][test1] += 1
+
+                # Identify significant dependencies
+                dependencies = []
+                for test_id, data in test_failures.items():
+                    total_failures = data["count"]
+                    if total_failures < 3:  # Ignore tests with too few failures
+                        continue
+
+                    # Find tests that fail together with this test more than 70% of the time
+                    for co_test, co_count in data["co_failures"].items():
+                        co_test_total = test_failures.get(co_test, {}).get("count", 0)
+                        if co_test_total < 3:  # Ignore tests with too few failures
+                            continue
+
+                        # Calculate dependency metrics
+                        pct_a_with_b = co_count / total_failures
+                        pct_b_with_a = co_count / co_test_total
+
+                        # Only consider strong dependencies
+                        if pct_a_with_b > 0.7 or pct_b_with_a > 0.7:
+                            # Determine dependency direction
+                            if pct_a_with_b > pct_b_with_a + 0.2:
+                                # test_id likely depends on co_test
+                                direction = f"{test_id} → {co_test}"
+                                strength = pct_a_with_b
+                                interpretation = f"{test_id.split('::')[-1]} fails when {co_test.split('::')[-1]} fails"
+                            elif pct_b_with_a > pct_a_with_b + 0.2:
+                                # co_test likely depends on test_id
+                                direction = f"{co_test} → {test_id}"
+                                strength = pct_b_with_a
+                                interpretation = f"{co_test.split('::')[-1]} fails when {test_id.split('::')[-1]} fails"
+                            else:
+                                # Bidirectional dependency
+                                direction = f"{test_id} ↔ {co_test}"
+                                strength = (pct_a_with_b + pct_b_with_a) / 2
+                                interpretation = (
+                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
+                                )
+
+                            dependencies.append(
+                                {
+                                    "test1": test_id,
+                                    "test2": co_test,
+                                    "direction": direction,
+                                    "strength": strength,
+                                    "interpretation": interpretation,
+                                    "co_failure_count": co_count,
+                                }
+                            )
+
+                # Sort dependencies by strength
+                dependencies.sort(key=lambda x: x["strength"], reverse=True)
+
+                # Display the results
+                if dependencies:
+                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table.add_column("Test Relationship", style="cyan")
+                    dependency_table.add_column("Strength", style="yellow")
+                    dependency_table.add_column("Co-Failures", style="red")
+                    dependency_table.add_column("Interpretation", style="green")
+
+                    # Show top 10 dependencies
+                    for dep in dependencies[:10]:
+                        # Format test names to be shorter
+                        test1_short = dep["test1"].split("::")[-1]
+                        test2_short = dep["test2"].split("::")[-1]
+
+                        if "→" in dep["direction"]:
+                            relationship = f"{test1_short} → {test2_short}"
+                        elif "↔" in dep["direction"]:
+                            relationship = f"{test1_short} ↔ {test2_short}"
+                        else:
+                            relationship = f"{test1_short} - {test2_short}"
+
+                        dependency_table.add_row(
+                            relationship, f"{dep['strength']:.2f}", str(dep["co_failure_count"]), dep["interpretation"]
+                        )
+
+                    console.print(dependency_table)
+                else:
+                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+
+            # 7. Environment Impact Analysis
+            if not json_mode:
+                console.print(
+                    "\n[bold]Environment Impact Analysis[/bold]: Analyzing how environment affects test results"
+                )
+
+                # Use the SessionInsights API to get environment impact data
+                insights = Insights(analysis=analysis)
+                env_impact = insights.sessions.environment_impact()
+                environments = env_impact["environments"]
+                env_pass_rates = env_impact["pass_rates"]
+                consistency = env_impact["consistency"]
+
+                # Display the results
+                if environments:
+                    env_table = Table(title="Environment Impact", box=box.SIMPLE)
+                    env_table.add_column("Environment", style="cyan")
+                    env_table.add_column("Sessions", style="yellow")
+                    env_table.add_column("Avg Pass Rate", style="green")
+
+                    for env, data in environments.items():
+                        env_table.add_row(
+                            env,
+                            str(len(data["sessions"])),
+                            f"{data['avg_pass_rate']:.2%}",
+                        )
+
+                    console.print(env_table)
+                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                else:
+                    console.print("[yellow]No environment data available.[/yellow]")
+
+            # 4. Error Pattern Analysis
+            # Analyze common error patterns across test failures
+            if not json_mode:
+                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+
+                # Use the core API to get error pattern data
+                insights = Insights(analysis=analysis)
+                error_data = insights.tests.error_patterns()
+
+                # Get the results
+                patterns = error_data["patterns"]
+                multi_error_tests = error_data["multi_error_tests"]
+                failure_details = error_data["failure_details"]
+
+                # First, show detailed information about all test failures if requested
+                if failure_details and show_error_details:
+                    console.print("\n[bold]Test Failure Details:[/bold]")
+                    for i, failure in enumerate(failure_details):
+                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(f"[dim]Session: {failure['session_id']}[/dim]")
+
+                        # Format and display the error message
+                        if failure["error_msg"]:
+                            # Use Rich's syntax highlighting for the error message
+                            console.print("[yellow]Error Message:[/yellow]")
+                            # Split into lines and add proper indentation
+                            for line in failure["error_msg"].split("\n"):
+                                if line.strip():  # Skip empty lines
+                                    console.print(f"  {line}")
+                        else:
+                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+
+                        console.print()  # Add a blank line between failures
+                elif failure_details:
+                    # Just show a summary if detailed error messages are not requested
+                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
+                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+
+                # Then show the error pattern analysis
+                if patterns:
+                    error_table = Table(title="Common Error Patterns")
+                    error_table.add_column("Error Pattern", style="cyan")
+                    error_table.add_column("Occurrences", style="yellow")
+                    error_table.add_column("Affected Tests", style="red")
+
+                    # Show top error patterns
+                    for pattern_data in patterns[:10]:  # Limit to top 10
+                        pattern = pattern_data["pattern"]
+                        count = pattern_data["count"]
+                        affected_tests = len(pattern_data["affected_tests"])
+                        error_table.add_row(pattern, str(count), str(affected_tests))
+
+                    console.print(error_table)
+
+                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    if multi_error_tests:
+                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        multi_error_table = Table(show_header=True)
+                        multi_error_table.add_column("Test", style="cyan")
+                        multi_error_table.add_column("Error Patterns", style="yellow")
+
+                        for test_data in multi_error_tests[:5]:  # Limit to top 5
+                            test = test_data["test"]
+                            pattern_count = test_data["pattern_count"]
+                            test_short = test.split("::")[-1] if "::" in test else test
+                            multi_error_table.add_row(test_short, str(pattern_count))
+
+                        console.print(multi_error_table)
+                else:
+                    if failure_details:
+                        console.print(
+                            "[italic yellow]No significant error patterns found, but test failures were detected.[/italic yellow]"
+                        )
+                        console.print(
+                            "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
+                        )
+                    else:
+                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+
+            # Update JSON output with error pattern data
+            if output_format == "json":
+                result["error_patterns"] = [
+                    {
+                        "pattern": pattern_data["pattern"],
+                        "count": pattern_data["count"],
+                        "affected_tests": pattern_data["affected_tests"]
+                    }
+                    for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
+                ]
+
+                result["multi_error_tests"] = [
+                    {
+                        "test": test_data["test"],
+                        "error_patterns": test_data["patterns"]
+                    }
+                    for test_data in multi_error_tests
+                ]
+
+                # Include detailed failure information in JSON output
+                result["test_failures"] = failure_details
+
+            # 5. Test Stability Timeline
+            if not json_mode:
+                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+
+                # Use the core API to get stability timeline data
+                insights = Insights(analysis=analysis)
+                timeline_data = insights.tests.stability_timeline(days=7, limit=10)
+
+                if timeline_data.get("error"):
+                    console.print(f"[yellow]{timeline_data['error']}[/yellow]")
+                else:
+                    # Display stability timeline
+                    timeline_table = Table(title="Test Stability Timeline", box=box.ROUNDED, title_justify="left")
+                    timeline_table.add_column("Test", style="cyan", width=30)
+
+                    # Add date columns
+                    sorted_dates = timeline_data["dates"]
+                    for date in sorted_dates:
+                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+
+                    # Add stability trend column
+                    timeline_table.add_column("Trend", style="green")
+
+                    # Add rows for each test
+                    test_timeline = timeline_data["timeline"]
+                    trends = timeline_data["trends"]
+
+                    for nodeid in test_timeline:
+                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        row = [test_short]
+
+                        # Add stability score for each date
+                        for date in sorted_dates:
+                            if date in test_timeline[nodeid]:
+                                metrics = test_timeline[nodeid][date]
+                                stability = metrics["stability_score"]
+
+                                # Format cell with stability score and color
+                                if stability >= 0.9:
+                                    cell = f"[green]{stability:.2f}[/green]"
+                                elif stability >= 0.7:
+                                    cell = f"[yellow]{stability:.2f}[/yellow]"
+                                else:
+                                    cell = f"[red]{stability:.2f}[/red]"
+
+                                # Add run count
+                                cell += f" ({metrics['total_runs']})"
+                            else:
+                                cell = "-"
+
+                            row.append(cell)
+
+                        # Add trend
+                        trend_info = trends.get(nodeid, {})
+                        direction = trend_info.get("direction", "insufficient_data")
+
+                        if direction == "improving":
+                            trend = "[green]↑ Improving[/green]"
+                        elif direction == "declining":
+                            trend = "[red]↓ Declining[/red]"
+                        elif direction == "stable":
+                            trend = "[blue]→ Stable[/blue]"
+                        else:
+                            trend = "Insufficient data"
+
+                        row.append(trend)
+                        timeline_table.add_row(*row)
+
+                    console.print(timeline_table)
+
+            # 6. Test Dependency Graph
+            # Analyze which tests tend to fail together to identify potential dependencies
+            if not json_mode:
+                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+
+                # Create a matrix of test co-failures
+                test_failures = {}
+                for session in filtered_sessions:
+                    # Get all failed tests in this session
+                    session_failures = []
+                    for test_result in session.test_results:
+                        nodeid = getattr(test_result, "nodeid", None)
+                        outcome = getattr(test_result, "outcome", None)
+
+                        # Check if the test failed
+                        is_failed = False
+                        if hasattr(outcome, "value"):
+                            # It's an enum
+                            is_failed = outcome.value == "FAILED"
+                        else:
+                            # It's a string
+                            is_failed = str(outcome).upper() == "FAILED"
+
+                        if is_failed and nodeid:
+                            session_failures.append(nodeid)
+
+                            # Track individual test failure counts
+                            if nodeid not in test_failures:
+                                test_failures[nodeid] = {"count": 0, "co_failures": {}}
+                            test_failures[nodeid]["count"] += 1
+
+                    # Record co-failures for each pair of failed tests
+                    for i, test1 in enumerate(session_failures):
+                        for test2 in session_failures[i + 1 :]:
+                            if test1 != test2:
+                                # Update co-failure count for test1
+                                if test2 not in test_failures[test1]["co_failures"]:
+                                    test_failures[test1]["co_failures"][test2] = 0
+                                test_failures[test1]["co_failures"][test2] += 1
+
+                                # Update co-failure count for test2
+                                if test1 not in test_failures[test2]["co_failures"]:
+                                    test_failures[test2]["co_failures"][test1] = 0
+                                test_failures[test2]["co_failures"][test1] += 1
+
+                # Identify significant dependencies
+                dependencies = []
+                for test_id, data in test_failures.items():
+                    total_failures = data["count"]
+                    if total_failures < 3:  # Ignore tests with too few failures
+                        continue
+
+                    # Find tests that fail together with this test more than 70% of the time
+                    for co_test, co_count in data["co_failures"].items():
+                        co_test_total = test_failures.get(co_test, {}).get("count", 0)
+                        if co_test_total < 3:  # Ignore tests with too few failures
+                            continue
+
+                        # Calculate dependency metrics
+                        pct_a_with_b = co_count / total_failures
+                        pct_b_with_a = co_count / co_test_total
+
+                        # Only consider strong dependencies
+                        if pct_a_with_b > 0.7 or pct_b_with_a > 0.7:
+                            # Determine dependency direction
+                            if pct_a_with_b > pct_b_with_a + 0.2:
+                                # test_id likely depends on co_test
+                                direction = f"{test_id} → {co_test}"
+                                strength = pct_a_with_b
+                                interpretation = f"{test_id.split('::')[-1]} fails when {co_test.split('::')[-1]} fails"
+                            elif pct_b_with_a > pct_a_with_b + 0.2:
+                                # co_test likely depends on test_id
+                                direction = f"{co_test} → {test_id}"
+                                strength = pct_b_with_a
+                                interpretation = f"{co_test.split('::')[-1]} fails when {test_id.split('::')[-1]} fails"
+                            else:
+                                # Bidirectional dependency
+                                direction = f"{test_id} ↔ {co_test}"
+                                strength = (pct_a_with_b + pct_b_with_a) / 2
+                                interpretation = (
+                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
+                                )
+
+                            dependencies.append(
+                                {
+                                    "test1": test_id,
+                                    "test2": co_test,
+                                    "direction": direction,
+                                    "strength": strength,
+                                    "interpretation": interpretation,
+                                    "co_failure_count": co_count,
+                                }
+                            )
+
+                # Sort dependencies by strength
+                dependencies.sort(key=lambda x: x["strength"], reverse=True)
+
+                # Display the results
+                if dependencies:
+                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table.add_column("Test Relationship", style="cyan")
+                    dependency_table.add_column("Strength", style="yellow")
+                    dependency_table.add_column("Co-Failures", style="red")
+                    dependency_table.add_column("Interpretation", style="green")
+
+                    # Show top 10 dependencies
+                    for dep in dependencies[:10]:
+                        # Format test names to be shorter
+                        test1_short = dep["test1"].split("::")[-1]
+                        test2_short = dep["test2"].split("::")[-1]
+
+                        if "→" in dep["direction"]:
+                            relationship = f"{test1_short} → {test2_short}"
+                        elif "↔" in dep["direction"]:
+                            relationship = f"{test1_short} ↔ {test2_short}"
+                        else:
+                            relationship = f"{test1_short} - {test2_short}"
+
+                        dependency_table.add_row(
+                            relationship, f"{dep['strength']:.2f}", str(dep["co_failure_count"]), dep["interpretation"]
+                        )
+
+                    console.print(dependency_table)
+                else:
+                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+
+            # 7. Environment Impact Analysis
+            if not json_mode:
+                console.print(
+                    "\n[bold]Environment Impact Analysis[/bold]: Analyzing how environment affects test results"
+                )
+
+                # Use the SessionInsights API to get environment impact data
+                insights = Insights(analysis=analysis)
+                env_impact = insights.sessions.environment_impact()
+                environments = env_impact["environments"]
+                env_pass_rates = env_impact["pass_rates"]
+                consistency = env_impact["consistency"]
+
+                # Display the results
+                if environments:
+                    env_table = Table(title="Environment Impact", box=box.SIMPLE)
+                    env_table.add_column("Environment", style="cyan")
+                    env_table.add_column("Sessions", style="yellow")
+                    env_table.add_column("Avg Pass Rate", style="green")
+
+                    for env, data in environments.items():
+                        env_table.add_row(
+                            env,
+                            str(len(data["sessions"])),
+                            f"{data['avg_pass_rate']:.2%}",
+                        )
+
+                    console.print(env_table)
+                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                else:
+                    console.print("[yellow]No environment data available.[/yellow]")
+
+            # 4. Error Pattern Analysis
+            # Analyze common error patterns across test failures
+            if not json_mode:
+                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+
+                # Use the core API to get error pattern data
+                insights = Insights(analysis=analysis)
+                error_data = insights.tests.error_patterns()
+
+                # Get the results
+                patterns = error_data["patterns"]
+                multi_error_tests = error_data["multi_error_tests"]
+                failure_details = error_data["failure_details"]
+
+                # First, show detailed information about all test failures if requested
+                if failure_details and show_error_details:
+                    console.print("\n[bold]Test Failure Details:[/bold]")
+                    for i, failure in enumerate(failure_details):
+                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(f"[dim]Session: {failure['session_id']}[/dim]")
+
+                        # Format and display the error message
+                        if failure["error_msg"]:
+                            # Use Rich's syntax highlighting for the error message
+                            console.print("[yellow]Error Message:[/yellow]")
+                            # Split into lines and add proper indentation
+                            for line in failure["error_msg"].split("\n"):
+                                if line.strip():  # Skip empty lines
+                                    console.print(f"  {line}")
+                        else:
+                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+
+                        console.print()  # Add a blank line between failures
+                elif failure_details:
+                    # Just show a summary if detailed error messages are not requested
+                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
+                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+
+                # Then show the error pattern analysis
+                if patterns:
+                    error_table = Table(title="Common Error Patterns")
+                    error_table.add_column("Error Pattern", style="cyan")
+                    error_table.add_column("Occurrences", style="yellow")
+                    error_table.add_column("Affected Tests", style="red")
+
+                    # Show top error patterns
+                    for pattern_data in patterns[:10]:  # Limit to top 10
+                        pattern = pattern_data["pattern"]
+                        count = pattern_data["count"]
+                        affected_tests = len(pattern_data["affected_tests"])
+                        error_table.add_row(pattern, str(count), str(affected_tests))
+
+                    console.print(error_table)
+
+                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    if multi_error_tests:
+                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        multi_error_table = Table(show_header=True)
+                        multi_error_table.add_column("Test", style="cyan")
+                        multi_error_table.add_column("Error Patterns", style="yellow")
+
+                        for test_data in multi_error_tests[:5]:  # Limit to top 5
+                            test = test_data["test"]
+                            pattern_count = test_data["pattern_count"]
+                            test_short = test.split("::")[-1] if "::" in test else test
+                            multi_error_table.add_row(test_short, str(pattern_count))
+
+                        console.print(multi_error_table)
+                else:
+                    if failure_details:
+                        console.print(
+                            "[italic yellow]No significant error patterns found, but test failures were detected.[/italic yellow]"
+                        )
+                        console.print(
+                            "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
+                        )
+                    else:
+                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+
+            # Update JSON output with error pattern data
+            if output_format == "json":
+                result["error_patterns"] = [
+                    {
+                        "pattern": pattern_data["pattern"],
+                        "count": pattern_data["count"],
+                        "affected_tests": pattern_data["affected_tests"]
+                    }
+                    for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
+                ]
+
+                result["multi_error_tests"] = [
+                    {
+                        "test": test_data["test"],
+                        "error_patterns": test_data["patterns"]
+                    }
+                    for test_data in multi_error_tests
+                ]
+
+                # Include detailed failure information in JSON output
+                result["test_failures"] = failure_details
+
+            # 5. Test Stability Timeline
+            if not json_mode:
+                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+
+                # Use the core API to get stability timeline data
+                insights = Insights(analysis=analysis)
+                timeline_data = insights.tests.stability_timeline(days=7, limit=10)
+
+                if timeline_data.get("error"):
+                    console.print(f"[yellow]{timeline_data['error']}[/yellow]")
+                else:
+                    # Display stability timeline
+                    timeline_table = Table(title="Test Stability Timeline", box=box.ROUNDED, title_justify="left")
+                    timeline_table.add_column("Test", style="cyan", width=30)
+
+                    # Add date columns
+                    sorted_dates = timeline_data["dates"]
+                    for date in sorted_dates:
+                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+
+                    # Add stability trend column
+                    timeline_table.add_column("Trend", style="green")
+
+                    # Add rows for each test
+                    test_timeline = timeline_data["timeline"]
+                    trends = timeline_data["trends"]
+
+                    for nodeid in test_timeline:
+                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        row = [test_short]
+
+                        # Add stability score for each date
+                        for date in sorted_dates:
+                            if date in test_timeline[nodeid]:
+                                metrics = test_timeline[nodeid][date]
+                                stability = metrics["stability_score"]
+
+                                # Format cell with stability score and color
+                                if stability >= 0.9:
+                                    cell = f"[green]{stability:.2f}[/green]"
+                                elif stability >= 0.7:
+                                    cell = f"[yellow]{stability:.2f}[/yellow]"
+                                else:
+                                    cell = f"[red]{stability:.2f}[/red]"
+
+                                # Add run count
+                                cell += f" ({metrics['total_runs']})"
+                            else:
+                                cell = "-"
+
+                            row.append(cell)
+
+                        # Add trend
+                        trend_info = trends.get(nodeid, {})
+                        direction = trend_info.get("direction", "insufficient_data")
+
+                        if direction == "improving":
+                            trend = "[green]↑ Improving[/green]"
+                        elif direction == "declining":
+                            trend = "[red]↓ Declining[/red]"
+                        elif direction == "stable":
+                            trend = "[blue]→ Stable[/blue]"
+                        else:
+                            trend = "Insufficient data"
+
+                        row.append(trend)
+                        timeline_table.add_row(*row)
+
+                    console.print(timeline_table)
+
             # Additional high-level metrics
             if not json_mode:
                 console.print(Panel("[bold cyan]Advanced Metrics & Insights[/bold cyan]"))
@@ -1042,18 +2350,19 @@ def analyze_test_data(
                 for test_result in session.test_results:
                     nodeid = getattr(test_result, "nodeid", None)
                     outcome = getattr(test_result, "outcome", None)
-                    if nodeid and outcome:
-                        # Handle both string and enum outcomes
-                        if hasattr(outcome, "value"):
-                            # It's an enum
-                            is_failed = outcome.value == "FAILED"
-                        else:
-                            # It's a string
-                            is_failed = str(outcome).upper() == "FAILED"
 
-                        if is_failed:
-                            test_failure_matrix[session_key][nodeid] = 1
-                            test_failure_counts[nodeid] += 1
+                    # Check if the test failed
+                    is_failed = False
+                    if hasattr(outcome, "value"):
+                        # It's an enum
+                        is_failed = outcome.value == "FAILED"
+                    else:
+                        # It's a string
+                        is_failed = str(outcome).upper() == "FAILED"
+
+                    if is_failed and nodeid:
+                        test_failure_matrix[session_key][nodeid] = 1
+                        test_failure_counts[nodeid] += 1
 
             # Calculate correlation between test failures
             correlated_pairs = []
@@ -1126,13 +2435,8 @@ def analyze_test_data(
                     # Only include pairs with significant correlation
                     if (abs(correlation) > 0.3 or jaccard_similarity > 0.3) and both_failed > 0:
                         # Get shortened test names for display
-                        test1_short = test1.split("::")[-1] if "::" in test1 else test1
-                        test2_short = test2.split("::")[-1] if "::" in test2 else test2
-
-                        # Extract module names for grouping related tests
-                        test1_module = test1.split("::")[0] if "::" in test1 else ""
-                        test2_module = test2.split("::")[0] if "::" in test2 else ""
-                        same_module = test1_module == test2_module and test1_module != ""
+                        test1_short = test1.split("::")[-1]
+                        test2_short = test2.split("::")[-1]
 
                         correlated_pairs.append(
                             {
@@ -1147,7 +2451,7 @@ def analyze_test_data(
                                 "both_failed": both_failed,
                                 "test1_failures": test1_only + both_failed,
                                 "test2_failures": test2_only + both_failed,
-                                "same_module": same_module,
+                                "same_module": test1.split("::")[0] == test2.split("::")[0],
                             }
                         )
 
@@ -1206,7 +2510,7 @@ def analyze_test_data(
                     root_cause_table.add_column("Correlation Frequency", style="yellow")
 
                     for test, frequency in top_root_causes:
-                        test_short = test.split("::")[-1] if "::" in test else test
+                        test_short = test.split("::")[-1]
                         root_cause_table.add_row(test_short, str(frequency))
 
                     console.print(root_cause_table)
@@ -1222,6 +2526,10 @@ def analyze_test_data(
                     # First pass: create initial clusters with strong correlations
                     for pair in correlated_pairs:
                         test1, test2 = pair["test1"], pair["test2"]
+
+                        # Skip self-correlation
+                        if test1 == test2:
+                            continue
 
                         # Skip if correlation is too weak
                         if abs(pair["correlation"]) < 0.5 and pair["jaccard_similarity"] < 0.4:
@@ -1262,7 +2570,7 @@ def analyze_test_data(
                             # Check if tests in this cluster are from the same module
                             modules = set()
                             for test in cluster:
-                                module = test.split("::")[0] if "::" in test else ""
+                                module = test.split("::")[0]
                                 if module:
                                     modules.add(module)
 
@@ -1284,8 +2592,8 @@ def analyze_test_data(
 
                             # Get failure counts for tests in this cluster
                             for test in sorted(cluster):
-                                test_short = test.split("::")[-1] if "::" in test else test
-                                module = test.split("::")[0] if "::" in test else "Unknown"
+                                test_short = test.split("::")[-1]
+                                module = test.split("::")[0]
 
                                 # Count failures for this test
                                 failure_count = 0
@@ -1412,7 +2720,7 @@ def analyze_test_data(
 
                     # Show top 10 brittle tests
                     for test in brittle_tests[:10]:
-                        test_short = test["test_id"].split("::")[-1] if "::" in test["test_id"] else test["test_id"]
+                        test_short = test["test_id"].split("::")[-1]
                         brittleness_table.add_row(
                             test_short,
                             f"{test['brittleness_score']:.2f}",
@@ -1492,7 +2800,7 @@ def analyze_test_data(
 
                     # Only include tests with significant patterns
                     if peak_hours or peak_days:
-                        test_short = test_id.split("::")[-1] if "::" in test_id else test_id
+                        test_short = test_id.split("::")[-1]
 
                         seasonal_patterns.append(
                             {
@@ -1551,117 +2859,17 @@ def analyze_test_data(
             # 4. Failure Pattern Recognition
             # Categorize failures by error type
             if not json_mode:
-                console.print("[bold]Failure Pattern Recognition:[/bold] Identifying common error patterns")
+                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
 
-            # Collect error messages from test failures
-            error_patterns = {}
-            error_counts = {}
-            test_to_error_map = {}
+                # Use the core API to get error pattern data
+                insights = Insights(analysis=analysis)
+                error_data = insights.tests.error_patterns()
 
-            # Track test failure details for debugging
-            failure_details = []
+                # Get the results
+                patterns = error_data["patterns"]
+                multi_error_tests = error_data["multi_error_tests"]
+                failure_details = error_data["failure_details"]
 
-            for session in filtered_sessions:
-                for test_result in session.test_results:
-                    nodeid = getattr(test_result, "nodeid", None)
-                    outcome = getattr(test_result, "outcome", None)
-
-                    # Check if the test failed
-                    is_failed = False
-                    if hasattr(outcome, "value"):
-                        # It's an enum
-                        is_failed = outcome.value == "FAILED"
-                    else:
-                        # It's a string
-                        is_failed = str(outcome).upper() == "FAILED"
-
-                    if is_failed and nodeid:
-                        # Extract error message from longreprtext
-                        error_msg = getattr(test_result, "longreprtext", "")
-
-                        # Store failure details for debugging
-                        failure_details.append(
-                            {
-                                "nodeid": nodeid,
-                                "error_msg": error_msg,
-                                "session_id": getattr(session, "session_id", "unknown"),
-                            }
-                        )
-
-                        if error_msg:
-                            # Extract meaningful error patterns from the error message
-                            # First, identify the error type
-                            error_type = "Unknown Error"
-                            error_detail = ""
-
-                            # Common Python exceptions to look for
-                            exception_types = [
-                                "AssertionError",
-                                "ValueError",
-                                "TypeError",
-                                "KeyError",
-                                "IndexError",
-                                "AttributeError",
-                                "ImportError",
-                                "RuntimeError",
-                                "NameError",
-                                "SyntaxError",
-                                "FileNotFoundError",
-                                "ZeroDivisionError",
-                                "PermissionError",
-                                "OSError",
-                                "IOError",
-                            ]
-
-                            # Find the exception type in the error message
-                            for exc_type in exception_types:
-                                if exc_type in error_msg:
-                                    error_type = exc_type
-                                    # Try to extract the specific error detail
-                                    lines = error_msg.split("\n")
-                                    for line in lines:
-                                        if exc_type in line:
-                                            # Extract the part after the exception type
-                                            parts = line.split(exc_type + ":", 1)
-                                            if len(parts) > 1:
-                                                error_detail = parts[1].strip()
-                                                break
-                                    break
-
-                            # If we couldn't extract a specific detail, use the first non-empty line
-                            if not error_detail and error_msg:
-                                for line in error_msg.split("\n"):
-                                    if line.strip() and not line.startswith('  File "'):
-                                        error_detail = line.strip()
-                                        break
-
-                            # Create a meaningful pattern that combines error type and detail
-                            pattern = f"{error_type}: {error_detail}" if error_detail else error_type
-
-                            # Truncate very long patterns
-                            if len(pattern) > 100:
-                                pattern = pattern[:97] + "..."
-
-                            # Count occurrences of each error pattern
-                            if pattern not in error_patterns:
-                                error_patterns[pattern] = []
-                                error_counts[pattern] = 0
-
-                            error_patterns[pattern].append(nodeid)
-                            error_counts[pattern] += 1
-
-                            # Map tests to their error patterns
-                            if nodeid not in test_to_error_map:
-                                test_to_error_map[nodeid] = []
-
-                            if pattern not in test_to_error_map[nodeid]:
-                                test_to_error_map[nodeid].append(pattern)
-
-            # Sort error patterns by frequency
-            sorted_patterns = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)
-
-            # Display the results
-            if not json_mode:
                 # First, show detailed information about all test failures if requested
                 if failure_details and show_error_details:
                     console.print("\n[bold]Test Failure Details:[/bold]")
@@ -1687,35 +2895,33 @@ def analyze_test_data(
                     console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
 
                 # Then show the error pattern analysis
-                if sorted_patterns:
+                if patterns:
                     error_table = Table(title="Common Error Patterns")
                     error_table.add_column("Error Pattern", style="cyan")
                     error_table.add_column("Occurrences", style="yellow")
                     error_table.add_column("Affected Tests", style="red")
 
                     # Show top error patterns
-                    for pattern, count in sorted_patterns[:10]:  # Limit to top 10
-                        affected_tests = len(set(error_patterns[pattern]))
+                    for pattern_data in patterns[:10]:  # Limit to top 10
+                        pattern = pattern_data["pattern"]
+                        count = pattern_data["count"]
+                        affected_tests = len(pattern_data["affected_tests"])
                         error_table.add_row(pattern, str(count), str(affected_tests))
 
                     console.print(error_table)
 
                     # Show tests with multiple error patterns (potentially flaky or unstable)
-                    multi_error_tests = {
-                        test: patterns for test, patterns in test_to_error_map.items() if len(patterns) > 1
-                    }
-
                     if multi_error_tests:
                         console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
                         multi_error_table = Table(show_header=True)
                         multi_error_table.add_column("Test", style="cyan")
                         multi_error_table.add_column("Error Patterns", style="yellow")
 
-                        for test, patterns in sorted(multi_error_tests.items(), key=lambda x: len(x[1]), reverse=True)[
-                            :5
-                        ]:
-                            test_short = test.split("::")[-1] if "::" in test else test
-                            multi_error_table.add_row(test_short, str(len(patterns)))
+                        for test_data in multi_error_tests[:5]:  # Limit to top 5
+                            test = test_data["test"]
+                            pattern_count = test_data["pattern_count"]
+                            test_short = test.split("::")[-1]
+                            multi_error_table.add_row(test_short, str(pattern_count))
 
                         console.print(multi_error_table)
                 else:
@@ -1732,99 +2938,42 @@ def analyze_test_data(
             # Update JSON output with error pattern data
             if output_format == "json":
                 result["error_patterns"] = [
-                    {"pattern": pattern, "count": count, "affected_tests": list(set(error_patterns[pattern]))}
-                    for pattern, count in sorted_patterns[:20]  # Limit to top 20 for JSON output
+                    {
+                        "pattern": pattern_data["pattern"],
+                        "count": pattern_data["count"],
+                        "affected_tests": pattern_data["affected_tests"]
+                    }
+                    for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
                 ]
 
                 result["multi_error_tests"] = [
-                    {"test": test, "error_patterns": patterns}
-                    for test, patterns in test_to_error_map.items()
-                    if len(patterns) > 1
+                    {
+                        "test": test_data["test"],
+                        "error_patterns": test_data["patterns"]
+                    }
+                    for test_data in multi_error_tests
                 ]
 
                 # Include detailed failure information in JSON output
                 result["test_failures"] = failure_details
 
             # 5. Test Stability Timeline
-            # Analyze how test stability changes over time
             if not json_mode:
                 console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
 
-                # Group sessions by date
-                date_sessions = {}
-                for session in filtered_sessions:
-                    session_date = session.session_start_time.date()
-                    if session_date not in date_sessions:
-                        date_sessions[session_date] = []
-                    date_sessions[session_date].append(session)
+                # Use the core API to get stability timeline data
+                insights = Insights(analysis=analysis)
+                timeline_data = insights.tests.stability_timeline(days=7, limit=10)
 
-                # Sort dates chronologically
-                sorted_dates = sorted(date_sessions.keys())
-
-                if len(sorted_dates) <= 1:
-                    console.print(
-                        "[yellow]Insufficient data for timeline analysis. Need data from multiple dates.[/yellow]"
-                    )
+                if timeline_data.get("error"):
+                    console.print(f"[yellow]{timeline_data['error']}[/yellow]")
                 else:
-                    # Track stability metrics over time for the most frequently run tests
-                    test_run_counts = {}
-                    for session in filtered_sessions:
-                        for test_result in session.test_results:
-                            nodeid = getattr(test_result, "nodeid", None)
-                            if nodeid:
-                                if nodeid not in test_run_counts:
-                                    test_run_counts[nodeid] = 0
-                                test_run_counts[nodeid] += 1
-
-                    # Get the top 10 most frequently run tests
-                    top_tests = sorted(test_run_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-
-                    # Calculate stability for each test on each date
-                    test_stability_timeline = {}
-                    for nodeid, _ in top_tests:
-                        test_stability_timeline[nodeid] = {}
-                        for date in sorted_dates:
-                            # Get all results for this test on this date
-                            date_results = []
-                            for session in date_sessions[date]:
-                                for test_result in session.test_results:
-                                    if getattr(test_result, "nodeid", None) == nodeid:
-                                        outcome = getattr(test_result, "outcome", None)
-                                        # Handle both string and enum outcomes
-                                        if hasattr(outcome, "value"):
-                                            # It's an enum
-                                            result = outcome.value
-                                        else:
-                                            # It's a string
-                                            result = str(outcome).upper()
-                                        date_results.append(result)
-
-                            # Calculate stability metrics if we have results
-                            if date_results:
-                                # Count outcomes
-                                outcome_counts = {}
-                                for result in date_results:
-                                    if result not in outcome_counts:
-                                        outcome_counts[result] = 0
-                                    outcome_counts[result] += 1
-
-                                # Calculate stability score (percentage of consistent results)
-                                if date_results:
-                                    most_common_count = max(outcome_counts.values())
-                                    stability_score = most_common_count / len(date_results)
-
-                                    # Store metrics
-                                    test_stability_timeline[nodeid][date] = {
-                                        "total_runs": len(date_results),
-                                        "outcome_counts": outcome_counts,
-                                        "stability_score": stability_score,
-                                    }
-
                     # Display stability timeline
-                    timeline_table = Table(title="Test Stability Timeline", box=box.SIMPLE)
-                    timeline_table.add_column("Test", style="cyan")
+                    timeline_table = Table(title="Test Stability Timeline", box=box.ROUNDED, title_justify="left")
+                    timeline_table.add_column("Test", style="cyan", width=30)
 
                     # Add date columns
+                    sorted_dates = timeline_data["dates"]
                     for date in sorted_dates:
                         timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
 
@@ -1832,19 +2981,18 @@ def analyze_test_data(
                     timeline_table.add_column("Trend", style="green")
 
                     # Add rows for each test
-                    for nodeid, _ in top_tests:
-                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
-                        row = [test_short]
+                    test_timeline = timeline_data["timeline"]
+                    trends = timeline_data["trends"]
 
-                        # Track stability scores for trend calculation
-                        stability_scores = []
+                    for nodeid in test_timeline:
+                        test_short = nodeid.split("::")[-1]
+                        row = [test_short]
 
                         # Add stability score for each date
                         for date in sorted_dates:
-                            if date in test_stability_timeline[nodeid]:
-                                metrics = test_stability_timeline[nodeid][date]
+                            if date in test_timeline[nodeid]:
+                                metrics = test_timeline[nodeid][date]
                                 stability = metrics["stability_score"]
-                                stability_scores.append(stability)
 
                                 # Format cell with stability score and color
                                 if stability >= 0.9:
@@ -1858,23 +3006,19 @@ def analyze_test_data(
                                 cell += f" ({metrics['total_runs']})"
                             else:
                                 cell = "-"
-                                stability_scores.append(None)
 
                             row.append(cell)
 
-                        # Calculate trend
-                        valid_scores = [s for s in stability_scores if s is not None]
-                        if len(valid_scores) >= 2:
-                            # Simple trend: compare first and last valid scores
-                            first_score = valid_scores[0]
-                            last_score = valid_scores[-1]
+                        # Add trend
+                        trend_info = trends.get(nodeid, {})
+                        direction = trend_info.get("direction", "insufficient_data")
 
-                            if last_score > first_score + 0.1:
-                                trend = "[green]↑ Improving[/green]"
-                            elif last_score < first_score - 0.1:
-                                trend = "[red]↓ Declining[/red]"
-                            else:
-                                trend = "[blue]→ Stable[/blue]"
+                        if direction == "improving":
+                            trend = "[green]↑ Improving[/green]"
+                        elif direction == "declining":
+                            trend = "[red]↓ Declining[/red]"
+                        elif direction == "stable":
+                            trend = "[blue]→ Stable[/blue]"
                         else:
                             trend = "Insufficient data"
 
@@ -2015,40 +3159,360 @@ def analyze_test_data(
                     "\n[bold]Environment Impact Analysis[/bold]: Analyzing how environment affects test results"
                 )
 
-                # Collect environment information from session tags
-                environments = {}
-                for session in filtered_sessions:
-                    env = session.session_tags.get("environment", "unknown")
-                    if env not in environments:
-                        environments[env] = {"pass_rates": []}
-
-                    # Calculate pass rate for this session
-                    session_results = session.test_results
-                    if session_results:
-                        session_pass_rate = sum(1 for t in session_results if t.outcome == "passed") / len(
-                            session_results
-                        )
-                        environments[env]["pass_rates"].append(session_pass_rate)
-
-                # Calculate average pass rate for each environment
-                env_pass_rates = {}
-                for env, data in environments.items():
-                    if data["pass_rates"]:
-                        env_pass_rates[env] = sum(data["pass_rates"]) / len(data["pass_rates"])
+                # Use the SessionInsights API to get environment impact data
+                insights = Insights(analysis=analysis)
+                env_impact = insights.sessions.environment_impact()
+                environments = env_impact["environments"]
+                env_pass_rates = env_impact["pass_rates"]
+                consistency = env_impact["consistency"]
 
                 # Display the results
-                if env_pass_rates:
-                    env_table = Table(title="Environment Impact Analysis", box=box.SIMPLE)
+                if environments:
+                    env_table = Table(title="Environment Impact", box=box.SIMPLE)
                     env_table.add_column("Environment", style="cyan")
-                    env_table.add_column("Average Pass Rate", style="yellow")
+                    env_table.add_column("Sessions", style="yellow")
+                    env_table.add_column("Avg Pass Rate", style="green")
 
-                    # Show environments with their average pass rates
-                    for env, pass_rate in env_pass_rates.items():
-                        env_table.add_row(env, f"{pass_rate:.2%}")
+                    for env, data in environments.items():
+                        env_table.add_row(
+                            env,
+                            str(len(data["sessions"])),
+                            f"{data['avg_pass_rate']:.2%}",
+                        )
 
                     console.print(env_table)
+                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
                 else:
-                    console.print("[yellow]No environment information found in the dataset.[/yellow]")
+                    console.print("[yellow]No environment data available.[/yellow]")
+
+            # 4. Error Pattern Analysis
+            # Analyze common error patterns across test failures
+            if not json_mode:
+                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+
+                # Use the core API to get error pattern data
+                insights = Insights(analysis=analysis)
+                error_data = insights.tests.error_patterns()
+
+                # Get the results
+                patterns = error_data["patterns"]
+                multi_error_tests = error_data["multi_error_tests"]
+                failure_details = error_data["failure_details"]
+
+                # First, show detailed information about all test failures if requested
+                if failure_details and show_error_details:
+                    console.print("\n[bold]Test Failure Details:[/bold]")
+                    for i, failure in enumerate(failure_details):
+                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(f"[dim]Session: {failure['session_id']}[/dim]")
+
+                        # Format and display the error message
+                        if failure["error_msg"]:
+                            # Use Rich's syntax highlighting for the error message
+                            console.print("[yellow]Error Message:[/yellow]")
+                            # Split into lines and add proper indentation
+                            for line in failure["error_msg"].split("\n"):
+                                if line.strip():  # Skip empty lines
+                                    console.print(f"  {line}")
+                        else:
+                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+
+                        console.print()  # Add a blank line between failures
+                elif failure_details:
+                    # Just show a summary if detailed error messages are not requested
+                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
+                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+
+                # Then show the error pattern analysis
+                if patterns:
+                    error_table = Table(title="Common Error Patterns")
+                    error_table.add_column("Error Pattern", style="cyan")
+                    error_table.add_column("Occurrences", style="yellow")
+                    error_table.add_column("Affected Tests", style="red")
+
+                    # Show top error patterns
+                    for pattern_data in patterns[:10]:  # Limit to top 10
+                        pattern = pattern_data["pattern"]
+                        count = pattern_data["count"]
+                        affected_tests = len(pattern_data["affected_tests"])
+                        error_table.add_row(pattern, str(count), str(affected_tests))
+
+                    console.print(error_table)
+
+                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    if multi_error_tests:
+                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        multi_error_table = Table(show_header=True)
+                        multi_error_table.add_column("Test", style="cyan")
+                        multi_error_table.add_column("Error Patterns", style="yellow")
+
+                        for test_data in multi_error_tests[:5]:  # Limit to top 5
+                            test = test_data["test"]
+                            pattern_count = test_data["pattern_count"]
+                            test_short = test.split("::")[-1]
+                            multi_error_table.add_row(test_short, str(pattern_count))
+
+                        console.print(multi_error_table)
+                else:
+                    if failure_details:
+                        console.print(
+                            "[italic yellow]No significant error patterns found, but test failures were detected.[/italic yellow]"
+                        )
+                        console.print(
+                            "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
+                        )
+                    else:
+                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+
+            # Update JSON output with error pattern data
+            if output_format == "json":
+                result["error_patterns"] = [
+                    {
+                        "pattern": pattern_data["pattern"],
+                        "count": pattern_data["count"],
+                        "affected_tests": pattern_data["affected_tests"]
+                    }
+                    for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
+                ]
+
+                result["multi_error_tests"] = [
+                    {
+                        "test": test_data["test"],
+                        "error_patterns": test_data["patterns"]
+                    }
+                    for test_data in multi_error_tests
+                ]
+
+                # Include detailed failure information in JSON output
+                result["test_failures"] = failure_details
+
+            # 5. Test Stability Timeline
+            if not json_mode:
+                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+
+                # Use the core API to get stability timeline data
+                insights = Insights(analysis=analysis)
+                timeline_data = insights.tests.stability_timeline(days=7, limit=10)
+
+                if timeline_data.get("error"):
+                    console.print(f"[yellow]{timeline_data['error']}[/yellow]")
+                else:
+                    # Display stability timeline
+                    timeline_table = Table(title="Test Stability Timeline", box=box.ROUNDED, title_justify="left")
+                    timeline_table.add_column("Test", style="cyan", width=30)
+
+                    # Add date columns
+                    sorted_dates = timeline_data["dates"]
+                    for date in sorted_dates:
+                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+
+                    # Add stability trend column
+                    timeline_table.add_column("Trend", style="green")
+
+                    # Add rows for each test
+                    test_timeline = timeline_data["timeline"]
+                    trends = timeline_data["trends"]
+
+                    for nodeid in test_timeline:
+                        test_short = nodeid.split("::")[-1]
+                        row = [test_short]
+
+                        # Add stability score for each date
+                        for date in sorted_dates:
+                            if date in test_timeline[nodeid]:
+                                metrics = test_timeline[nodeid][date]
+                                stability = metrics["stability_score"]
+
+                                # Format cell with stability score and color
+                                if stability >= 0.9:
+                                    cell = f"[green]{stability:.2f}[/green]"
+                                elif stability >= 0.7:
+                                    cell = f"[yellow]{stability:.2f}[/yellow]"
+                                else:
+                                    cell = f"[red]{stability:.2f}[/red]"
+
+                                # Add run count
+                                cell += f" ({metrics['total_runs']})"
+                            else:
+                                cell = "-"
+
+                            row.append(cell)
+
+                        # Add trend
+                        trend_info = trends.get(nodeid, {})
+                        direction = trend_info.get("direction", "insufficient_data")
+
+                        if direction == "improving":
+                            trend = "[green]↑ Improving[/green]"
+                        elif direction == "declining":
+                            trend = "[red]↓ Declining[/red]"
+                        elif direction == "stable":
+                            trend = "[blue]→ Stable[/blue]"
+                        else:
+                            trend = "Insufficient data"
+
+                        row.append(trend)
+                        timeline_table.add_row(*row)
+
+                    console.print(timeline_table)
+
+            # 6. Test Dependency Graph
+            # Analyze which tests tend to fail together to identify potential dependencies
+            if not json_mode:
+                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+
+                # Create a matrix of test co-failures
+                test_failures = {}
+                for session in filtered_sessions:
+                    # Get all failed tests in this session
+                    session_failures = []
+                    for test_result in session.test_results:
+                        nodeid = getattr(test_result, "nodeid", None)
+                        outcome = getattr(test_result, "outcome", None)
+
+                        # Check if the test failed
+                        is_failed = False
+                        if hasattr(outcome, "value"):
+                            # It's an enum
+                            is_failed = outcome.value == "FAILED"
+                        else:
+                            # It's a string
+                            is_failed = str(outcome).upper() == "FAILED"
+
+                        if is_failed and nodeid:
+                            session_failures.append(nodeid)
+
+                            # Track individual test failure counts
+                            if nodeid not in test_failures:
+                                test_failures[nodeid] = {"count": 0, "co_failures": {}}
+                            test_failures[nodeid]["count"] += 1
+
+                    # Record co-failures for each pair of failed tests
+                    for i, test1 in enumerate(session_failures):
+                        for test2 in session_failures[i + 1 :]:
+                            if test1 != test2:
+                                # Update co-failure count for test1
+                                if test2 not in test_failures[test1]["co_failures"]:
+                                    test_failures[test1]["co_failures"][test2] = 0
+                                test_failures[test1]["co_failures"][test2] += 1
+
+                                # Update co-failure count for test2
+                                if test1 not in test_failures[test2]["co_failures"]:
+                                    test_failures[test2]["co_failures"][test1] = 0
+                                test_failures[test2]["co_failures"][test1] += 1
+
+                # Identify significant dependencies
+                dependencies = []
+                for test_id, data in test_failures.items():
+                    total_failures = data["count"]
+                    if total_failures < 3:  # Ignore tests with too few failures
+                        continue
+
+                    # Find tests that fail together with this test more than 70% of the time
+                    for co_test, co_count in data["co_failures"].items():
+                        co_test_total = test_failures.get(co_test, {}).get("count", 0)
+                        if co_test_total < 3:  # Ignore tests with too few failures
+                            continue
+
+                        # Calculate dependency metrics
+                        pct_a_with_b = co_count / total_failures
+                        pct_b_with_a = co_count / co_test_total
+
+                        # Only consider strong dependencies
+                        if pct_a_with_b > 0.7 or pct_b_with_a > 0.7:
+                            # Determine dependency direction
+                            if pct_a_with_b > pct_b_with_a + 0.2:
+                                # test_id likely depends on co_test
+                                direction = f"{test_id} → {co_test}"
+                                strength = pct_a_with_b
+                                interpretation = f"{test_id.split('::')[-1]} fails when {co_test.split('::')[-1]} fails"
+                            elif pct_b_with_a > pct_a_with_b + 0.2:
+                                # co_test likely depends on test_id
+                                direction = f"{co_test} → {test_id}"
+                                strength = pct_b_with_a
+                                interpretation = f"{co_test.split('::')[-1]} fails when {test_id.split('::')[-1]} fails"
+                            else:
+                                # Bidirectional dependency
+                                direction = f"{test_id} ↔ {co_test}"
+                                strength = (pct_a_with_b + pct_b_with_a) / 2
+                                interpretation = (
+                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
+                                )
+
+                            dependencies.append(
+                                {
+                                    "test1": test_id,
+                                    "test2": co_test,
+                                    "direction": direction,
+                                    "strength": strength,
+                                    "interpretation": interpretation,
+                                    "co_failure_count": co_count,
+                                }
+                            )
+
+                # Sort dependencies by strength
+                dependencies.sort(key=lambda x: x["strength"], reverse=True)
+
+                # Display the results
+                if dependencies:
+                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table.add_column("Test Relationship", style="cyan")
+                    dependency_table.add_column("Strength", style="yellow")
+                    dependency_table.add_column("Co-Failures", style="red")
+                    dependency_table.add_column("Interpretation", style="green")
+
+                    # Show top 10 dependencies
+                    for dep in dependencies[:10]:
+                        # Format test names to be shorter
+                        test1_short = dep["test1"].split("::")[-1]
+                        test2_short = dep["test2"].split("::")[-1]
+
+                        if "→" in dep["direction"]:
+                            relationship = f"{test1_short} → {test2_short}"
+                        elif "↔" in dep["direction"]:
+                            relationship = f"{test1_short} ↔ {test2_short}"
+                        else:
+                            relationship = f"{test1_short} - {test2_short}"
+
+                        dependency_table.add_row(
+                            relationship, f"{dep['strength']:.2f}", str(dep["co_failure_count"]), dep["interpretation"]
+                        )
+
+                    console.print(dependency_table)
+                else:
+                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+
+            # 7. Environment Impact Analysis
+            if not json_mode:
+                console.print(
+                    "\n[bold]Environment Impact Analysis[/bold]: Analyzing how environment affects test results"
+                )
+
+                # Use the SessionInsights API to get environment impact data
+                insights = Insights(analysis=analysis)
+                env_impact = insights.sessions.environment_impact()
+                environments = env_impact["environments"]
+                env_pass_rates = env_impact["pass_rates"]
+                consistency = env_impact["consistency"]
+
+                # Display the results
+                if environments:
+                    env_table = Table(title="Environment Impact", box=box.SIMPLE)
+                    env_table.add_column("Environment", style="cyan")
+                    env_table.add_column("Sessions", style="yellow")
+                    env_table.add_column("Avg Pass Rate", style="green")
+
+                    for env, data in environments.items():
+                        env_table.add_row(
+                            env,
+                            str(len(data["sessions"])),
+                            f"{data['avg_pass_rate']:.2%}",
+                        )
+
+                    console.print(env_table)
+                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                else:
+                    console.print("[yellow]No environment data available.[/yellow]")
         except Exception as e:
             # Always display errors for test compatibility, even in JSON mode
             console.print(f"[bold red]Error during analysis:[/bold red] {str(e)}")
