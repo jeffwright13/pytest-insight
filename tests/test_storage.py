@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 from pytest_insight.core.models import TestSession
@@ -359,7 +360,6 @@ class TestStorageProfile:
 
     def test_storage_profile_creation(self):
         """Test creating a StorageProfile."""
-        from pathlib import Path
 
         from pytest_insight.core.storage import StorageProfile
 
@@ -527,6 +527,148 @@ class TestProfileManager:
         monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "nonexistent")
         with pytest.raises(ValueError, match="Profile 'nonexistent' does not exist"):
             profile_manager.get_profile()
+
+    def test_backup_profiles(self, tmp_path):
+        """Test creating a backup of profiles."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a temporary config
+        config_path = tmp_path / "profiles.json"
+        manager = ProfileManager(config_path=config_path)
+
+        # Create a profile to have something to backup
+        manager.create_profile("test-profile", "json", "/test/path")
+
+        # Create a backup
+        backup_path = manager.backup_profiles()
+        assert backup_path is not None
+        assert backup_path.exists()
+        assert "profiles_backup_" in backup_path.name
+        assert backup_path.suffix == ".json"
+
+    def test_list_backups(self, tmp_path):
+        """Test listing available backups."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a temporary config
+        config_path = tmp_path / "profiles.json"
+        manager = ProfileManager(config_path=config_path)
+
+        # Create multiple backups
+        manager.backup_profiles()
+        manager.backup_profiles()
+        manager.backup_profiles()
+
+        # List backups
+        backups = manager.list_backups()
+
+        # Verify backups are listed
+        assert backups  # Simplified sequence length comparison
+
+        # Verify backup information
+        for backup in backups:
+            assert "path" in backup
+            assert "timestamp" in backup
+            assert "size" in backup
+            assert "filename" in backup
+
+    def test_cleanup_old_backups(self, tmp_path):
+        """Test cleaning up old backups."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a temporary config
+        config_path = tmp_path / "profiles.json"
+        manager = ProfileManager(config_path=config_path)
+
+        # Create more backups than the max limit
+        max_backups = 3
+
+        # Create backups
+        for _ in range(max_backups + 5):
+            manager.backup_profiles()
+
+        # Clean up old backups with a smaller limit
+        manager._cleanup_old_backups(max_backups=max_backups)
+
+        # Verify only max_backups remain
+        backup_dir = config_path.parent / "backups"
+        backup_files = list(backup_dir.glob("profiles_backup_*.json"))
+        assert len(backup_files) <= max_backups
+
+    def test_restore_from_backup(self, tmp_path):
+        """Test restoring profiles from a backup."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a temporary config
+        config_path = tmp_path / "profiles.json"
+        manager = ProfileManager(config_path=config_path)
+
+        # Create original profiles
+        manager.create_profile("original1", "json", "/original1/path")
+        manager.create_profile("original2", "memory")
+
+        # Create a backup
+        backup_path = manager.backup_profiles()
+        assert backup_path is not None
+
+        # Create new profiles (replacing the originals)
+        manager.delete_profile("original1")
+        manager.delete_profile("original2")
+        manager.create_profile("new_profile", "json", "/new/path")
+
+        # Verify new profile exists and old ones don't
+        profiles = manager.list_profiles()
+        assert "new_profile" in profiles
+        assert "original1" not in profiles
+        assert "original2" not in profiles
+
+        # Restore from backup
+        success = manager.restore_from_backup(backup_path)
+        assert success
+
+        # Verify original profiles are restored
+        restored_profiles = manager.list_profiles()
+        assert "original1" in restored_profiles
+        assert "original2" in restored_profiles
+        assert "new_profile" not in restored_profiles
+
+    def test_restore_nonexistent_backup(self, tmp_path):
+        """Test restoring from a non-existent backup file."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a temporary config
+        config_path = tmp_path / "profiles.json"
+        manager = ProfileManager(config_path=config_path)
+
+        # Try to restore from a non-existent backup
+        non_existent_path = tmp_path / "non_existent_backup.json"
+        result = manager.restore_from_backup(non_existent_path)
+
+        # Should return False for failure
+        assert result is False
+
+    def test_automatic_backup_on_save(self, tmp_path):
+        """Test that backups are automatically created when saving profiles."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a temporary config
+        config_path = tmp_path / "profiles.json"
+        manager = ProfileManager(config_path=config_path)
+
+        # Create a profile to trigger _save_profiles
+        manager.create_profile("test_profile", "json", "/test/path")
+
+        # Verify a backup was created
+        backup_dir = config_path.parent / "backups"
+        backup_files = list(backup_dir.glob("profiles_backup_*.json"))
+        assert backup_files  # Simplified sequence length comparison
+
+        # Create another profile to trigger another backup
+        manager.create_profile("another_profile", "memory")
+
+        # Verify another backup was created
+        backup_files_after = list(backup_dir.glob("profiles_backup_*.json"))
+        assert len(backup_files_after) > len(backup_files)  # More backups than before
 
 
 class TestStorageWithProfiles:

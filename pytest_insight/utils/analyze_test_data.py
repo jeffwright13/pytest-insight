@@ -134,7 +134,7 @@ def analyze_test_data(
                 return
 
             # Now use the InsightAPI for a consistent interface
-            api = InsightAPI()
+            api = InsightAPI(profile_name=profile)
 
             # Apply filters to the loaded sessions
             filtered_sessions = sessions
@@ -433,9 +433,7 @@ def analyze_test_data(
                         # 2. Calculate test outcome metrics (using TestOutcome.PASSED enum value)
                         # Following metric style guide: test.outcome.passed
                         test_outcome_passed_base = sum(1 for test in base_tests if test.outcome.value == "PASSED")
-                        test_outcome_passed_target = sum(
-                            1 for test in target_tests if test.outcome.value == "PASSED"
-                        )
+                        test_outcome_passed_target = sum(1 for test in target_tests if test.outcome.value == "PASSED")
 
                         # Handle empty test collections to avoid division by zero
                         base_test_count = len(base_tests)
@@ -455,9 +453,7 @@ def analyze_test_data(
                         # Following metric style guide: test.duration.average
                         # Filter out None durations for robust calculation
                         test_durations_base = [test.duration for test in base_tests if test.duration is not None]
-                        test_durations_target = [
-                            test.duration for test in target_tests if test.duration is not None
-                        ]
+                        test_durations_target = [test.duration for test in target_tests if test.duration is not None]
 
                         test_duration_average_current = (
                             sum(test_durations_base) / len(test_durations_base) if test_durations_base else 0
@@ -539,8 +535,10 @@ def analyze_test_data(
 
                         # Create API instances for both current and comparison profiles
                         # The mock tests are looking for these exact calls
-                        InsightAPI(profile=profile)  # Will be None if no profile specified
-                        compare_api = InsightAPI(profile=compare_value)
+                        print(f"DEBUG: Creating InsightAPI with profile={profile}")
+                        current_api = InsightAPI(profile_name=profile)  # Will be None if no profile specified
+                        print(f"DEBUG: Creating InsightAPI with profile={compare_value}")
+                        compare_api = InsightAPI(profile_name=compare_value)
 
                         # Apply the same filters to the comparison profile
                         compare_query = compare_api.query()
@@ -945,10 +943,7 @@ def analyze_test_data(
                             relationship = f"{test1_short} - {test2_short}"
 
                         dependency_table.add_row(
-                            relationship, 
-                            f"{dep['strength']:.2f}", 
-                            str(dep["co_failure_count"]), 
-                            dep["interpretation"]
+                            relationship, f"{dep['strength']:.2f}", str(dep["co_failure_count"]), dep["interpretation"]
                         )
 
                     console.print(dependency_table)
@@ -1072,16 +1067,13 @@ def analyze_test_data(
                     {
                         "pattern": pattern_data["pattern"],
                         "count": pattern_data["count"],
-                        "affected_tests": pattern_data["affected_tests"]
+                        "affected_tests": pattern_data["affected_tests"],
                     }
                     for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
                 ]
 
                 result["multi_error_tests"] = [
-                    {
-                        "test": test_data["test"],
-                        "error_patterns": test_data["patterns"]
-                    }
+                    {"test": test_data["test"], "error_patterns": test_data["patterns"]}
                     for test_data in multi_error_tests
                 ]
 
@@ -1401,16 +1393,13 @@ def analyze_test_data(
                     {
                         "pattern": pattern_data["pattern"],
                         "count": pattern_data["count"],
-                        "affected_tests": pattern_data["affected_tests"]
+                        "affected_tests": pattern_data["affected_tests"],
                     }
                     for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
                 ]
 
                 result["multi_error_tests"] = [
-                    {
-                        "test": test_data["test"],
-                        "error_patterns": test_data["patterns"]
-                    }
+                    {"test": test_data["test"], "error_patterns": test_data["patterns"]}
                     for test_data in multi_error_tests
                 ]
 
@@ -1730,16 +1719,13 @@ def analyze_test_data(
                     {
                         "pattern": pattern_data["pattern"],
                         "count": pattern_data["count"],
-                        "affected_tests": pattern_data["affected_tests"]
+                        "affected_tests": pattern_data["affected_tests"],
                     }
                     for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
                 ]
 
                 result["multi_error_tests"] = [
-                    {
-                        "test": test_data["test"],
-                        "error_patterns": test_data["patterns"]
-                    }
+                    {"test": test_data["test"], "error_patterns": test_data["patterns"]}
                     for test_data in multi_error_tests
                 ]
 
@@ -2059,16 +2045,13 @@ def analyze_test_data(
                     {
                         "pattern": pattern_data["pattern"],
                         "count": pattern_data["count"],
-                        "affected_tests": pattern_data["affected_tests"]
+                        "affected_tests": pattern_data["affected_tests"],
                     }
                     for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
                 ]
 
                 result["multi_error_tests"] = [
-                    {
-                        "test": test_data["test"],
-                        "error_patterns": test_data["patterns"]
-                    }
+                    {"test": test_data["test"], "error_patterns": test_data["patterns"]}
                     for test_data in multi_error_tests
                 ]
 
@@ -2941,16 +2924,13 @@ def analyze_test_data(
                     {
                         "pattern": pattern_data["pattern"],
                         "count": pattern_data["count"],
-                        "affected_tests": pattern_data["affected_tests"]
+                        "affected_tests": pattern_data["affected_tests"],
                     }
                     for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
                 ]
 
                 result["multi_error_tests"] = [
-                    {
-                        "test": test_data["test"],
-                        "error_patterns": test_data["patterns"]
-                    }
+                    {"test": test_data["test"], "error_patterns": test_data["patterns"]}
                     for test_data in multi_error_tests
                 ]
 
@@ -3270,16 +3250,13 @@ def analyze_test_data(
                     {
                         "pattern": pattern_data["pattern"],
                         "count": pattern_data["count"],
-                        "affected_tests": pattern_data["affected_tests"]
+                        "affected_tests": pattern_data["affected_tests"],
                     }
                     for pattern_data in patterns[:20]  # Limit to top 20 for JSON output
                 ]
 
                 result["multi_error_tests"] = [
-                    {
-                        "test": test_data["test"],
-                        "error_patterns": test_data["patterns"]
-                    }
+                    {"test": test_data["test"], "error_patterns": test_data["patterns"]}
                     for test_data in multi_error_tests
                 ]
 

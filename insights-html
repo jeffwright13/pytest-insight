@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Usage: ./tee-colored-html.sh [your_command]
+
+if [ -z "$1" ]; then
+  echo "Usage: $0 <command>"
+  exit 1
+fi
+
+OUT_RAW="output.raw"
+OUT_HTML="output.html"
+
+# Step 1: Run the command inside a PTY and capture full-color output
+script -q "$OUT_RAW" bash -c "$*"
+
+# Step 2: Convert to HTML
+cat "$OUT_RAW" | aha > "$OUT_HTML"
+
+# Step 3: Open in browser
+open "$OUT_HTML"

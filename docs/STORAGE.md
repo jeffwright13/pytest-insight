@@ -212,9 +212,6 @@ storage.save_session(test_session)
 # Load all sessions
 sessions = storage.load_sessions()
 
-# Get the most recent session
-latest = storage.get_last_session()
-
 # Get a session by ID
 session = storage.get_session_by_id("session-123")
 

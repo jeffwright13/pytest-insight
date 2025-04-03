@@ -146,7 +146,7 @@ class Comparison:
             Comparison instance for chaining
         """
         self._base_profile = profile_name
-        self.base_query.with_profile(profile_name)
+        self.base_query = self.base_query.with_profile(profile_name)
         return self
 
     def with_target_profile(self, profile_name: str) -> "Comparison":
@@ -159,7 +159,7 @@ class Comparison:
             Comparison instance for chaining
         """
         self._target_profile = profile_name
-        self.target_query.with_profile(profile_name)
+        self.target_query = self.target_query.with_profile(profile_name)
         return self
 
     def with_profiles(self, base_profile: str, target_profile: str) -> "Comparison":

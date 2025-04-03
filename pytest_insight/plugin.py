@@ -12,8 +12,7 @@ from pytest import ExitCode
 
 from pytest_insight.core.insights import Insights
 from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
-from pytest_insight.core.storage import get_storage_instance
-from pytest_insight.utils.constants import DEFAULT_STORAGE_TYPE, StorageType
+from pytest_insight.core.storage import create_profile, get_profile_manager, get_storage_instance
 
 _INSIGHT_INITIALIZED: bool = False
 _INSIGHT_ENABLED: bool = False
@@ -48,17 +47,10 @@ def pytest_addoption(parser):
         help="Name of the system under test (defaults to hostname if not specified)",
     )
     group.addoption(
-        "--insight-storage-type",
+        "--insight-profile",
         action="store",
-        default=DEFAULT_STORAGE_TYPE.value,
-        choices=[t.value for t in StorageType],
-        help=f"Storage type for test data (default: {DEFAULT_STORAGE_TYPE.value})",
-    )
-    group.addoption(
-        "--insight-storage-path",
-        action="store",
-        default=None,
-        help="Path to storage directory/file (default: ~/.pytest_insight)",
+        default="default",
+        help="Name of the storage profile to use (defaults to 'default')",
     )
     group.addoption(
         "--insight-environment",
@@ -76,13 +68,28 @@ def pytest_configure(config: Config):
     if not insight_enabled(config):
         return
 
-    # Initialize storage
-    storage_type_str = config.getoption("insight_storage_type", DEFAULT_STORAGE_TYPE.value)
-    storage_type = StorageType(storage_type_str)
-    storage_path = config.getoption("insight_storage_path", None)
+    # Get profile name, defaulting to 'default'
+    profile_name = config.getoption("insight_profile", "default")
 
     try:
-        storage = get_storage_instance(storage_type.value, storage_path)
+        # Try to get the profile
+        profile_manager = get_profile_manager()
+        try:
+            profile_manager.get_profile(profile_name)
+        except ValueError:
+            # Profile doesn't exist, create the default profile if it's the default one
+            if profile_name == "default":
+                # Create a default profile with json storage
+                create_profile("default", "json", None)  # None will use the default path
+                print("[pytest-insight] Created default profile", file=sys.stderr)
+            else:
+                print(f"[pytest-insight] Warning: Profile '{profile_name}' not found", file=sys.stderr)
+                print("[pytest-insight] Creating a default profile and using it instead", file=sys.stderr)
+                create_profile("default", "json", None)
+                profile_name = "default"
+
+        # Now get the storage instance using the profile
+        storage = get_storage_instance(profile_name=profile_name)
     except Exception as e:
         # Log error but don't fail the test run
         print(f"[pytest-insight] Error initializing storage: {e}", file=sys.stderr)
