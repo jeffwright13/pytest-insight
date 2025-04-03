@@ -14,7 +14,9 @@ from pytest_insight.utils.constants import DEFAULT_STORAGE_PATH
 class StorageProfile:
     """Represents a storage configuration profile, which is a named storage configuration used to differentiate between different storage backends, different file paths, different SUTs/setups/environments, etc."""
 
-    def __init__(self, name: str, storage_type: str = "json", file_path: Optional[str] = None):
+    def __init__(
+        self, name: str, storage_type: str = "json", file_path: Optional[str] = None
+    ):
         """Initialize a storage profile.
 
         Args:
@@ -60,7 +62,9 @@ class ProfileManager:
         Args:
             config_path: Optional custom path for profile configuration
         """
-        self.config_path = config_path or Path.home() / ".pytest_insight" / "profiles.json"
+        self.config_path = (
+            config_path or Path.home() / ".pytest_insight" / "profiles.json"
+        )
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         self.profiles = {}
         self.active_profile_name = None
@@ -79,7 +83,8 @@ class ProfileManager:
         try:
             data = json.loads(self.config_path.read_text())
             self.profiles = {
-                name: StorageProfile.from_dict(profile_data) for name, profile_data in data.get("profiles", {}).items()
+                name: StorageProfile.from_dict(profile_data)
+                for name, profile_data in data.get("profiles", {}).items()
             }
             self.active_profile_name = data.get("active_profile", "default")
 
@@ -129,7 +134,9 @@ class ProfileManager:
             self.backup_profiles()
 
         data = {
-            "profiles": {name: profile.to_dict() for name, profile in self.profiles.items()},
+            "profiles": {
+                name: profile.to_dict() for name, profile in self.profiles.items()
+            },
             "active_profile": self.active_profile_name,
         }
 
@@ -137,7 +144,9 @@ class ProfileManager:
         temp_dir = self.config_path.parent
         temp_dir.mkdir(parents=True, exist_ok=True)
 
-        with tempfile.NamedTemporaryFile(mode="w", dir=temp_dir, delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=temp_dir, delete=False
+        ) as temp_file:
             # Write data to the temporary file
             json.dump(data, temp_file, indent=2)
             temp_path = Path(temp_file.name)
@@ -151,7 +160,9 @@ class ProfileManager:
                 temp_path.unlink()  # Clean up temp file
             raise
 
-    def create_profile(self, name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
+    def create_profile(
+        self, name: str, storage_type: str = "json", file_path: Optional[str] = None
+    ) -> StorageProfile:
         """Create a new storage profile.
 
         Args:
@@ -290,7 +301,11 @@ class ProfileManager:
         if not backup_dir.exists():
             return
 
-        backups = sorted(backup_dir.glob("profiles_backup_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        backups = sorted(
+            backup_dir.glob("profiles_backup_*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
 
         # Remove older backups beyond the max limit
         for old_backup in backups[max_backups:]:
@@ -318,7 +333,9 @@ class ProfileManager:
                 # and new format (profiles_backup_YYYYMMDD_HHMMSS_uniqueid.json)
                 filename = backup_file.name
                 # Extract the timestamp part (after profiles_backup_ and before .json or _uniqueid)
-                timestamp_str = filename.replace("profiles_backup_", "").replace(".json", "")
+                timestamp_str = filename.replace("profiles_backup_", "").replace(
+                    ".json", ""
+                )
 
                 # If there's an underscore after the timestamp, it's the new format with a unique ID
                 if "_" in timestamp_str:
@@ -391,7 +408,9 @@ class BaseStorage:
         """Retrieve past test sessions."""
         raise NotImplementedError
 
-    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
+    def clear_sessions(
+        self, sessions_to_clear: Optional[List[TestSession]] = None
+    ) -> int:
         """Remove stored sessions.
 
         Args:
@@ -425,32 +444,33 @@ class InMemoryStorage(BaseStorage):
         """Save a test session."""
         self._sessions.append(session)
 
-    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
-        """Remove stored sessions.
+    def clear_sessions(
+        self, sessions_to_clear: Optional[List[TestSession]] = None
+    ) -> int:
+        """Clear all sessions or specific sessions from storage.
 
         Args:
-            sessions_to_clear: Optional list of TestSession objects to remove.
-                              If None, removes all sessions.
+            sessions_to_clear: Optional list of session IDs to clear.
+                               If None, all sessions are cleared.
 
         Returns:
             Number of sessions removed
         """
+        # Get current sessions count
+        initial_count = len(self._sessions)
+
         if sessions_to_clear is None:
             # Clear all sessions
-            initial_count = len(self._sessions)
             self._sessions.clear()
             return initial_count
         else:
-            # Get current sessions
-            initial_count = len(self._sessions)
-
-            # Create a set of session IDs to clear
+            # Clear specific sessions
             session_ids_to_clear = {session.session_id for session in sessions_to_clear}
-
-            # Keep only sessions not in the clear list
-            self._sessions = [session for session in self._sessions if session.session_id not in session_ids_to_clear]
-
-            # Return number of sessions removed
+            self._sessions = [
+                session
+                for session in self._sessions
+                if session.session_id not in session_ids_to_clear
+            ]
             return initial_count - len(self._sessions)
 
 
@@ -519,7 +539,9 @@ class JSONStorage(BaseStorage):
         except Exception as e:
             print(f"Warning: Failed to save sessions to {self.file_path}: {e}")
 
-    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
+    def clear_sessions(
+        self, sessions_to_clear: Optional[List[TestSession]] = None
+    ) -> int:
         """Remove stored sessions.
 
         Args:
@@ -545,7 +567,9 @@ class JSONStorage(BaseStorage):
 
             # Keep only sessions not in the clear list
             remaining_sessions = [
-                session for session in current_sessions if session.session_id not in session_ids_to_clear
+                session
+                for session in current_sessions
+                if session.session_id not in session_ids_to_clear
             ]
 
             # Save the filtered sessions
@@ -586,7 +610,9 @@ class JSONStorage(BaseStorage):
                 return session
         return None
 
-    def export_sessions(self, export_path: str, days: Optional[int] = None, output_format: str = "json"):
+    def export_sessions(
+        self, export_path: str, days: Optional[int] = None, output_format: str = "json"
+    ):
         """Export test sessions to a file.
 
         Args:
@@ -619,7 +645,9 @@ class JSONStorage(BaseStorage):
         else:
             raise ValueError(f"Unsupported output format: {output_format}")
 
-    def import_sessions(self, import_path: str, merge_strategy: str = "skip_existing") -> Dict[str, int]:
+    def import_sessions(
+        self, import_path: str, merge_strategy: str = "skip_existing"
+    ) -> Dict[str, int]:
         """Import sessions from a file exported by another instance.
 
         Args:
@@ -699,7 +727,9 @@ class JSONStorage(BaseStorage):
         if merge_strategy == "replace_existing":
             # Remove existing sessions that will be replaced
             imported_ids = {session.session_id for session in imported_sessions}
-            existing_sessions = [s for s in existing_sessions if s.session_id not in imported_ids]
+            existing_sessions = [
+                s for s in existing_sessions if s.session_id not in imported_ids
+            ]
 
         # Combine existing and imported sessions
         all_sessions = existing_sessions + imported_sessions
@@ -715,7 +745,9 @@ class JSONStorage(BaseStorage):
         temp_dir = self.file_path.parent
         temp_dir.mkdir(parents=True, exist_ok=True)
 
-        with tempfile.NamedTemporaryFile(mode="w", dir=temp_dir, delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=temp_dir, delete=False
+        ) as temp_file:
             # Write data to the temporary file
             json.dump(data, temp_file, indent=2)
             temp_path = Path(temp_file.name)
@@ -734,7 +766,9 @@ class JSONStorage(BaseStorage):
         try:
             data = json.loads(self.file_path.read_text())
             if not isinstance(data, list):
-                print(f"Warning: Invalid data format in {self.file_path}, expected list")
+                print(
+                    f"Warning: Invalid data format in {self.file_path}, expected list"
+                )
                 return []
             return data
         except json.JSONDecodeError as e:
@@ -747,73 +781,65 @@ class JSONStorage(BaseStorage):
 
 
 def get_storage_instance(
-    storage_type: str = None, file_path: str = None, profile_name: str = None, _from_profile: bool = False
+    profile_name: Optional[str] = None,
 ) -> BaseStorage:
-    """Get storage instance based on configuration.
+    """Get a storage instance configured according to the specified profile.
 
-    Precedence order for configuration:
-    1. Profile settings (if profile_name is provided)
-    2. Direct parameters (storage_type, file_path)
-    3. Environment variables (PYTEST_INSIGHT_PROFILE, PYTEST_INSIGHT_STORAGE_TYPE, PYTEST_INSIGHT_DB_PATH)
-    4. Default values (json storage type, ~/.pytest_insight/sessions.json)
+    This function returns a storage instance configured according to the specified profile.
+    If no profile is specified, it will try to use the profile from the PYTEST_INSIGHT_PROFILE
+    environment variable. If that's not set, it will use the active profile from the profile manager.
 
     Args:
-        storage_type: Optional storage type override (ignored if profile_name is provided)
-        file_path: Optional file path override (ignored if profile_name is provided)
         profile_name: Optional profile name to use
-        _from_profile: Internal parameter to prevent infinite recursion
 
     Returns:
         Configured storage instance
     """
-    # Step 1: Check for profile-based configuration (highest precedence)
-    if profile_name is not None and not _from_profile:
-        # Use profile manager to get configuration
-        profile_manager = get_profile_manager()
+    profile_manager = get_profile_manager()
+
+    # Step 1: Use explicitly provided profile name
+    if profile_name is not None:
         try:
             profile = profile_manager.get_profile(profile_name)
-            # Profile settings override direct parameters
-            return get_storage_instance(
-                storage_type=profile.storage_type,
-                file_path=profile.file_path,
-                _from_profile=True,  # Prevent further profile lookup
-            )
+            if profile.storage_type.lower() == "json":
+                return JSONStorage(profile.file_path)
+            elif profile.storage_type.lower() == "memory":
+                return InMemoryStorage()
+            else:
+                raise ValueError(
+                    f"Unsupported storage type in profile '{profile_name}': {profile.storage_type}"
+                )
         except ValueError as e:
             print(f"Warning: Profile '{profile_name}' not found: {e}")
-            print("Falling back to direct parameters or defaults")
+            print("Falling back to environment or active profile")
 
-    # Step 2: Check environment variable for profile (if no explicit profile_name and not from profile)
+    # Step 2: Check environment variable for profile
     env_profile = os.environ.get("PYTEST_INSIGHT_PROFILE")
-    if profile_name is None and env_profile and env_profile != "" and not _from_profile:
-        # Use profile manager to get configuration
-        profile_manager = get_profile_manager()
+    if env_profile and env_profile != "":
         try:
             profile = profile_manager.get_profile(env_profile)
-            # Profile settings override direct parameters
-            return get_storage_instance(
-                storage_type=profile.storage_type,
-                file_path=profile.file_path,
-                _from_profile=True,  # Prevent further profile lookup
-            )
+            if profile.storage_type.lower() == "json":
+                return JSONStorage(profile.file_path)
+            elif profile.storage_type.lower() == "memory":
+                return InMemoryStorage()
+            else:
+                raise ValueError(
+                    f"Unsupported storage type in environment profile '{env_profile}': {profile.storage_type}"
+                )
         except ValueError as e:
             print(f"Warning: Environment profile '{env_profile}' not found: {e}")
-            print("Falling back to direct parameters or defaults")
+            print("Falling back to active profile")
 
-    # Step 3: Use direct parameters or environment variables
-    # Get storage type from args, env, or default
-    storage_type = storage_type or os.environ.get("PYTEST_INSIGHT_STORAGE_TYPE", "json")
-
-    # Get file path from args, env, or default
-    if not file_path:
-        file_path = os.environ.get("PYTEST_INSIGHT_DB_PATH")
-
-    # Step 4: Create appropriate storage instance
-    if storage_type.lower() == "json":
-        return JSONStorage(file_path)
-    elif storage_type.lower() == "memory":
+    # Step 3: Use active profile
+    profile = profile_manager.get_active_profile()
+    if profile.storage_type.lower() == "json":
+        return JSONStorage(profile.file_path)
+    elif profile.storage_type.lower() == "memory":
         return InMemoryStorage()
     else:
-        raise ValueError(f"Unsupported storage type: {storage_type}")
+        raise ValueError(
+            f"Unsupported storage type in active profile '{profile.name}': {profile.storage_type}"
+        )
 
 
 # Global profile manager instance
@@ -832,7 +858,9 @@ def get_profile_manager() -> ProfileManager:
     return _profile_manager
 
 
-def create_profile(name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
+def create_profile(
+    name: str, storage_type: str = "json", file_path: Optional[str] = None
+) -> StorageProfile:
     """Create a new storage profile.
 
     Args:
@@ -843,6 +871,8 @@ def create_profile(name: str, storage_type: str = "json", file_path: Optional[st
     Returns:
         The created profile
     """
+    # For backward compatibility, we still accept storage_type and file_path
+    # but in the future, we'll encourage users to just use profiles
     return get_profile_manager().create_profile(name, storage_type, file_path)
 
 

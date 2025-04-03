@@ -1,6 +1,3 @@
-
-
-
 #!/usr/bin/env python3
 """
 Back-fill pytest-insight data with a month's worth of test sessions.
@@ -33,49 +30,52 @@ SUT_NAMES = [
     "web-frontend",
     "data-processor",
     "auth-service",
-    "mobile-app"
+    "mobile-app",
 ]
 
 # Test outcome probabilities (to create realistic variation)
 OUTCOME_PROBABILITIES = {
     "passed": 0.75,  # 75% pass rate
     "failed": 0.15,  # 15% failure rate
-    "skipped": 0.05, # 5% skip rate
-    "xfailed": 0.02, # 2% expected failure
-    "xpassed": 0.02, # 2% unexpected pass
-    "error": 0.01    # 1% error rate
+    "skipped": 0.05,  # 5% skip rate
+    "xfailed": 0.02,  # 2% expected failure
+    "xpassed": 0.02,  # 2% unexpected pass
+    "error": 0.01,  # 1% error rate
 }
+
 
 def load_json_data():
     """Load the existing practice.json data."""
     try:
-        with open(PRACTICE_JSON_PATH, 'r') as f:
+        with open(PRACTICE_JSON_PATH, "r") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         print(f"Could not load {PRACTICE_JSON_PATH}. Starting with empty data.")
         return []
+
 
 def save_json_data(data):
     """Save the updated data back to practice.json."""
     # Create parent directory if it doesn't exist
     PRACTICE_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(PRACTICE_JSON_PATH, 'w') as f:
+    with open(PRACTICE_JSON_PATH, "w") as f:
         json.dump(data, f, indent=2)
 
     print(f"Saved {len(data)} test sessions to {PRACTICE_JSON_PATH}")
+
 
 def generate_session_id(sut_name, date, index):
     """Generate a unique session ID."""
     date_str = date.strftime("%Y%m%d")
     return f"{sut_name.lower()}-{date_str}-{index}"
 
+
 def modify_test_result(test_result):
     """Modify a test result with a new outcome and timing."""
     # Randomly select a new outcome based on probabilities
     outcome = random.choices(
-        list(OUTCOME_PROBABILITIES.keys()),
-        weights=list(OUTCOME_PROBABILITIES.values())
+        list(OUTCOME_PROBABILITIES.keys()), weights=list(OUTCOME_PROBABILITIES.values())
     )[0]
 
     # Update the outcome
@@ -95,6 +95,7 @@ def modify_test_result(test_result):
 
     return test_result
 
+
 def create_session_for_date(template_session, target_date, index):
     """Create a new session for a specific date based on a template session."""
     # Create a deep copy of the template
@@ -105,7 +106,9 @@ def create_session_for_date(template_session, target_date, index):
         new_session["sut_name"] = random.choice(SUT_NAMES)
 
     # Update session ID
-    new_session["session_id"] = generate_session_id(new_session["sut_name"], target_date, index)
+    new_session["session_id"] = generate_session_id(
+        new_session["sut_name"], target_date, index
+    )
 
     # Set the start time to the target date with a random hour
     hour = random.randint(8, 18)  # Business hours
@@ -125,7 +128,9 @@ def create_session_for_date(template_session, target_date, index):
         modify_test_result(test_result)
 
         # Update test start and stop times relative to session start
-        test_start_offset = random.uniform(0, session_duration * 0.8)  # Start within first 80% of session
+        test_start_offset = random.uniform(
+            0, session_duration * 0.8
+        )  # Start within first 80% of session
         test_start = start_time + timedelta(seconds=test_start_offset)
         test_result["start_time"] = test_start.isoformat()
 
@@ -133,6 +138,7 @@ def create_session_for_date(template_session, target_date, index):
         test_result["stop_time"] = test_stop.isoformat()
 
     return new_session
+
 
 def backfill_data(existing_data, days=30, sessions_per_day=3):
     """Generate back-filled data for the specified number of days."""
@@ -162,13 +168,16 @@ def backfill_data(existing_data, days=30, sessions_per_day=3):
         daily_sessions = random.randint(1, sessions_per_day)
 
         for i in range(daily_sessions):
-            new_session = create_session_for_date(template_session, datetime.combine(current_date, datetime.min.time()), i)
+            new_session = create_session_for_date(
+                template_session, datetime.combine(current_date, datetime.min.time()), i
+            )
             new_data.append(new_session)
 
         current_date += timedelta(days=1)
 
     print(f"Generated {len(new_data)} new test sessions spanning {days} days")
     return new_data
+
 
 def main():
     """Main function to back-fill the practice.json file."""
@@ -184,6 +193,7 @@ def main():
 
     # Save the combined data
     save_json_data(combined_data)
+
 
 if __name__ == "__main__":
     main()

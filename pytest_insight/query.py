@@ -147,13 +147,17 @@ class ShellPatternFilter:
     def __post_init__(self):
         """Validate pattern and field name."""
         if not isinstance(self.pattern, str):
-            raise InvalidQueryParameterError(f"Invalid pattern type: {type(self.pattern)}")
+            raise InvalidQueryParameterError(
+                f"Invalid pattern type: {type(self.pattern)}"
+            )
 
         if not self.pattern:
             raise InvalidQueryParameterError("Pattern cannot be empty")
 
         if not isinstance(self.field_name, str):
-            raise InvalidQueryParameterError(f"Invalid field_name type: {type(self.field_name)}")
+            raise InvalidQueryParameterError(
+                f"Invalid field_name type: {type(self.field_name)}"
+            )
 
         if self.field_name not in self.ALLOWED_FIELDS:
             raise InvalidQueryParameterError(f"Invalid field name: {self.field_name}")
@@ -241,7 +245,9 @@ class RegexPatternFilter:
     @classmethod
     def from_dict(cls, data: Dict) -> "RegexPatternFilter":
         """Create from dictionary."""
-        instance = cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
+        instance = cls(
+            pattern=data["pattern"], field_name=data.get("field_name", "nodeid")
+        )
         instance._compiled_regex = re.compile(instance.pattern)
         return instance
 
@@ -401,7 +407,9 @@ class QueryTestFilter:
         self.query = query
         self.filters: List[TestFilter] = []
 
-    def with_pattern(self, pattern: str, *, field_name: str, use_regex: bool = False) -> "QueryTestFilter":
+    def with_pattern(
+        self, pattern: str, *, field_name: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
         """Filter tests by pattern matching against any string field.
 
         Key aspects:
@@ -447,7 +455,9 @@ class QueryTestFilter:
         self.filters.append(filter_cls(pattern=pattern, field_name=field_name))
         return self
 
-    def with_nodeid_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
+    def with_nodeid_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
         """Filter tests by pattern in nodeid.
 
         This is a convenience method that sets field_name="nodeid".
@@ -462,7 +472,9 @@ class QueryTestFilter:
         """
         return self.with_pattern(pattern, field_name="nodeid", use_regex=use_regex)
 
-    def with_output_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
+    def with_output_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
         """Filter tests by pattern in any output field.
 
         This is a convenience method that checks all output fields.
@@ -479,7 +491,9 @@ class QueryTestFilter:
             self.with_pattern(pattern, field_name=fld, use_regex=use_regex)
         return self
 
-    def with_error_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
+    def with_error_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
         """Filter tests by pattern in error output (longreprtext).
 
         This is a convenience method that sets field_name="longreprtext".
@@ -492,9 +506,13 @@ class QueryTestFilter:
         Returns:
             QueryTestFilter instance for chaining
         """
-        return self.with_pattern(pattern, field_name="longreprtext", use_regex=use_regex)
+        return self.with_pattern(
+            pattern, field_name="longreprtext", use_regex=use_regex
+        )
 
-    def with_log_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
+    def with_log_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
         """Filter tests by pattern in log output (caplog).
 
         This is a convenience method that sets field_name="caplog".
@@ -509,7 +527,9 @@ class QueryTestFilter:
         """
         return self.with_pattern(pattern, field_name="caplog", use_regex=use_regex)
 
-    def with_stdout_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
+    def with_stdout_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
         """Filter tests by pattern in stdout (capstdout).
 
         This is a convenience method that sets field_name="capstdout".
@@ -524,7 +544,9 @@ class QueryTestFilter:
         """
         return self.with_pattern(pattern, field_name="capstdout", use_regex=use_regex)
 
-    def with_stderr_containing(self, pattern: str, use_regex: bool = False) -> "QueryTestFilter":
+    def with_stderr_containing(
+        self, pattern: str, use_regex: bool = False
+    ) -> "QueryTestFilter":
         """Filter tests by pattern in stderr (capstderr).
 
         This is a convenience method that sets field_name="capstderr".
@@ -557,9 +579,13 @@ class QueryTestFilter:
         def warning_predicate(test: TestResult) -> bool:
             return bool(test.has_warning) == has_warning
 
-        return self.with_custom_filter(warning_predicate, name=f"warning_filter(has_warning={has_warning})")
+        return self.with_custom_filter(
+            warning_predicate, name=f"warning_filter(has_warning={has_warning})"
+        )
 
-    def with_duration_between(self, min_seconds: float, max_seconds: float) -> "QueryTestFilter":
+    def with_duration_between(
+        self, min_seconds: float, max_seconds: float
+    ) -> "QueryTestFilter":
         """Filter tests by duration range.
 
         Test-level filter that:
@@ -594,7 +620,9 @@ class QueryTestFilter:
         self.filters.append(OutcomeFilter(outcome))
         return self
 
-    def with_custom_filter(self, predicate: Callable[[TestResult], bool], name: str) -> "QueryTestFilter":
+    def with_custom_filter(
+        self, predicate: Callable[[TestResult], bool], name: str
+    ) -> "QueryTestFilter":
         """Add custom test filter.
 
         Test-level filter that:
@@ -639,7 +667,11 @@ class QueryTestFilter:
 
     def to_dict(self) -> Dict:
         """Convert filters to dictionary."""
-        return {"filters": [f.to_dict() for f in self.filters if not isinstance(f, CustomFilter)]}
+        return {
+            "filters": [
+                f.to_dict() for f in self.filters if not isinstance(f, CustomFilter)
+            ]
+        }
 
     @classmethod
     def from_dict(cls, data: Dict, query: "Query") -> "QueryTestFilter":
@@ -724,7 +756,9 @@ class Query:
         result2 = query2.with_session_tag("region", "us-east").execute()
     """
 
-    def __init__(self, storage: Optional[BaseStorage] = None, profile_name: Optional[str] = None):
+    def __init__(
+        self, storage: Optional[BaseStorage] = None, profile_name: Optional[str] = None
+    ):
         """Initialize a new Query instance.
 
         Args:
@@ -780,7 +814,9 @@ class Query:
             sessions = self.storage.load_sessions()
         elif not sessions:
             raise InvalidQueryParameterError("No sessions provided")
-        elif not isinstance(sessions, list) or not all(isinstance(s, TestSession) for s in sessions):
+        elif not isinstance(sessions, list) or not all(
+            isinstance(s, TestSession) for s in sessions
+        ):
             raise InvalidQueryParameterError("Invalid session type")
 
         # Apply session-level filters
@@ -796,7 +832,9 @@ class Query:
                 matching_tests = [
                     test
                     for test in session.test_results
-                    if all(filter_func.matches(test) for filter_func in self._test_filters)
+                    if all(
+                        filter_func.matches(test) for filter_func in self._test_filters
+                    )
                 ]
 
                 # If any tests match all filters, create new session with only matching tests
@@ -895,7 +933,9 @@ class Query:
         """
         if not isinstance(days, int) or days < 0:
             raise InvalidQueryParameterError("Days must be a non-negative integer")
-        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(days=days)
+        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(
+            days=days
+        )
         self._session_filters.append(create_after_or_equals_filter(cutoff))
         return self
 
@@ -913,7 +953,9 @@ class Query:
         """
         if not isinstance(hours, int) or hours < 0:
             raise InvalidQueryParameterError("Hours must be a non-negative integer")
-        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(hours=hours)
+        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(
+            hours=hours
+        )
         self._session_filters.append(create_after_or_equals_filter(cutoff))
         return self
 
@@ -931,7 +973,9 @@ class Query:
         """
         if not isinstance(minutes, int) or minutes < 0:
             raise InvalidQueryParameterError("Minutes must be a non-negative integer")
-        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(minutes=minutes)
+        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(
+            minutes=minutes
+        )
         self._session_filters.append(create_after_or_equals_filter(cutoff))
         return self
 
@@ -949,7 +993,9 @@ class Query:
         """
         if not isinstance(seconds, int) or seconds < 0:
             raise InvalidQueryParameterError("Seconds must be a non-negative integer")
-        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(seconds=seconds)
+        cutoff = dt_module.datetime.now(dt_module.timezone.utc) - dt_module.timedelta(
+            seconds=seconds
+        )
         self._session_filters.append(create_after_or_equals_filter(cutoff))
         return self
 
@@ -973,7 +1019,9 @@ class Query:
         Raises:
             InvalidQueryParameterError: If dates are invalid.
         """
-        if not isinstance(start, dt_module.datetime) or not isinstance(end, dt_module.datetime):
+        if not isinstance(start, dt_module.datetime) or not isinstance(
+            end, dt_module.datetime
+        ):
             raise InvalidQueryParameterError("Start and end must be datetime objects")
         if start > end:
             raise InvalidQueryParameterError("Start date must be before end date")
@@ -1046,7 +1094,8 @@ class Query:
 
         self._session_filters.append(
             lambda s: any(
-                (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome)) == outcome_str
+                (t.outcome.value if hasattr(t.outcome, "value") else str(t.outcome))
+                == outcome_str
                 for t in s.test_results
             )
         )
@@ -1061,7 +1110,9 @@ class Query:
         Returns:
             Query instance for chaining.
         """
-        self._session_filters.append(lambda s: any(t.has_warning for t in s.test_results) == has_warnings)
+        self._session_filters.append(
+            lambda s: any(t.has_warning for t in s.test_results) == has_warnings
+        )
         return self
 
     def with_reruns(self, has_reruns: bool = True) -> "Query":
@@ -1090,7 +1141,11 @@ class Query:
         """
         if not isinstance(pattern, str) or not pattern.strip():
             raise InvalidQueryParameterError("Test pattern must be a non-empty string")
-        self._session_filters.append(lambda s: any(pattern == t.nodeid or pattern in t.nodeid for t in s.test_results))
+        self._session_filters.append(
+            lambda s: any(
+                pattern == t.nodeid or pattern in t.nodeid for t in s.test_results
+            )
+        )
         return self
 
     def with_session_id_pattern(self, pattern: str) -> "Query":
@@ -1110,7 +1165,9 @@ class Query:
             InvalidQueryParameterError: If pattern is empty.
         """
         if not isinstance(pattern, str) or not pattern.strip():
-            raise InvalidQueryParameterError("Session ID pattern must be a non-empty string")
+            raise InvalidQueryParameterError(
+                "Session ID pattern must be a non-empty string"
+            )
         self._session_filters.append(lambda s: fnmatch.fnmatch(s.session_id, pattern))
         return self
 

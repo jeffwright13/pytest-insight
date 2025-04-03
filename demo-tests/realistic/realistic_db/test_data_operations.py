@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
 # Mock database connection and cursor classes
 class MockCursor:
     def __init__(self, connection, query_times=None):
@@ -45,7 +46,7 @@ class MockCursor:
                 "select": "DatabaseError: Error executing query",
                 "insert": "IntegrityError: Duplicate key value violates unique constraint",
                 "update": "DatabaseError: Update failed due to constraint violation",
-                "delete": "DatabaseError: Cannot delete due to foreign key constraint"
+                "delete": "DatabaseError: Cannot delete due to foreign key constraint",
             }
             if query_type in error_types and random.random() < 0.5:
                 raise Exception(error_types[query_type])
@@ -68,8 +69,9 @@ class MockCursor:
             "name": f"Item-{random.randint(1000, 9999)}",
             "created_at": datetime.now() - timedelta(days=random.randint(0, 30)),
             "status": random.choice(["active", "inactive", "pending", "archived"]),
-            "value": round(random.uniform(10, 1000), 2)
+            "value": round(random.uniform(10, 1000), 2),
         }
+
 
 class MockConnection:
     def __init__(self, db_type="postgres"):
@@ -86,7 +88,7 @@ class MockConnection:
                 "update": 0.06,
                 "delete": 0.04,
                 "create": 0.1,
-                "drop": 0.03
+                "drop": 0.03,
             },
             "mysql": {
                 "select": 0.07,
@@ -94,8 +96,8 @@ class MockConnection:
                 "update": 0.05,
                 "delete": 0.03,
                 "create": 0.09,
-                "drop": 0.02
-            }
+                "drop": 0.02,
+            },
         }
 
     def cursor(self):
@@ -129,6 +131,7 @@ class MockConnection:
         time.sleep(random.uniform(0.01, 0.02))
         self.is_connected = False
 
+
 # Fixtures for database testing
 @pytest.fixture
 def db_connection():
@@ -138,6 +141,7 @@ def db_connection():
     conn = MockConnection(db_type=db_type)
     yield conn
     conn.close()
+
 
 @pytest.fixture
 def transaction(db_connection):
@@ -153,6 +157,7 @@ def transaction(db_connection):
         if conn.in_transaction:
             conn.rollback()
 
+
 # Basic database tests
 def test_db_connection(db_connection):
     """Test database connection."""
@@ -161,6 +166,7 @@ def test_db_connection(db_connection):
     # Test creating a cursor
     cursor = db_connection.cursor()
     assert cursor is not None
+
 
 def test_simple_query(db_connection):
     """Test executing a simple query."""
@@ -171,6 +177,7 @@ def test_simple_query(db_connection):
     results = cursor.fetchall()
     assert len(results) > 0
 
+
 # Test with transaction that should succeed
 def test_successful_transaction(transaction):
     """Test a successful database transaction."""
@@ -178,10 +185,14 @@ def test_successful_transaction(transaction):
     cursor = conn.cursor()
 
     # Insert a new record
-    cursor.execute("INSERT INTO users (name, email) VALUES ('Test User', 'test@example.com')")
+    cursor.execute(
+        "INSERT INTO users (name, email) VALUES ('Test User', 'test@example.com')"
+    )
 
     # Update a record
-    cursor.execute("UPDATE users SET status = 'active' WHERE email = 'test@example.com'")
+    cursor.execute(
+        "UPDATE users SET status = 'active' WHERE email = 'test@example.com'"
+    )
 
     # Commit the transaction
     conn.commit()
@@ -192,6 +203,7 @@ def test_successful_transaction(transaction):
     assert result is not None
     assert result["status"] == "active"
 
+
 # Test with transaction that should be rolled back
 def test_transaction_rollback(transaction):
     """Test rolling back a transaction after an error."""
@@ -199,7 +211,9 @@ def test_transaction_rollback(transaction):
     cursor = conn.cursor()
 
     # Insert a new record
-    cursor.execute("INSERT INTO users (name, email) VALUES ('Rollback User', 'rollback@example.com')")
+    cursor.execute(
+        "INSERT INTO users (name, email) VALUES ('Rollback User', 'rollback@example.com')"
+    )
 
     # Simulate an error condition about 20% of the time
     if random.random() < 0.2:
@@ -220,6 +234,7 @@ def test_transaction_rollback(transaction):
         result = cursor.fetchone()
         assert result is not None
 
+
 # Test with occasional connection issues
 def test_connection_stability(db_connection):
     """Test database connection stability."""
@@ -238,6 +253,7 @@ def test_connection_stability(db_connection):
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         assert cursor.fetchone() is not None
+
 
 # Test with slow queries
 def test_query_performance(db_connection):
@@ -272,12 +288,15 @@ def test_query_performance(db_connection):
 
         # Fail if the query was too slow (simulating a performance test failure)
         if execution_time > timeout:
-            pytest.fail(f"Query took too long to execute: {execution_time:.2f}s > {timeout:.2f}s")
+            pytest.fail(
+                f"Query took too long to execute: {execution_time:.2f}s > {timeout:.2f}s"
+            )
 
         assert len(results) > 0
     except Exception as e:
         # This will catch both timeout errors and database errors
         pytest.fail(f"Query failed: {str(e)}")
+
 
 # Test with data validation
 def test_data_integrity(db_connection):
@@ -286,7 +305,9 @@ def test_data_integrity(db_connection):
 
     # Try to insert a record with invalid data
     try:
-        cursor.execute("INSERT INTO users (name, email) VALUES (NULL, 'invalid@example.com')")
+        cursor.execute(
+            "INSERT INTO users (name, email) VALUES (NULL, 'invalid@example.com')"
+        )
         db_connection.commit()
 
         # If we get here without an exception, the test should fail randomly
@@ -296,6 +317,7 @@ def test_data_integrity(db_connection):
     except Exception as e:
         # Expected exception for data integrity violation
         assert "constraint" in str(e).lower() or "null" in str(e).lower()
+
 
 # Test with database-specific features
 def test_db_specific_features(db_connection):
@@ -315,6 +337,7 @@ def test_db_specific_features(db_connection):
     results = cursor.fetchall()
     assert len(results) >= 0
 
+
 # Test with dependency chain
 @pytest.mark.dependency()
 def test_create_schema(db_connection):
@@ -329,24 +352,28 @@ def test_create_schema(db_connection):
     if random.random() < 0.07:
         pytest.fail("Failed to create schema")
 
+
 @pytest.mark.dependency(depends=["test_create_schema"])
 def test_create_table(db_connection):
     """Test creating a table in the schema (depends on schema creation)."""
     cursor = db_connection.cursor()
 
     # Create a test table
-    cursor.execute("""
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS test_schema.test_table (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
-    """)
+    """
+    )
     db_connection.commit()
 
     # Verify the table exists
     cursor.execute("SELECT * FROM test_schema.test_table")
     assert True
+
 
 @pytest.mark.dependency(depends=["test_create_table"])
 def test_insert_data(db_connection):
@@ -354,9 +381,11 @@ def test_insert_data(db_connection):
     cursor = db_connection.cursor()
 
     # Insert test data
-    cursor.execute("""
+    cursor.execute(
+        """
     INSERT INTO test_schema.test_table (name) VALUES ('Test Record')
-    """)
+    """
+    )
     db_connection.commit()
 
     # Verify the data was inserted

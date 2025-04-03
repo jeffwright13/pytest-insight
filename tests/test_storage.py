@@ -4,8 +4,13 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+
 from pytest_insight.core.models import TestSession
-from pytest_insight.core.storage import InMemoryStorage, JSONStorage, get_storage_instance
+from pytest_insight.core.storage import (
+    InMemoryStorage,
+    JSONStorage,
+    get_storage_instance,
+)
 
 
 @pytest.fixture
@@ -24,7 +29,11 @@ def in_memory_storage():
 @pytest.mark.parametrize("storage_class", [InMemoryStorage, JSONStorage])
 def test_save_and_load_session(storage_class, tmp_path, test_session_basic):
     """Test saving and loading a session in both storage types."""
-    storage = storage_class(tmp_path / "sessions.json") if storage_class == JSONStorage else storage_class()
+    storage = (
+        storage_class(tmp_path / "sessions.json")
+        if storage_class == JSONStorage
+        else storage_class()
+    )
 
     assert storage.load_sessions() == []  # Should start empty
 
@@ -69,20 +78,26 @@ def test_get_session_by_id(json_storage, test_session_basic):
 
 def test_get_storage_instance_json(mocker, tmp_path):
     """Test get_storage_instance correctly returns JSONStorage."""
+    from pytest_insight.core.storage import ProfileManager
 
-    # Mock environment variables with a side_effect function to handle different keys
-    def mock_environ_get(key, default=None):
-        if key == "PYTEST_INSIGHT_DB_PATH":
-            return str(tmp_path / "sessions.json")
-        elif key == "PYTEST_INSIGHT_PROFILE":
-            return None
-        else:
-            return default
+    # Create a profile manager with a test profile
+    config_path = tmp_path / "profiles.json"
+    profile_manager = ProfileManager(config_path=config_path)
 
-    mocker.patch("os.environ.get", side_effect=mock_environ_get)
+    # Create a test profile
+    profile_manager.create_profile(
+        "test-profile", "json", str(tmp_path / "sessions.json")
+    )
 
-    storage = get_storage_instance("json")
+    # Mock get_profile_manager to return our test instance
+    mocker.patch(
+        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
+    )
+
+    # Test with profile_name
+    storage = get_storage_instance(profile_name="test-profile")
     assert isinstance(storage, JSONStorage)
+    assert storage.file_path == tmp_path / "sessions.json"
 
 
 def test_jsonstorage_handles_corrupt_data(mocker, json_storage):
@@ -152,13 +167,17 @@ def test_save_sessions_bulk(tmp_path, get_test_time):
     # Verify all sessions were saved
     loaded_sessions = storage.load_sessions()
     assert len(loaded_sessions) == 5
-    assert {s.session_id for s in loaded_sessions} == {f"bulk-test-{i}" for i in range(5)}
+    assert {s.session_id for s in loaded_sessions} == {
+        f"bulk-test-{i}" for i in range(5)
+    }
 
 
 def test_handles_invalid_data_format(mocker, json_storage):
     """Test handling of invalid data format (non-list JSON)."""
     # Mock the _read_json_safely method instead of read_text
-    mocker.patch.object(json_storage, "_read_json_safely", return_value={"not": "a list"})
+    mocker.patch.object(
+        json_storage, "_read_json_safely", return_value={"not": "a list"}
+    )
 
     # Should handle gracefully and return empty list
     assert json_storage.load_sessions() == []
@@ -254,16 +273,29 @@ def test_concurrent_access_simulation(tmp_path, get_test_time):
 
 def test_get_storage_instance_with_env_vars(mocker, tmp_path):
     """Test get_storage_instance with environment variables."""
-    # Use tmp_path instead of /custom to avoid permission issues
-    custom_path = str(tmp_path / "custom_storage.json")
+    from pytest_insight.core.storage import ProfileManager
 
-    # Mock environment variables
-    mocker.patch.dict(
-        os.environ,
-        {"PYTEST_INSIGHT_STORAGE_TYPE": "json", "PYTEST_INSIGHT_DB_PATH": custom_path},
+    # Create a profile manager with a test profile
+    config_path = tmp_path / "profiles.json"
+    profile_manager = ProfileManager(config_path=config_path)
+
+    # Create a test profile
+    env_profile_name = "env-profile"
+    custom_path = str(tmp_path / "custom_storage.json")
+    profile_manager.create_profile(env_profile_name, "json", custom_path)
+
+    # Mock get_profile_manager to return our test instance
+    mocker.patch(
+        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
     )
 
-    # Get storage instance
+    # Mock environment variable for profile
+    mocker.patch.dict(
+        os.environ,
+        {"PYTEST_INSIGHT_PROFILE": env_profile_name},
+    )
+
+    # Get storage instance without specifying profile (should use env var)
     storage = get_storage_instance()
 
     # Verify correct type and path
@@ -271,10 +303,33 @@ def test_get_storage_instance_with_env_vars(mocker, tmp_path):
     assert str(storage.file_path) == custom_path
 
 
-def test_get_storage_instance_invalid_type():
+def test_get_storage_instance_invalid_type(mocker, tmp_path):
     """Test get_storage_instance with invalid storage type."""
+    from pytest_insight.core.storage import ProfileManager
+
+    # Create a profile manager with a test profile
+    config_path = tmp_path / "profiles.json"
+    profile_manager = ProfileManager(config_path=config_path)
+
+    # Create a test profile with invalid storage type
+    profile_manager.create_profile(
+        "invalid-profile", "invalid_type", str(tmp_path / "invalid.json")
+    )
+
+    # Mock get_profile_manager to return our test instance
+    mocker.patch(
+        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
+    )
+
+    # Mock environment variable to be empty
+    mocker.patch.dict("os.environ", {"PYTEST_INSIGHT_PROFILE": ""})
+
+    # Ensure the active profile is set to our invalid profile
+    profile_manager.switch_profile("invalid-profile")
+
+    # Should raise ValueError when trying to get storage with invalid profile
     with pytest.raises(ValueError, match="Unsupported storage type"):
-        get_storage_instance("invalid_type")
+        get_storage_instance()
 
 
 def test_selective_clear_sessions_json(json_storage, get_test_time):
@@ -688,10 +743,14 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
+        monkeypatch.setattr(
+            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
+        )
 
         # Create test profiles
-        profile_manager.create_profile("json-profile", "json", str(tmp_path / "json-db.json"))
+        profile_manager.create_profile(
+            "json-profile", "json", str(tmp_path / "json-db.json")
+        )
         profile_manager.create_profile("memory-profile", "memory")
 
         # Get storage with json profile
@@ -703,13 +762,24 @@ class TestStorageWithProfiles:
         storage = get_storage_instance(profile_name="memory-profile")
         assert isinstance(storage, InMemoryStorage)
 
-        # Profile overrides direct parameters
-        storage = get_storage_instance(storage_type="memory", profile_name="json-profile")
-        assert isinstance(storage, JSONStorage)  # Profile takes precedence
+        # Get default storage when no profile specified (should use default profile)
+        # First, ensure default profile exists with json storage
+        if "default" not in profile_manager.list_profiles():
+            profile_manager.create_profile(
+                "default", "json", str(tmp_path / "default-db.json")
+            )
+        else:
+            # Update the default profile to use our test path
+            default_profile = profile_manager.get_profile("default")
+            default_profile.file_path = str(tmp_path / "default-db.json")
+            profile_manager._save_profiles()
 
-        # Direct parameters used when no profile specified
-        storage = get_storage_instance(storage_type="memory")
-        assert isinstance(storage, InMemoryStorage)
+        # Make default the active profile
+        profile_manager.switch_profile("default")
+
+        storage = get_storage_instance()
+        assert isinstance(storage, JSONStorage)
+        assert Path(storage.file_path) == tmp_path / "default-db.json"
 
     def test_env_var_profile_override(self, tmp_path, monkeypatch):
         """Test environment variable override for profile in get_storage_instance."""
@@ -724,10 +794,14 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
+        monkeypatch.setattr(
+            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
+        )
 
         # Create test profile
-        profile_manager.create_profile("env-profile", "json", str(tmp_path / "env-db.json"))
+        profile_manager.create_profile(
+            "env-profile", "json", str(tmp_path / "env-db.json")
+        )
 
         # Set environment variable
         monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "env-profile")
@@ -738,7 +812,9 @@ class TestStorageWithProfiles:
         assert storage.file_path == tmp_path / "env-db.json"
 
         # Explicit profile should override env var
-        profile_manager.create_profile("explicit-profile", "json", str(tmp_path / "explicit-db.json"))
+        profile_manager.create_profile(
+            "explicit-profile", "json", str(tmp_path / "explicit-db.json")
+        )
         storage = get_storage_instance(profile_name="explicit-profile")
         assert storage.file_path == tmp_path / "explicit-db.json"
 
@@ -757,7 +833,9 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
+        monkeypatch.setattr(
+            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
+        )
 
         # Create profiles using the convenience functions
         # These will use our mocked profile manager

@@ -106,13 +106,23 @@ class EndpointCategory:
         self.endpoints.append({"path": path, "method": method, "summary": summary})
 
 
-def categorize_endpoints(api_class: Type, prefix: str = "") -> Dict[str, EndpointCategory]:
+def categorize_endpoints(
+    api_class: Type, prefix: str = ""
+) -> Dict[str, EndpointCategory]:
     """Categorize endpoints based on method name patterns."""
     categories = {
-        "query": EndpointCategory("Query Operations", "Methods for querying and filtering test data"),
-        "filter": EndpointCategory("Filtering Operations", "Methods for filtering test results"),
-        "compare": EndpointCategory("Comparison Operations", "Methods for comparing test results"),
-        "analyze": EndpointCategory("Analysis Operations", "Methods for analyzing test patterns"),
+        "query": EndpointCategory(
+            "Query Operations", "Methods for querying and filtering test data"
+        ),
+        "filter": EndpointCategory(
+            "Filtering Operations", "Methods for filtering test results"
+        ),
+        "compare": EndpointCategory(
+            "Comparison Operations", "Methods for comparing test results"
+        ),
+        "analyze": EndpointCategory(
+            "Analysis Operations", "Methods for analyzing test patterns"
+        ),
         "config": EndpointCategory("Configuration", "Methods for configuring the API"),
         "other": EndpointCategory("Other Operations", "Miscellaneous operations"),
     }
@@ -142,7 +152,9 @@ def categorize_endpoints(api_class: Type, prefix: str = "") -> Dict[str, Endpoin
         elif "config" in name or "profile" in name or "setting" in name:
             category_key = "config"
 
-        categories[category_key].add_endpoint(path, "POST", f"{api_class.__name__}.{name}")
+        categories[category_key].add_endpoint(
+            path, "POST", f"{api_class.__name__}.{name}"
+        )
 
     # Remove empty categories
     return {k: v for k, v in categories.items() if v.endpoints}
@@ -151,7 +163,9 @@ def categorize_endpoints(api_class: Type, prefix: str = "") -> Dict[str, Endpoin
 # ---- Core API Router Generators ----
 
 
-def generate_api_router(api_class: Type, prefix: str = "") -> Tuple[APIRouter, Dict[str, EndpointCategory]]:
+def generate_api_router(
+    api_class: Type, prefix: str = ""
+) -> Tuple[APIRouter, Dict[str, EndpointCategory]]:
     """Generate a FastAPI router from an API class with categorized endpoints."""
     router = APIRouter()
 
@@ -179,7 +193,9 @@ def generate_api_router(api_class: Type, prefix: str = "") -> Tuple[APIRouter, D
             api_instance = api_class()
 
             # Call method with parameters
-            result = getattr(api_instance, method.__name__)(**params.dict(exclude_unset=True))
+            result = getattr(api_instance, method.__name__)(
+                **params.dict(exclude_unset=True)
+            )
 
             # Return result
             return {"result": str(result)}
@@ -215,8 +231,12 @@ def create_query_router() -> APIRouter:
 
     class QueryParams(BaseModel):
         sut_name: Optional[str] = Field(None, description="System Under Test name")
-        days: Optional[int] = Field(None, description="Number of days to look back", gt=0)
-        test_pattern: Optional[str] = Field(None, description="Test pattern (supports wildcards)")
+        days: Optional[int] = Field(
+            None, description="Number of days to look back", gt=0
+        )
+        test_pattern: Optional[str] = Field(
+            None, description="Test pattern (supports wildcards)"
+        )
         profile_name: Optional[str] = Field(None, description="Storage profile name")
 
     @router.post("/execute")
@@ -252,9 +272,15 @@ def create_comparison_router() -> APIRouter:
     class ComparisonParams(BaseModel):
         base_sut: str = Field(..., description="Base SUT name")
         target_sut: str = Field(..., description="Target SUT name")
-        test_pattern: Optional[str] = Field(None, description="Test pattern (supports wildcards)")
-        base_profile: Optional[str] = Field(None, description="Base storage profile name")
-        target_profile: Optional[str] = Field(None, description="Target storage profile name")
+        test_pattern: Optional[str] = Field(
+            None, description="Test pattern (supports wildcards)"
+        )
+        base_profile: Optional[str] = Field(
+            None, description="Base storage profile name"
+        )
+        target_profile: Optional[str] = Field(
+            None, description="Target storage profile name"
+        )
 
     @router.post("/execute")
     async def execute_comparison(params: ComparisonParams):
@@ -284,7 +310,9 @@ def create_analysis_router() -> APIRouter:
 
     class AnalysisParams(BaseModel):
         sut_name: Optional[str] = Field(None, description="System Under Test name")
-        days: Optional[int] = Field(None, description="Number of days to look back", gt=0)
+        days: Optional[int] = Field(
+            None, description="Number of days to look back", gt=0
+        )
         profile_name: Optional[str] = Field(None, description="Storage profile name")
 
     @router.post("/health_report")
@@ -321,7 +349,9 @@ def create_analysis_router() -> APIRouter:
 # ---- Category Index Endpoints ----
 
 
-def create_category_index(app: FastAPI, all_categories: Dict[str, Dict[str, EndpointCategory]]):
+def create_category_index(
+    app: FastAPI, all_categories: Dict[str, Dict[str, EndpointCategory]]
+):
     """Create an index endpoint that shows all endpoint categories."""
 
     @app.get("/api/categories", tags=["API Index"])
@@ -345,7 +375,11 @@ def create_category_index(app: FastAPI, all_categories: Dict[str, Dict[str, Endp
                 @app.get(f"/api/categories/{a_name}/{c_name}", tags=["API Index"])
                 async def get_category_detail():
                     """Get details for a specific endpoint category."""
-                    return {"name": cat.name, "description": cat.description, "endpoints": cat.endpoints}
+                    return {
+                        "name": cat.name,
+                        "description": cat.description,
+                        "endpoints": cat.endpoints,
+                    }
 
                 return get_category_detail
 
@@ -410,7 +444,9 @@ def create_introspected_api() -> FastAPI:
     # Add low-level introspected routers with categorization
     all_categories = {}
 
-    insight_router, insight_categories = generate_api_router(InsightAPI, prefix="insight_")
+    insight_router, insight_categories = generate_api_router(
+        InsightAPI, prefix="insight_"
+    )
     all_categories["insight"] = insight_categories
     app.include_router(
         insight_router,
@@ -426,7 +462,9 @@ def create_introspected_api() -> FastAPI:
         tags=["Introspect Query"],
     )
 
-    comparison_router, comparison_categories = generate_api_router(Comparison, prefix="comparison_")
+    comparison_router, comparison_categories = generate_api_router(
+        Comparison, prefix="comparison_"
+    )
     all_categories["comparison"] = comparison_categories
     app.include_router(
         comparison_router,
@@ -434,7 +472,9 @@ def create_introspected_api() -> FastAPI:
         tags=["Introspect Comparison"],
     )
 
-    analysis_router, analysis_categories = generate_api_router(Analysis, prefix="analysis_")
+    analysis_router, analysis_categories = generate_api_router(
+        Analysis, prefix="analysis_"
+    )
     all_categories["analysis"] = analysis_categories
     app.include_router(
         analysis_router,
@@ -709,9 +749,21 @@ def create_introspected_api() -> FastAPI:
             # This is a simplified example - in a real implementation,
             # you would use the actual storage API to get recent sessions
             sessions = [
-                {"id": "session1", "name": "Test Run 1 - March 29, 2025", "date": "2025-03-29"},
-                {"id": "session2", "name": "Test Run 2 - March 28, 2025", "date": "2025-03-28"},
-                {"id": "session3", "name": "Test Run 3 - March 27, 2025", "date": "2025-03-27"},
+                {
+                    "id": "session1",
+                    "name": "Test Run 1 - March 29, 2025",
+                    "date": "2025-03-29",
+                },
+                {
+                    "id": "session2",
+                    "name": "Test Run 2 - March 28, 2025",
+                    "date": "2025-03-28",
+                },
+                {
+                    "id": "session3",
+                    "name": "Test Run 3 - March 27, 2025",
+                    "date": "2025-03-27",
+                },
             ]
             return {"sessions": sessions}
         except Exception as e:
@@ -732,7 +784,13 @@ def create_introspected_api() -> FastAPI:
             if query.get("filter") != "all" and query.get("filter") != status:
                 continue
 
-            results.append({"name": f"test_function_{i}", "status": status, "duration": random.uniform(0.1, 2.0)})
+            results.append(
+                {
+                    "name": f"test_function_{i}",
+                    "status": status,
+                    "duration": random.uniform(0.1, 2.0),
+                }
+            )
 
         return {"results": results}
 
@@ -749,12 +807,20 @@ def main():
 
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="Run pytest-insight introspected API server")
-    parser.add_argument("--host", default="127.0.0.1", help="Host to bind the server to")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind the server to")
+    parser = argparse.ArgumentParser(
+        description="Run pytest-insight introspected API server"
+    )
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="Host to bind the server to"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000, help="Port to bind the server to"
+    )
 
     args = parser.parse_args()
-    print(f"Starting pytest-insight introspected API server at http://{args.host}:{args.port}")
+    print(
+        f"Starting pytest-insight introspected API server at http://{args.host}:{args.port}"
+    )
     print(f"API documentation: http://{args.host}:{args.port}/docs")
 
     uvicorn.run(introspected_app, host=args.host, port=args.port)

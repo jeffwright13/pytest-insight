@@ -26,14 +26,17 @@ import importlib.metadata
 from typing import Optional
 
 from pytest_insight.core.analysis import Analysis, analysis, analysis_with_profile
-from pytest_insight.core.comparison import Comparison, comparison, comparison_with_profiles
+from pytest_insight.core.comparison import (
+    Comparison,
+    comparison,
+    comparison_with_profiles,
+)
 from pytest_insight.core.insights import Insights, insights, insights_with_profile
 from pytest_insight.core.query import Query
 from pytest_insight.core.storage import (
     create_profile,
     get_active_profile,
     get_profile_manager,
-    get_storage_instance,
     list_profiles,
     switch_profile,
 )
@@ -80,8 +83,7 @@ class InsightAPI:
             A new Query instance configured with the current profile
         """
         if self._profile_name:
-            storage = get_storage_instance(profile_name=self._profile_name)
-            return Query(storage)
+            return Query(profile_name=self._profile_name)
         return query()
 
     def compare(self) -> Comparison:
@@ -119,17 +121,16 @@ class InsightAPI:
 
 
 # Re-export the factory functions with consistent naming
-def query(storage=None, profile_name=None):
+def query(profile_name: Optional[str] = None):
     """Create a new Query instance for finding and filtering test sessions.
 
     Args:
-        storage: Optional storage instance to use
         profile_name: Optional profile name to use for storage configuration
 
     Returns:
         A new Query instance
     """
-    return Query(storage=storage, profile_name=profile_name)
+    return Query(profile_name=profile_name)
 
 
 compare = comparison

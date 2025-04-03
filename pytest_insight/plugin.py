@@ -11,8 +11,17 @@ from _pytest.terminal import TerminalReporter, WarningReport
 from pytest import ExitCode
 
 from pytest_insight.core.insights import Insights
-from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
-from pytest_insight.core.storage import create_profile, get_profile_manager, get_storage_instance
+from pytest_insight.core.models import (
+    RerunTestGroup,
+    TestOutcome,
+    TestResult,
+    TestSession,
+)
+from pytest_insight.core.storage import (
+    create_profile,
+    get_profile_manager,
+    get_storage_instance,
+)
 
 _INSIGHT_INITIALIZED: bool = False
 _INSIGHT_ENABLED: bool = False
@@ -80,11 +89,19 @@ def pytest_configure(config: Config):
             # Profile doesn't exist, create the default profile if it's the default one
             if profile_name == "default":
                 # Create a default profile with json storage
-                create_profile("default", "json", None)  # None will use the default path
+                create_profile(
+                    "default", "json", None
+                )  # None will use the default path
                 print("[pytest-insight] Created default profile", file=sys.stderr)
             else:
-                print(f"[pytest-insight] Warning: Profile '{profile_name}' not found", file=sys.stderr)
-                print("[pytest-insight] Creating a default profile and using it instead", file=sys.stderr)
+                print(
+                    f"[pytest-insight] Warning: Profile '{profile_name}' not found",
+                    file=sys.stderr,
+                )
+                print(
+                    "[pytest-insight] Creating a default profile and using it instead",
+                    file=sys.stderr,
+                )
                 create_profile("default", "json", None)
                 profile_name = "default"
 
@@ -103,7 +120,9 @@ def pytest_configure(config: Config):
 
 
 @pytest.hookimpl
-def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
+def pytest_terminal_summary(
+    terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config
+):
     """Process test results and show useful insights in terminal summary."""
     if not insight_enabled(config):
         return
@@ -121,7 +140,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
     # Process all test reports
     for outcome, reports in stats.items():
-        if not outcome:  # looking for empty string "", only populated with 'setup' and 'teardown' reports
+        if (
+            not outcome
+        ):  # looking for empty string "", only populated with 'setup' and 'teardown' reports
             continue
 
         if outcome == "warnings":
@@ -133,7 +154,8 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
             # Capture only call-phase or error failures from setup/teardown
             if report.when == "call" or (
-                report.when in ("setup", "teardown") and report.outcome in ("failed", "error")
+                report.when in ("setup", "teardown")
+                and report.outcome in ("failed", "error")
             ):
                 report_time = datetime.fromtimestamp(report.start)
 
@@ -146,7 +168,11 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
                 test_results.append(
                     TestResult(
                         nodeid=report.nodeid,
-                        outcome=(TestOutcome.from_str(outcome) if outcome else TestOutcome.SKIPPED),
+                        outcome=(
+                            TestOutcome.from_str(outcome)
+                            if outcome
+                            else TestOutcome.SKIPPED
+                        ),
                         start_time=report_time,
                         duration=report.duration,
                         caplog=getattr(report, "caplog", ""),
@@ -172,7 +198,10 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     session_end = session_end or datetime.now()
 
     # Generate unique session ID
-    session_id = (f"{sut_name}-{session_start.strftime('%Y%m%d-%H%M%S')}-" f"{str(uuid.uuid4())[:8]}").lower()
+    session_id = (
+        f"{sut_name}-{session_start.strftime('%Y%m%d-%H%M%S')}-"
+        f"{str(uuid.uuid4())[:8]}"
+    ).lower()
 
     # Create/process rerun test groups
     rerun_test_group_list = group_tests_into_rerun_test_groups(test_results)
@@ -195,8 +224,12 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     try:
         storage.save_session(session)
     except Exception as e:
-        terminalreporter.write_line(f"[pytest-insight] Error: Failed to save session - {str(e)}", red=True)
-        terminalreporter.write_line(f"[pytest-insight] Error details: {str(e)}", red=True)
+        terminalreporter.write_line(
+            f"[pytest-insight] Error: Failed to save session - {str(e)}", red=True
+        )
+        terminalreporter.write_line(
+            f"[pytest-insight] Error details: {str(e)}", red=True
+        )
 
     # Import Analysis class here to avoid circular imports
     from pytest_insight.core.analysis import Analysis
@@ -223,7 +256,9 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         # Write the formatted insights output
         terminalreporter.write_line(output)
     except Exception as e:
-        terminalreporter.write_line(f"[pytest-insight] Error generating summary: {str(e)}", red=True)
+        terminalreporter.write_line(
+            f"[pytest-insight] Error generating summary: {str(e)}", red=True
+        )
         return
 
 
@@ -243,7 +278,9 @@ def group_tests_into_rerun_test_groups(
     # First pass: group by nodeid
     for test_result in test_results:
         if test_result.nodeid not in rerun_test_groups:
-            rerun_test_groups[test_result.nodeid] = RerunTestGroup(nodeid=test_result.nodeid)
+            rerun_test_groups[test_result.nodeid] = RerunTestGroup(
+                nodeid=test_result.nodeid
+            )
         rerun_test_groups[test_result.nodeid].add_test(test_result)
 
     # Return only groups with reruns (more than one test)

@@ -38,8 +38,12 @@ class NormalizedDatetime:
         Returns:
             Tuple of normalized datetime objects ready for comparison
         """
-        dt1_has_tzinfo = dt1.tzinfo is not None and dt1.tzinfo.utcoffset(dt1) is not None
-        dt2_has_tzinfo = dt2.tzinfo is not None and dt2.tzinfo.utcoffset(dt2) is not None
+        dt1_has_tzinfo = (
+            dt1.tzinfo is not None and dt1.tzinfo.utcoffset(dt1) is not None
+        )
+        dt2_has_tzinfo = (
+            dt2.tzinfo is not None and dt2.tzinfo.utcoffset(dt2) is not None
+        )
 
         # If both have the same timezone status (both aware or both naive), return as-is
         if dt1_has_tzinfo == dt2_has_tzinfo:

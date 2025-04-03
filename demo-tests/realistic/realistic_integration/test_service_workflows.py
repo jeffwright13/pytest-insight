@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
+
 # Mock service classes for integration testing
 class MockAuthService:
     def __init__(self, failure_rate=0.05):
@@ -32,7 +33,7 @@ class MockAuthService:
                 "token": f"mock-token-{username}-{int(time.time())}",
                 "expires_in": self.token_validity,
                 "user_id": f"user-{random.randint(1000, 9999)}",
-                "role": self.users[username]["role"]
+                "role": self.users[username]["role"],
             }
         else:
             return {"success": False, "error": "Invalid credentials"}
@@ -55,10 +56,11 @@ class MockAuthService:
                     return {
                         "success": True,
                         "username": username,
-                        "role": self.users.get(username, {}).get("role", "user")
+                        "role": self.users.get(username, {}).get("role", "user"),
                     }
 
         return {"success": False, "error": "Invalid or expired token"}
+
 
 class MockInventoryService:
     def __init__(self, failure_rate=0.08):
@@ -68,8 +70,9 @@ class MockInventoryService:
                 "id": f"product-{i}",
                 "name": f"Product {i}",
                 "price": round(random.uniform(10, 1000), 2),
-                "stock": random.randint(0, 100)
-            } for i in range(1, 20)
+                "stock": random.randint(0, 100),
+            }
+            for i in range(1, 20)
         }
 
     def get_product(self, product_id):
@@ -122,6 +125,7 @@ class MockInventoryService:
         else:
             return {"success": False, "error": "Product not found"}
 
+
 class MockOrderService:
     def __init__(self, inventory_service, failure_rate=0.1):
         self.failure_rate = failure_rate
@@ -150,7 +154,7 @@ class MockOrderService:
             return {
                 "success": False,
                 "error": "Some items are unavailable",
-                "unavailable_items": unavailable_items
+                "unavailable_items": unavailable_items,
             }
 
         # Create order
@@ -173,13 +177,15 @@ class MockOrderService:
             # Update inventory
             self.inventory_service.update_stock(product_id, -quantity)
 
-            order_items.append({
-                "product_id": product_id,
-                "name": product["name"],
-                "price": product["price"],
-                "quantity": quantity,
-                "total": item_total
-            })
+            order_items.append(
+                {
+                    "product_id": product_id,
+                    "name": product["name"],
+                    "price": product["price"],
+                    "quantity": quantity,
+                    "total": item_total,
+                }
+            )
 
             order_total += item_total
 
@@ -190,14 +196,10 @@ class MockOrderService:
             "items": order_items,
             "total": order_total,
             "status": "created",
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
         }
 
-        return {
-            "success": True,
-            "order_id": order_id,
-            "total": order_total
-        }
+        return {"success": True, "order_id": order_id, "total": order_total}
 
     def get_order(self, order_id):
         # Simulate network latency
@@ -226,6 +228,7 @@ class MockOrderService:
         else:
             return {"success": False, "error": "Order not found"}
 
+
 class MockPaymentService:
     def __init__(self, failure_rate=0.12):
         self.failure_rate = failure_rate
@@ -252,14 +255,10 @@ class MockPaymentService:
             "amount": amount,
             "payment_method": payment_method,
             "status": "completed",
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
         }
 
-        return {
-            "success": True,
-            "payment_id": payment_id,
-            "status": "completed"
-        }
+        return {"success": True, "payment_id": payment_id, "status": "completed"}
 
     def get_payment(self, payment_id):
         # Simulate network latency
@@ -274,26 +273,31 @@ class MockPaymentService:
         else:
             return {"success": False, "error": "Payment not found"}
 
+
 # Fixtures for integration testing
 @pytest.fixture
 def auth_service():
     """Create an authentication service for testing."""
     return MockAuthService()
 
+
 @pytest.fixture
 def inventory_service():
     """Create an inventory service for testing."""
     return MockInventoryService()
+
 
 @pytest.fixture
 def order_service(inventory_service):
     """Create an order service for testing."""
     return MockOrderService(inventory_service)
 
+
 @pytest.fixture
 def payment_service():
     """Create a payment service for testing."""
     return MockPaymentService()
+
 
 @pytest.fixture
 def authenticated_user(auth_service):
@@ -302,6 +306,7 @@ def authenticated_user(auth_service):
     if not auth_result["success"]:
         pytest.skip("Authentication service unavailable")
     return auth_result
+
 
 # Basic integration tests
 def test_product_availability(inventory_service):
@@ -313,6 +318,7 @@ def test_product_availability(inventory_service):
     assert result["success"] is True
     assert "product" in result
     assert result["product"]["id"] == product_id
+
 
 def test_authentication_flow(auth_service):
     """Test the complete authentication flow."""
@@ -327,8 +333,11 @@ def test_authentication_flow(auth_service):
     assert validation_result["success"] is True
     assert validation_result["username"] == "test_user"
 
+
 # End-to-end order workflow test
-def test_complete_order_workflow(authenticated_user, inventory_service, order_service, payment_service):
+def test_complete_order_workflow(
+    authenticated_user, inventory_service, order_service, payment_service
+):
     """Test the complete order workflow from product selection to payment."""
     # Step 1: Get user token from authentication
     user_token = authenticated_user["token"]
@@ -361,9 +370,7 @@ def test_complete_order_workflow(authenticated_user, inventory_service, order_se
 
     # Step 5: Process payment
     payment_result = payment_service.process_payment(
-        order_id,
-        order_total,
-        "credit_card"
+        order_id, order_total, "credit_card"
     )
 
     if not payment_result["success"]:
@@ -384,19 +391,27 @@ def test_complete_order_workflow(authenticated_user, inventory_service, order_se
     assert final_order["success"] is True
     assert final_order["order"]["status"] == "paid"
 
+
 # Test with service dependency failures
-def test_order_with_inventory_failure(authenticated_user, inventory_service, order_service):
+def test_order_with_inventory_failure(
+    authenticated_user, inventory_service, order_service
+):
     """Test order creation when inventory service fails."""
     user_id = authenticated_user["user_id"]
 
     # Force inventory service to fail
-    with patch.object(inventory_service, 'check_stock', return_value={"success": False, "error": "Service unavailable"}):
+    with patch.object(
+        inventory_service,
+        "check_stock",
+        return_value={"success": False, "error": "Service unavailable"},
+    ):
         order_items = [{"product_id": "product-3", "quantity": 1}]
         order_result = order_service.create_order(user_id, order_items)
 
         # Order should fail due to inventory service failure
         assert order_result["success"] is False
         assert "error" in order_result
+
 
 # Test with data consistency issues
 def test_inventory_consistency(inventory_service):
@@ -423,6 +438,7 @@ def test_inventory_consistency(inventory_service):
     final_result = inventory_service.get_product(product_id)
     assert final_result["success"] is True
     assert final_result["product"]["stock"] == expected_final_stock
+
 
 # Test with concurrent operations (simulated)
 def test_concurrent_orders(authenticated_user, inventory_service, order_service):
@@ -463,6 +479,7 @@ def test_concurrent_orders(authenticated_user, inventory_service, order_service)
         # At least one order should fail due to insufficient stock
         assert not (order1_result["success"] and order2_result["success"])
 
+
 # Test with dependency chain
 @pytest.mark.dependency()
 def test_user_registration():
@@ -470,6 +487,7 @@ def test_user_registration():
     # This test will always pass but is required for the dependency chain
     time.sleep(random.uniform(0.1, 0.3))
     assert True
+
 
 @pytest.mark.dependency(depends=["test_user_registration"])
 def test_user_login(auth_service):
@@ -481,6 +499,7 @@ def test_user_login(auth_service):
     # This test will fail occasionally
     if random.random() < 0.07:
         pytest.fail("Login service temporarily unavailable")
+
 
 @pytest.mark.dependency(depends=["test_user_login"])
 def test_user_purchases(authenticated_user, inventory_service, order_service):

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
 # Mock Selenium WebDriver and related classes
 class MockWebElement:
     def __init__(self, element_id, element_type, is_displayed=True, is_enabled=True):
@@ -40,6 +41,7 @@ class MockWebElement:
     @property
     def text(self):
         return self._text
+
 
 class MockWebDriver:
     def __init__(self, browser="chrome"):
@@ -84,6 +86,7 @@ class MockWebDriver:
     def quit(self):
         pass
 
+
 # Fixtures for UI testing
 @pytest.fixture
 def browser():
@@ -93,6 +96,7 @@ def browser():
     driver = MockWebDriver(browser=browser_type)
     yield driver
     driver.quit()
+
 
 @pytest.fixture
 def logged_in_browser(browser):
@@ -120,6 +124,7 @@ def logged_in_browser(browser):
 
     return browser
 
+
 # Basic UI tests
 def test_login_page_loads(browser):
     """Test that the login page loads correctly."""
@@ -136,6 +141,7 @@ def test_login_page_loads(browser):
     assert username.is_displayed()
     assert password.is_displayed()
     assert login_button.is_displayed()
+
 
 def test_login_with_valid_credentials(browser):
     """Test logging in with valid credentials."""
@@ -155,6 +161,7 @@ def test_login_with_valid_credentials(browser):
 
     # Verify redirect to dashboard
     assert "dashboard" in browser.current_url
+
 
 # Flaky test - sometimes elements aren't immediately visible
 def test_dashboard_widgets_load(logged_in_browser):
@@ -181,6 +188,7 @@ def test_dashboard_widgets_load(logged_in_browser):
             widgets = browser.find_elements("class", "dashboard-widget")
             assert len(widgets) >= 3
 
+
 # Test with browser compatibility issues
 def test_responsive_design(browser):
     """Test responsive design elements adapt correctly."""
@@ -202,6 +210,7 @@ def test_responsive_design(browser):
     assert len(menu_items) > 0
     assert menu_items[0].is_displayed()
 
+
 # Test with JS errors
 def test_interactive_chart(logged_in_browser):
     """Test interactive chart functionality."""
@@ -215,7 +224,9 @@ def test_interactive_chart(logged_in_browser):
     if random.random() < 0.12:
         with pytest.raises(Exception):
             # Simulate JS error when interacting with chart
-            browser.execute_script("return document.getElementById('analytics-chart').renderError()")
+            browser.execute_script(
+                "return document.getElementById('analytics-chart').renderError()"
+            )
             pytest.fail("JavaScript error in chart rendering")
 
     # Click on chart to show details
@@ -224,6 +235,7 @@ def test_interactive_chart(logged_in_browser):
     # Verify chart details panel is shown
     details = browser.find_element("id", "chart-details")
     assert details.is_displayed()
+
 
 # Slow test - complex UI interaction
 def test_form_submission_flow(logged_in_browser):
@@ -270,6 +282,7 @@ def test_form_submission_flow(logged_in_browser):
     success_message = browser.find_element("class", "success-message")
     assert "Project created successfully" in success_message.text
 
+
 # Test with dependency chain
 @pytest.mark.dependency()
 def test_user_profile_page_loads(logged_in_browser):
@@ -284,6 +297,7 @@ def test_user_profile_page_loads(logged_in_browser):
     # This test will fail occasionally
     if random.random() < 0.07:
         pytest.fail("Profile page failed to load completely")
+
 
 @pytest.mark.dependency(depends=["test_user_profile_page_loads"])
 def test_edit_user_profile(logged_in_browser):
@@ -307,6 +321,7 @@ def test_edit_user_profile(logged_in_browser):
     success_message = browser.find_element("class", "success-message")
     assert "Profile updated successfully" in success_message.text
 
+
 # Test with accessibility issues
 def test_accessibility_compliance(browser):
     """Test page accessibility compliance."""
@@ -320,7 +335,7 @@ def test_accessibility_compliance(browser):
         issues = [
             "Contrast ratio too low on navigation menu",
             "Missing alt text on dashboard images",
-            "Form labels not properly associated with inputs"
+            "Form labels not properly associated with inputs",
         ]
         random_issue = random.choice(issues)
         pytest.fail(f"Accessibility issue detected: {random_issue}")

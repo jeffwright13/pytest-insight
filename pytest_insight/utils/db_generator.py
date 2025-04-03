@@ -8,7 +8,12 @@ from zoneinfo import ZoneInfo
 
 import typer
 
-from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+from pytest_insight.core.models import (
+    RerunTestGroup,
+    TestOutcome,
+    TestResult,
+    TestSession,
+)
 from pytest_insight.core.storage import get_profile_manager, get_storage_instance
 
 
@@ -73,7 +78,9 @@ class PracticeDataGenerator:
         test_categories: Optional[list[str]] = None,
     ):
         self.storage_profile = storage_profile
-        self.target_path = target_path or Path.home() / ".pytest_insight" / "practice.json"
+        self.target_path = (
+            target_path or Path.home() / ".pytest_insight" / "practice.json"
+        )
         self.days = days
         self.targets_per_base = targets_per_base
         self.start_date = start_date
@@ -98,7 +105,9 @@ class PracticeDataGenerator:
 
         # Filter SUTs if specified
         if sut_filter:
-            self.sut_variations = [sut for sut in self.sut_variations if sut.startswith(sut_filter)]
+            self.sut_variations = [
+                sut for sut in self.sut_variations if sut.startswith(sut_filter)
+            ]
             if not self.sut_variations:
                 raise ValueError(f"No SUTs found matching prefix '{sut_filter}'")
 
@@ -141,7 +150,9 @@ class PracticeDataGenerator:
             invalid_categories = set(test_categories) - set(self.test_patterns.keys())
             if invalid_categories:
                 raise ValueError(f"Invalid test categories: {invalid_categories}")
-            self.test_patterns = {k: v for k, v in self.test_patterns.items() if k in test_categories}
+            self.test_patterns = {
+                k: v for k, v in self.test_patterns.items() if k in test_categories
+            }
 
     def _get_test_time(self, offset_seconds: int = 0) -> datetime:
         """Get a consistent timezone-aware timestamp for tests.
@@ -175,9 +186,17 @@ class PracticeDataGenerator:
             start_time = start_time.replace(tzinfo=ZoneInfo("UTC"))
 
         caplog = self.text_gen.sentence()
-        capstderr = self.text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+        capstderr = (
+            self.text_gen.sentence()
+            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+            else ""
+        )
         capstdout = self.text_gen.sentence()
-        longreprtext = self.text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+        longreprtext = (
+            self.text_gen.paragraph()
+            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+            else ""
+        )
 
         return TestResult(
             nodeid=nodeid,
@@ -296,8 +315,12 @@ class PracticeDataGenerator:
             # Check if the profile has a valid file path
             if profile.file_path is None:
                 # Create a default path for this profile
-                default_path = str(Path.home() / ".pytest_insight" / f"{profile_name}.json")
-                print(f"Profile has no file path. Creating a new profile with path: {default_path}")
+                default_path = str(
+                    Path.home() / ".pytest_insight" / f"{profile_name}.json"
+                )
+                print(
+                    f"Profile has no file path. Creating a new profile with path: {default_path}"
+                )
 
                 # We can't modify the existing profile directly, so we need to create a new one
                 # First, remember if this was the active profile
@@ -316,7 +339,9 @@ class PracticeDataGenerator:
                         raise
 
                 # Create a new profile with the same name but a valid file path
-                profile = profile_manager.create_profile(name=profile_name, storage_type="json", file_path=default_path)
+                profile = profile_manager.create_profile(
+                    name=profile_name, storage_type="json", file_path=default_path
+                )
 
                 # If it was the active profile, switch back to it
                 if was_active:
@@ -328,7 +353,9 @@ class PracticeDataGenerator:
             # Profile doesn't exist, create it
             print(f"Creating new profile: {profile_name}")
             default_path = str(Path.home() / ".pytest_insight" / f"{profile_name}.json")
-            return profile_manager.create_profile(name=profile_name, storage_type="json", file_path=default_path)
+            return profile_manager.create_profile(
+                name=profile_name, storage_type="json", file_path=default_path
+            )
 
     def _save_to_file(self, all_sessions):
         # Save to file directly (backward compatibility)
@@ -516,7 +543,9 @@ def main(
                 # Use datetime(2023, 1, 1) as base like conftest.py
                 base = datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
                 parsed_date = datetime.strptime(start_date, "%Y-%m-%d")
-                parsed_start_date = base + timedelta(days=(parsed_date - datetime(2023, 1, 1)).days)
+                parsed_start_date = base + timedelta(
+                    days=(parsed_date - datetime(2023, 1, 1)).days
+                )
             except ValueError as e:
                 if "format" in str(e):
                     raise typer.BadParameter("Start date must be in YYYY-MM-DD format")

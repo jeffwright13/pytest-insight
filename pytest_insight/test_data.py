@@ -20,7 +20,12 @@ import string
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+from pytest_insight.core.models import (
+    RerunTestGroup,
+    TestOutcome,
+    TestResult,
+    TestSession,
+)
 
 
 class TextGenerator:

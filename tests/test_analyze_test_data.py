@@ -1,8 +1,9 @@
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
-from pytest_insight.utils.analyze_test_data import analyze_test_data
 from rich.console import Console
+
+from pytest_insight.utils.analyze_test_data import analyze_test_data
 
 
 @pytest.fixture
@@ -76,7 +77,12 @@ class Test_AnalyzeTestData:
     @patch("pytest_insight.utils.analyze_test_data.InsightAPI")
     @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_profile_comparison(
-        self, mock_console_class, mock_insight_api, mock_get_storage_instance, mock_args, mock_api
+        self,
+        mock_console_class,
+        mock_insight_api,
+        mock_get_storage_instance,
+        mock_args,
+        mock_api,
     ):
         """Test analyze_test_data function with profile comparison."""
         # Setup
@@ -138,7 +144,9 @@ class Test_AnalyzeTestData:
         # Directly call the function with the necessary parameters
         # We need to manually mock the InsightAPI calls since we're not reaching that code path
         with patch.object(mock_insight_api, "call_count", 0):  # Reset call count
-            with patch.object(mock_insight_api, "call_args_list", []):  # Reset call args
+            with patch.object(
+                mock_insight_api, "call_args_list", []
+            ):  # Reset call args
                 # Manually add the calls we expect to see
                 mock_insight_api(profile_name="current-profile")
                 mock_insight_api(profile_name="other-profile")
@@ -170,13 +178,20 @@ class Test_AnalyzeTestData:
         mock_insight_api.assert_any_call(profile_name="other-profile")
 
         # 3. Verify that the profile was displayed
-        mock_console.print.assert_any_call("[bold]Using profile:[/bold] current-profile")
+        mock_console.print.assert_any_call(
+            "[bold]Using profile:[/bold] current-profile"
+        )
 
     @patch("pytest_insight.utils.analyze_test_data.get_storage_instance")
     @patch("pytest_insight.utils.analyze_test_data.InsightAPI")
     @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_profile_comparison_no_current_profile(
-        self, mock_console_class, mock_insight_api, mock_get_storage_instance, mock_args, mock_api
+        self,
+        mock_console_class,
+        mock_insight_api,
+        mock_get_storage_instance,
+        mock_args,
+        mock_api,
     ):
         """Test analyze_test_data function with profile comparison when no current profile is specified."""
         # Setup
@@ -222,20 +237,28 @@ class Test_AnalyzeTestData:
         mock_args.trends = False
 
         # Mock file loading
-        with patch("builtins.open", mock_open(read_data='[{"session_id": "test-session"}]')):
+        with patch(
+            "builtins.open", mock_open(read_data='[{"session_id": "test-session"}]')
+        ):
             with patch("json.load") as mock_json_load:
                 mock_json_load.return_value = [{"session_id": "test-session"}]
 
                 # Mock TestSession.from_dict
-                with patch("pytest_insight.core.models.TestSession.from_dict") as mock_from_dict:
+                with patch(
+                    "pytest_insight.core.models.TestSession.from_dict"
+                ) as mock_from_dict:
                     mock_session = MagicMock()
                     mock_session.test_results = [MagicMock()]
                     mock_from_dict.return_value = mock_session
 
                     # Directly call the function with the necessary parameters
                     # We need to manually mock the InsightAPI calls since we're not reaching that code path
-                    with patch.object(mock_insight_api, "call_count", 0):  # Reset call count
-                        with patch.object(mock_insight_api, "call_args_list", []):  # Reset call args
+                    with patch.object(
+                        mock_insight_api, "call_count", 0
+                    ):  # Reset call count
+                        with patch.object(
+                            mock_insight_api, "call_args_list", []
+                        ):  # Reset call args
                             # Manually add the calls we expect to see
                             mock_insight_api(profile_name=None)
                             mock_insight_api(profile_name="other-profile")
@@ -263,7 +286,12 @@ class Test_AnalyzeTestData:
     @patch("pytest_insight.utils.analyze_test_data.InsightAPI")
     @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_profile_comparison_error(
-        self, mock_console_class, mock_insight_api, mock_get_storage_instance, mock_args, mock_api
+        self,
+        mock_console_class,
+        mock_insight_api,
+        mock_get_storage_instance,
+        mock_args,
+        mock_api,
     ):
         """Test analyze_test_data function with profile comparison when an error occurs."""
         # Setup
@@ -312,7 +340,9 @@ class Test_AnalyzeTestData:
         # Directly call the function with the necessary parameters
         # We need to manually mock the InsightAPI calls since we're not reaching that code path
         with patch.object(mock_insight_api, "call_count", 0):  # Reset call count
-            with patch.object(mock_insight_api, "call_args_list", []):  # Reset call args
+            with patch.object(
+                mock_insight_api, "call_args_list", []
+            ):  # Reset call args
                 # Manually add the calls we expect to see
                 mock_insight_api(profile_name="current-profile")
                 mock_insight_api(profile_name="other-profile")
@@ -338,7 +368,9 @@ class Test_AnalyzeTestData:
         mock_insight_api.assert_any_call(profile_name="other-profile")
 
         # 3. Verify that an error message was displayed (the exact message may vary)
-        mock_console.print.assert_any_call("[bold]Using profile:[/bold] current-profile")
+        mock_console.print.assert_any_call(
+            "[bold]Using profile:[/bold] current-profile"
+        )
         # Check that some error message was displayed
         error_message_found = False
         for call in mock_console.print.call_args_list:
@@ -352,7 +384,12 @@ class Test_AnalyzeTestData:
     @patch("pytest_insight.utils.analyze_test_data.InsightAPI")
     @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_unknown_comparison_type(
-        self, mock_console_class, mock_insight_api, mock_get_storage_instance, mock_args, mock_api
+        self,
+        mock_console_class,
+        mock_insight_api,
+        mock_get_storage_instance,
+        mock_args,
+        mock_api,
     ):
         """Test analyze_test_data function with an unknown comparison type."""
         # Setup
@@ -398,7 +435,9 @@ class Test_AnalyzeTestData:
         mock_insight_api.assert_called_once()
 
         # 3. Verify that an error message was displayed (the exact message may vary)
-        mock_console.print.assert_any_call("[bold]Using profile:[/bold] current-profile")
+        mock_console.print.assert_any_call(
+            "[bold]Using profile:[/bold] current-profile"
+        )
         # Check that some error message was displayed
         error_message_found = False
         for call in mock_console.print.call_args_list:
@@ -412,7 +451,12 @@ class Test_AnalyzeTestData:
     @patch("pytest_insight.utils.analyze_test_data.InsightAPI")
     @patch("pytest_insight.utils.analyze_test_data.Console")
     def test_analyze_data_with_profile_comparison_no_sessions(
-        self, mock_console_class, mock_insight_api, mock_get_storage_instance, mock_args, mock_api
+        self,
+        mock_console_class,
+        mock_insight_api,
+        mock_get_storage_instance,
+        mock_args,
+        mock_api,
     ):
         """Test analyze_test_data function with profile comparison when no sessions are found."""
         # Setup

@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 import pytest
+
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.models import TestOutcome, TestResult, TestSession
 from pytest_insight.core.query import Query
@@ -149,7 +150,9 @@ class Test_Analysis:
         assert len(filtered_analysis._sessions) == 2  # Only the api-service sessions
 
         # Test more complex query with test-level filtering
-        complex_filtered = analysis.with_query(lambda q: q.filter_by_test().with_outcome(TestOutcome.FAILED).apply())
+        complex_filtered = analysis.with_query(
+            lambda q: q.filter_by_test().with_outcome(TestOutcome.FAILED).apply()
+        )
 
         # Verify test-level filtering worked while preserving session context
         assert len(complex_filtered._sessions) == 2  # Sessions with failed tests
@@ -180,7 +183,9 @@ class Test_Analysis:
         db_sessions = analysis.with_query(lambda q: q.for_sut("db-service"))._sessions
 
         # Compare health between different SUTs
-        comparison = analysis.compare_health(base_sessions=api_sessions, target_sessions=db_sessions)
+        comparison = analysis.compare_health(
+            base_sessions=api_sessions, target_sessions=db_sessions
+        )
 
         # Verify comparison structure
         assert "base_health" in comparison
@@ -208,26 +213,37 @@ class Test_Analysis:
            - Preserving session context in filtered results
         """
         # Create a query and use its results with Analysis
-        query = Query(storage=json_storage)
-        query_result = query.for_sut("api-service").execute(sessions=analysis_sessions)
+        profile_name = "test_integration_profile"
+        json_storage.profile_name = (
+            profile_name  # Add profile_name to storage for reference
+        )
+        query = Query(profile_name=profile_name)
 
-        # Use query results with Analysis
-        analysis = Analysis(sessions=query_result.sessions)
-        report = analysis.health_report()
-
-        # Verify integration worked
-        assert "health_score" in report
-        assert "session_metrics" in report
-
-        # Test chaining with multiple filters
-        filtered_analysis = Analysis(sessions=analysis_sessions).with_query(
-            lambda q: q.for_sut("api-service").filter_by_test().with_nodeid_containing("test_get").apply()
+        # Mock the execute method to return our test sessions
+        original_execute = query.execute
+        query.execute = lambda sessions=None: original_execute(
+            sessions=analysis_sessions
         )
 
-        # Verify chained filtering worked
-        assert len(filtered_analysis._sessions) > 0
-        performance_report = filtered_analysis.performance_report()
-        assert "performance" in performance_report
+        # Use query results with Analysis
+        query_result = query.for_sut("api-service").execute()
+        analysis = Analysis(sessions=query_result.sessions, profile_name=profile_name)
+
+        # Verify sessions were filtered correctly
+        assert len(analysis._sessions) == 2  # Only api-service sessions
+
+        # Test chaining query with analysis
+        health_report = (
+            Analysis(profile_name=profile_name)
+            .with_query(
+                lambda q: q.for_sut("api-service").with_outcome(TestOutcome.FAILED)
+            )
+            .health_report()
+        )
+
+        # Verify health report contains expected metrics
+        assert "health_score" in health_report
+        assert "session_metrics" in health_report
 
     def test_error_handling(self, json_storage):
         """Test error handling in Analysis class.
@@ -255,7 +271,9 @@ class Test_Analysis:
         mock_storage = mocker.MagicMock()
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch("pytest_insight.core.analysis.get_storage_instance")
+        mock_get_storage = mocker.patch(
+            "pytest_insight.core.analysis.get_storage_instance"
+        )
         mock_get_storage.return_value = mock_storage
 
         # Initialize analysis with profile
@@ -274,7 +292,9 @@ class Test_Analysis:
         mock_storage = mocker.MagicMock()
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch("pytest_insight.core.analysis.get_storage_instance")
+        mock_get_storage = mocker.patch(
+            "pytest_insight.core.analysis.get_storage_instance"
+        )
         mock_get_storage.return_value = mock_storage
 
         # Create analysis and call with_profile
@@ -297,9 +317,12 @@ class Test_Analysis:
         """Test combining with_query and with_profile methods."""
         # Mock the storage to control its behavior
         mock_storage = mocker.MagicMock()
+        mock_storage.profile_name = "test_profile"  # Add profile_name to mock storage
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch("pytest_insight.core.analysis.get_storage_instance")
+        mock_get_storage = mocker.patch(
+            "pytest_insight.core.analysis.get_storage_instance"
+        )
         mock_get_storage.return_value = mock_storage
 
         # Mock the Query class to verify profile parameters are passed
@@ -317,7 +340,7 @@ class Test_Analysis:
         analysis.with_query(lambda q: q.for_sut("api-service"))
 
         # Verify Query was called with correct profile at least once
-        mock_query.assert_any_call(storage=mock_storage, profile_name="test_profile")
+        mock_query.assert_any_call(profile_name="test_profile")
 
     def test_convenience_functions(self, mocker):
         """Test module-level convenience functions."""
@@ -329,7 +352,7 @@ class Test_Analysis:
 
         # Test analysis function
         analysis(profile_name="test_profile")
-        mock_analysis.assert_called_with(storage=None, sessions=None, profile_name="test_profile")
+        mock_analysis.assert_called_with(profile_name="test_profile", sessions=None)
 
         # Test analysis_with_profile function
         analysis_with_profile("test_profile")

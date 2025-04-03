@@ -12,9 +12,15 @@ import uvicorn
 def main():
     """Launch the pytest-insight web interface."""
     parser = argparse.ArgumentParser(description="Run pytest-insight API server")
-    parser.add_argument("--host", default="127.0.0.1", help="Host to bind the server to")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind the server to")
-    parser.add_argument("--reload", action="store_true", help="Enable auto-reload on code changes")
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="Host to bind the server to"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000, help="Port to bind the server to"
+    )
+    parser.add_argument(
+        "--reload", action="store_true", help="Enable auto-reload on code changes"
+    )
     parser.add_argument(
         "--db-path",
         type=str,
@@ -59,7 +65,12 @@ def main():
         print(f"Created config at {config_path}")
 
     # Updated import path to reflect the new folder structure
-    uvicorn.run("pytest_insight.rest_api.high_level_api_introspect:introspected_app", host=args.host, port=args.port, reload=args.reload)
+    uvicorn.run(
+        "pytest_insight.rest_api.high_level_api_introspect:introspected_app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+    )
 
 
 if __name__ == "__main__":

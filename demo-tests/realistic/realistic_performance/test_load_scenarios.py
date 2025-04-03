@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pytest
 
+
 # Performance metrics tracking
 @dataclass
 class PerformanceMetrics:
@@ -23,6 +24,7 @@ class PerformanceMetrics:
         """Calculate operation duration in seconds."""
         return self.end_time - self.start_time
 
+
 # Mock system under test
 class MockSystem:
     def __init__(self, base_latency=0.1, error_rate=0.05):
@@ -32,7 +34,9 @@ class MockSystem:
         self.cache_hit_ratio = 0.7  # Percentage of requests that hit cache
         self.resource_usage = 0.0  # 0.0 to 1.0, simulates CPU/memory usage
 
-    def simulate_operation(self, operation_type: str, complexity: float = 1.0) -> Tuple[bool, Optional[str]]:
+    def simulate_operation(
+        self, operation_type: str, complexity: float = 1.0
+    ) -> Tuple[bool, Optional[str]]:
         """Simulate a system operation with realistic performance characteristics."""
         # Calculate operation latency based on multiple factors
         latency = self._calculate_latency(operation_type, complexity)
@@ -56,7 +60,7 @@ class MockSystem:
             "write": 1.5,
             "compute": 2.0,
             "io": 1.8,
-            "network": 2.2
+            "network": 2.2,
         }
 
         # Get operation factor or default to 1.0
@@ -69,7 +73,7 @@ class MockSystem:
         latency *= self.load_factor
 
         # Apply resource usage factor (higher resource usage = higher latency)
-        latency *= (1.0 + self.resource_usage)
+        latency *= 1.0 + self.resource_usage
 
         # Apply cache effect (cached results are faster)
         if operation_type == "read" and random.random() < self.cache_hit_ratio:
@@ -92,7 +96,7 @@ class MockSystem:
             "write": 0.03,
             "compute": 0.05,
             "io": 0.02,
-            "network": 0.01
+            "network": 0.01,
         }
 
         # Get resource impact or default to 0.01
@@ -113,10 +117,10 @@ class MockSystem:
         current_error_rate = self.error_rate
 
         # Error rate increases with resource usage
-        current_error_rate += (self.resource_usage * 0.1)
+        current_error_rate += self.resource_usage * 0.1
 
         # Error rate increases with load factor
-        current_error_rate += ((self.load_factor - 1.0) * 0.05)
+        current_error_rate += (self.load_factor - 1.0) * 0.05
 
         # Different operations have different error probabilities
         if operation_type == "write":
@@ -131,7 +135,11 @@ class MockSystem:
                 "write": ["DuplicateKey", "ValidationError", "WriteTimeout"],
                 "compute": ["ResourceExhausted", "ComputeTimeout", "OutOfMemory"],
                 "io": ["IOError", "DiskFull", "PermissionDenied"],
-                "network": ["NetworkTimeout", "ConnectionRefused", "ServiceUnavailable"]
+                "network": [
+                    "NetworkTimeout",
+                    "ConnectionRefused",
+                    "ServiceUnavailable",
+                ],
             }
 
             # Get possible errors for this operation or use generic errors
@@ -143,13 +151,16 @@ class MockSystem:
 
         return True, None
 
+
 # Performance testing helper
 class PerformanceTester:
     def __init__(self, system: MockSystem):
         self.system = system
         self.metrics: List[PerformanceMetrics] = []
 
-    def execute_operation(self, operation_type: str, complexity: float = 1.0) -> PerformanceMetrics:
+    def execute_operation(
+        self, operation_type: str, complexity: float = 1.0
+    ) -> PerformanceMetrics:
         """Execute an operation and record metrics."""
         start_time = time.time()
         success, error = self.system.simulate_operation(operation_type, complexity)
@@ -160,13 +171,15 @@ class PerformanceTester:
             start_time=start_time,
             end_time=end_time,
             success=success,
-            error=error
+            error=error,
         )
 
         self.metrics.append(metrics)
         return metrics
 
-    def execute_concurrent_operations(self, operation_type: str, concurrency: int, complexity: float = 1.0) -> List[PerformanceMetrics]:
+    def execute_concurrent_operations(
+        self, operation_type: str, concurrency: int, complexity: float = 1.0
+    ) -> List[PerformanceMetrics]:
         """Execute operations concurrently and record metrics."""
         with ThreadPoolExecutor(max_workers=concurrency) as executor:
             futures = [
@@ -184,7 +197,9 @@ class PerformanceTester:
         # Filter metrics by operation type if specified
         filtered_metrics = self.metrics
         if operation_type:
-            filtered_metrics = [m for m in self.metrics if m.operation == operation_type]
+            filtered_metrics = [
+                m for m in self.metrics if m.operation == operation_type
+            ]
 
         if not filtered_metrics:
             return {
@@ -194,7 +209,7 @@ class PerformanceTester:
                 "max_duration": 0,
                 "avg_duration": 0,
                 "p95_duration": 0,
-                "error_counts": {}
+                "error_counts": {},
             }
 
         # Calculate statistics
@@ -214,13 +229,16 @@ class PerformanceTester:
 
         return {
             "count": len(filtered_metrics),
-            "success_rate": success_count / len(filtered_metrics) if filtered_metrics else 0,
+            "success_rate": (
+                success_count / len(filtered_metrics) if filtered_metrics else 0
+            ),
             "min_duration": min(durations) if durations else 0,
             "max_duration": max(durations) if durations else 0,
             "avg_duration": statistics.mean(durations) if durations else 0,
             "p95_duration": p95_duration,
-            "error_counts": error_counts
+            "error_counts": error_counts,
         }
+
 
 # Fixtures for performance testing
 @pytest.fixture
@@ -228,39 +246,55 @@ def mock_system():
     """Create a mock system for performance testing."""
     return MockSystem(base_latency=0.05, error_rate=0.05)
 
+
 @pytest.fixture
 def performance_tester(mock_system):
     """Create a performance tester."""
     return PerformanceTester(mock_system)
+
 
 # Basic performance tests
 def test_read_performance(performance_tester):
     """Test read operation performance."""
     # Execute a series of read operations
     for _ in range(10):
-        metrics = performance_tester.execute_operation("read", complexity=random.uniform(0.5, 1.5))
+        metrics = performance_tester.execute_operation(
+            "read", complexity=random.uniform(0.5, 1.5)
+        )
         assert metrics.duration > 0
 
     # Analyze the results
     analysis = performance_tester.analyze_metrics("read")
 
     # Verify performance meets requirements
-    assert analysis["avg_duration"] < 0.2, f"Average read time too slow: {analysis['avg_duration']:.3f}s"
-    assert analysis["success_rate"] > 0.8, f"Read success rate too low: {analysis['success_rate']:.2f}"
+    assert (
+        analysis["avg_duration"] < 0.2
+    ), f"Average read time too slow: {analysis['avg_duration']:.3f}s"
+    assert (
+        analysis["success_rate"] > 0.8
+    ), f"Read success rate too low: {analysis['success_rate']:.2f}"
+
 
 def test_write_performance(performance_tester):
     """Test write operation performance."""
     # Execute a series of write operations
     for _ in range(10):
-        metrics = performance_tester.execute_operation("write", complexity=random.uniform(0.8, 1.2))
+        metrics = performance_tester.execute_operation(
+            "write", complexity=random.uniform(0.8, 1.2)
+        )
         assert metrics.duration > 0
 
     # Analyze the results
     analysis = performance_tester.analyze_metrics("write")
 
     # Verify performance meets requirements
-    assert analysis["avg_duration"] < 0.3, f"Average write time too slow: {analysis['avg_duration']:.3f}s"
-    assert analysis["p95_duration"] < 0.5, f"95th percentile write time too slow: {analysis['p95_duration']:.3f}s"
+    assert (
+        analysis["avg_duration"] < 0.3
+    ), f"Average write time too slow: {analysis['avg_duration']:.3f}s"
+    assert (
+        analysis["p95_duration"] < 0.5
+    ), f"95th percentile write time too slow: {analysis['p95_duration']:.3f}s"
+
 
 # Load testing
 def test_concurrent_read_performance(performance_tester):
@@ -278,7 +312,10 @@ def test_concurrent_read_performance(performance_tester):
     # Verify performance under load
     # This test will occasionally fail to simulate performance degradation under load
     if analysis["avg_duration"] > 0.25 and random.random() < 0.2:
-        pytest.fail(f"Performance degraded under load: {analysis['avg_duration']:.3f}s avg response time")
+        pytest.fail(
+            f"Performance degraded under load: {analysis['avg_duration']:.3f}s avg response time"
+        )
+
 
 def test_concurrent_write_performance(performance_tester):
     """Test write performance under concurrent load."""
@@ -295,7 +332,10 @@ def test_concurrent_write_performance(performance_tester):
     # Verify performance under load
     # This test will occasionally fail to simulate contention issues
     if analysis["success_rate"] < 0.7 and random.random() < 0.3:
-        pytest.fail(f"Write contention detected: {analysis['success_rate']:.2f} success rate")
+        pytest.fail(
+            f"Write contention detected: {analysis['success_rate']:.2f} success rate"
+        )
+
 
 # Stress testing
 def test_system_under_stress(performance_tester):
@@ -325,6 +365,7 @@ def test_system_under_stress(performance_tester):
     if success_rate < 0.6 and random.random() < 0.4:
         pytest.fail(f"System unstable under stress: {success_rate:.2f} success rate")
 
+
 # Resource utilization test
 def test_resource_utilization(mock_system, performance_tester):
     """Test system resource utilization under load."""
@@ -340,6 +381,7 @@ def test_resource_utilization(mock_system, performance_tester):
     # This test will fail if resource usage is too high
     if resource_usage > 0.8 and random.random() < 0.3:
         pytest.fail(f"Resource utilization too high: {resource_usage:.2f}")
+
 
 # Recovery test
 def test_system_recovery(mock_system, performance_tester):
@@ -361,7 +403,10 @@ def test_system_recovery(mock_system, performance_tester):
     recovered_usage = mock_system.resource_usage
 
     # Verify the system recovered
-    assert recovered_usage < high_usage, "System failed to recover resources after high load"
+    assert (
+        recovered_usage < high_usage
+    ), "System failed to recover resources after high load"
+
 
 # Long-running performance test
 def test_sustained_performance(performance_tester):
@@ -383,8 +428,11 @@ def test_sustained_performance(performance_tester):
 
     # Check for performance degradation over time
     # This test will occasionally fail to simulate performance degradation
-    if (read_analysis["avg_duration"] > 0.15 or write_analysis["avg_duration"] > 0.25) and random.random() < 0.2:
+    if (
+        read_analysis["avg_duration"] > 0.15 or write_analysis["avg_duration"] > 0.25
+    ) and random.random() < 0.2:
         pytest.fail("Performance degraded over sustained usage")
+
 
 # Test with dependency chain
 @pytest.mark.dependency()
@@ -399,6 +447,7 @@ def test_baseline_performance(performance_tester):
     if random.random() < 0.05:
         pytest.fail("Baseline performance unstable")
 
+
 @pytest.mark.dependency(depends=["test_baseline_performance"])
 def test_comparative_performance(performance_tester):
     """Compare performance against baseline (depends on baseline test)."""
@@ -411,8 +460,12 @@ def test_comparative_performance(performance_tester):
     baseline = performance_tester.analyze_metrics("read")
 
     # This test will fail if performance degrades too much
-    if baseline["avg_duration"] * 1.5 < baseline["avg_duration"] and random.random() < 0.2:
+    if (
+        baseline["avg_duration"] * 1.5 < baseline["avg_duration"]
+        and random.random() < 0.2
+    ):
         pytest.fail("Performance degraded significantly from baseline")
+
 
 # Scalability test
 def test_scalability(performance_tester):
@@ -430,9 +483,19 @@ def test_scalability(performance_tester):
     # Check if response time increases linearly or worse with load
     if len(avg_durations) >= 3:
         # Calculate growth factors
-        growth_factor1 = avg_durations[1] / avg_durations[0] if avg_durations[0] > 0 else float('inf')
-        growth_factor2 = avg_durations[2] / avg_durations[1] if avg_durations[1] > 0 else float('inf')
+        growth_factor1 = (
+            avg_durations[1] / avg_durations[0]
+            if avg_durations[0] > 0
+            else float("inf")
+        )
+        growth_factor2 = (
+            avg_durations[2] / avg_durations[1]
+            if avg_durations[1] > 0
+            else float("inf")
+        )
 
         # If growth is super-linear (quadratic or worse), the test may fail
         if growth_factor2 > growth_factor1 * 1.5 and random.random() < 0.3:
-            pytest.fail(f"System does not scale linearly: {growth_factor1:.2f} vs {growth_factor2:.2f}")
+            pytest.fail(
+                f"System does not scale linearly: {growth_factor1:.2f} vs {growth_factor2:.2f}"
+            )
