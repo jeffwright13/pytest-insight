@@ -766,7 +766,7 @@ class Query:
         self._session_filters = []  # Session-level filters (SUT, time range, warnings)
         self._test_filters = []  # Test-level filters (pattern, duration, outcome)
         self._sessions = []  # Cached sessions from storage
-        self._profile_name = profile_name
+        self._profile_name = profile_name or None  # Storage profile name
 
         # Get storage instance from profile
         self.storage = get_storage_instance(profile_name=profile_name)

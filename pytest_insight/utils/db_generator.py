@@ -78,8 +78,11 @@ class PracticeDataGenerator:
         test_categories: Optional[list[str]] = None,
     ):
         self.storage_profile = storage_profile
+        # Only use target_path if no storage_profile is provided
         self.target_path = (
-            target_path or Path.home() / ".pytest_insight" / "practice.json"
+            None
+            if storage_profile
+            else (target_path or Path.home() / ".pytest_insight" / "practice.json")
         )
         self.days = days
         self.targets_per_base = targets_per_base
@@ -358,72 +361,86 @@ class PracticeDataGenerator:
             )
 
     def _save_to_file(self, all_sessions):
-        # Save to file directly (backward compatibility)
+        """Save sessions directly to a file with metadata."""
+        # Create parent directories if they don't exist
         self.target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Add metadata to the output
+        output_data = {
+            "_metadata_storage_profile": "none",
+            "_metadata_file_path": str(self.target_path),
+            "_metadata_generated_at": datetime.now().isoformat(),
+            "sessions": [session.to_dict() for session in all_sessions],
+        }
+        
+        # Write to file
         with open(self.target_path, "w") as f:
-            json.dump(
-                {"sessions": [session.to_dict() for session in all_sessions]},
-                f,
-                indent=2,
-            )
+            json.dump(output_data, f, indent=2)
 
-    def generate_practice_data(self) -> None:
+    def generate_practice_data(self):
         """Generate practice data with various test scenarios."""
         all_sessions = []
-        base_time = self.start_date or self._get_test_time()
 
-        for sut_name in self.sut_variations:
-            for day in range(self.days):
-                session_date = base_time + timedelta(days=day)
+        # Ensure the storage profile is valid if specified
+        profile_valid = False
+        if self.storage_profile:
+            profile_valid = self._ensure_valid_profile(self.storage_profile)
+            if profile_valid:
+                # Update target_path to match the profile's file path for reporting
+                storage = get_storage_instance(self.storage_profile)
+                if hasattr(storage, "file_path"):
+                    self.target_path = Path(storage.file_path)
 
-                # Create base session
+        # Generate base sessions (one per day per SUT)
+        for day in range(self.days):
+            for sut_name in self.sut_variations:
+                # Generate a timestamp for this day
+                day_time = (
+                    self.start_date or datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
+                ) + timedelta(days=day)
+
+                # Create a base session
                 base_session = self._create_session(
-                    sut_name=sut_name,
-                    session_time=session_date,
-                    is_base=True,
+                    sut_name=sut_name, session_time=day_time, is_base=True
                 )
                 all_sessions.append(base_session)
 
-                # Generate target sessions
-                num_targets = random.randint(1, self.targets_per_base)
-                for _ in range(num_targets):
-                    target_date = session_date + timedelta(
-                        hours=random.randint(1, 23),
-                        minutes=random.randint(0, 59),
+                # Generate target sessions for this base
+                for _ in range(random.randint(1, self.targets_per_base)):
+                    # Target sessions are within the same day but at different times
+                    target_time = day_time + timedelta(
+                        hours=random.randint(1, 8), minutes=random.randint(0, 59)
                     )
                     target_session = self._create_session(
-                        sut_name=sut_name,
-                        session_time=target_date,
-                        is_base=False,
+                        sut_name=sut_name, session_time=target_time
                     )
                     all_sessions.append(target_session)
 
-        # Sort sessions by start time
-        all_sessions.sort(key=lambda x: x.session_start_time)
-
-        # Save to file or storage profile
-        if self.storage_profile:
+        # Save the generated data
+        if profile_valid and self.storage_profile:
             try:
-                # Ensure the profile exists and has a valid file path
-                profile = self._ensure_valid_profile(self.storage_profile)
-
-                # Get a storage instance for this profile
-                storage = get_storage_instance(profile_name=self.storage_profile)
-
-                # Save the sessions (storage expects TestSession objects)
+                # Get storage instance for the profile
+                storage = get_storage_instance(self.storage_profile)
+                
+                # Add metadata to each session
+                for session in all_sessions:
+                    if not hasattr(session, "metadata"):
+                        session.metadata = {}
+                    session.metadata["_generated_by"] = "insight-gen"
+                    session.metadata["_storage_profile"] = self.storage_profile
+                    session.metadata["_generated_at"] = datetime.now().isoformat()
+                
+                # Save sessions to the storage
                 storage.save_sessions(all_sessions)
-
-                print(f"Data saved to storage profile: {self.storage_profile}")
-                print(f"Profile path: {profile.file_path}")
-
-                # Update target_path to match the profile's path
-                self.target_path = Path(profile.file_path)
+                print(f"Saved {len(all_sessions)} sessions to profile '{self.storage_profile}'")
+                print(f"Storage path: {self.target_path}")
+                
             except Exception as e:
-                print(f"Error saving to profile {self.storage_profile}: {e}")
-                print("Falling back to direct file save")
+                print(f"Error saving to profile '{self.storage_profile}': {e}")
+                print("Falling back to direct file save...")
                 self._save_to_file(all_sessions)
         else:
-            # Save to file directly (backward compatibility)
+            # Save directly to file
             self._save_to_file(all_sessions)
 
 
@@ -436,39 +453,39 @@ app = typer.Typer(
 
 @app.command()
 def main(
+    output: str = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output file path (default: ~/.pytest_insight/practice.json). Only used if no storage profile is specified.",
+    ),
     days: int = typer.Option(
         7,
         "--days",
         "-d",
-        help="Number of days to generate data for (min: 1, max: 90)",
+        help="Number of days to generate data for (1-365)",
         min=1,
-        max=90,
+        max=365,
     ),
     targets: int = typer.Option(
         3,
         "--targets",
         "-t",
-        help="Maximum number of target sessions per base session (min: 1, max: 10)",
+        help="Maximum number of target sessions per base (1-10)",
         min=1,
         max=10,
-    ),
-    output: str = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output path for practice database (default: ~/.pytest_insight/practice.json)",
     ),
     start_date: str = typer.Option(
         None,
         "--start-date",
         "-s",
-        help="Start date for data generation (format: YYYY-MM-DD). Default: 2023-01-01",
+        help="Start date for data generation (YYYY-MM-DD)",
     ),
     pass_rate: float = typer.Option(
         0.45,
         "--pass-rate",
         "-p",
-        help="Base pass rate for normal tests (0.1-0.9)",
+        help="Base pass rate for tests (0.1-0.9)",
         min=0.1,
         max=0.9,
     ),
@@ -508,7 +525,7 @@ def main(
     storage_profile: str = typer.Option(
         None,
         "--storage-profile",
-        help="Storage profile to use for data generation",
+        help="Storage profile to use for data generation (preferred over output path)",
     ),
 ):
     """Generate practice test data with configurable parameters.
@@ -525,6 +542,9 @@ def main(
 
         # Generate minimal data quickly
         insight-gen --days 3 --targets 2 --quiet
+        
+        # Generate data directly to a storage profile
+        insight-gen --storage-profile my_profile
 
     The generated data will maintain realistic test outcome distributions while
     respecting the configured parameters. Test categories include:
@@ -581,7 +601,10 @@ def main(
         generator.generate_practice_data()
 
         if not quiet:
-            print(f"Generated practice data for {days} days")
+            if storage_profile:
+                print(f"Generated practice data for {days} days using profile '{storage_profile}'")
+            else:
+                print(f"Generated practice data for {days} days")
             print(f"Data saved to: {generator.target_path}")
 
     except Exception as e:
