@@ -68,6 +68,7 @@ insight = "pytest_insight.plugin"
 
 [project.scripts]
 insights = "pytest_insight.utils.analyze_test_data:main"
+insights-new = "pytest_insight.utils.analyze_test_data_new:main"
 insight-gen = "pytest_insight.utils.db_generator:app"
 insight-api = "pytest_insight.utils.server_launcher:main"
 
