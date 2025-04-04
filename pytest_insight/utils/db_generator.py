@@ -224,9 +224,9 @@ class PracticeDataGenerator:
         )
 
         # Get test patterns for this module
-        test_patterns = self.test_patterns.get(module_type, [])
-        if not test_patterns:
-            test_patterns = random.choice(list(self.test_patterns.values()))
+        test_patterns = self.test_patterns.get(module_type) or random.choice(
+            list(self.test_patterns.values())
+        )
 
         # Generate test results
         test_results = []
@@ -339,7 +339,7 @@ class PracticeDataGenerator:
                         raise
 
                 # Create a new profile with the same name but a valid file path
-                profile = profile_manager.create_profile(
+                profile = profile_manager._create_profile(
                     name=profile_name, storage_type="json", file_path=default_path
                 )
 
@@ -353,7 +353,7 @@ class PracticeDataGenerator:
             # Profile doesn't exist, create it
             print(f"Creating new profile: {profile_name}")
             default_path = str(Path.home() / ".pytest_insight" / f"{profile_name}.json")
-            return profile_manager.create_profile(
+            return profile_manager._create_profile(
                 name=profile_name, storage_type="json", file_path=default_path
             )
 

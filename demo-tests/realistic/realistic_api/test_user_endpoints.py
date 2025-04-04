@@ -1,9 +1,8 @@
 # This is a realistic API testing module that simulates testing a RESTful API
-import json
 import random
 import time
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 import requests
@@ -63,9 +62,7 @@ def test_api_list_users(api_client):
     with patch.object(api_client, "get") as mock_get:
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
-            "data": [
-                {"id": f"user_{i}", "username": f"user_{i}"} for i in range(1, 11)
-            ],
+            "data": [{"id": f"user_{i}", "username": f"user_{i}"} for i in range(1, 11)],
             "page": 1,
             "per_page": 10,
             "total": 42,
@@ -102,9 +99,7 @@ def test_api_search_users(api_client):
         # Simulate a complex search that takes longer
         time.sleep(0.25)
 
-        response = api_client.get(
-            f"{API_BASE_URL}/users/search?query=active&role=admin&department=engineering"
-        )
+        response = api_client.get(f"{API_BASE_URL}/users/search?query=active&role=admin&department=engineering")
 
         assert response.status_code == 200
         assert "data" in response.json()
@@ -157,10 +152,7 @@ def test_api_batch_operations(api_client):
             time.sleep(0.18)
 
             batch_data = {
-                "operations": [
-                    {"type": "create", "data": {"username": f"batch_user_{i}"}}
-                    for i in range(10)
-                ]
+                "operations": [{"type": "create", "data": {"username": f"batch_user_{i}"}} for i in range(10)]
             }
             response = api_client.post(f"{API_BASE_URL}/batch", json=batch_data)
 
@@ -179,10 +171,7 @@ def test_api_batch_operations(api_client):
             time.sleep(0.3)
 
             batch_data = {
-                "operations": [
-                    {"type": "create", "data": {"username": f"batch_user_{i}"}}
-                    for i in range(10)
-                ]
+                "operations": [{"type": "create", "data": {"username": f"batch_user_{i}"}} for i in range(10)]
             }
             response = api_client.post(f"{API_BASE_URL}/batch", json=batch_data)
 
@@ -207,9 +196,7 @@ def test_api_update_user(api_client, mock_user_data):
 
             user_id = mock_user_data["id"]
             update_data = {"status": "inactive"}
-            response = api_client.put(
-                f"{API_BASE_URL}/users/{user_id}", json=update_data
-            )
+            response = api_client.put(f"{API_BASE_URL}/users/{user_id}", json=update_data)
 
             # This should fail with server error
             assert response.status_code != 500, "Server error occurred"
@@ -224,9 +211,7 @@ def test_api_update_user(api_client, mock_user_data):
 
             user_id = mock_user_data["id"]
             update_data = {"status": "inactive"}
-            response = api_client.put(
-                f"{API_BASE_URL}/users/{user_id}", json=update_data
-            )
+            response = api_client.put(f"{API_BASE_URL}/users/{user_id}", json=update_data)
 
             assert response.status_code == 200
             assert response.json()["status"] == "inactive"

@@ -120,7 +120,7 @@ def main():
     # Print overall information
     print("\n=== pytest-insight API Servers ===")
     if run_high_level and run_introspected:
-        print(f"Running both API servers:")
+        print("Running both API servers:")
         print(f"  High-Level API: http://{args.host}:{args.high_level_port}")
         print(f"  Introspected API: http://{args.host}:{args.introspected_port}")
     elif run_high_level:

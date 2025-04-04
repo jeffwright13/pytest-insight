@@ -1,7 +1,3 @@
-
-## Content for docs/QUERY_COMPARE_ANALYZE.md
-
-```markdown
 # Query, Compare, Analyze: The pytest-insight Workflow
 
 This document explains the core workflow of pytest-insight, built around three fundamental operations: Query, Compare, and Analyze.
@@ -39,13 +35,76 @@ An important aspect of the Query API is that both levels of filtering return com
 ### Example Workflow
 
 ```python
-from pytest_insight.core.query import Query
+from pytest_insight.core.core_api import InsightAPI, query
 
-# Create a query from all available sessions
-query = Query.from_storage()
+# Method 1: Using the InsightAPI class (recommended)
+api = InsightAPI(profile_name="my_profile")
 
 # Session-level filtering
-sessions = query.for_sut("api-service").in_last_days(7).execute()
+sessions = api.query().with_sut("api-service").in_last_days(7).execute()
 
 # Test-level filtering (still returns sessions)
-sessions = query.filter_by_test().with_pattern("test_api*").with_outcome(TestOutcome.FAILED).apply().execute()
+sessions = api.query().filter_by_test().with_pattern("test_api*").with_outcome("failed").apply().execute()
+
+# Method 2: Using the standalone query function
+# Create a query using the specified profile
+q = query(profile_name="my_profile")
+
+# Session-level filtering
+sessions = q.with_sut("api-service").in_last_days(7).execute()
+```
+
+## Compare: Understanding Differences
+
+The Compare operation helps you identify differences between test runs, making it easy to spot regressions, improvements, or changes in test behavior.
+
+```python
+from pytest_insight.core.core_api import InsightAPI
+
+# Initialize API with a specific profile
+api = InsightAPI(profile_name="my_profile")
+
+# Compare test results between two SUTs
+comparison = api.compare().between_suts("sut-v1", "sut-v2")
+
+# Get the comparison results
+results = comparison.get_results()
+
+# Access specific comparison metrics
+new_failures = results.new_failures
+fixed_tests = results.fixed_tests
+```
+
+## Analyze: Extracting Insights
+
+The Analyze operation helps you extract meaningful insights from your test data, such as identifying flaky tests, performance trends, and patterns in test failures.
+
+```python
+from pytest_insight.core.core_api import InsightAPI
+
+# Initialize API with a specific profile
+api = InsightAPI(profile_name="my_profile")
+
+# Create an analysis instance
+analysis = api.analyze()
+
+# Get flaky tests
+flaky_tests = analysis.identify_flaky_tests()
+
+# Get performance metrics
+slowest_tests = analysis.get_slowest_tests(limit=10)
+
+# Get consistently failing tests
+failing_tests = analysis.identify_consistently_failing_tests()
+```
+
+## Profile-Based Approach
+
+As of the latest version, pytest-insight uses a profile-based approach for all operations. This means:
+
+1. You specify a profile name instead of storage details
+2. All operations (Query, Compare, Analyze) use the specified profile
+3. Profiles can be managed via the storage API
+4. Environment variables can override the active profile
+
+This simplifies usage, especially in CI/CD environments where you can set the `PYTEST_INSIGHT_PROFILE` environment variable to control which profile is used.

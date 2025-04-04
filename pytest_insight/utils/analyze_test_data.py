@@ -28,6 +28,7 @@ from pytest_insight.core.core_api import InsightAPI
 from pytest_insight.core.insights import Insights
 from pytest_insight.core.models import TestSession
 from pytest_insight.core.storage import get_storage_instance
+from pytest_insight.utils.logging_setup import logger
 
 
 def analyze_test_data(
@@ -36,7 +37,7 @@ def analyze_test_data(
     days=None,
     output_format="text",
     test_pattern=None,
-    profile=None,
+    profile_name=None,
     compare_with=None,
     show_trends=False,
     show_error_details=False,
@@ -59,24 +60,24 @@ def analyze_test_data(
             sessions = []
 
             # Use profile if specified, otherwise load from file
-            if profile:
+            if profile_name:
                 if not json_mode:
-                    console.print(f"[bold]Using profile:[/bold] {profile}")
+                    console.print(f"[bold]Using profile:[/bold] {profile_name}")
                 try:
                     # Get storage instance for the specified profile
-                    storage = get_storage_instance(profile_name=profile)
+                    storage = get_storage_instance(profile_name=profile_name)
                     # Load sessions from the profile's storage
                     sessions = storage.load_sessions()
                     if not sessions:
                         if not json_mode:
                             console.print(
-                                f"[bold yellow]Warning:[/bold yellow] No sessions found in profile '{profile}'."
+                                f"[bold yellow]Warning:[/bold yellow] No sessions found in profile '{profile_name}'."
                             )
                         return
                 except Exception as e:
                     if not json_mode:
                         console.print(
-                            f"[bold red]Error loading from profile '{profile}':[/bold red] {str(e)}"
+                            f"[bold red]Error loading from profile '{profile_name}':[/bold red] {str(e)}"
                         )
                         console.print("Falling back to file-based loading...")
                     # Fall back to file loading if profile loading fails
@@ -88,7 +89,7 @@ def analyze_test_data(
                         return
 
             # Load from file if no profile or profile loading failed
-            if not profile or not sessions:
+            if not profile_name or not sessions:
                 if not data_path:
                     if not json_mode:
                         console.print(
@@ -157,7 +158,7 @@ def analyze_test_data(
                 return
 
             # Now use the InsightAPI for a consistent interface
-            api = InsightAPI(profile_name=profile)
+            api = InsightAPI(profile_name=profile_name)
 
             # Apply filters to the loaded sessions
             filtered_sessions = sessions
@@ -228,10 +229,10 @@ def analyze_test_data(
             # Basic statistics
             if not json_mode:
                 # Include the data path in the message
-                if profile:
+                if profile_name:
                     console.print(
                         Panel(
-                            f"[bold]Found {len(filtered_sessions)} test sessions in profile '{profile}'[/bold]"
+                            f"[bold]Found {len(filtered_sessions)} test sessions in profile '{profile_name}'[/bold]"
                         )
                     )
                 else:
@@ -652,16 +653,20 @@ def analyze_test_data(
                     try:
                         # Get current sessions (already filtered above)
                         current_sessions = filtered_sessions
-                        current_label = f"Profile: {profile}" if profile else "Current"
+                        current_label = (
+                            f"Profile: {profile_name}" if profile_name else "Current"
+                        )
 
                         # Create API instances for both current and comparison profiles
                         # The mock tests are looking for these exact calls
-                        print(f"DEBUG: Creating InsightAPI with profile={profile}")
+                        logger.debug(
+                            f"Creating InsightAPI with profile_name={profile_name}"
+                        )
                         current_api = InsightAPI(
-                            profile_name=profile
+                            profile_name=profile_name
                         )  # Will be None if no profile specified
-                        print(
-                            f"DEBUG: Creating InsightAPI with profile={compare_value}"
+                        logger.debug(
+                            f"Creating InsightAPI with profile_name={compare_value}"
                         )
                         compare_api = InsightAPI(profile_name=compare_value)
 
@@ -4421,7 +4426,7 @@ def main():
         days=args.days,
         output_format=args.format,
         test_pattern=args.test,
-        profile=args.profile,
+        profile_name=args.profile,
         compare_with=args.compare,
         show_trends=args.trends,
         show_error_details=args.show_errors,

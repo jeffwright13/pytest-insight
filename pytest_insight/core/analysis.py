@@ -1101,7 +1101,6 @@ class Analysis:
         test_outcomes = defaultdict(set)
 
         for session in self._sessions:
-
             # Process regular test results
             for test in session.test_results:
                 test_outcomes[test.nodeid].add(test.outcome)
@@ -1145,7 +1144,6 @@ class Analysis:
         test_durations = defaultdict(list)
 
         for session in self._sessions:
-
             # Process regular test results
             for test in session.test_results:
                 test_durations[test.nodeid].append(test.duration)
@@ -1192,7 +1190,6 @@ class Analysis:
         failure_counts = defaultdict(int)
 
         for session in self._sessions:
-
             # Process regular test results
             for test in session.test_results:
                 if test.outcome == TestOutcome.FAILED:
@@ -1424,7 +1421,6 @@ class Analysis:
                 and failure_rate >= min_failure_rate
                 and (1.0 - failure_rate) <= hysteresis_threshold
             ):
-
                 # This test is consistently failing with allowed hysteresis
                 first_timestamp = sorted_history[0][0]
                 last_timestamp = sorted_history[-1][0]

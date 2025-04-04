@@ -1,8 +1,6 @@
 # This is a realistic UI testing module that simulates testing a web application frontend
 import random
 import time
-from datetime import datetime
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -224,9 +222,7 @@ def test_interactive_chart(logged_in_browser):
     if random.random() < 0.12:
         with pytest.raises(Exception):
             # Simulate JS error when interacting with chart
-            browser.execute_script(
-                "return document.getElementById('analytics-chart').renderError()"
-            )
+            browser.execute_script("return document.getElementById('analytics-chart').renderError()")
             pytest.fail("JavaScript error in chart rendering")
 
     # Click on chart to show details

@@ -85,7 +85,7 @@ def test_get_storage_instance_json(mocker, tmp_path):
     profile_manager = ProfileManager(config_path=config_path)
 
     # Create a test profile
-    profile_manager.create_profile(
+    profile_manager._create_profile(
         "test-profile", "json", str(tmp_path / "sessions.json")
     )
 
@@ -282,7 +282,7 @@ def test_get_storage_instance_with_env_vars(mocker, tmp_path):
     # Create a test profile
     env_profile_name = "env-profile"
     custom_path = str(tmp_path / "custom_storage.json")
-    profile_manager.create_profile(env_profile_name, "json", custom_path)
+    profile_manager._create_profile(env_profile_name, "json", custom_path)
 
     # Mock get_profile_manager to return our test instance
     mocker.patch(
@@ -312,7 +312,7 @@ def test_get_storage_instance_invalid_type(mocker, tmp_path):
     profile_manager = ProfileManager(config_path=config_path)
 
     # Create a test profile with invalid storage type
-    profile_manager.create_profile(
+    profile_manager._create_profile(
         "invalid-profile", "invalid_type", str(tmp_path / "invalid.json")
     )
 
@@ -464,7 +464,7 @@ class TestProfileManager:
     def test_create_profile(self, profile_manager):
         """Test creating a new profile."""
         # Create a new profile
-        profile = profile_manager.create_profile("test", "json", "/test/path")
+        profile = profile_manager._create_profile("test", "json", "/test/path")
         assert profile.name == "test"
         assert profile.storage_type == "json"
         assert profile.file_path == "/test/path"
@@ -476,12 +476,12 @@ class TestProfileManager:
 
         # Creating a duplicate profile should raise an error
         with pytest.raises(ValueError, match="Profile 'test' already exists"):
-            profile_manager.create_profile("test", "memory")
+            profile_manager._create_profile("test", "memory")
 
     def test_get_profile(self, profile_manager):
         """Test getting a profile."""
         # Create a test profile
-        profile_manager.create_profile("test", "json", "/test/path")
+        profile_manager._create_profile("test", "json", "/test/path")
 
         # Get by name
         profile = profile_manager.get_profile("test")
@@ -499,8 +499,8 @@ class TestProfileManager:
     def test_switch_profile(self, profile_manager):
         """Test switching between profiles."""
         # Create test profiles
-        profile_manager.create_profile("test1", "json", "/test1/path")
-        profile_manager.create_profile("test2", "memory", "/test2/path")
+        profile_manager._create_profile("test1", "json", "/test1/path")
+        profile_manager._create_profile("test2", "memory", "/test2/path")
 
         # Switch to test1
         profile = profile_manager.switch_profile("test1")
@@ -521,8 +521,8 @@ class TestProfileManager:
     def test_delete_profile(self, profile_manager):
         """Test deleting a profile."""
         # Create test profiles
-        profile_manager.create_profile("test1", "json", "/test1/path")
-        profile_manager.create_profile("test2", "memory", "/test2/path")
+        profile_manager._create_profile("test1", "json", "/test1/path")
+        profile_manager._create_profile("test2", "memory", "/test2/path")
 
         # Delete test1
         profile_manager.delete_profile("test1")
@@ -546,8 +546,8 @@ class TestProfileManager:
         # Create a profile manager and add profiles
         config_path = tmp_path / "profiles.json"
         manager1 = ProfileManager(config_path=config_path)
-        manager1.create_profile("test1", "json", "/test1/path")
-        manager1.create_profile("test2", "memory", "/test2/path")
+        manager1._create_profile("test1", "json", "/test1/path")
+        manager1._create_profile("test2", "memory", "/test2/path")
         manager1.switch_profile("test1")
 
         # Create a new profile manager with the same config path
@@ -564,8 +564,8 @@ class TestProfileManager:
     def test_env_var_override(self, profile_manager, monkeypatch):
         """Test environment variable override for active profile."""
         # Create test profiles
-        profile_manager.create_profile("test1", "json", "/test1/path")
-        profile_manager.create_profile("env-profile", "memory", "/env/path")
+        profile_manager._create_profile("test1", "json", "/test1/path")
+        profile_manager._create_profile("env-profile", "memory", "/env/path")
 
         # Set environment variable
         monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "env-profile")
@@ -592,7 +592,7 @@ class TestProfileManager:
         manager = ProfileManager(config_path=config_path)
 
         # Create a profile to have something to backup
-        manager.create_profile("test-profile", "json", "/test/path")
+        manager._create_profile("test-profile", "json", "/test/path")
 
         # Create a backup
         backup_path = manager.backup_profiles()
@@ -659,8 +659,8 @@ class TestProfileManager:
         manager = ProfileManager(config_path=config_path)
 
         # Create original profiles
-        manager.create_profile("original1", "json", "/original1/path")
-        manager.create_profile("original2", "memory")
+        manager._create_profile("original1", "json", "/original1/path")
+        manager._create_profile("original2", "memory")
 
         # Create a backup
         backup_path = manager.backup_profiles()
@@ -669,7 +669,7 @@ class TestProfileManager:
         # Create new profiles (replacing the originals)
         manager.delete_profile("original1")
         manager.delete_profile("original2")
-        manager.create_profile("new_profile", "json", "/new/path")
+        manager._create_profile("new_profile", "json", "/new/path")
 
         # Verify new profile exists and old ones don't
         profiles = manager.list_profiles()
@@ -711,7 +711,7 @@ class TestProfileManager:
         manager = ProfileManager(config_path=config_path)
 
         # Create a profile to trigger _save_profiles
-        manager.create_profile("test_profile", "json", "/test/path")
+        manager._create_profile("test_profile", "json", "/test/path")
 
         # Verify a backup was created
         backup_dir = config_path.parent / "backups"
@@ -719,7 +719,7 @@ class TestProfileManager:
         assert backup_files  # Simplified sequence length comparison
 
         # Create another profile to trigger another backup
-        manager.create_profile("another_profile", "memory")
+        manager._create_profile("another_profile", "memory")
 
         # Verify another backup was created
         backup_files_after = list(backup_dir.glob("profiles_backup_*.json"))
@@ -748,10 +748,10 @@ class TestStorageWithProfiles:
         )
 
         # Create test profiles
-        profile_manager.create_profile(
+        profile_manager._create_profile(
             "json-profile", "json", str(tmp_path / "json-db.json")
         )
-        profile_manager.create_profile("memory-profile", "memory")
+        profile_manager._create_profile("memory-profile", "memory")
 
         # Get storage with json profile
         storage = get_storage_instance(profile_name="json-profile")
@@ -765,7 +765,7 @@ class TestStorageWithProfiles:
         # Get default storage when no profile specified (should use default profile)
         # First, ensure default profile exists with json storage
         if "default" not in profile_manager.list_profiles():
-            profile_manager.create_profile(
+            profile_manager._create_profile(
                 "default", "json", str(tmp_path / "default-db.json")
             )
         else:
@@ -799,7 +799,7 @@ class TestStorageWithProfiles:
         )
 
         # Create test profile
-        profile_manager.create_profile(
+        profile_manager._create_profile(
             "env-profile", "json", str(tmp_path / "env-db.json")
         )
 
@@ -812,7 +812,7 @@ class TestStorageWithProfiles:
         assert storage.file_path == tmp_path / "env-db.json"
 
         # Explicit profile should override env var
-        profile_manager.create_profile(
+        profile_manager._create_profile(
             "explicit-profile", "json", str(tmp_path / "explicit-db.json")
         )
         storage = get_storage_instance(profile_name="explicit-profile")

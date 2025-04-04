@@ -157,7 +157,7 @@ class Test_AnalyzeTestData:
                     days=mock_args.days,
                     output_format=mock_args.format,
                     test_pattern=mock_args.test,
-                    profile=mock_args.profile,
+                    profile_name=mock_args.profile,
                     compare_with=mock_args.compare,
                     show_trends=mock_args.trends,
                 )
@@ -270,7 +270,7 @@ class Test_AnalyzeTestData:
                                 days=mock_args.days,
                                 output_format=mock_args.format,
                                 test_pattern=mock_args.test,
-                                profile=mock_args.profile,
+                                profile_name=mock_args.profile,
                                 compare_with=mock_args.compare,
                                 show_trends=mock_args.trends,
                             )
@@ -354,7 +354,7 @@ class Test_AnalyzeTestData:
                     days=mock_args.days,
                     output_format=mock_args.format,
                     test_pattern=mock_args.test,
-                    profile=mock_args.profile,
+                    profile_name=mock_args.profile,
                     compare_with=mock_args.compare,
                     show_trends=mock_args.trends,
                 )
@@ -422,7 +422,7 @@ class Test_AnalyzeTestData:
             days=mock_args.days,
             output_format=mock_args.format,
             test_pattern=mock_args.test,
-            profile=mock_args.profile,
+            profile_name=mock_args.profile,
             compare_with=mock_args.compare,
             show_trends=mock_args.trends,
         )
@@ -494,7 +494,7 @@ class Test_AnalyzeTestData:
             days=mock_args.days,
             output_format=mock_args.format,
             test_pattern=mock_args.test,
-            profile=mock_args.profile,
+            profile_name=mock_args.profile,
             compare_with=mock_args.compare,
             show_trends=mock_args.trends,
         )

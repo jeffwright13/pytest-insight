@@ -73,7 +73,7 @@ def test_session_with_tags(get_test_time, monkeypatch):
 
     # Create a test profile with in-memory storage
     test_profile_name = f"test-tags-profile-{uuid.uuid4().hex[:8]}"
-    profile_manager.create_profile(test_profile_name, "memory")
+    profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
     monkeypatch.setattr(
@@ -227,7 +227,7 @@ def test_time_based_filtering(get_test_time, monkeypatch):
 
     # Create a test profile with in-memory storage
     test_profile_name = f"test-time-profile-{uuid.uuid4().hex[:8]}"
-    profile_manager.create_profile(test_profile_name, "memory")
+    profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
     monkeypatch.setattr(
@@ -363,7 +363,7 @@ def test_pattern_based_filtering(get_test_time, monkeypatch):
 
     # Create a test profile with in-memory storage
     test_profile_name = f"test-pattern-profile-{uuid.uuid4().hex[:8]}"
-    profile_manager.create_profile(test_profile_name, "memory")
+    profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
     monkeypatch.setattr(
@@ -513,7 +513,7 @@ def test_duration_based_filtering(get_test_time, monkeypatch):
 
     # Create a test profile with in-memory storage
     test_profile_name = f"test-duration-profile-{uuid.uuid4().hex[:8]}"
-    profile_manager.create_profile(test_profile_name, "memory")
+    profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
     monkeypatch.setattr(
@@ -701,7 +701,7 @@ def test_outcome_based_filtering(get_test_time, monkeypatch):
 
     # Create a test profile with in-memory storage
     test_profile_name = f"test-outcome-profile-{uuid.uuid4().hex[:8]}"
-    profile_manager.create_profile(test_profile_name, "memory")
+    profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
     monkeypatch.setattr(

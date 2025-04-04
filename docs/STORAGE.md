@@ -39,8 +39,8 @@ The default storage backend uses JSON files to store test session data. It provi
 - Automatic backup on data corruption
 
 Configuration options:
-- Custom file path via `file_path` parameter
-- Default location: `~/.pytest_insight/sessions.json`
+- Custom file path via storage profile
+- Default location: `~/.pytest_insight/{profile_name}.json`
 
 ### InMemoryStorage
 
@@ -54,14 +54,14 @@ Data is lost when the application exits or when the storage instance is destroye
 
 ## Storage Profiles
 
-Storage profiles provide a way to manage multiple storage configurations and easily switch between them.
+Storage profiles provide a way to manage multiple storage configurations and easily switch between them. **As of the latest version, profiles are now the recommended and primary way to configure storage in pytest-insight.**
 
 ### Profile Components
 
 Each profile contains:
 - **name**: Unique identifier for the profile
 - **storage_type**: The type of storage to use ("json" or "memory")
-- **file_path**: Optional custom path for file-based storage
+- **file_path**: Optional custom path for file-based storage (defaults to `~/.pytest_insight/{profile_name}.json`)
 
 ### Profile Management
 
@@ -93,9 +93,6 @@ storage = get_storage_instance()
 
 # Get storage using a specific profile
 storage = get_storage_instance(profile_name="demo")
-
-# Profile settings override direct parameters
-storage = get_storage_instance(profile_name="demo", storage_type="memory")  # Uses demo profile's storage_type
 ```
 
 ### Environment Variable Override
@@ -107,6 +104,8 @@ You can override the active profile using the `PYTEST_INSIGHT_PROFILE` environme
 export PYTEST_INSIGHT_PROFILE=demo
 ```
 
+This is particularly useful in CI/CD environments like Jenkins jobs running in Docker containers, where you can set different profiles for different jobs.
+
 ## Simple File Exchange (SFE)
 
 The Simple File Exchange functionality allows importing and exporting test session data between different storage instances or applications.
@@ -114,11 +113,14 @@ The Simple File Exchange functionality allows importing and exporting test sessi
 ### Export Operations
 
 ```python
-# Export all sessions
+# Export all sessions to a file
 storage.export_sessions("/path/to/export.json")
 
-# Export sessions from the last 7 days
-storage.export_sessions("/path/to/recent.json", days=7)
+# Export with filtering
+storage.export_sessions(
+    "/path/to/export.json",
+    filter_func=lambda session: session.sut_name == "my-service"
+)
 
 # Export in CSV format
 storage.export_sessions("/path/to/export.csv", output_format="csv")
@@ -167,20 +169,19 @@ storage.import_sessions("/tmp/export.json")
 4. **Environment Bootstrapping**: Quickly set up new environments with initial data
 5. **Backup and Restore**: Create backups of specific profiles before making changes
 6. **Collaboration**: Share specific test results with team members
+7. **CI/CD Integration**: Use different profiles for different Jenkins jobs or environments
 
 ## Configuration
 
 ### Default Settings
 
 - Default storage type: JSON
-- Default file path: `~/.pytest_insight/sessions.json`
+- Default file path: `~/.pytest_insight/{profile_name}.json`
 - Default profile: "default"
 - Profiles configuration: `~/.pytest_insight/profiles.json`
 
 ### Environment Variables
 
-- `PYTEST_INSIGHT_STORAGE_TYPE`: Override the default storage type
-- `PYTEST_INSIGHT_DB_PATH`: Override the default file path
 - `PYTEST_INSIGHT_PROFILE`: Override the active profile
 
 ## API Reference
@@ -190,16 +191,10 @@ storage.import_sessions("/tmp/export.json")
 ```python
 from pytest_insight.core.storage import get_storage_instance
 
-# Get storage with defaults
+# Get storage with defaults (uses active profile)
 storage = get_storage_instance()
 
-# Specify storage type
-storage = get_storage_instance(storage_type="json")
-
-# Specify file path
-storage = get_storage_instance(file_path="/custom/path.json")
-
-# Specify profile
+# Get storage using a specific profile
 storage = get_storage_instance(profile_name="demo")
 ```
 
@@ -247,22 +242,25 @@ active = get_active_profile()
 
 # Advanced: Direct ProfileManager usage
 manager = ProfileManager()
-manager.create_profile("custom", "json", "/path/to/file.json")
+manager._create_profile("custom", "json", "/path/to/file.json")
 manager.delete_profile("old-profile")
 ```
 
-## Integration with Query System
+## Integration with Core API
 
-The storage system integrates with the pytest-insight query system to provide a fluent interface for finding and filtering test sessions:
+The storage system integrates with the pytest-insight core API to provide a fluent interface for finding and filtering test sessions:
 
 ```python
-from pytest_insight import query
+from pytest_insight.core.core_api import InsightAPI, query
 
-# Query using the active profile's storage
-results = query.for_sut("service").in_last_days(7).execute()
+# Initialize API with a specific profile
+api = InsightAPI(profile_name="my_profile")
 
-# Query with test-level filtering
-results = query.filter_by_test().with_outcome("failed").apply().execute()
+# Query using the profile's storage
+results = api.query().with_sut("service").in_last_days(7).execute()
+
+# Standalone query function (uses active or specified profile)
+results = query(profile_name="my_profile").with_outcome("failed").execute()
 ```
 
 This integration follows the core pytest-insight API design principles of providing a fluent interface for Query, Compare, and Analyze operations, while keeping the implementation details abstracted away from the user.

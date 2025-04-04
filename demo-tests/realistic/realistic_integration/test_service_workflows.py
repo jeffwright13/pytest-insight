@@ -1,12 +1,10 @@
 # This is a realistic integration testing module that simulates testing end-to-end workflows
-import json
 import random
 import time
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import datetime
+from unittest.mock import patch
 
 import pytest
-import requests
 
 
 # Mock service classes for integration testing
@@ -335,12 +333,10 @@ def test_authentication_flow(auth_service):
 
 
 # End-to-end order workflow test
-def test_complete_order_workflow(
-    authenticated_user, inventory_service, order_service, payment_service
-):
+def test_complete_order_workflow(authenticated_user, inventory_service, order_service, payment_service):
     """Test the complete order workflow from product selection to payment."""
     # Step 1: Get user token from authentication
-    user_token = authenticated_user["token"]
+    authenticated_user["token"]
     user_id = authenticated_user["user_id"]
 
     # Step 2: Check product availability
@@ -369,9 +365,7 @@ def test_complete_order_workflow(
         assert updated_product["product"]["stock"] == initial_stock - 2
 
     # Step 5: Process payment
-    payment_result = payment_service.process_payment(
-        order_id, order_total, "credit_card"
-    )
+    payment_result = payment_service.process_payment(order_id, order_total, "credit_card")
 
     if not payment_result["success"]:
         # If payment fails, the test should fail about 15% of the time
@@ -380,7 +374,7 @@ def test_complete_order_workflow(
         else:
             pytest.skip("Payment service unavailable")
 
-    payment_id = payment_result["payment_id"]
+    payment_result["payment_id"]
 
     # Step 6: Update order status
     status_result = order_service.update_order_status(order_id, "paid")
@@ -393,9 +387,7 @@ def test_complete_order_workflow(
 
 
 # Test with service dependency failures
-def test_order_with_inventory_failure(
-    authenticated_user, inventory_service, order_service
-):
+def test_order_with_inventory_failure(authenticated_user, inventory_service, order_service):
     """Test order creation when inventory service fails."""
     user_id = authenticated_user["user_id"]
 

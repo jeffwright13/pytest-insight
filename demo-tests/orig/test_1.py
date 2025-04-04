@@ -114,9 +114,7 @@ def test_e2_xfail_by_decorator_and_has_reason(fake_data, logger):
     pytest.xfail("Marked as Xfail with decorator.")
 
 
-def test_f1_xfails_by_inline_even_though_assertTrue_happens_before_pytestDotXfail(
-    fake_data, logger
-):
+def test_f1_xfails_by_inline_even_though_assertTrue_happens_before_pytestDotXfail(fake_data, logger):
     logger.critical(fake_data)
     logger.error(fake_data)
     logger.warning(fake_data)
@@ -280,9 +278,7 @@ def test_10b_failed_capturing(fake_data, capsys, logger):
     logger.warning("FAILED this log is captured")
     with capsys.disabled(logger):
         print("FAILED stdout not captured, going directly to sys.stdout")
-        print(
-            "FAILED stderr not captured, going directly to sys.stderr", file=sys.stderr
-        )
+        print("FAILED stderr not captured, going directly to sys.stderr", file=sys.stderr)
         logger.warning("FAIL is this log captured?")
     print("FAILED this stdout is also captured")
     print("FAILED this stderr is also captured", file=sys.stderr)
@@ -300,9 +296,7 @@ def test_11_pass_capturing(fake_data, capsys, logger):
     print("PASS this stderr is captured", file=sys.stderr)
     logger.warning("PASS this log is captured")
     with capsys.disabled(log_testname, logger):
-        print(
-            "PASS stdout not captured (capsys disabled), going directly to sys.stdout"
-        )
+        print("PASS stdout not captured (capsys disabled), going directly to sys.stdout")
         print(
             "PASS stderr not captured (capsys disabled), going directly to sys.stderr",
             file=sys.stderr,
@@ -331,8 +325,7 @@ def test_12_fails_and_has_stdout(fake_data, logger):
 
 def test_13_passes_and_has_stdout(fake_data, logger):
     print(
-        "This test passes. This message is a 'print' and is consumed by Pytest via"
-        " stdout."
+        "This test passes. This message is a 'print' and is consumed by Pytest via" " stdout."
     )  # stdout is consumed by pytest
     logger.critical(fake_data)
     logger.error(fake_data)

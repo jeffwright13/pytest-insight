@@ -924,7 +924,7 @@ class TestInsights:
             total_failures = len(timestamps)
 
             # Calculate hourly distribution as percentages
-            hour_percentages = [count / total_failures for count in hour_distribution]
+            [count / total_failures for count in hour_distribution]
 
             # Check for peaks (hours with significantly more failures)
             avg_failures_per_hour = total_failures / 24
@@ -942,7 +942,7 @@ class TestInsights:
                 day_distribution[day] += 1
 
             # Calculate day distribution as percentages
-            day_percentages = [count / total_failures for count in day_distribution]
+            [count / total_failures for count in day_distribution]
 
             # Check for peak days
             avg_failures_per_day = total_failures / 7

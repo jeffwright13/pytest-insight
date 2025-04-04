@@ -15,8 +15,6 @@ For new projects, please use insights_cli.py directly.
 
 import argparse
 import json
-import sys
-from datetime import datetime, timedelta
 
 from rich.console import Console
 

@@ -160,7 +160,7 @@ class ProfileManager:
                 temp_path.unlink()  # Clean up temp file
             raise
 
-    def create_profile(
+    def _create_profile(
         self, name: str, storage_type: str = "json", file_path: Optional[str] = None
     ) -> StorageProfile:
         """Create a new storage profile.
@@ -873,7 +873,7 @@ def create_profile(
     """
     # For backward compatibility, we still accept storage_type and file_path
     # but in the future, we'll encourage users to just use profiles
-    return get_profile_manager().create_profile(name, storage_type, file_path)
+    return get_profile_manager()._create_profile(name, storage_type, file_path)
 
 
 def switch_profile(name: str) -> StorageProfile:

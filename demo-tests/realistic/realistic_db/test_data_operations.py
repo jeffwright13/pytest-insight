@@ -2,7 +2,6 @@
 import random
 import time
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -185,14 +184,10 @@ def test_successful_transaction(transaction):
     cursor = conn.cursor()
 
     # Insert a new record
-    cursor.execute(
-        "INSERT INTO users (name, email) VALUES ('Test User', 'test@example.com')"
-    )
+    cursor.execute("INSERT INTO users (name, email) VALUES ('Test User', 'test@example.com')")
 
     # Update a record
-    cursor.execute(
-        "UPDATE users SET status = 'active' WHERE email = 'test@example.com'"
-    )
+    cursor.execute("UPDATE users SET status = 'active' WHERE email = 'test@example.com'")
 
     # Commit the transaction
     conn.commit()
@@ -211,9 +206,7 @@ def test_transaction_rollback(transaction):
     cursor = conn.cursor()
 
     # Insert a new record
-    cursor.execute(
-        "INSERT INTO users (name, email) VALUES ('Rollback User', 'rollback@example.com')"
-    )
+    cursor.execute("INSERT INTO users (name, email) VALUES ('Rollback User', 'rollback@example.com')")
 
     # Simulate an error condition about 20% of the time
     if random.random() < 0.2:
@@ -288,9 +281,7 @@ def test_query_performance(db_connection):
 
         # Fail if the query was too slow (simulating a performance test failure)
         if execution_time > timeout:
-            pytest.fail(
-                f"Query took too long to execute: {execution_time:.2f}s > {timeout:.2f}s"
-            )
+            pytest.fail(f"Query took too long to execute: {execution_time:.2f}s > {timeout:.2f}s")
 
         assert len(results) > 0
     except Exception as e:
@@ -305,9 +296,7 @@ def test_data_integrity(db_connection):
 
     # Try to insert a record with invalid data
     try:
-        cursor.execute(
-            "INSERT INTO users (name, email) VALUES (NULL, 'invalid@example.com')"
-        )
+        cursor.execute("INSERT INTO users (name, email) VALUES (NULL, 'invalid@example.com')")
         db_connection.commit()
 
         # If we get here without an exception, the test should fail randomly
