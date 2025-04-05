@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
-"""
-Main entry point for pytest-insight CLI.
-This allows running the package directly with: python -m pytest_insight
-"""
+#!/usr/bin/env python
+"""CLI for pytest-insight."""
 
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -15,39 +12,26 @@ from pytest_insight.core.storage import (
     create_profile,
     get_active_profile,
     get_profile_manager,
-    get_storage_instance,
     list_profiles,
     switch_profile,
 )
 from pytest_insight.utils.db_generator import PracticeDataGenerator
-
 
 # Create the main app
 app = typer.Typer(
     name="insight",
     help="pytest-insight: Test analytics and insights for pytest",
     add_completion=False,
-    context_settings={"help_option_names": ["--help", "-h"]}
+    context_settings={"help_option_names": ["--help", "-h"]},
 )
 
 # Create subcommand groups
-profile_app = typer.Typer(
-    help="Manage storage profiles",
-    context_settings={"help_option_names": ["--help", "-h"]}
-)
-generate_app = typer.Typer(
-    help="Generate practice test data",
-    context_settings={"help_option_names": ["--help", "-h"]}
-)
-analyze_app = typer.Typer(
-    help="Analyze test results",
-    context_settings={"help_option_names": ["--help", "-h"]}
-)
+profile_app = typer.Typer(help="Manage storage profiles", context_settings={"help_option_names": ["--help", "-h"]})
+generate_app = typer.Typer(help="Generate practice test data", context_settings={"help_option_names": ["--help", "-h"]})
 
 # Add subcommands to main app
 app.add_typer(profile_app, name="profile")
 app.add_typer(generate_app, name="generate")
-app.add_typer(analyze_app, name="analyze")
 
 
 # Profile management commands
@@ -56,7 +40,7 @@ def list_all_profiles():
     """List all available storage profiles."""
     profiles = list_profiles()
     active = get_active_profile().name
-    
+
     typer.echo("Available storage profiles:")
     for name, profile in profiles.items():
         active_marker = "* " if name == active else "  "
@@ -66,21 +50,15 @@ def list_all_profiles():
 @profile_app.command("create")
 def create_new_profile(
     name: str = typer.Argument(..., help="Name for the new profile"),
-    storage_type: str = typer.Option(
-        "json", "--type", "-t", help="Storage type (json, memory)"
-    ),
-    file_path: Optional[str] = typer.Option(
-        None, "--path", "-p", help="Custom file path for storage"
-    ),
-    activate: bool = typer.Option(
-        False, "--activate", "-a", help="Set as active profile after creation"
-    ),
+    storage_type: str = typer.Option("json", "--type", "-t", help="Storage type (json, memory)"),
+    file_path: Optional[str] = typer.Option(None, "--path", "-p", help="Custom file path for storage"),
+    activate: bool = typer.Option(False, "--activate", "-a", help="Set as active profile after creation"),
 ):
     """Create a new storage profile."""
     try:
         profile = create_profile(name, storage_type, file_path)
         typer.echo(f"Created profile '{name}' ({profile.storage_type}): {profile.file_path}")
-        
+
         if activate:
             switch_profile(name)
             typer.echo(f"Activated profile '{name}'")
@@ -90,9 +68,7 @@ def create_new_profile(
 
 
 @profile_app.command("switch")
-def switch_to_profile(
-    name: str = typer.Argument(..., help="Name of the profile to switch to")
-):
+def switch_to_profile(name: str = typer.Argument(..., help="Name of the profile to switch to")):
     """Switch to a different storage profile."""
     try:
         profile = switch_profile(name)
@@ -113,9 +89,7 @@ def show_active_profile():
 @profile_app.command("delete")
 def delete_existing_profile(
     name: str = typer.Argument(..., help="Name of the profile to delete"),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="Force deletion without confirmation"
-    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Force deletion without confirmation"),
 ):
     """Delete a storage profile."""
     if not force:
@@ -123,7 +97,7 @@ def delete_existing_profile(
         if not confirm:
             typer.echo("Operation cancelled.")
             return
-    
+
     try:
         get_profile_manager().delete_profile(name)
         typer.echo(f"Deleted profile '{name}'")
@@ -207,9 +181,7 @@ def generate_practice_data(
                 # Use datetime(2023, 1, 1) as base like conftest.py
                 base = datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
                 parsed_date = datetime.strptime(start_date, "%Y-%m-%d")
-                parsed_start_date = base + timedelta(
-                    days=(parsed_date - datetime(2023, 1, 1)).days
-                )
+                parsed_start_date = base + timedelta(days=(parsed_date - datetime(2023, 1, 1)).days)
             except ValueError as e:
                 if "format" in str(e):
                     raise typer.BadParameter("Start date must be in YYYY-MM-DD format")
@@ -256,44 +228,156 @@ def generate_practice_data(
         raise typer.Exit(code=1)
 
 
-# Analyze commands
-@analyze_app.command("insights")
-def analyze_insights(
-    profile: Optional[str] = typer.Option(
-        None, "--profile", "-p", help="Storage profile to analyze"
-    ),
-    output: Optional[str] = typer.Option(
-        None, "--output", "-o", help="Output file for analysis results"
-    ),
+# Make analyze a direct command on the main app
+@app.command(
+    help="Analyze test sessions",
+    context_settings={"help_option_names": ["--help", "-h"]},
+)
+def analyze(
+    profile: str = typer.Option("default", "--profile", "-p", help="Storage profile to use"),
+    days: Optional[int] = typer.Option(None, "--days", "-d", help="Number of days to analyze"),
+    output: str = typer.Option("text", "--output", "-o", help="Output format (text, json)"),
+    chunk_size: int = typer.Option(1000, "--chunk-size", "-c", help="Chunk size for processing large datasets"),
+    no_progress: bool = typer.Option(False, "--no-progress", help="Disable progress bars"),
 ):
-    """Analyze test results and generate insights."""
-    typer.echo("Analyzing test results...")
-    
-    # This is a placeholder for the actual implementation
-    # In the future, this would use the Query/Analysis/Insights classes
-    
-    if profile:
+    """Analyze test sessions."""
+    try:
+        # Import analysis components here to avoid circular imports
+        from pytest_insight.core.analysis import Analysis
+        from pytest_insight.core.storage import load_sessions
+
+        # Display profile information
         typer.echo(f"Using profile: {profile}")
-        # Get the storage instance for the profile
-        try:
-            storage = get_storage_instance(profile)
-            sessions = storage.load_sessions()
-            typer.echo(f"Loaded {len(sessions)} test sessions")
-            
-            # Basic analysis
-            typer.echo("\nBasic Statistics:")
-            typer.echo(f"Total sessions: {len(sessions)}")
-            
-            # More detailed analysis would go here
-            
-        except Exception as e:
-            typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(code=1)
-    else:
-        typer.echo("No profile specified. Using active profile.")
-        profile = get_active_profile()
-        typer.echo(f"Active profile: {profile.name}")
-        # Similar analysis would go here
+
+        # Load sessions from storage
+        sessions = load_sessions(profile_name=profile, show_progress=not no_progress)
+
+        if not sessions:
+            typer.echo("[bold red]No sessions found in storage.[/bold red]")
+            return
+
+        # Create analysis instance with progress configuration
+        analysis = Analysis(profile_name=profile, sessions=sessions, show_progress=not no_progress)
+
+        # Load sessions with pagination if needed
+        if days:
+            typer.echo(f"Limiting analysis to {days} days")
+
+        # Show progress for large datasets
+        typer.echo("Loading and processing test sessions...")
+
+        # Get session metrics with optimized processing
+        session_metrics = analysis.sessions.test_metrics(days, chunk_size=chunk_size)
+
+        # Get failure rate (this is a lightweight calculation)
+        failure_rate = analysis.sessions.failure_rate(days)
+
+        # Print summary statistics
+        typer.echo("\n=== Test Session Summary ===")
+        typer.echo(f"Total sessions: {len(analysis._sessions) if analysis._sessions else 'Unknown'}")
+        typer.echo(f"Total tests: {session_metrics.get('total_tests', 0)}")
+        typer.echo(f"Unique tests: {session_metrics.get('unique_tests', 0)}")
+        typer.echo(f"Average duration: {session_metrics.get('avg_duration', 0):.2f} seconds")
+
+        typer.echo("\n=== Test Health ===")
+        typer.echo(f"Session failure rate: {failure_rate:.1%}")
+
+        # Skip detailed analysis if summary_only is True
+        # if not summary_only:
+        # Get trends with progress indicator
+        typer.echo("\nCalculating trends...")
+        trends = analysis.sessions.detect_trends(days)
+
+        # Get test stability metrics with progress indicator
+        typer.echo("Analyzing test stability...")
+        stability = analysis.tests.stability(chunk_size=chunk_size)
+
+        typer.echo(f"Flaky tests: {len(stability.get('flaky_tests', []))}")
+
+        # Print trend information
+        typer.echo("\n=== Trends ===")
+        duration_trend = trends.get("duration", {})
+        typer.echo(f"Duration trend: {duration_trend.get('direction', 'stable')}")
+        if duration_trend.get("significant", False):
+            typer.echo(f"  * Significant change detected: {duration_trend.get('change_percent', 0):.1f}%")
+
+        failure_trend = trends.get("failures", {})
+        typer.echo(f"Failure trend: {failure_trend.get('direction', 'stable')}")
+        if failure_trend.get("significant", False):
+            typer.echo(f"  * Significant change detected: {failure_trend.get('change_percent', 0):.1f}%")
+
+        warning_trend = trends.get("warnings", {})
+        if warning_trend:
+            typer.echo(f"Warning trend: {warning_trend.get('direction', 'stable')}")
+            if warning_trend.get("significant", False):
+                typer.echo(f"  * Significant change detected: {warning_trend.get('change_percent', 0):.1f}%")
+
+        # Print top flaky tests if available
+        flaky_tests = stability.get("flaky_tests", [])
+        if flaky_tests:
+            typer.echo("\n=== Top Flaky Tests ===")
+            # Show top 10 instead of just 5
+            max_flaky_to_show = min(10, len(flaky_tests))
+            for i, test in enumerate(flaky_tests[:max_flaky_to_show], 1):
+                typer.echo(f"{i}. {test.get('nodeid', 'Unknown')}")
+                typer.echo(f"   Flakiness rate: {test.get('flakiness_rate', 0):.1%}")
+
+                # Show outcome distribution for each flaky test
+                outcomes = test.get("outcomes", [])
+                if outcomes and len(outcomes) > 0:
+                    outcome_str = ", ".join(
+                        [f"{o.get('outcome', '').split('.')[-1]}: {o.get('count', 0)}" for o in outcomes[:3]]
+                    )
+                    typer.echo(f"   Outcomes: {outcome_str}...")
+
+        # Print test execution metrics
+        if "test_execution_metrics" in session_metrics:
+            metrics = session_metrics["test_execution_metrics"]
+            typer.echo("\n=== Test Execution Metrics ===")
+            typer.echo(f"Slowest tests average duration: {metrics.get('slowest_avg_duration', 0):.2f}s")
+            typer.echo(f"Fastest tests average duration: {metrics.get('fastest_avg_duration', 0):.2f}s")
+
+            # Show top 5 slowest tests
+            slow_tests = metrics.get("slowest_tests", [])
+            if slow_tests:
+                typer.echo("\nTop 5 Slowest Tests:")
+                for i, test in enumerate(slow_tests[:5], 1):
+                    typer.echo(f"{i}. {test.get('nodeid', 'Unknown')}: {test.get('avg_duration', 0):.2f}s")
+
+        # Save to output file if specified
+        if output:
+            import json
+
+            # Prepare data for serialization
+            result = {
+                "session_metrics": session_metrics,
+                "failure_rate": failure_rate,
+            }
+
+            # Add detailed analysis if available
+            result.update({"trends": trends, "stability": stability})
+
+            # Convert any non-serializable objects
+            def serialize_datetime(obj):
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+                raise TypeError(f"Type {type(obj)} not serializable")
+
+            typer.echo(f"\nSaving results to {output}...")
+            with open(output, "w") as f:
+                json.dump(result, f, default=serialize_datetime, indent=2)
+
+            typer.echo(f"Detailed results saved to: {output}")
+
+    except ImportError as e:
+        typer.echo(f"Error importing analysis components: {e}", err=True)
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.echo(f"Error during analysis: {e}", err=True)
+        import traceback
+
+        typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
 
 
 # Main entry point

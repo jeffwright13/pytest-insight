@@ -14,9 +14,7 @@ from pytest_insight.utils.constants import DEFAULT_STORAGE_PATH
 class StorageProfile:
     """Represents a storage configuration profile, which is a named storage configuration used to differentiate between different storage backends, different file paths, different SUTs/setups/environments, etc."""
 
-    def __init__(
-        self, name: str, storage_type: str = "json", file_path: Optional[str] = None
-    ):
+    def __init__(self, name: str, storage_type: str = "json", file_path: Optional[str] = None):
         """Initialize a storage profile.
 
         Args:
@@ -62,9 +60,7 @@ class ProfileManager:
         Args:
             config_path: Optional custom path for profile configuration
         """
-        self.config_path = (
-            config_path or Path.home() / ".pytest_insight" / "profiles.json"
-        )
+        self.config_path = config_path or Path.home() / ".pytest_insight" / "profiles.json"
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         self.profiles = {}
         self.active_profile_name = None
@@ -83,8 +79,7 @@ class ProfileManager:
         try:
             data = json.loads(self.config_path.read_text())
             self.profiles = {
-                name: StorageProfile.from_dict(profile_data)
-                for name, profile_data in data.get("profiles", {}).items()
+                name: StorageProfile.from_dict(profile_data) for name, profile_data in data.get("profiles", {}).items()
             }
             self.active_profile_name = data.get("active_profile", "default")
 
@@ -102,31 +97,6 @@ class ProfileManager:
             self.active_profile_name = "default"
             self._save_profiles()
 
-    # def _save_profiles(self) -> None:
-    #     """Save profiles to configuration file."""
-    #     data = {
-    #         "profiles": {name: profile.to_dict() for name, profile in self.profiles.items()},
-    #         "active_profile": self.active_profile_name,
-    #     }
-
-    #     # Create a temporary file in the same directory
-    #     temp_dir = self.config_path.parent
-    #     temp_dir.mkdir(parents=True, exist_ok=True)
-
-    #     with tempfile.NamedTemporaryFile(mode="w", dir=temp_dir, delete=False) as temp_file:
-    #         # Write data to the temporary file
-    #         json.dump(data, temp_file, indent=2)
-    #         temp_path = Path(temp_file.name)
-
-    #     try:
-    #         # Rename is atomic on POSIX systems
-    #         temp_path.replace(self.config_path)
-    #     except Exception as e:
-    #         print(f"Warning: Failed to save profiles to {self.config_path}: {e}")
-    #         if temp_path.exists():
-    #             temp_path.unlink()  # Clean up temp file
-    #         raise
-
     def _save_profiles(self) -> None:
         """Save profiles to configuration file."""
         # Create a backup before saving
@@ -134,9 +104,7 @@ class ProfileManager:
             self.backup_profiles()
 
         data = {
-            "profiles": {
-                name: profile.to_dict() for name, profile in self.profiles.items()
-            },
+            "profiles": {name: profile.to_dict() for name, profile in self.profiles.items()},
             "active_profile": self.active_profile_name,
         }
 
@@ -144,9 +112,7 @@ class ProfileManager:
         temp_dir = self.config_path.parent
         temp_dir.mkdir(parents=True, exist_ok=True)
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", dir=temp_dir, delete=False
-        ) as temp_file:
+        with tempfile.NamedTemporaryFile(mode="w", dir=temp_dir, delete=False) as temp_file:
             # Write data to the temporary file
             json.dump(data, temp_file, indent=2)
             temp_path = Path(temp_file.name)
@@ -160,9 +126,7 @@ class ProfileManager:
                 temp_path.unlink()  # Clean up temp file
             raise
 
-    def _create_profile(
-        self, name: str, storage_type: str = "json", file_path: Optional[str] = None
-    ) -> StorageProfile:
+    def _create_profile(self, name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
         """Create a new storage profile.
 
         Args:
@@ -333,9 +297,7 @@ class ProfileManager:
                 # and new format (profiles_backup_YYYYMMDD_HHMMSS_uniqueid.json)
                 filename = backup_file.name
                 # Extract the timestamp part (after profiles_backup_ and before .json or _uniqueid)
-                timestamp_str = filename.replace("profiles_backup_", "").replace(
-                    ".json", ""
-                )
+                timestamp_str = filename.replace("profiles_backup_", "").replace(".json", "")
 
                 # If there's an underscore after the timestamp, it's the new format with a unique ID
                 if "_" in timestamp_str:
@@ -408,9 +370,7 @@ class BaseStorage:
         """Retrieve past test sessions."""
         raise NotImplementedError
 
-    def clear_sessions(
-        self, sessions_to_clear: Optional[List[TestSession]] = None
-    ) -> int:
+    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
         """Remove stored sessions.
 
         Args:
@@ -444,9 +404,7 @@ class InMemoryStorage(BaseStorage):
         """Save a test session."""
         self._sessions.append(session)
 
-    def clear_sessions(
-        self, sessions_to_clear: Optional[List[TestSession]] = None
-    ) -> int:
+    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
         """Clear all sessions or specific sessions from storage.
 
         Args:
@@ -466,24 +424,22 @@ class InMemoryStorage(BaseStorage):
         else:
             # Clear specific sessions
             session_ids_to_clear = {session.session_id for session in sessions_to_clear}
-            self._sessions = [
-                session
-                for session in self._sessions
-                if session.session_id not in session_ids_to_clear
-            ]
+            self._sessions = [session for session in self._sessions if session.session_id not in session_ids_to_clear]
             return initial_count - len(self._sessions)
 
 
 class JSONStorage(BaseStorage):
     """Storage for test sessions using JSON files."""
 
-    def __init__(self, file_path: Optional[Path] = None):
+    def __init__(self, file_path: Optional[Path] = None, profile_name: Optional[str] = None):
         """Initialize storage with optional custom file path.
 
         Args:
             file_path: Optional custom path for session storage.
                       If not provided, uses ~/.pytest_insight/sessions.json
+            profile_name: Optional profile name for this storage instance.
         """
+        super().__init__()
         self.file_path = Path(file_path) if file_path else DEFAULT_STORAGE_PATH
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -491,22 +447,240 @@ class JSONStorage(BaseStorage):
         if not self.file_path.exists():
             self._write_json_safely([])
 
-    def load_sessions(self) -> List[TestSession]:
-        """Load all test sessions from storage."""
+    def load_sessions_with_progress(self, show_progress: bool = True) -> List[TestSession]:
+        """Load sessions with progress reporting.
+
+        Args:
+            show_progress: Whether to show progress bars during loading
+
+        Returns:
+            List of TestSession objects
+        """
+        if not os.path.exists(self.file_path):
+            return []
+
+        try:
+            with open(self.file_path, "r") as f:
+                data = json.load(f)
+        except json.JSONDecodeError:
+            print(f"Failed to decode JSON from {self.file_path}")
+            return []
+
+        if not data:
+            return []
+
+        sessions_data = data.get("sessions", [])
+
+        if show_progress:
+            from rich.progress import (
+                BarColumn,
+                Progress,
+                SpinnerColumn,
+                TextColumn,
+                TimeElapsedColumn,
+            )
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(),
+                TextColumn("[bold green]{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+            ) as progress:
+                task = progress.add_task("[cyan]Loading sessions...", total=len(sessions_data))
+
+                sessions = []
+                for session_data in sessions_data:
+                    try:
+                        session = TestSession.from_dict(session_data)
+                        sessions.append(session)
+                    except Exception as e:
+                        print(f"Failed to load session: {e}")
+
+                    progress.update(task, advance=1)
+
+                return sessions
+        else:
+            # Load without progress reporting
+            sessions = []
+            for session_data in sessions_data:
+                try:
+                    session = TestSession.from_dict(session_data)
+                    sessions.append(session)
+                except Exception as e:
+                    print(f"Failed to load session: {e}")
+
+            return sessions
+
+    def load_sessions(self, chunk_size: int = 1000, show_progress: bool = True) -> List[TestSession]:
+        """Load all test sessions from storage.
+
+        Args:
+            chunk_size: Number of sessions to load at once (for large files)
+            show_progress: Whether to show progress bars during loading
+
+        Returns:
+            List of TestSession objects
+        """
         if not self.file_path.exists():
             return []
+
+        file_size = os.path.getsize(self.file_path) if os.path.exists(self.file_path) else 0
+
+        # For small files (< 10MB), use standard loading
+        if file_size < 10 * 1024 * 1024:  # 10MB
+            try:
+                with open(self.file_path, "r") as f:
+                    data = json.load(f)
+
+                # Handle both formats: array of sessions or object with sessions key
+                if isinstance(data, list):
+                    return [TestSession.from_dict(session_dict) for session_dict in data]
+                elif isinstance(data, dict) and "sessions" in data:
+                    return [TestSession.from_dict(session_dict) for session_dict in data.get("sessions", [])]
+                else:
+                    return []
+            except json.JSONDecodeError:
+                return []
+
+        # For large files, use streaming parser
+        return self._load_sessions_streaming(chunk_size, show_progress)
+
+    def _load_sessions_streaming(self, chunk_size: int = 1000, show_progress: bool = True) -> List[TestSession]:
+        """Load sessions using a streaming JSON parser for large files.
+
+        Args:
+            chunk_size: Number of sessions to process at once
+            show_progress: Whether to show progress bars during loading
+
+        Returns:
+            List of TestSession objects
+        """
+        # Import ijson here to avoid making it a hard dependency
+        import ijson
+
+        # Only import rich components if progress bars are enabled
+        if show_progress:
+            from rich.progress import (
+                BarColumn,
+                Progress,
+                SpinnerColumn,
+                TextColumn,
+                TimeElapsedColumn,
+            )
+
+        sessions = []
         try:
-            data = self._read_json_safely()
-            sessions = []
-            for idx, session_data in enumerate(data):
-                try:
-                    sessions.append(TestSession.from_dict(session_data))
-                except Exception as e:
-                    print(f"Warning: Failed to deserialize session at index {idx}: {e}")
+            with open(self.file_path, "rb") as f:
+                # First try to detect the format by reading a small part
+                f.seek(0)
+                start_bytes = f.read(100)  # Read first 100 bytes to check format
+                f.seek(0)  # Reset file position
+
+                # Check if the file starts with an array or an object
+                is_array = start_bytes.strip().startswith(b"[")
+
+                if is_array:
+                    # Parse directly from the root array
+                    sessions_array = ijson.items(f, "item")
+                else:
+                    # Parse from the sessions array within the object
+                    sessions_array = ijson.items(f, "sessions.item")
+
+                # First pass to count total items (optional but gives better progress feedback)
+                # Get file size as a proxy for progress
+                file_size = os.path.getsize(self.file_path)
+
+                # Process sessions in chunks with progress bar if enabled
+                if show_progress:
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[bold blue]Loading sessions..."),
+                        BarColumn(),
+                        TextColumn("[bold green]{task.completed}/{task.total}"),
+                        TimeElapsedColumn(),
+                    ) as progress:
+                        # Create a task with the file size as total
+                        task = progress.add_task("[cyan]Processing...", total=file_size)
+
+                        chunk = []
+                        last_pos = 0
+                        for session_dict in sessions_array:
+                            try:
+                                # Convert any decimal values to floats
+                                self._convert_decimal_to_float(session_dict)
+                                session = TestSession.from_dict(session_dict)
+                                chunk.append(session)
+
+                                # Process chunk when it reaches the desired size
+                                if len(chunk) >= chunk_size:
+                                    sessions.extend(chunk)
+                                    chunk = []
+
+                                # Update progress based on file position
+                                current_pos = f.tell()
+                                if current_pos > last_pos:
+                                    progress.update(task, completed=current_pos)
+                                    last_pos = current_pos
+
+                            except Exception as e:
+                                print(f"Error parsing session: {e}")
+                                continue
+
+                        # Add any remaining sessions
+                        if chunk:
+                            sessions.extend(chunk)
+
+                        # Ensure progress bar completes
+                        progress.update(task, completed=file_size)
+                else:
+                    # Process without progress bar
+                    chunk = []
+                    for session_dict in sessions_array:
+                        try:
+                            # Convert any decimal values to floats
+                            self._convert_decimal_to_float(session_dict)
+                            session = TestSession.from_dict(session_dict)
+                            chunk.append(session)
+
+                            # Process chunk when it reaches the desired size
+                            if len(chunk) >= chunk_size:
+                                sessions.extend(chunk)
+                                chunk = []
+                        except Exception as e:
+                            print(f"Error parsing session: {e}")
+                            continue
+
+                    # Add any remaining sessions
+                    if chunk:
+                        sessions.extend(chunk)
+
             return sessions
         except Exception as e:
-            print(f"Warning: Failed to load sessions from {self.file_path}: {e}")
+            print(f"Error loading sessions streaming: {e}")
+            # Fall back to empty list on error
             return []
+
+    def _convert_decimal_to_float(self, obj):
+        """Recursively convert decimal values to floats in a dictionary or list.
+
+        Args:
+            obj: The object to convert (dict, list, or scalar value)
+        """
+        import decimal
+
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if isinstance(value, decimal.Decimal):
+                    obj[key] = float(value)
+                elif isinstance(value, (dict, list)):
+                    self._convert_decimal_to_float(value)
+        elif isinstance(obj, list):
+            for i, value in enumerate(obj):
+                if isinstance(value, decimal.Decimal):
+                    obj[i] = float(value)
+                elif isinstance(value, (dict, list)):
+                    self._convert_decimal_to_float(value)
 
     def save_session(self, session: TestSession) -> None:
         """Save a single test session to storage.
@@ -539,9 +713,7 @@ class JSONStorage(BaseStorage):
         except Exception as e:
             print(f"Warning: Failed to save sessions to {self.file_path}: {e}")
 
-    def clear_sessions(
-        self, sessions_to_clear: Optional[List[TestSession]] = None
-    ) -> int:
+    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
         """Remove stored sessions.
 
         Args:
@@ -567,9 +739,7 @@ class JSONStorage(BaseStorage):
 
             # Keep only sessions not in the clear list
             remaining_sessions = [
-                session
-                for session in current_sessions
-                if session.session_id not in session_ids_to_clear
+                session for session in current_sessions if session.session_id not in session_ids_to_clear
             ]
 
             # Save the filtered sessions
@@ -610,9 +780,7 @@ class JSONStorage(BaseStorage):
                 return session
         return None
 
-    def export_sessions(
-        self, export_path: str, days: Optional[int] = None, output_format: str = "json"
-    ):
+    def export_sessions(self, export_path: str, days: Optional[int] = None, output_format: str = "json"):
         """Export test sessions to a file.
 
         Args:
@@ -645,9 +813,7 @@ class JSONStorage(BaseStorage):
         else:
             raise ValueError(f"Unsupported output format: {output_format}")
 
-    def import_sessions(
-        self, import_path: str, merge_strategy: str = "skip_existing"
-    ) -> Dict[str, int]:
+    def import_sessions(self, import_path: str, merge_strategy: str = "skip_existing") -> Dict[str, int]:
         """Import sessions from a file exported by another instance.
 
         Args:
@@ -727,9 +893,7 @@ class JSONStorage(BaseStorage):
         if merge_strategy == "replace_existing":
             # Remove existing sessions that will be replaced
             imported_ids = {session.session_id for session in imported_sessions}
-            existing_sessions = [
-                s for s in existing_sessions if s.session_id not in imported_ids
-            ]
+            existing_sessions = [s for s in existing_sessions if s.session_id not in imported_ids]
 
         # Combine existing and imported sessions
         all_sessions = existing_sessions + imported_sessions
@@ -739,45 +903,28 @@ class JSONStorage(BaseStorage):
 
         return stats
 
-    def _write_json_safely(self, data):
-        """Write JSON data to file using atomic operations."""
-        # Create a temporary file in the same directory
-        temp_dir = self.file_path.parent
-        temp_dir.mkdir(parents=True, exist_ok=True)
+    def _write_json_safely(self, sessions_data: List[Dict]) -> None:
+        """Write JSON data safely to avoid corruption.
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", dir=temp_dir, delete=False
-        ) as temp_file:
-            # Write data to the temporary file
-            json.dump(data, temp_file, indent=2)
-            temp_path = Path(temp_file.name)
-
+        Args:
+            sessions_data: List of session data dictionaries
+        """
+        # Create a temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json")
         try:
-            # Rename is atomic on POSIX systems
-            temp_path.replace(self.file_path)
+            # Write data to temp file
+            json.dump({"sessions": sessions_data}, temp_file, indent=2)
+            temp_file.close()
+
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+
+            # Move temp file to target location
+            shutil.move(temp_file.name, self.file_path)
         except Exception as e:
-            print(f"Warning: Failed to save data to {self.file_path}: {e}")
-            if temp_path.exists():
-                temp_path.unlink()  # Clean up temp file
-            raise
-
-    def _read_json_safely(self):
-        """Read JSON data from file with error handling."""
-        try:
-            data = json.loads(self.file_path.read_text())
-            if not isinstance(data, list):
-                print(
-                    f"Warning: Invalid data format in {self.file_path}, expected list"
-                )
-                return []
-            return data
-        except json.JSONDecodeError as e:
-            print(f"Warning: JSON decode error in {self.file_path}: {e}")
-            # Try to recover by creating a backup of the corrupted file
-            backup_path = self.file_path.with_suffix(".bak")
-            print(f"Creating backup of corrupted file at {backup_path}")
-            self.file_path.rename(backup_path)
-            return []
+            # Clean up temp file on error
+            os.unlink(temp_file.name)
+            raise e
 
 
 def get_storage_instance(
@@ -806,9 +953,7 @@ def get_storage_instance(
             elif profile.storage_type.lower() == "memory":
                 return InMemoryStorage()
             else:
-                raise ValueError(
-                    f"Unsupported storage type in profile '{profile_name}': {profile.storage_type}"
-                )
+                raise ValueError(f"Unsupported storage type in profile '{profile_name}': {profile.storage_type}")
         except ValueError as e:
             print(f"Warning: Profile '{profile_name}' not found: {e}")
             print("Falling back to environment or active profile")
@@ -837,9 +982,7 @@ def get_storage_instance(
     elif profile.storage_type.lower() == "memory":
         return InMemoryStorage()
     else:
-        raise ValueError(
-            f"Unsupported storage type in active profile '{profile.name}': {profile.storage_type}"
-        )
+        raise ValueError(f"Unsupported storage type in active profile '{profile.name}': {profile.storage_type}")
 
 
 # Global profile manager instance
@@ -858,9 +1001,7 @@ def get_profile_manager() -> ProfileManager:
     return _profile_manager
 
 
-def create_profile(
-    name: str, storage_type: str = "json", file_path: Optional[str] = None
-) -> StorageProfile:
+def create_profile(name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
     """Create a new storage profile.
 
     Args:
@@ -904,3 +1045,32 @@ def get_active_profile() -> StorageProfile:
         The active profile
     """
     return get_profile_manager().get_active_profile()
+
+
+# Main entry point for loading sessions
+def load_sessions(
+    profile_name: Optional[str] = None, chunk_size: int = 1000, show_progress: bool = True
+) -> List[TestSession]:
+    """Load sessions from the specified storage profile.
+
+    Args:
+        profile_name: Storage profile name to use
+        chunk_size: Number of sessions to load at once (for large files)
+        show_progress: Whether to show progress bars during loading
+
+    Returns:
+        List of TestSession objects
+    """
+    storage_instance = get_storage_instance(profile_name=profile_name)
+
+    # Handle different storage types
+    if isinstance(storage_instance, JSONStorage):
+        # JSONStorage supports show_progress and chunk_size
+        return storage_instance.load_sessions(chunk_size=chunk_size, show_progress=show_progress)
+    return storage_instance.load_sessions()
+
+
+# Main entry point
+if __name__ == "__main__":
+    # Example usage
+    pass

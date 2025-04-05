@@ -63,6 +63,7 @@ class SessionAnalysis:
         storage: Optional[BaseStorage] = None,
         sessions: Optional[List[TestSession]] = None,
         profile_name: Optional[str] = None,
+        show_progress: bool = True,
     ):
         """Initialize with storage and optional session list.
 
@@ -72,8 +73,10 @@ class SessionAnalysis:
                      will analyze all sessions from storage.
             profile_name: Optional profile name to use for storage configuration.
                          Takes precedence over storage parameter if both are provided.
+            show_progress: Whether to show progress bars during analysis
         """
         self._profile_name = profile_name
+        self._show_progress = show_progress
 
         if storage is None and profile_name is not None:
             storage = get_storage_instance(profile_name=profile_name)
@@ -125,266 +128,424 @@ class SessionAnalysis:
             return 0.0
 
         failed_sessions = sum(
-            1
-            for session in sessions
-            if any(test.outcome == TestOutcome.FAILED for test in session.test_results)
+            1 for session in sessions if any(test.outcome == TestOutcome.FAILED for test in session.test_results)
         )
 
         return failed_sessions / len(sessions)
 
-    def test_metrics(self, days: Optional[int] = None) -> Dict[str, float]:
+    def test_metrics(self, days: Optional[int] = None, chunk_size: int = 1000) -> Dict[str, Any]:
         """Calculate key test metrics for sessions.
 
         Analyzes test metrics while preserving session context to identify:
         - Overall execution statistics
         - Test uniqueness and repetition
-        - Test flakiness (same test with different outcomes in same session)
+        - Flaky test detection
 
         Args:
             days: Optional number of days to look back
+            chunk_size: Number of sessions to process at once for large datasets
 
         Returns:
-            Dict of metrics including:
-            - avg_duration: Average test duration
-            - total_tests: Total number of tests
-            - unique_tests: Number of unique tests
-            - flaky_tests: Number of flaky tests
+            Dict containing metrics:
+            - total_tests: Total number of tests executed
+            - unique_tests: Number of unique test nodeids
+            - avg_duration: Average test duration in seconds
+            - max_duration: Maximum test duration in seconds
+            - min_duration: Minimum test duration in seconds
+            - failed_tests: Number of failed tests
+            - passed_tests: Number of passed tests
+            - skipped_tests: Number of skipped tests
             - avg_tests_per_session: Average tests per session
         """
         sessions = self._get_sessions(days)
+
         if not sessions:
             return {
-                "avg_duration": 0.0,
                 "total_tests": 0,
                 "unique_tests": 0,
-                "flaky_tests": 0,
-                "avg_tests_per_session": 0.0,
+                "avg_duration": 0,
+                "max_duration": 0,
+                "min_duration": 0,
+                "failed_tests": 0,
+                "passed_tests": 0,
+                "skipped_tests": 0,
+                "avg_tests_per_session": 0,
             }
 
-        # Track metrics while preserving session context
-        total_duration = 0.0
+        # Initialize counters
         total_tests = 0
-        unique_nodeids = set()
-        flaky_tests = set()
+        unique_tests = set()
+        durations = []
+        failed_tests = 0
+        passed_tests = 0
+        skipped_tests = 0
 
-        # Analyze each session while preserving context
-        for session in sessions:
-            # Track test outcomes within this session
-            session_outcomes = defaultdict(set)
+        # Process sessions in chunks for large datasets
+        session_chunks = [sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)]
 
-            for test in session.test_results:
-                total_duration += test.duration
-                total_tests += 1
-                unique_nodeids.add(test.nodeid)
+        # Only import rich components if progress bars are enabled
+        if self._show_progress:
+            from rich.progress import (
+                BarColumn,
+                Progress,
+                SpinnerColumn,
+                TextColumn,
+                TimeElapsedColumn,
+            )
 
-                # Track outcomes per test within session context
-                session_outcomes[test.nodeid].add(test.outcome)
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(),
+                TextColumn("[bold green]{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+            ) as progress:
+                task = progress.add_task("[cyan]Processing test metrics...", total=len(sessions))
 
-                # Test is flaky if it has multiple outcomes in same session
-                if len(session_outcomes[test.nodeid]) > 1:
-                    flaky_tests.add(test.nodeid)
+                for chunk in session_chunks:
+                    for session in chunk:
+                        # Process each test result
+                        for test_result in session.test_results:
+                            total_tests += 1
+                            unique_tests.add(test_result.nodeid)
+
+                            if test_result.duration is not None:
+                                durations.append(test_result.duration)
+
+                            if test_result.outcome == TestOutcome.FAILED:
+                                failed_tests += 1
+                            elif test_result.outcome == TestOutcome.PASSED:
+                                passed_tests += 1
+                            elif test_result.outcome == TestOutcome.SKIPPED:
+                                skipped_tests += 1
+
+                        # Update progress
+                        progress.update(task, advance=1)
+        else:
+            # Process without progress bar
+            for chunk in session_chunks:
+                for session in chunk:
+                    # Process each test result
+                    for test_result in session.test_results:
+                        total_tests += 1
+                        unique_tests.add(test_result.nodeid)
+
+                        if test_result.duration is not None:
+                            durations.append(test_result.duration)
+
+                        if test_result.outcome == TestOutcome.FAILED:
+                            failed_tests += 1
+                        elif test_result.outcome == TestOutcome.PASSED:
+                            passed_tests += 1
+                        elif test_result.outcome == TestOutcome.SKIPPED:
+                            skipped_tests += 1
+
+        # Calculate metrics
+        avg_duration = mean(durations) if durations else 0
+        max_duration = max(durations) if durations else 0
+        min_duration = min(durations) if durations else 0
+        avg_tests_per_session = total_tests / len(sessions) if sessions else 0
 
         return {
-            "avg_duration": total_duration / total_tests if total_tests > 0 else 0.0,
             "total_tests": total_tests,
-            "unique_tests": len(unique_nodeids),
-            "flaky_tests": len(flaky_tests),
-            "avg_tests_per_session": total_tests / len(sessions),
+            "unique_tests": len(unique_tests),
+            "avg_duration": avg_duration,
+            "max_duration": max_duration,
+            "min_duration": min_duration,
+            "failed_tests": failed_tests,
+            "passed_tests": passed_tests,
+            "skipped_tests": skipped_tests,
+            "avg_tests_per_session": avg_tests_per_session,
         }
 
-    def detect_trends(
-        self, days: Optional[int] = None, window_size: int = 7
-    ) -> Dict[str, Any]:
+    def detect_trends(self, days: Optional[int] = None, window_size: int = 7) -> Dict[str, Any]:
         """Detect significant trends in session data.
 
         Analyzes trends while preserving session context to identify:
         - Changes in execution time
         - Changes in failure patterns
         - Changes in warning patterns
-        - Correlated failures within sessions
 
         Args:
             days: Optional number of days to look back
-            window_size: Size of sliding window for trend analysis in days
+            window_size: Size of the window for trend analysis (in days)
 
         Returns:
-            Dict of detected trends including:
-            - duration_trend: Changes in execution time
-                - direction: "increasing", "decreasing", or "stable"
-                - magnitude: Average change per window
-            - failure_trend: Changes in failure patterns
-                - direction: "improving", "degrading", or "stable"
-                - magnitude: Average change in failure rate
-                - correlated_failures: List of tests that fail together
-            - warning_trend: Changes in warning patterns
-                - direction: "increasing", "decreasing", or "stable"
+            Dict containing trend information:
+            - duration: Dict with duration trend info
+                - direction: 'increasing', 'decreasing', or 'stable'
+                - change_percent: Percentage change
+                - significant: Boolean indicating if change is statistically significant
+            - failures: Dict with failure trend info
+                - direction: 'increasing', 'decreasing', or 'stable'
+                - change_percent: Percentage change
+                - significant: Boolean indicating if change is statistically significant
+            - warnings: Dict with warning trend info
+                - direction: 'increasing', 'decreasing', or 'stable'
+                - change_percent: Percentage change
+                - significant: Boolean indicating if change is statistically significant
                 - common_warnings: Most frequent warning types
         """
-        sessions = sorted(self._get_sessions(days), key=lambda s: s.session_start_time)
+        sessions = self._get_sessions(days)
+
         if not sessions:
             return {
-                "duration_trend": {"direction": "stable", "magnitude": 0.0},
-                "failure_trend": {
+                "duration": {"direction": "stable", "change_percent": 0.0, "significant": False},
+                "failures": {"direction": "stable", "change_percent": 0.0, "significant": False},
+                "warnings": {
                     "direction": "stable",
-                    "magnitude": 0.0,
-                    "correlated_failures": [],
+                    "change_percent": 0.0,
+                    "significant": False,
+                    "common_warnings": [],
                 },
-                "warning_trend": {"direction": "stable", "common_warnings": []},
             }
 
-        # Analyze duration trends
-        duration_trend = self._analyze_duration_trend(sessions, window_size)
+        # Sort sessions by start time
+        sessions = sorted(sessions, key=lambda s: s.session_start_time)
 
-        # Analyze failure trends while preserving session context
-        failure_trend = self._analyze_failure_trend(sessions, window_size)
+        # Limit to a reasonable number of sessions for trend analysis
+        MAX_SESSIONS = 100
+        if len(sessions) > MAX_SESSIONS:
+            # Take evenly distributed samples if we have too many sessions
+            step = len(sessions) // MAX_SESSIONS
+            sessions = [sessions[i] for i in range(0, len(sessions), step)][:MAX_SESSIONS]
 
-        # Analyze warning trends
-        warning_trend = self._analyze_warning_trend(sessions, window_size)
+        # Only import rich components if progress bars are enabled
+        if self._show_progress:
+            from rich.progress import (
+                BarColumn,
+                Progress,
+                SpinnerColumn,
+                TextColumn,
+                TimeElapsedColumn,
+            )
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(),
+                TextColumn("[bold green]{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+            ) as progress:
+                # Create tasks for each analysis
+                duration_task = progress.add_task("[cyan]Analyzing duration trends...", total=1)
+                failure_task = progress.add_task("[cyan]Analyzing failure trends...", total=1)
+                warning_task = progress.add_task("[cyan]Analyzing warning trends...", total=1)
+
+                # Analyze duration trends
+                duration_trend = self._analyze_duration_trend(sessions, window_size)
+                progress.update(duration_task, completed=1)
+
+                # Analyze failure trends
+                failure_trend = self._analyze_failure_trend(sessions, window_size)
+                progress.update(failure_task, completed=1)
+
+                # Analyze warning trends
+                warning_trend = self._analyze_warning_trend(sessions, window_size)
+                progress.update(warning_task, completed=1)
+        else:
+            # Analyze without progress bars
+            duration_trend = self._analyze_duration_trend(sessions, window_size)
+            failure_trend = self._analyze_failure_trend(sessions, window_size)
+            warning_trend = self._analyze_warning_trend(sessions, window_size)
 
         return {
-            "duration_trend": duration_trend,
-            "failure_trend": failure_trend,
-            "warning_trend": warning_trend,
+            "duration": duration_trend,
+            "failures": failure_trend,
+            "warnings": warning_trend,
         }
 
-    def _analyze_duration_trend(
-        self, sessions: List[TestSession], window_size: int
-    ) -> Dict[str, Any]:
+    def _analyze_duration_trend(self, sessions: List[TestSession], window_size: int) -> Dict[str, Any]:
         """Analyze trends in test execution duration."""
-        # Calculate average duration per session
+        # Calculate average duration per session (with a limit on tests per session)
+        MAX_TESTS_PER_SESSION = 1000
         durations = []
+
         for session in sessions:
-            session_duration = sum(t.duration for t in session.test_results)
+            # Limit the number of tests to process
+            test_results = (
+                session.test_results[:MAX_TESTS_PER_SESSION]
+                if len(session.test_results) > MAX_TESTS_PER_SESSION
+                else session.test_results
+            )
+            session_duration = sum(t.duration for t in test_results)
             durations.append(session_duration)
 
         if len(durations) < 2:
-            return {"direction": "stable", "magnitude": 0.0}
+            return {"direction": "stable", "change_percent": 0.0, "significant": False}
 
-        # Calculate trend using simple linear regression
-        x = list(range(len(durations)))
-        slope = sum(
-            (x[i] - mean(x)) * (y - mean(durations)) for i, y in enumerate(durations)
-        ) / sum((x[i] - mean(x)) ** 2 for i in x)
+        # Fast trend calculation using numpy if available
+        try:
+            import numpy as np
+
+            x = np.arange(len(durations))
+            A = np.vstack([x, np.ones(len(x))]).T
+            slope, _ = np.linalg.lstsq(A, durations, rcond=None)[0]
+        except (ImportError, Exception):
+            # Fallback to simple calculation if numpy not available or fails
+            try:
+                x = list(range(len(durations)))
+                x_mean = sum(x) / len(x)
+                y_mean = sum(durations) / len(durations)
+
+                numerator = sum((x[i] - x_mean) * (y - y_mean) for i, y in enumerate(durations))
+                denominator = sum((x[i] - x_mean) ** 2 for i in x)
+
+                if abs(denominator) < 1e-10:
+                    slope = 0
+                else:
+                    slope = numerator / denominator
+            except Exception:
+                slope = 0
 
         return {
-            "direction": (
-                "increasing"
-                if slope > 0.1
-                else "decreasing" if slope < -0.1 else "stable"
-            ),
-            "magnitude": abs(slope),
+            "direction": ("increasing" if slope > 0.1 else "decreasing" if slope < -0.1 else "stable"),
+            "change_percent": abs(slope) * 100 if abs(slope) < 100 else 100,  # Cap at 100%
+            "significant": False,  # TODO: Implement significance check
         }
 
-    def _analyze_failure_trend(
-        self, sessions: List[TestSession], window_size: int
-    ) -> Dict[str, Any]:
+    def _analyze_failure_trend(self, sessions: List[TestSession], window_size: int) -> Dict[str, Any]:
         """Analyze trends in test failures while preserving session context."""
-        # Calculate failure rate per session
-        failure_rates = []
-        correlated_failures = defaultdict(int)
+        # Strict limits to prevent excessive computation
+        MAX_TESTS_PER_SESSION = 500
+        MAX_WINDOWS = 20
+
+        # Group sessions by time window (limit number of windows)
+        windows = []
+        current_window = []
+        window_count = 0
 
         for session in sessions:
-            # Track failures within session context
-            failed_tests = set()
-            for test in session.test_results:
-                if test.outcome == TestOutcome.FAILED:
-                    failed_tests.add(test.nodeid)
+            current_window.append(session)
+            if len(current_window) >= window_size:
+                windows.append(current_window)
+                current_window = []
+                window_count += 1
+                if window_count >= MAX_WINDOWS:
+                    break
 
-            # Record failure rate
-            failure_rates.append(
-                len(failed_tests) / len(session.test_results)
-                if session.test_results
-                else 0.0
-            )
+        if current_window:
+            windows.append(current_window)
 
-            # Track correlated failures within session context
-            failed_list = sorted(failed_tests)
-            for i, test1 in enumerate(failed_list):
-                for test2 in failed_list[i + 1 :]:
-                    correlated_failures[(test1, test2)] += 1
+        # Calculate failure rate for each window
+        failure_rates = []
+        for window in windows:
+            failed_sessions = 0
+            for s in window:
+                # Limit tests to process
+                test_results = (
+                    s.test_results[:MAX_TESTS_PER_SESSION]
+                    if len(s.test_results) > MAX_TESTS_PER_SESSION
+                    else s.test_results
+                )
+                if any(t.outcome == TestOutcome.FAILED for t in test_results):
+                    failed_sessions += 1
+
+            failure_rate = failed_sessions / len(window) if window else 0
+            failure_rates.append(failure_rate)
+
+        # Skip correlated failures calculation - it's expensive and not used in the output
 
         if len(failure_rates) < 2:
-            return {"direction": "stable", "magnitude": 0.0, "correlated_failures": []}
+            return {"direction": "stable", "change_percent": 0.0, "significant": False}
 
-        # Calculate trend
-        slope = sum(
-            (x - mean(range(len(failure_rates)))) * (y - mean(failure_rates))
-            for x, y in enumerate(failure_rates)
-        ) / sum(
-            (x - mean(range(len(failure_rates)))) ** 2
-            for x in range(len(failure_rates))
-        )
+        # Fast trend calculation using numpy if available
+        try:
+            import numpy as np
 
-        # Find most common correlated failures
-        correlated = sorted(
-            ((pair, count) for pair, count in correlated_failures.items()),
-            key=lambda x: x[1],
-            reverse=True,
-        )[
-            :5
-        ]  # Top 5 correlations
+            x = np.arange(len(failure_rates))
+            A = np.vstack([x, np.ones(len(x))]).T
+            slope, _ = np.linalg.lstsq(A, failure_rates, rcond=None)[0]
+        except (ImportError, Exception):
+            # Fallback to simple calculation
+            try:
+                x = list(range(len(failure_rates)))
+                x_mean = sum(x) / len(x)
+                y_mean = sum(failure_rates) / len(failure_rates)
+
+                numerator = sum((i - x_mean) * (rate - y_mean) for i, rate in enumerate(failure_rates))
+                denominator = sum((i - x_mean) ** 2 for i in x)
+
+                if abs(denominator) < 1e-10:
+                    slope = 0
+                else:
+                    slope = numerator / denominator
+            except Exception:
+                slope = 0
 
         return {
-            "direction": (
-                "degrading"
-                if slope > 0.05
-                else "improving" if slope < -0.05 else "stable"
-            ),
-            "magnitude": abs(slope),
-            "correlated_failures": [
-                {"tests": list(pair), "count": count} for pair, count in correlated
-            ],
+            "direction": ("worsening" if slope > 0.05 else "improving" if slope < -0.05 else "stable"),
+            "change_percent": abs(slope) * 100 if abs(slope) < 100 else 100,  # Cap at 100%
+            "significant": False,  # TODO: Implement significance check
         }
 
-    def _analyze_warning_trend(
-        self, sessions: List[TestSession], window_size: int
-    ) -> Dict[str, Any]:
+    def _analyze_warning_trend(self, sessions: List[TestSession], window_size: int) -> Dict[str, Any]:
         """Analyze trends in test warnings."""
+        # Strict limits to prevent excessive computation
+        MAX_TESTS_PER_SESSION = 500
+        MAX_WARNINGS_TO_TRACK = 100
+
         # Track warnings per session
         warning_counts = []
         warning_types = defaultdict(int)
+        warning_types_count = 0
 
         for session in sessions:
-            session_warnings = sum(
-                1 for test in session.test_results if test.has_warning
+            # Limit tests to process
+            test_results = (
+                session.test_results[:MAX_TESTS_PER_SESSION]
+                if len(session.test_results) > MAX_TESTS_PER_SESSION
+                else session.test_results
             )
+
+            session_warnings = sum(1 for test in test_results if test.has_warning)
             warning_counts.append(session_warnings)
 
-            # Track warning types within session context
-            for test in session.test_results:
-                if test.has_warning:
+            # Track warning types (limited)
+            for test in test_results:
+                if test.has_warning and warning_types_count < MAX_WARNINGS_TO_TRACK:
                     warning_types[test.nodeid] += 1
+                    warning_types_count += 1
 
         if len(warning_counts) < 2:
-            return {"direction": "stable", "common_warnings": []}
+            return {"direction": "stable", "change_percent": 0.0, "significant": False}
 
-        # Calculate trend
-        slope = sum(
-            (x - mean(range(len(warning_counts)))) * (y - mean(warning_counts))
-            for x, y in enumerate(warning_counts)
-        ) / sum(
-            (x - mean(range(len(warning_counts)))) ** 2
-            for x in range(len(warning_counts))
-        )
+        # Fast trend calculation using numpy if available
+        try:
+            import numpy as np
 
-        # Find most common warning types
+            x = np.arange(len(warning_counts))
+            A = np.vstack([x, np.ones(len(x))]).T
+            slope, _ = np.linalg.lstsq(A, warning_counts, rcond=None)[0]
+        except (ImportError, Exception):
+            # Fallback to simple calculation
+            try:
+                x = list(range(len(warning_counts)))
+                x_mean = sum(x) / len(x)
+                y_mean = sum(warning_counts) / len(warning_counts)
+
+                numerator = sum((i - x_mean) * (count - y_mean) for i, count in enumerate(warning_counts))
+                denominator = sum((i - x_mean) ** 2 for i in x)
+
+                if abs(denominator) < 1e-10:
+                    slope = 0
+                else:
+                    slope = numerator / denominator
+            except Exception:
+                slope = 0
+
+        # Find most common warning types (limit to top 5)
         common_warnings = sorted(
             ((test, count) for test, count in warning_types.items()),
             key=lambda x: x[1],
             reverse=True,
-        )[
-            :5
-        ]  # Top 5 warning types
+        )[:5]
 
         return {
-            "direction": (
-                "increasing"
-                if slope > 0.05
-                else "decreasing" if slope < -0.05 else "stable"
-            ),
-            "common_warnings": [
-                {"test": test, "count": count} for test, count in common_warnings
-            ],
+            "direction": ("increasing" if slope > 0.05 else "decreasing" if slope < -0.05 else "stable"),
+            "change_percent": abs(slope) * 100 if abs(slope) < 100 else 100,  # Cap at 100%
+            "significant": False,  # TODO: Implement significance check
+            "common_warnings": [{"test": test, "count": count} for test, count in common_warnings],
         }
 
 
@@ -402,6 +563,7 @@ class TestAnalysis:
         storage: Optional[BaseStorage] = None,
         sessions: Optional[List[TestSession]] = None,
         profile_name: Optional[str] = None,
+        show_progress: bool = True,
     ):
         """Initialize with storage and optional session list.
 
@@ -411,8 +573,10 @@ class TestAnalysis:
                      will analyze all sessions from storage.
             profile_name: Optional profile name to use for storage configuration.
                          Takes precedence over storage parameter if both are provided.
+            show_progress: Whether to show progress bars during analysis
         """
         self._profile_name = profile_name
+        self._show_progress = show_progress
 
         if storage is None and profile_name is not None:
             storage = get_storage_instance(profile_name=profile_name)
@@ -425,21 +589,160 @@ class TestAnalysis:
         # Use profile-only approach for Query initialization
         self._query = Query(profile_name=profile_name)
 
-    def stability(self) -> Dict[str, Any]:
+    def stability(self, chunk_size: int = 1000) -> Dict[str, Any]:
         """Analyze test stability.
+
+        Args:
+            chunk_size: Number of tests to process at once for large datasets
 
         Returns:
             Dict of stability metrics including:
-            - flaky_tests: List of flaky tests with rates
-            - stable_tests: List of consistently passing tests
+            - flaky_tests: List of tests with inconsistent outcomes
             - unstable_tests: List of consistently failing tests
         """
-        # Basic implementation that returns empty lists
+        if self._sessions is None:
+            return {"flaky_tests": [], "unstable_tests": []}
+
+        sessions = self._sessions
+        if not sessions:
+            return {"flaky_tests": [], "unstable_tests": []}
+
+        # Track test outcomes across sessions
+        test_history = defaultdict(list)
+
+        # Process sessions in chunks for large datasets
+        session_chunks = [sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)]
+
+        # Only import rich components if progress bars are enabled
+        if self._show_progress:
+            from rich.progress import (
+                BarColumn,
+                Progress,
+                SpinnerColumn,
+                TextColumn,
+                TimeElapsedColumn,
+            )
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(),
+                TextColumn("[bold green]{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+            ) as progress:
+                # Create tasks
+                session_task = progress.add_task("[cyan]Processing sessions...", total=len(sessions))
+                analysis_task = progress.add_task("[cyan]Analyzing test stability...", total=1, visible=False)
+
+                # Process each session
+                for chunk in session_chunks:
+                    for session in chunk:
+                        session_timestamp = session.session_start_time
+
+                        # Process each test result
+                        for test_result in session.test_results:
+                            test_history[test_result.nodeid].append((session_timestamp, test_result.outcome))
+
+                        # Update progress
+                        progress.update(session_task, advance=1)
+
+                # Make analysis task visible and start it
+                progress.update(analysis_task, visible=True)
+
+                # Analyze flaky tests
+                flaky_tests = []
+                for nodeid, outcomes in test_history.items():
+                    # A test is flaky if it has different outcomes
+                    unique_outcomes = set(outcome for _, outcome in outcomes)
+                    if len(unique_outcomes) > 1:
+                        # Calculate flakiness rate
+                        outcome_counts = defaultdict(int)
+                        for _, outcome in outcomes:
+                            outcome_counts[outcome] += 1
+
+                        total_runs = len(outcomes)
+                        most_common_outcome = max(outcome_counts.items(), key=lambda x: x[1])[0]
+                        most_common_count = outcome_counts[most_common_outcome]
+
+                        flakiness_rate = 1.0 - (most_common_count / total_runs)
+
+                        flaky_tests.append(
+                            {
+                                "nodeid": nodeid,
+                                "outcomes": [{"outcome": str(o), "count": c} for o, c in outcome_counts.items()],
+                                "flakiness_rate": flakiness_rate,
+                                "total_runs": total_runs,
+                            }
+                        )
+
+                # Sort by flakiness rate (descending)
+                flaky_tests.sort(key=lambda x: x["flakiness_rate"], reverse=True)
+
+                # Update progress
+                progress.update(analysis_task, completed=1)
+        else:
+            # Process without progress bars
+            for chunk in session_chunks:
+                for session in chunk:
+                    session_timestamp = session.session_start_time
+
+                    # Process each test result
+                    for test_result in session.test_results:
+                        test_history[test_result.nodeid].append((session_timestamp, test_result.outcome))
+
+            # Analyze flaky tests
+            flaky_tests = []
+            for nodeid, outcomes in test_history.items():
+                # A test is flaky if it has different outcomes
+                unique_outcomes = set(outcome for _, outcome in outcomes)
+                if len(unique_outcomes) > 1:
+                    # Calculate flakiness rate
+                    outcome_counts = defaultdict(int)
+                    for _, outcome in outcomes:
+                        outcome_counts[outcome] += 1
+
+                    total_runs = len(outcomes)
+                    most_common_outcome = max(outcome_counts.items(), key=lambda x: x[1])[0]
+                    most_common_count = outcome_counts[most_common_outcome]
+
+                    flakiness_rate = 1.0 - (most_common_count / total_runs)
+
+                    flaky_tests.append(
+                        {
+                            "nodeid": nodeid,
+                            "outcomes": [{"outcome": str(o), "count": c} for o, c in outcome_counts.items()],
+                            "flakiness_rate": flakiness_rate,
+                            "total_runs": total_runs,
+                        }
+                    )
+
+            # Sort by flakiness rate (descending)
+            flaky_tests.sort(key=lambda x: x["flakiness_rate"], reverse=True)
+
+        # Find consistently failing tests (separate from flaky tests)
+        unstable_tests = []
+        for nodeid, outcomes in test_history.items():
+            # Skip tests that are already identified as flaky
+            if any(test["nodeid"] == nodeid for test in flaky_tests):
+                continue
+
+            # A test is unstable if it consistently fails
+            if all(outcome == TestOutcome.FAILED for _, outcome in outcomes) and len(outcomes) >= 2:
+                unstable_tests.append(
+                    {
+                        "nodeid": nodeid,
+                        "failure_count": len(outcomes),
+                        "first_failure": min(timestamp for timestamp, _ in outcomes),
+                        "last_failure": max(timestamp for timestamp, _ in outcomes),
+                    }
+                )
+
+        # Sort by failure count (descending)
+        unstable_tests.sort(key=lambda x: x["failure_count"], reverse=True)
+
         return {
-            "flaky_tests": [],
-            "stable_tests": [],
-            "unstable_tests": [],
-            "outcome_patterns": {},
+            "flaky_tests": flaky_tests,
+            "unstable_tests": unstable_tests,
         }
 
     def performance(self) -> Dict[str, Any]:
@@ -482,6 +785,7 @@ class MetricsAnalysis:
         storage: Optional[BaseStorage] = None,
         sessions: Optional[List[TestSession]] = None,
         profile_name: Optional[str] = None,
+        show_progress: bool = True,
     ):
         """Initialize with storage and optional session list.
 
@@ -491,8 +795,10 @@ class MetricsAnalysis:
                      will analyze all sessions from storage.
             profile_name: Optional profile name to use for storage configuration.
                          Takes precedence over storage parameter if both are provided.
+            show_progress: Whether to show progress bars during analysis
         """
         self._profile_name = profile_name
+        self._show_progress = show_progress
 
         if storage is None and profile_name is not None:
             storage = get_storage_instance(profile_name=profile_name)
@@ -560,9 +866,7 @@ class MetricsAnalysis:
         )
 
         # Generate recommendations based on scores
-        recommendations = self._generate_recommendations(
-            stability_score, performance_score, warning_score, sessions
-        )
+        recommendations = self._generate_recommendations(stability_score, performance_score, warning_score, sessions)
 
         return {
             "overall_score": overall_score,
@@ -630,16 +934,10 @@ class MetricsAnalysis:
             # Look for performance degradation within session
             if session_durations:
                 session_mean = mean(session_durations)
-                session_stddev = (
-                    stdev(session_durations) if len(session_durations) > 1 else 0
-                )
+                session_stddev = stdev(session_durations) if len(session_durations) > 1 else 0
 
                 # Count tests significantly slower than session average
-                sum(
-                    1
-                    for d in session_durations
-                    if d > session_mean + 2 * session_stddev
-                )
+                sum(1 for d in session_durations if d > session_mean + 2 * session_stddev)
 
         if not durations:
             return 0.0
@@ -649,9 +947,7 @@ class MetricsAnalysis:
         duration_stddev = stdev(durations) if len(durations) > 1 else 0
 
         # Score based on consistency and outliers
-        consistency_score = 100 * (
-            1 - (duration_stddev / avg_duration if avg_duration > 0 else 0)
-        )
+        consistency_score = 100 * (1 - (duration_stddev / avg_duration if avg_duration > 0 else 0))
 
         return max(0, min(100, consistency_score))
 
@@ -689,9 +985,7 @@ class MetricsAnalysis:
         repeat_ratio = repeated_warnings / total_tests if total_tests > 0 else 0
 
         base_score = 100 * (1 - warning_ratio)
-        repeat_penalty = (
-            30 * repeat_ratio
-        )  # Up to 30 point penalty for repeated warnings
+        repeat_penalty = 30 * repeat_ratio  # Up to 30 point penalty for repeated warnings
 
         return max(0, min(100, base_score - repeat_penalty))
 
@@ -713,8 +1007,7 @@ class MetricsAnalysis:
                     {
                         "category": "stability",
                         "priority": "high",
-                        "message": "High failure rate detected in tests: "
-                        + ", ".join(failed_patterns[:3]),
+                        "message": "High failure rate detected in tests: " + ", ".join(failed_patterns[:3]),
                     }
                 )
 
@@ -726,8 +1019,7 @@ class MetricsAnalysis:
                     {
                         "category": "performance",
                         "priority": "medium",
-                        "message": "Performance bottlenecks identified in: "
-                        + ", ".join(slow_tests[:3]),
+                        "message": "Performance bottlenecks identified in: " + ", ".join(slow_tests[:3]),
                     }
                 )
 
@@ -739,8 +1031,7 @@ class MetricsAnalysis:
                     {
                         "category": "warnings",
                         "priority": "low",
-                        "message": "Recurring warnings found in: "
-                        + ", ".join(warning_patterns[:3]),
+                        "message": "Recurring warnings found in: " + ", ".join(warning_patterns[:3]),
                     }
                 )
 
@@ -760,12 +1051,7 @@ class MetricsAnalysis:
                     failure_counts[test.nodeid] += 1
 
         # Return tests with highest failure counts
-        return [
-            test
-            for test, count in sorted(
-                failure_counts.items(), key=lambda x: x[1], reverse=True
-            )
-        ]
+        return [test for test, count in sorted(failure_counts.items(), key=lambda x: x[1], reverse=True)]
 
     def _find_slow_tests(self, sessions: List[TestSession]) -> List[str]:
         """Identify consistently slow tests while preserving session context."""
@@ -785,14 +1071,10 @@ class MetricsAnalysis:
             avg_duration = mean(durations)
             if len(durations) > 1:
                 stdev(durations)
-                if avg_duration > mean(
-                    d for dur in test_durations.values() for d in dur
-                ):
+                if avg_duration > mean(d for dur in test_durations.values() for d in dur):
                     slow_tests.append((test_id, avg_duration))
 
-        return [
-            test for test, _ in sorted(slow_tests, key=lambda x: x[1], reverse=True)
-        ]
+        return [test for test, _ in sorted(slow_tests, key=lambda x: x[1], reverse=True)]
 
     def _analyze_warning_patterns(self, sessions: List[TestSession]) -> List[str]:
         """Analyze warning patterns while preserving session context."""
@@ -808,12 +1090,7 @@ class MetricsAnalysis:
                     warning_counts[test.nodeid] += 1
 
         # Return tests with highest warning counts
-        return [
-            test
-            for test, count in sorted(
-                warning_counts.items(), key=lambda x: x[1], reverse=True
-            )
-        ]
+        return [test for test, count in sorted(warning_counts.items(), key=lambda x: x[1], reverse=True)]
 
 
 class Analysis:
@@ -863,6 +1140,7 @@ class Analysis:
         storage: Optional[BaseStorage] = None,
         sessions: Optional[List[TestSession]] = None,
         profile_name: Optional[str] = None,
+        show_progress: bool = True,
     ):
         """Initialize analysis components.
 
@@ -872,8 +1150,10 @@ class Analysis:
             sessions: Optional list of sessions to analyze
             profile_name: Optional profile name to use for storage configuration.
                          Takes precedence over storage parameter if both are provided.
+            show_progress: Whether to show progress bars during analysis
         """
         self._profile_name = profile_name
+        self._show_progress = show_progress
 
         if storage is None:
             storage = get_storage_instance(profile_name=profile_name)
@@ -882,9 +1162,9 @@ class Analysis:
         self._sessions = sessions
 
         # Initialize analysis components
-        self.sessions = SessionAnalysis(storage, sessions, profile_name)
-        self.tests = TestAnalysis(storage, sessions, profile_name)
-        self.metrics = MetricsAnalysis(storage, sessions, profile_name)
+        self.sessions = SessionAnalysis(storage, sessions, profile_name, show_progress)
+        self.tests = TestAnalysis(storage, sessions, profile_name, show_progress)
+        self.metrics = MetricsAnalysis(storage, sessions, profile_name, show_progress)
 
     def with_profile(self, profile_name: str) -> "Analysis":
         """Set the storage profile for analysis.
@@ -902,9 +1182,9 @@ class Analysis:
         self.storage = get_storage_instance(profile_name=profile_name)
 
         # Update analysis components with new storage
-        self.sessions = SessionAnalysis(self.storage, self._sessions, profile_name)
-        self.tests = TestAnalysis(self.storage, self._sessions, profile_name)
-        self.metrics = MetricsAnalysis(self.storage, self._sessions, profile_name)
+        self.sessions = SessionAnalysis(self.storage, self._sessions, profile_name, self._show_progress)
+        self.tests = TestAnalysis(self.storage, self._sessions, profile_name, self._show_progress)
+        self.metrics = MetricsAnalysis(self.storage, self._sessions, profile_name, self._show_progress)
 
         return self
 
@@ -930,6 +1210,7 @@ class Analysis:
             storage=self.storage,
             sessions=filtered_sessions,
             profile_name=self._profile_name,
+            show_progress=self._show_progress,
         )
 
     def health_report(self, days: Optional[int] = None) -> Dict[str, Any]:
@@ -1018,17 +1299,14 @@ class Analysis:
             base_sessions = sorted_sessions[:midpoint]
             target_sessions = sorted_sessions[midpoint:]
 
-        base_analysis = Analysis(storage=self.storage, sessions=base_sessions)
-        target_analysis = Analysis(storage=self.storage, sessions=target_sessions)
+        base_analysis = Analysis(storage=self.storage, sessions=base_sessions, show_progress=self._show_progress)
+        target_analysis = Analysis(storage=self.storage, sessions=target_sessions, show_progress=self._show_progress)
 
         base_health = base_analysis.health_report()
         target_health = target_analysis.health_report()
 
         # Calculate differences
-        health_diff = (
-            target_health["health_score"]["overall_score"]
-            - base_health["health_score"]["overall_score"]
-        )
+        health_diff = target_health["health_score"]["overall_score"] - base_health["health_score"]["overall_score"]
 
         return {
             "base_health": base_health,
@@ -1123,9 +1401,7 @@ class Analysis:
                         test_outcomes[nodeid].add(final_outcome)
 
         # Tests with multiple outcomes are considered flaky
-        flaky_tests = [
-            nodeid for nodeid, outcomes in test_outcomes.items() if len(outcomes) > 1
-        ]
+        flaky_tests = [nodeid for nodeid, outcomes in test_outcomes.items() if len(outcomes) > 1]
         return flaky_tests
 
     def identify_slowest_tests(self, limit: int = 5) -> List[tuple]:
@@ -1166,10 +1442,7 @@ class Analysis:
                         test_durations[nodeid].append(final_duration)
 
         # Calculate average duration per test
-        avg_durations = [
-            (nodeid, sum(durations) / len(durations))
-            for nodeid, durations in test_durations.items()
-        ]
+        avg_durations = [(nodeid, sum(durations) / len(durations)) for nodeid, durations in test_durations.items()]
 
         # Sort by duration (descending) and return top N
         return sorted(avg_durations, key=lambda x: x[1], reverse=True)[:limit]
@@ -1211,9 +1484,7 @@ class Analysis:
         # Sort by failure count (descending) and return top N
         return sorted(failure_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
 
-    def identify_consistently_failing_tests(
-        self, min_consecutive_failures: int = 2
-    ) -> List[dict]:
+    def identify_consistently_failing_tests(self, min_consecutive_failures: int = 2) -> List[dict]:
         """Identify tests that have consistently failed over time.
 
         This method tracks tests that have failed in consecutive sessions,
@@ -1246,12 +1517,7 @@ class Analysis:
 
             # Process regular test results
             for test in session.test_results:
-                nodeid = test.nodeid
-                if nodeid not in test_history:
-                    test_history[nodeid] = []
-
-                # Record the outcome
-                test_history[nodeid].append((session_timestamp, test.outcome))
+                test_history.setdefault(test.nodeid, []).append((session_timestamp, test.outcome))
 
             # Process rerun groups if available
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
@@ -1299,9 +1565,7 @@ class Analysis:
                                 "consecutive_failures": current_streak,
                                 "first_failure": streak_start,
                                 "last_failure": streak_end,
-                                "failure_duration": (
-                                    streak_end - streak_start
-                                ).total_seconds(),
+                                "failure_duration": (streak_end - streak_start).total_seconds(),
                             }
                         )
 
@@ -1371,12 +1635,7 @@ class Analysis:
 
             # Process regular test results
             for test in session.test_results:
-                nodeid = test.nodeid
-                if nodeid not in test_history:
-                    test_history[nodeid] = []
-
-                # Record the outcome
-                test_history[nodeid].append((session_timestamp, test.outcome))
+                test_history.setdefault(test.nodeid, []).append((session_timestamp, test.outcome))
 
             # Process rerun groups if available
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
@@ -1407,9 +1666,7 @@ class Analysis:
             sorted_history = sorted(history, key=lambda x: x[0])
 
             # Analyze the entire history as a single streak with hysteresis
-            failure_count = sum(
-                1 for _, outcome in sorted_history if outcome == TestOutcome.FAILED
-            )
+            failure_count = sum(1 for _, outcome in sorted_history if outcome == TestOutcome.FAILED)
             total_count = len(sorted_history)
 
             # Calculate failure rate
@@ -1433,9 +1690,7 @@ class Analysis:
                         "failure_rate": failure_rate,
                         "first_occurrence": first_timestamp,
                         "last_occurrence": last_timestamp,
-                        "streak_duration": (
-                            last_timestamp - first_timestamp
-                        ).total_seconds(),
+                        "streak_duration": (last_timestamp - first_timestamp).total_seconds(),
                     }
                 )
 
@@ -1451,6 +1706,7 @@ class Analysis:
 def analysis(
     profile_name: Optional[str] = None,
     sessions: Optional[List[TestSession]] = None,
+    show_progress: bool = True,
 ) -> Analysis:
     """Create a new Analysis instance.
 
@@ -1460,6 +1716,7 @@ def analysis(
     Args:
         profile_name: Optional profile name to use for storage configuration.
         sessions: Optional list of sessions to analyze
+        show_progress: Whether to show progress bars during analysis
 
     Returns:
         New Analysis instance ready for building analysis
@@ -1471,10 +1728,10 @@ def analysis(
         # With profile
         result = analysis(profile_name="prod").health_report()
     """
-    return Analysis(profile_name=profile_name, sessions=sessions)
+    return Analysis(profile_name=profile_name, sessions=sessions, show_progress=show_progress)
 
 
-def analysis_with_profile(profile_name: str) -> Analysis:
+def analysis_with_profile(profile_name: str, show_progress: bool = True) -> Analysis:
     """Create a new Analysis instance with a specific profile.
 
     This is a convenience function for creating a new Analysis instance
@@ -1482,6 +1739,7 @@ def analysis_with_profile(profile_name: str) -> Analysis:
 
     Args:
         profile_name: Name of the profile to use
+        show_progress: Whether to show progress bars during analysis
 
     Returns:
         New Analysis instance configured with the specified profile
@@ -1490,4 +1748,4 @@ def analysis_with_profile(profile_name: str) -> Analysis:
         # Analyze production data
         result = analysis_with_profile("prod").health_report()
     """
-    return Analysis(profile_name=profile_name)
+    return Analysis(profile_name=profile_name, show_progress=show_progress)
