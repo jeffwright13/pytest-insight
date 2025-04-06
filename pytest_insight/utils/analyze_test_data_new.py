@@ -60,6 +60,7 @@ def analyze_test_data(
         # If data_path is provided (legacy mode), create a profile for it
         if data_path and not profile_name:
             from pytest_insight.core.core_api import create_profile
+
             try:
                 profile_name = f"temp_profile_{hash(data_path) % 10000:04d}"
                 create_profile(profile_name, "json", data_path)
@@ -67,7 +68,13 @@ def analyze_test_data(
                 if not json_mode:
                     console.print(f"[bold red]Error creating profile for data path:[/bold red] {str(e)}")
                 else:
-                    print(json.dumps({"error": f"Error creating profile: {str(e)}"}, default=str, indent=2))
+                    print(
+                        json.dumps(
+                            {"error": f"Error creating profile: {str(e)}"},
+                            default=str,
+                            indent=2,
+                        )
+                    )
                 return {"error": f"Error creating profile: {str(e)}"}
 
         # Create insights instance with the profile
@@ -84,7 +91,7 @@ def analyze_test_data(
         # Check if we have sessions by trying to access session metrics
         try:
             session_metrics = insights.sessions.session_metrics()
-            session_count = session_metrics.get('total_sessions', 0)
+            session_count = session_metrics.get("total_sessions", 0)
             if session_count == 0:
                 if not json_mode:
                     console.print("[bold red]Error:[/bold red] No test sessions found.")
@@ -130,7 +137,7 @@ def analyze_test_data(
                 "outcome_distribution": insights.tests.outcome_distribution(),
                 "flaky_tests": insights.tests.flaky_tests(),
                 "slowest_tests": insights.tests.slowest_tests(),
-                "environment_impact": insights.sessions.environment_impact()
+                "environment_impact": insights.sessions.environment_impact(),
             }
 
             # Add additional data based on flags
@@ -141,7 +148,7 @@ def analyze_test_data(
             if show_trends:
                 result["trends"] = {
                     "duration_trends": insights.trends.duration_trends(),
-                    "failure_trends": insights.trends.failure_trends()
+                    "failure_trends": insights.trends.failure_trends(),
                 }
 
             # Add comparison data if requested
@@ -263,7 +270,9 @@ def analyze_test_data(
                     improving = failure_trends.get("improving", False)
                     direction = "decrease" if improving else "increase"
                     color = "green" if improving else "red"
-                    console.print(f"Failure Trend: [bold {color}]{abs(trend_pct):.2f}% {direction} in failures[/bold {color}]")
+                    console.print(
+                        f"Failure Trend: [bold {color}]{abs(trend_pct):.2f}% {direction} in failures[/bold {color}]"
+                    )
 
             # Show comparison if requested
             if compare_with and compare_type == "days":
@@ -327,14 +336,10 @@ def analyze_test_data(
 def main():
     """Main function to run the analysis CLI."""
     parser = argparse.ArgumentParser(description="Analyze pytest test results")
-    parser.add_argument(
-        "--data-path", "-d", help="Path to test data (default: use configured storage)"
-    )
+    parser.add_argument("--data-path", "-d", help="Path to test data (default: use configured storage)")
     parser.add_argument("--sut", "-s", help="Filter by system under test")
     parser.add_argument("--days", type=int, help="Filter by number of days")
-    parser.add_argument(
-        "--format", "-f", choices=["text", "json"], default="text", help="Output format"
-    )
+    parser.add_argument("--format", "-f", choices=["text", "json"], default="text", help="Output format")
     parser.add_argument("--test", "-t", help="Filter by test name pattern")
     parser.add_argument("--profile", "-p", help="Storage profile to use")
     parser.add_argument(
@@ -342,27 +347,22 @@ def main():
         "-c",
         help="Compare with another dataset (format: days:N, version:X.Y.Z, or profile:name)",
     )
-    parser.add_argument(
-        "--show-trends", "--trends", action="store_true", help="Show trend analysis"
-    )
+    parser.add_argument("--show-trends", "--trends", action="store_true", help="Show trend analysis")
     parser.add_argument(
         "--show-error-details",
         "--errors",
         action="store_true",
         help="Show detailed error information",
     )
-    parser.add_argument(
-        "--version", "-v", action="store_true", help="Show version information"
-    )
-    parser.add_argument(
-        "--generate-sample", action="store_true", help="Generate sample test data"
-    )
+    parser.add_argument("--version", "-v", action="store_true", help="Show version information")
+    parser.add_argument("--generate-sample", action="store_true", help="Generate sample test data")
 
     args = parser.parse_args()
 
     # Show version information if requested
     if args.version:
         from pytest_insight import __version__
+
         print(f"pytest-insight version: {__version__}")
         return
 
@@ -378,6 +378,7 @@ def main():
             else:
                 # Otherwise, call the main function with the --generate-sample argument
                 import sys as sys_module
+
                 original_argv = sys_module.argv
                 sys_module.argv = [original_argv[0], "--generate-sample"]
                 old_analyze.main()

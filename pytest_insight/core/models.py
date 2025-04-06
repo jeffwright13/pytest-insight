@@ -48,6 +48,10 @@ class TestOutcome(Enum):
         """Convert entire TestOutcome enum to a list of possible string values."""
         return [outcome.value.lower() for outcome in cls]
 
+    def is_failed(self) -> bool:
+        """Check if the outcome represents a failure."""
+        return self in (self.FAILED, self.ERROR)
+
 
 @dataclass
 class TestResult:
@@ -115,14 +119,10 @@ class TestResult:
     def from_dict(cls, data: Dict) -> "TestResult":
         """Create a TestResult from a dictionary."""
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Invalid data for TestResult. Expected dict, got {type(data)}"
-            )
+            raise ValueError(f"Invalid data for TestResult. Expected dict, got {type(data)}")
 
         start_time = datetime.fromisoformat(data["start_time"])
-        stop_time = (
-            datetime.fromisoformat(data["stop_time"]) if data.get("stop_time") else None
-        )
+        stop_time = datetime.fromisoformat(data["stop_time"]) if data.get("stop_time") else None
         duration = data.get("duration")
 
         return cls(
@@ -178,9 +178,7 @@ class RerunTestGroup:
     def from_dict(cls, data: Dict) -> "RerunTestGroup":
         """Create RerunTestGroup from dictionary."""
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Invalid data for RerunTestGroup. Expected dict, got {type(data)}"
-            )
+            raise ValueError(f"Invalid data for RerunTestGroup. Expected dict, got {type(data)}")
 
         group = cls(nodeid=data["nodeid"])
         group.tests = [TestResult.from_dict(t) for t in data["tests"]]
@@ -205,18 +203,12 @@ class TestSession:
     def __post_init__(self):
         """Calculate timing information once at initialization."""
         if self.session_stop_time is None and self.session_duration is None:
-            raise ValueError(
-                "Either session_stop_time or session_duration must be provided"
-            )
+            raise ValueError("Either session_stop_time or session_duration must be provided")
 
         if self.session_stop_time is None:
-            self.session_stop_time = self.session_start_time + timedelta(
-                seconds=self.session_duration
-            )
+            self.session_stop_time = self.session_start_time + timedelta(seconds=self.session_duration)
         elif self.session_duration is None:
-            self.session_duration = (
-                self.session_stop_time - self.session_start_time
-            ).total_seconds()
+            self.session_duration = (self.session_stop_time - self.session_start_time).total_seconds()
 
     def to_dict(self) -> Dict:
         """Convert TestSession to a dictionary for JSON serialization."""
@@ -238,9 +230,7 @@ class TestSession:
     def from_dict(cls, data: Dict) -> "TestSession":
         """Create a TestSession from a dictionary."""
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Invalid data for TestSession. Expected dict, got {type(data)}"
-            )
+            raise ValueError(f"Invalid data for TestSession. Expected dict, got {type(data)}")
 
         session = cls(
             sut_name=data["sut_name"],

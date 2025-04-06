@@ -525,26 +525,61 @@ class JSONStorage(BaseStorage):
         if not self.file_path.exists():
             return []
 
-        file_size = os.path.getsize(self.file_path) if os.path.exists(self.file_path) else 0
+        try:
+            data = self._read_json_safely()
+            sessions_data = data.get("sessions", [])
 
-        # For small files (< 10MB), use standard loading
-        if file_size < 10 * 1024 * 1024:  # 10MB
-            try:
-                with open(self.file_path, "r") as f:
-                    data = json.load(f)
-
-                # Handle both formats: array of sessions or object with sessions key
-                if isinstance(data, list):
-                    return [TestSession.from_dict(session_dict) for session_dict in data]
-                elif isinstance(data, dict) and "sessions" in data:
-                    return [TestSession.from_dict(session_dict) for session_dict in data.get("sessions", [])]
-                else:
-                    return []
-            except json.JSONDecodeError:
+            if not sessions_data:
                 return []
 
-        # For large files, use streaming parser
-        return self._load_sessions_streaming(chunk_size, show_progress)
+            # Process sessions in chunks to avoid memory issues with large files
+            if show_progress:
+                try:
+                    from rich.progress import Progress, SpinnerColumn, TextColumn
+
+                    sessions = []
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[progress.description]{task.description}"),
+                        transient=True,
+                    ) as progress:
+                        # Create a task with the file size as total
+                        task = progress.add_task(
+                            f"Loading {len(sessions_data)} sessions...",
+                            total=len(sessions_data),
+                        )
+
+                        for session_data in sessions_data:
+                            try:
+                                session = TestSession.from_dict(session_data)
+                                sessions.append(session)
+                            except Exception as e:
+                                print(f"Failed to load session: {e}")
+
+                            progress.update(task, advance=1)
+
+                    return sessions
+                except ImportError:
+                    # Fall back to non-progress version if rich is not available
+                    show_progress = False
+
+            # Load without progress reporting
+            sessions = []
+            for session_data in sessions_data:
+                try:
+                    session = TestSession.from_dict(session_data)
+                    sessions.append(session)
+                except Exception as e:
+                    print(f"Failed to load session: {e}")
+
+            return sessions
+
+        except json.JSONDecodeError:
+            # Create backup of corrupted file
+            backup_path = self.file_path.with_suffix(".bak")
+            shutil.copy2(self.file_path, backup_path)
+            print(f"Warning: JSON decode error in {self.file_path}. Backup created at {backup_path}")
+            return []
 
     def _load_sessions_streaming(self, chunk_size: int = 1000, show_progress: bool = True) -> List[TestSession]:
         """Load sessions using a streaming JSON parser for large files.
@@ -926,6 +961,30 @@ class JSONStorage(BaseStorage):
             os.unlink(temp_file.name)
             raise e
 
+    def _read_json_safely(self) -> Dict:
+        """Read JSON data safely from storage file.
+
+        Returns:
+            Dictionary containing the loaded JSON data
+
+        Raises:
+            json.JSONDecodeError: If the file contains invalid JSON
+        """
+        if not self.file_path.exists():
+            return {"sessions": []}
+
+        # Create a backup before reading in case we encounter corruption
+        backup_path = None
+        try:
+            with open(self.file_path, "r") as f:
+                data = json.load(f)
+                return data
+        except json.JSONDecodeError as e:
+            # Create backup of corrupted file
+            backup_path = self.file_path.with_suffix(".bak")
+            shutil.copy2(self.file_path, backup_path)
+            raise e
+
 
 def get_storage_instance(
     profile_name: Optional[str] = None,
@@ -1049,7 +1108,9 @@ def get_active_profile() -> StorageProfile:
 
 # Main entry point for loading sessions
 def load_sessions(
-    profile_name: Optional[str] = None, chunk_size: int = 1000, show_progress: bool = True
+    profile_name: Optional[str] = None,
+    chunk_size: int = 1000,
+    show_progress: bool = True,
 ) -> List[TestSession]:
     """Load sessions from the specified storage profile.
 

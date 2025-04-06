@@ -4,7 +4,6 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-
 from pytest_insight.core.models import TestSession
 from pytest_insight.core.storage import (
     InMemoryStorage,
@@ -29,11 +28,7 @@ def in_memory_storage():
 @pytest.mark.parametrize("storage_class", [InMemoryStorage, JSONStorage])
 def test_save_and_load_session(storage_class, tmp_path, test_session_basic):
     """Test saving and loading a session in both storage types."""
-    storage = (
-        storage_class(tmp_path / "sessions.json")
-        if storage_class == JSONStorage
-        else storage_class()
-    )
+    storage = storage_class(tmp_path / "sessions.json") if storage_class == JSONStorage else storage_class()
 
     assert storage.load_sessions() == []  # Should start empty
 
@@ -85,14 +80,10 @@ def test_get_storage_instance_json(mocker, tmp_path):
     profile_manager = ProfileManager(config_path=config_path)
 
     # Create a test profile
-    profile_manager._create_profile(
-        "test-profile", "json", str(tmp_path / "sessions.json")
-    )
+    profile_manager._create_profile("test-profile", "json", str(tmp_path / "sessions.json"))
 
     # Mock get_profile_manager to return our test instance
-    mocker.patch(
-        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
-    )
+    mocker.patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager)
 
     # Test with profile_name
     storage = get_storage_instance(profile_name="test-profile")
@@ -134,9 +125,10 @@ def test_atomic_write_operations(tmp_path, get_test_time):
     # Verify the file exists and contains valid JSON
     assert storage_path.exists()
     data = json.loads(storage_path.read_text())
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["session_id"] == "atomic-test"
+    assert isinstance(data, dict)
+    assert "sessions" in data
+    assert len(data["sessions"]) == 1
+    assert data["sessions"][0]["session_id"] == "atomic-test"
 
     # Verify no temporary files are left behind
     temp_files = list(tmp_path.glob("tmp*"))
@@ -167,17 +159,13 @@ def test_save_sessions_bulk(tmp_path, get_test_time):
     # Verify all sessions were saved
     loaded_sessions = storage.load_sessions()
     assert len(loaded_sessions) == 5
-    assert {s.session_id for s in loaded_sessions} == {
-        f"bulk-test-{i}" for i in range(5)
-    }
+    assert {s.session_id for s in loaded_sessions} == {f"bulk-test-{i}" for i in range(5)}
 
 
 def test_handles_invalid_data_format(mocker, json_storage):
     """Test handling of invalid data format (non-list JSON)."""
     # Mock the _read_json_safely method instead of read_text
-    mocker.patch.object(
-        json_storage, "_read_json_safely", return_value={"not": "a list"}
-    )
+    mocker.patch.object(json_storage, "_read_json_safely", return_value={"not": "a list"})
 
     # Should handle gracefully and return empty list
     assert json_storage.load_sessions() == []
@@ -187,17 +175,19 @@ def test_handles_invalid_session_data(mocker, json_storage, get_test_time):
     """Test handling of invalid session data within a valid JSON list."""
     # Create a JSON list with one valid and one invalid session
     timestamp = get_test_time()
-    mock_data = [
-        {
-            "sut_name": "valid",
-            "session_id": "valid",
-            "session_start_time": timestamp.isoformat(),
-            "session_stop_time": (timestamp + timedelta(seconds=30)).isoformat(),
-            "session_duration": 30,
-            "test_results": [],
-        },
-        {"invalid_session": "missing required fields"},
-    ]
+    mock_data = {
+        "sessions": [
+            {
+                "sut_name": "valid",
+                "session_id": "valid",
+                "session_start_time": timestamp.isoformat(),
+                "session_stop_time": (timestamp + timedelta(seconds=30)).isoformat(),
+                "session_duration": 30,
+                "test_results": [],
+            },
+            {"invalid_session": "missing required fields"},
+        ]
+    }
 
     # Mock the _read_json_safely method
     mocker.patch.object(json_storage, "_read_json_safely", return_value=mock_data)
@@ -285,9 +275,7 @@ def test_get_storage_instance_with_env_vars(mocker, tmp_path):
     profile_manager._create_profile(env_profile_name, "json", custom_path)
 
     # Mock get_profile_manager to return our test instance
-    mocker.patch(
-        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
-    )
+    mocker.patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager)
 
     # Mock environment variable for profile
     mocker.patch.dict(
@@ -312,14 +300,10 @@ def test_get_storage_instance_invalid_type(mocker, tmp_path):
     profile_manager = ProfileManager(config_path=config_path)
 
     # Create a test profile with invalid storage type
-    profile_manager._create_profile(
-        "invalid-profile", "invalid_type", str(tmp_path / "invalid.json")
-    )
+    profile_manager._create_profile("invalid-profile", "invalid_type", str(tmp_path / "invalid.json"))
 
     # Mock get_profile_manager to return our test instance
-    mocker.patch(
-        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
-    )
+    mocker.patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager)
 
     # Mock environment variable to be empty
     mocker.patch.dict("os.environ", {"PYTEST_INSIGHT_PROFILE": ""})
@@ -743,14 +727,10 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr(
-            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-        )
+        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
         # Create test profiles
-        profile_manager._create_profile(
-            "json-profile", "json", str(tmp_path / "json-db.json")
-        )
+        profile_manager._create_profile("json-profile", "json", str(tmp_path / "json-db.json"))
         profile_manager._create_profile("memory-profile", "memory")
 
         # Get storage with json profile
@@ -765,9 +745,7 @@ class TestStorageWithProfiles:
         # Get default storage when no profile specified (should use default profile)
         # First, ensure default profile exists with json storage
         if "default" not in profile_manager.list_profiles():
-            profile_manager._create_profile(
-                "default", "json", str(tmp_path / "default-db.json")
-            )
+            profile_manager._create_profile("default", "json", str(tmp_path / "default-db.json"))
         else:
             # Update the default profile to use our test path
             default_profile = profile_manager.get_profile("default")
@@ -794,14 +772,10 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr(
-            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-        )
+        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
         # Create test profile
-        profile_manager._create_profile(
-            "env-profile", "json", str(tmp_path / "env-db.json")
-        )
+        profile_manager._create_profile("env-profile", "json", str(tmp_path / "env-db.json"))
 
         # Set environment variable
         monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "env-profile")
@@ -812,9 +786,7 @@ class TestStorageWithProfiles:
         assert storage.file_path == tmp_path / "env-db.json"
 
         # Explicit profile should override env var
-        profile_manager._create_profile(
-            "explicit-profile", "json", str(tmp_path / "explicit-db.json")
-        )
+        profile_manager._create_profile("explicit-profile", "json", str(tmp_path / "explicit-db.json"))
         storage = get_storage_instance(profile_name="explicit-profile")
         assert storage.file_path == tmp_path / "explicit-db.json"
 
@@ -833,9 +805,7 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr(
-            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-        )
+        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
         # Create profiles using the convenience functions
         # These will use our mocked profile manager
@@ -858,3 +828,141 @@ class TestStorageWithProfiles:
         # Get active profile
         active = get_active_profile()
         assert active.name == "profile1"
+
+
+def test_load_sessions_with_progress(mocker, tmp_path, get_test_time):
+    """Test loading sessions with progress reporting."""
+    # Create a storage instance
+    storage_path = tmp_path / "sessions.json"
+    storage = JSONStorage(file_path=storage_path)
+
+    # Create test sessions
+    sessions = []
+    for i in range(5):
+        session = TestSession(
+            sut_name=f"progress-test-{i}",
+            session_id=f"progress-test-{i}",
+            session_start_time=get_test_time(i * 600),
+            session_duration=30,
+            test_results=[],
+        )
+        sessions.append(session)
+
+    # Save sessions directly using _write_json_safely
+    storage._write_json_safely([s.to_dict() for s in sessions])
+
+    # Mock rich.progress to verify it's used
+    progress_mock = mocker.patch("rich.progress.Progress", autospec=True)
+
+    # Load sessions with progress
+    loaded_sessions = storage.load_sessions(show_progress=True)
+
+    # Verify Progress was used
+    progress_mock.assert_called_once()
+
+    # Verify all sessions were loaded
+    assert len(loaded_sessions) == 5
+    assert {s.session_id for s in loaded_sessions} == {f"progress-test-{i}" for i in range(5)}
+
+
+def test_load_sessions_without_progress(mocker, tmp_path, get_test_time):
+    """Test loading sessions without progress reporting."""
+    # Create a storage instance
+    storage_path = tmp_path / "sessions.json"
+    storage = JSONStorage(file_path=storage_path)
+
+    # Create test sessions
+    sessions = []
+    for i in range(3):
+        session = TestSession(
+            sut_name=f"no-progress-test-{i}",
+            session_id=f"no-progress-test-{i}",
+            session_start_time=get_test_time(i * 600),
+            session_duration=30,
+            test_results=[],
+        )
+        sessions.append(session)
+
+    # Save sessions directly using _write_json_safely
+    storage._write_json_safely([s.to_dict() for s in sessions])
+
+    # Mock rich.progress to verify it's not used
+    progress_mock = mocker.patch("rich.progress.Progress", autospec=True)
+
+    # Load sessions without progress
+    loaded_sessions = storage.load_sessions(show_progress=False)
+
+    # Verify Progress was not used
+    progress_mock.assert_not_called()
+
+    # Verify all sessions were loaded
+    assert len(loaded_sessions) == 3
+    assert {s.session_id for s in loaded_sessions} == {f"no-progress-test-{i}" for i in range(3)}
+
+
+def test_load_sessions_with_invalid_session_data(mocker, tmp_path):
+    """Test loading sessions with some invalid session data."""
+    # Create a storage instance
+    storage_path = tmp_path / "sessions.json"
+    storage = JSONStorage(file_path=storage_path)
+
+    # Create test data with one valid and one invalid session
+    sessions_data = {
+        "sessions": [
+            {
+                "sut_name": "valid-session",
+                "session_id": "valid-session",
+                "session_start_time": "2023-01-01T00:00:00+00:00",
+                "session_stop_time": "2023-01-01T00:00:30+00:00",
+                "session_duration": 30,
+                "test_results": [],
+            },
+            {
+                "invalid_session": "missing required fields",
+            },
+        ]
+    }
+
+    # Save sessions directly
+    with open(storage_path, "w") as f:
+        json.dump(sessions_data, f)
+
+    # Capture print output
+    print_mock = mocker.patch("builtins.print")
+
+    # Load sessions
+    loaded_sessions = storage.load_sessions()
+
+    # Verify only valid session was loaded
+    assert len(loaded_sessions) == 1
+    assert loaded_sessions[0].session_id == "valid-session"
+
+    # Verify error was printed
+    print_mock.assert_any_call(mocker.ANY)  # Any call with string containing error message
+
+
+def test_load_sessions_with_rich_import_error(mocker, tmp_path, get_test_time):
+    """Test loading sessions when rich module import fails."""
+    # Create a storage instance
+    storage_path = tmp_path / "sessions.json"
+    storage = JSONStorage(file_path=storage_path)
+
+    # Create and save a test session
+    session = TestSession(
+        sut_name="import-error-test",
+        session_id="import-error-test",
+        session_start_time=get_test_time(),
+        session_duration=30,
+        test_results=[],
+    )
+    storage._write_json_safely([session.to_dict()])
+
+    # Mock rich.progress to raise ImportError
+    mocker.patch("rich.progress.Progress", side_effect=ImportError("Mocked import error"))
+
+    # Load sessions with progress (should fall back to non-progress version)
+    loaded_sessions = storage.load_sessions(show_progress=True)
+
+    # Verify session was loaded despite the import error
+    assert len(loaded_sessions) == 1
+    assert loaded_sessions[0].session_id == "import-error-test"

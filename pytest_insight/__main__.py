@@ -7,12 +7,15 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 import typer
+from rich.console import Console
+from rich.table import Table
 
 from pytest_insight.core.storage import (
     create_profile,
     get_active_profile,
     get_profile_manager,
     list_profiles,
+    load_sessions,
     switch_profile,
 )
 from pytest_insight.utils.db_generator import PracticeDataGenerator
@@ -26,8 +29,14 @@ app = typer.Typer(
 )
 
 # Create subcommand groups
-profile_app = typer.Typer(help="Manage storage profiles", context_settings={"help_option_names": ["--help", "-h"]})
-generate_app = typer.Typer(help="Generate practice test data", context_settings={"help_option_names": ["--help", "-h"]})
+profile_app = typer.Typer(
+    help="Manage storage profiles",
+    context_settings={"help_option_names": ["--help", "-h"]},
+)
+generate_app = typer.Typer(
+    help="Generate practice test data",
+    context_settings={"help_option_names": ["--help", "-h"]},
+)
 
 # Add subcommands to main app
 app.add_typer(profile_app, name="profile")
@@ -99,7 +108,8 @@ def delete_existing_profile(
             return
 
     try:
-        get_profile_manager().delete_profile(name)
+        profile_manager = get_profile_manager()
+        profile_manager.delete_profile(name)
         typer.echo(f"Deleted profile '{name}'")
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -239,12 +249,34 @@ def analyze(
     output: str = typer.Option("text", "--output", "-o", help="Output format (text, json)"),
     chunk_size: int = typer.Option(1000, "--chunk-size", "-c", help="Chunk size for processing large datasets"),
     no_progress: bool = typer.Option(False, "--no-progress", help="Disable progress bars"),
+    analysis_type: str = typer.Option(
+        "standard",
+        "--type",
+        "-t",
+        help="Analysis type (standard, comprehensive, health, relationships, trends)",
+    ),
+    flaky_threshold: float = typer.Option(
+        0.1,
+        "--flaky-threshold",
+        help="Threshold for considering a test flaky (0.0-1.0)",
+    ),
+    slow_threshold: float = typer.Option(
+        0.0,
+        "--slow-threshold",
+        help="Threshold for considering a test slow (in seconds, 0.0 means auto-detect)",
+    ),
+    export_path: Optional[str] = typer.Option(None, "--export", "-e", help="Export analysis results to file path"),
+    sut_name: Optional[str] = typer.Option(None, "--sut", "-s", help="Filter analysis to specific SUT name"),
 ):
     """Analyze test sessions."""
     try:
         # Import analysis components here to avoid circular imports
+        import json
+
         from pytest_insight.core.analysis import Analysis
-        from pytest_insight.core.storage import load_sessions
+        from pytest_insight.core.insights import Insights
+
+        console = Console()
 
         # Display profile information
         typer.echo(f"Using profile: {profile}")
@@ -256,8 +288,19 @@ def analyze(
             typer.echo("[bold red]No sessions found in storage.[/bold red]")
             return
 
+        # Apply SUT filter if specified
+        if sut_name:
+            typer.echo(f"Filtering sessions for SUT: {sut_name}")
+            sessions = [s for s in sessions if s.sut == sut_name]
+            if not sessions:
+                typer.echo(f"[bold red]No sessions found for SUT: {sut_name}[/bold red]")
+                return
+
         # Create analysis instance with progress configuration
         analysis = Analysis(profile_name=profile, sessions=sessions, show_progress=not no_progress)
+
+        # Create insights instance
+        insights = Insights(profile_name=profile)
 
         # Load sessions with pagination if needed
         if days:
@@ -279,38 +322,77 @@ def analyze(
         typer.echo(f"Unique tests: {session_metrics.get('unique_tests', 0)}")
         typer.echo(f"Average duration: {session_metrics.get('avg_duration', 0):.2f} seconds")
 
+        # Add session start/end time range
+        if analysis._sessions:
+            start_times = [
+                s.session_start_time
+                for s in analysis._sessions
+                if hasattr(s, "session_start_time") and s.session_start_time is not None
+            ]
+
+            # Use session_stop_time if available, otherwise use timestamp
+            end_times = []
+            for s in analysis._sessions:
+                if hasattr(s, "session_stop_time") and s.session_stop_time is not None:
+                    end_times.append(s.session_stop_time)
+                elif hasattr(s, "session_start_time") and s.session_start_time is not None:
+                    # Fallback to session_start_time if end_time not available
+                    end_times.append(s.session_start_time)
+                elif hasattr(s, "timestamp") and s.timestamp is not None:
+                    # Fallback to timestamp
+                    end_times.append(s.timestamp)
+
+            if start_times and end_times:
+                earliest = min(start_times)
+                latest = max(end_times)
+                typer.echo(f"Time range: {earliest.strftime('%Y-%m-%d %H:%M')} to {latest.strftime('%Y-%m-%d %H:%M')}")
+
         typer.echo("\n=== Test Health ===")
         typer.echo(f"Session failure rate: {failure_rate:.1%}")
 
-        # Skip detailed analysis if summary_only is True
-        # if not summary_only:
+        # Add outcome distribution
+        outcome_distribution = analysis.sessions.outcome_distribution(days)
+        if outcome_distribution:
+            typer.echo("\n=== Outcome Distribution ===")
+            table = Table(show_header=True)
+            table.add_column("Outcome")
+            table.add_column("Count")
+            table.add_column("Percentage")
+
+            for outcome, count in outcome_distribution.items():
+                percentage = count / session_metrics.get("total_tests", 1) * 100
+                table.add_row(outcome, str(count), f"{percentage:.1f}%")
+
+            console.print(table)
+
         # Get trends with progress indicator
-        typer.echo("\nCalculating trends...")
-        trends = analysis.sessions.detect_trends(days)
+        if analysis_type in ["standard", "comprehensive", "trends"]:
+            typer.echo("\nCalculating trends...")
+            trends = analysis.sessions.detect_trends(days)
 
-        # Get test stability metrics with progress indicator
-        typer.echo("Analyzing test stability...")
-        stability = analysis.tests.stability(chunk_size=chunk_size)
+            # Get test stability metrics with progress indicator
+            typer.echo("Analyzing test stability...")
+            stability = analysis.tests.stability(chunk_size=chunk_size)
 
-        typer.echo(f"Flaky tests: {len(stability.get('flaky_tests', []))}")
+            typer.echo(f"Flaky tests: {len(stability.get('flaky_tests', []))}")
 
-        # Print trend information
-        typer.echo("\n=== Trends ===")
-        duration_trend = trends.get("duration", {})
-        typer.echo(f"Duration trend: {duration_trend.get('direction', 'stable')}")
-        if duration_trend.get("significant", False):
-            typer.echo(f"  * Significant change detected: {duration_trend.get('change_percent', 0):.1f}%")
+            # Print trend information
+            typer.echo("\n=== Trends ===")
+            duration_trend = trends.get("duration", {})
+            typer.echo(f"Duration trend: {duration_trend.get('direction', 'stable')}")
+            if duration_trend.get("significant", False):
+                typer.echo(f"  * Significant change detected: {duration_trend.get('change_percent', 0):.1f}%")
 
-        failure_trend = trends.get("failures", {})
-        typer.echo(f"Failure trend: {failure_trend.get('direction', 'stable')}")
-        if failure_trend.get("significant", False):
-            typer.echo(f"  * Significant change detected: {failure_trend.get('change_percent', 0):.1f}%")
+            failure_trend = trends.get("failures", {})
+            typer.echo(f"Failure trend: {failure_trend.get('direction', 'stable')}")
+            if failure_trend.get("significant", False):
+                typer.echo(f"  * Significant change detected: {failure_trend.get('change_percent', 0):.1f}%")
 
-        warning_trend = trends.get("warnings", {})
-        if warning_trend:
-            typer.echo(f"Warning trend: {warning_trend.get('direction', 'stable')}")
-            if warning_trend.get("significant", False):
-                typer.echo(f"  * Significant change detected: {warning_trend.get('change_percent', 0):.1f}%")
+            warning_trend = trends.get("warnings", {})
+            if warning_trend:
+                typer.echo(f"Warning trend: {warning_trend.get('direction', 'stable')}")
+                if warning_trend.get("significant", False):
+                    typer.echo(f"  * Significant change detected: {warning_trend.get('change_percent', 0):.1f}%")
 
         # Print top flaky tests if available
         flaky_tests = stability.get("flaky_tests", [])
@@ -344,40 +426,115 @@ def analyze(
                 for i, test in enumerate(slow_tests[:5], 1):
                     typer.echo(f"{i}. {test.get('nodeid', 'Unknown')}: {test.get('avg_duration', 0):.2f}s")
 
-        # Save to output file if specified
-        if output:
-            import json
+        # Add test relationship analysis
+        if analysis_type in ["comprehensive", "relationships"]:
+            typer.echo("\n=== Test Relationship Analysis ===")
+            typer.echo("Analyzing co-failures...")
 
+            # Calculate co-failures (tests that tend to fail together)
+            co_failures = analysis.tests.co_failures(min_correlation=0.7)
+
+            if co_failures:
+                typer.echo("\n=== Co-Failure Clusters ===")
+                for i, cluster in enumerate(co_failures[:5], 1):
+                    typer.echo(f"Cluster {i} (Correlation: {cluster.get('correlation', 0):.2f}):")
+                    for test in cluster.get("tests", [])[:3]:
+                        typer.echo(f"  - {test}")
+                    if len(cluster.get("tests", [])) > 3:
+                        typer.echo(f"  - ... and {len(cluster.get('tests', [])) - 3} more")
+            else:
+                typer.echo("No significant co-failure patterns detected.")
+
+        # Add health score analysis
+        if analysis_type in ["comprehensive", "health"]:
+            typer.echo("\n=== Test Health Score Analysis ===")
+
+            # Calculate overall health score
+            health_score = analysis.tests.health_score()
+
+            if health_score:
+                overall_score = health_score.get("overall_score", 0)
+                stability_score = health_score.get("stability_score", 0)
+                performance_score = health_score.get("performance_score", 0)
+
+                typer.echo(f"Overall Health Score: {overall_score:.1f}/100")
+                typer.echo(f"Stability Score: {stability_score:.1f}/100")
+                typer.echo(f"Performance Score: {performance_score:.1f}/100")
+
+                # Show health score breakdown by test category
+                categories = health_score.get("categories", {})
+                if categories:
+                    typer.echo("\nHealth Score by Category:")
+                    for category, score in categories.items():
+                        typer.echo(f"  {category}: {score:.1f}/100")
+
+        # Add recently failing/passing tests analysis
+        if analysis_type in ["comprehensive", "standard"]:
+            typer.echo("\n=== Recent Test Behavior Changes ===")
+
+            # Get recently failing and recently passing tests
+            behavior_changes = analysis.tests.behavior_changes(days=days or 30)
+
+            if behavior_changes:
+                # Recently failing tests (were passing, now failing)
+                recently_failing = behavior_changes.get("recently_failing", [])
+                if recently_failing:
+                    typer.echo("\nRecently Failing Tests:")
+                    for i, test in enumerate(recently_failing[:5], 1):
+                        typer.echo(f"{i}. {test.get('nodeid', 'Unknown')}")
+                        typer.echo(f"   Last passed: {test.get('last_passed', 'Unknown')}")
+                        typer.echo(f"   Failure streak: {test.get('failure_streak', 0)} runs")
+
+                # Recently passing tests (were failing, now passing)
+                recently_passing = behavior_changes.get("recently_passing", [])
+                if recently_passing:
+                    typer.echo("\nRecently Fixed Tests:")
+                    for i, test in enumerate(recently_passing[:5], 1):
+                        typer.echo(f"{i}. {test.get('nodeid', 'Unknown')}")
+                        typer.echo(f"   Last failed: {test.get('last_failed', 'Unknown')}")
+                        typer.echo(f"   Success streak: {test.get('success_streak', 0)} runs")
+
+        # Export results if requested
+        if export_path:
             # Prepare data for serialization
-            result = {
-                "session_metrics": session_metrics,
-                "failure_rate": failure_rate,
+            export_data = {
+                "timestamp": datetime.now().isoformat(),
+                "profile": profile,
+                "session_summary": {
+                    "total_sessions": (len(analysis._sessions) if analysis._sessions else 0),
+                    "total_tests": session_metrics.get("total_tests", 0),
+                    "unique_tests": session_metrics.get("unique_tests", 0),
+                    "avg_duration": session_metrics.get("avg_duration", 0),
+                    "failure_rate": failure_rate,
+                },
+                "trends": trends if "trends" in locals() else {},
+                "flaky_tests": flaky_tests if "flaky_tests" in locals() else [],
+                "execution_metrics": session_metrics.get("test_execution_metrics", {}),
             }
 
-            # Add detailed analysis if available
-            result.update({"trends": trends, "stability": stability})
+            # Add relationship data if available
+            if "co_failures" in locals() and co_failures:
+                export_data["co_failures"] = co_failures
 
-            # Convert any non-serializable objects
-            def serialize_datetime(obj):
-                if isinstance(obj, datetime):
-                    return obj.isoformat()
-                raise TypeError(f"Type {type(obj)} not serializable")
+            # Add health score if available
+            if "health_score" in locals() and health_score:
+                export_data["health_score"] = health_score
 
-            typer.echo(f"\nSaving results to {output}...")
-            with open(output, "w") as f:
-                json.dump(result, f, default=serialize_datetime, indent=2)
+            # Add behavior changes if available
+            if "behavior_changes" in locals() and behavior_changes:
+                export_data["behavior_changes"] = behavior_changes
 
-            typer.echo(f"Detailed results saved to: {output}")
+            # Write to file
+            with open(export_path, "w") as f:
+                json.dump(export_data, f, indent=2)
 
-    except ImportError as e:
-        typer.echo(f"Error importing analysis components: {e}", err=True)
-        raise typer.Exit(code=1)
+            typer.echo(f"\nAnalysis results exported to: {export_path}")
+
     except Exception as e:
-        typer.echo(f"Error during analysis: {e}", err=True)
+        typer.echo(f"[bold red]Error during analysis: {str(e)}[/bold red]")
         import traceback
 
-        typer.echo(traceback.format_exc(), err=True)
-        raise typer.Exit(code=1)
+        typer.echo(traceback.format_exc())
 
 
 # Main entry point

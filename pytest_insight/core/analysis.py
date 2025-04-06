@@ -49,7 +49,119 @@ from pytest_insight.core.query import Query
 from pytest_insight.core.storage import BaseStorage, get_storage_instance
 
 
-class SessionAnalysis:
+class AnalysisBase:
+    """Base class for analysis components with shared functionality."""
+
+    def __init__(self, show_progress: bool = True):
+        """Initialize base analysis class.
+
+        Args:
+            show_progress: Whether to show progress bars during analysis
+        """
+        self._show_progress = show_progress
+
+    def _progress_context(self, description: str, total: int):
+        """Create a progress context for long-running operations.
+
+        Args:
+            description: Description of the operation
+            total: Total number of items to process
+
+        Returns:
+            A context manager for progress reporting
+        """
+        if not self._show_progress:
+            # Return a dummy context manager if progress is disabled
+            class DummyProgress:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc_val, exc_tb):
+                    pass
+
+                def update(self, *args, **kwargs):
+                    pass
+
+            return DummyProgress()
+
+        # Import here to avoid circular imports
+        from rich.progress import (
+            BarColumn,
+            Progress,
+            TaskProgressColumn,
+            TextColumn,
+        )
+
+        progress = Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            transient=True,
+        )
+        task = progress.add_task(description, total=total)
+
+        # Create a wrapper that exposes the update method directly
+        class ProgressWrapper:
+            def __init__(self, progress, task_id):
+                self.progress = progress
+                self.task_id = task_id
+
+            def __enter__(self):
+                self.progress.__enter__()
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                self.progress.__exit__(exc_type, exc_val, exc_tb)
+
+            def update(self, advance=1):
+                self.progress.update(self.task_id, advance=advance)
+
+        return ProgressWrapper(progress, task)
+
+    def _filter_sessions_by_days(self, days: Optional[int]) -> List[TestSession]:
+        """Filter sessions by the number of days from the most recent session.
+
+        Args:
+            days: Number of days to look back from the most recent session
+
+        Returns:
+            List of filtered sessions
+        """
+        if not hasattr(self, "_sessions") or self._sessions is None or days is None:
+            return getattr(self, "_sessions", [])
+
+        # Find the most recent session timestamp
+        timestamps = []
+        for s in self._sessions:
+            if hasattr(s, "session_start_time") and s.session_start_time is not None:
+                timestamps.append(s.session_start_time)
+            elif hasattr(s, "timestamp") and s.timestamp is not None:
+                timestamps.append(s.timestamp)
+
+        if not timestamps:
+            return self._sessions
+
+        most_recent = max(timestamps)
+
+        # Calculate the cutoff date
+        cutoff = most_recent - timedelta(days=days)
+
+        # Filter sessions by timestamp
+        filtered_sessions = []
+        for s in self._sessions:
+            session_time = None
+            if hasattr(s, "session_start_time") and s.session_start_time is not None:
+                session_time = s.session_start_time
+            elif hasattr(s, "timestamp") and s.timestamp is not None:
+                session_time = s.timestamp
+
+            if session_time is not None and session_time >= cutoff:
+                filtered_sessions.append(s)
+
+        return filtered_sessions
+
+
+class SessionAnalysis(AnalysisBase):
     """Session-level analytics.
 
     Analyzes patterns and metrics at the test session level:
@@ -75,8 +187,8 @@ class SessionAnalysis:
                          Takes precedence over storage parameter if both are provided.
             show_progress: Whether to show progress bars during analysis
         """
+        super().__init__(show_progress=show_progress)
         self._profile_name = profile_name
-        self._show_progress = show_progress
 
         if storage is None and profile_name is not None:
             storage = get_storage_instance(profile_name=profile_name)
@@ -290,8 +402,16 @@ class SessionAnalysis:
 
         if not sessions:
             return {
-                "duration": {"direction": "stable", "change_percent": 0.0, "significant": False},
-                "failures": {"direction": "stable", "change_percent": 0.0, "significant": False},
+                "duration": {
+                    "direction": "stable",
+                    "change_percent": 0.0,
+                    "significant": False,
+                },
+                "failures": {
+                    "direction": "stable",
+                    "change_percent": 0.0,
+                    "significant": False,
+                },
                 "warnings": {
                     "direction": "stable",
                     "change_percent": 0.0,
@@ -381,26 +501,23 @@ class SessionAnalysis:
             x = np.arange(len(durations))
             A = np.vstack([x, np.ones(len(x))]).T
             slope, _ = np.linalg.lstsq(A, durations, rcond=None)[0]
-        except (ImportError, Exception):
-            # Fallback to simple calculation if numpy not available or fails
-            try:
-                x = list(range(len(durations)))
-                x_mean = sum(x) / len(x)
-                y_mean = sum(durations) / len(durations)
+        except ImportError:
+            # Fallback to simple calculation if numpy not available
+            x = list(range(len(durations)))
+            x_mean = sum(x) / len(x)
+            y_mean = sum(durations) / len(durations)
 
-                numerator = sum((x[i] - x_mean) * (y - y_mean) for i, y in enumerate(durations))
-                denominator = sum((x[i] - x_mean) ** 2 for i in x)
+            numerator = sum((x[i] - x_mean) * (y - y_mean) for i, y in enumerate(durations))
+            denominator = sum((x[i] - x_mean) ** 2 for i in x)
 
-                if abs(denominator) < 1e-10:
-                    slope = 0
-                else:
-                    slope = numerator / denominator
-            except Exception:
+            if abs(denominator) < 1e-10:
                 slope = 0
+            else:
+                slope = numerator / denominator
 
         return {
             "direction": ("increasing" if slope > 0.1 else "decreasing" if slope < -0.1 else "stable"),
-            "change_percent": abs(slope) * 100 if abs(slope) < 100 else 100,  # Cap at 100%
+            "change_percent": (abs(slope) * 100 if abs(slope) < 100 else 100),  # Cap at 100%
             "significant": False,  # TODO: Implement significance check
         }
 
@@ -456,26 +573,23 @@ class SessionAnalysis:
             x = np.arange(len(failure_rates))
             A = np.vstack([x, np.ones(len(x))]).T
             slope, _ = np.linalg.lstsq(A, failure_rates, rcond=None)[0]
-        except (ImportError, Exception):
+        except ImportError:
             # Fallback to simple calculation
-            try:
-                x = list(range(len(failure_rates)))
-                x_mean = sum(x) / len(x)
-                y_mean = sum(failure_rates) / len(failure_rates)
+            x = list(range(len(failure_rates)))
+            x_mean = sum(x) / len(x)
+            y_mean = sum(failure_rates) / len(failure_rates)
 
-                numerator = sum((i - x_mean) * (rate - y_mean) for i, rate in enumerate(failure_rates))
-                denominator = sum((i - x_mean) ** 2 for i in x)
+            numerator = sum((i - x_mean) * (rate - y_mean) for i, rate in enumerate(failure_rates))
+            denominator = sum((i - x_mean) ** 2 for i in x)
 
-                if abs(denominator) < 1e-10:
-                    slope = 0
-                else:
-                    slope = numerator / denominator
-            except Exception:
+            if abs(denominator) < 1e-10:
                 slope = 0
+            else:
+                slope = numerator / denominator
 
         return {
             "direction": ("worsening" if slope > 0.05 else "improving" if slope < -0.05 else "stable"),
-            "change_percent": abs(slope) * 100 if abs(slope) < 100 else 100,  # Cap at 100%
+            "change_percent": (abs(slope) * 100 if abs(slope) < 100 else 100),  # Cap at 100%
             "significant": False,  # TODO: Implement significance check
         }
 
@@ -517,22 +631,19 @@ class SessionAnalysis:
             x = np.arange(len(warning_counts))
             A = np.vstack([x, np.ones(len(x))]).T
             slope, _ = np.linalg.lstsq(A, warning_counts, rcond=None)[0]
-        except (ImportError, Exception):
+        except ImportError:
             # Fallback to simple calculation
-            try:
-                x = list(range(len(warning_counts)))
-                x_mean = sum(x) / len(x)
-                y_mean = sum(warning_counts) / len(warning_counts)
+            x = list(range(len(warning_counts)))
+            x_mean = sum(x) / len(x)
+            y_mean = sum(warning_counts) / len(warning_counts)
 
-                numerator = sum((i - x_mean) * (count - y_mean) for i, count in enumerate(warning_counts))
-                denominator = sum((i - x_mean) ** 2 for i in x)
+            numerator = sum((i - x_mean) * (count - y_mean) for i, count in enumerate(warning_counts))
+            denominator = sum((i - x_mean) ** 2 for i in x)
 
-                if abs(denominator) < 1e-10:
-                    slope = 0
-                else:
-                    slope = numerator / denominator
-            except Exception:
+            if abs(denominator) < 1e-10:
                 slope = 0
+            else:
+                slope = numerator / denominator
 
         # Find most common warning types (limit to top 5)
         common_warnings = sorted(
@@ -543,13 +654,395 @@ class SessionAnalysis:
 
         return {
             "direction": ("increasing" if slope > 0.05 else "decreasing" if slope < -0.05 else "stable"),
-            "change_percent": abs(slope) * 100 if abs(slope) < 100 else 100,  # Cap at 100%
+            "change_percent": (abs(slope) * 100 if abs(slope) < 100 else 100),  # Cap at 100%
             "significant": False,  # TODO: Implement significance check
             "common_warnings": [{"test": test, "count": count} for test, count in common_warnings],
         }
 
+    def outcome_distribution(self, days: Optional[int] = None) -> Dict[str, int]:
+        """
+        Calculate the distribution of test outcomes across sessions.
 
-class TestAnalysis:
+        Args:
+            days: Optional number of days to limit the analysis to
+
+        Returns:
+            Dictionary mapping outcome names to counts
+        """
+        # Filter sessions by days if specified
+        sessions = self._filter_sessions_by_days(days) if days else self._sessions
+
+        if not sessions:
+            return {}
+
+        # Initialize outcome counter
+        outcome_counts = {}
+
+        # Set up progress reporting
+        total_sessions = len(sessions)
+        with self._progress_context("Calculating outcome distribution", total_sessions) as progress:
+            # Process each session
+            for i, session in enumerate(sessions):
+                progress.update(i)
+
+                # Count outcomes in this session
+                for test_result in session.test_results:
+                    outcome_str = test_result.outcome.to_str()
+                    outcome_counts[outcome_str] = outcome_counts.get(outcome_str, 0) + 1
+
+        return outcome_counts
+
+    def co_failures(self, min_correlation: float = 0.7, min_occurrences: int = 3) -> List[Dict[str, Any]]:
+        """
+        Identify clusters of tests that tend to fail together.
+
+        Args:
+            min_correlation: Minimum correlation coefficient to consider tests related
+            min_occurrences: Minimum number of co-occurrences to consider
+
+        Returns:
+            List of co-failure clusters with correlation scores
+        """
+        if not self._sessions:
+            return []
+
+        # Extract all test failures from sessions
+        test_failures = {}
+        session_failures = {}
+
+        # Set up progress reporting
+        total_sessions = len(self._sessions)
+        with self._progress_context("Extracting test failures", total_sessions) as progress:
+            # Process each session
+            for i, session in enumerate(self._sessions):
+                progress.update(i)
+
+                # Record failures in this session
+                session_id = session.session_id
+                session_failures[session_id] = []
+
+                for test_result in session.test_results:
+                    if test_result.outcome.is_failed():
+                        test_id = test_result.nodeid
+
+                        # Initialize test entry if not exists
+                        if test_id not in test_failures:
+                            test_failures[test_id] = set()
+
+                        # Record that this test failed in this session
+                        test_failures[test_id].add(session_id)
+                        session_failures[session_id].append(test_id)
+
+        # Find correlations between tests
+        correlations = {}
+        test_ids = list(test_failures.keys())
+
+        # Skip if not enough tests
+        if len(test_ids) < 2:
+            return []
+
+        # Set up progress reporting
+        total_comparisons = len(test_ids) * (len(test_ids) - 1) // 2
+        with self._progress_context("Calculating test correlations", total_comparisons) as progress:
+            # Compare each pair of tests
+            comparison_count = 0
+            for i in range(len(test_ids)):
+                for j in range(i + 1, len(test_ids)):
+                    progress.update(comparison_count)
+                    comparison_count += 1
+
+                    test_a = test_ids[i]
+                    test_b = test_ids[j]
+
+                    # Get sessions where each test failed
+                    sessions_a = test_failures[test_a]
+                    sessions_b = test_failures[test_b]
+
+                    # Calculate co-occurrence
+                    co_failures = sessions_a.intersection(sessions_b)
+
+                    # Skip if not enough co-occurrences
+                    if len(co_failures) < min_occurrences:
+                        continue
+
+                    # Calculate correlation coefficient (Jaccard similarity)
+                    correlation = len(co_failures) / len(sessions_a.union(sessions_b))
+
+                    # Record if above threshold
+                    if correlation >= min_correlation:
+                        pair_key = (test_a, test_b)
+                        correlations[pair_key] = {
+                            "correlation": correlation,
+                            "co_failures": len(co_failures),
+                            "tests": [test_a, test_b],
+                        }
+
+        # Build clusters from correlations
+        clusters = []
+        processed_pairs = set()
+
+        # Sort correlations by strength
+        sorted_correlations = sorted(correlations.items(), key=lambda x: x[1]["correlation"], reverse=True)
+
+        # Process each correlation
+        for (test_a, test_b), data in sorted_correlations:
+            # Skip if already in a cluster
+            if (test_a, test_b) in processed_pairs:
+                continue
+
+            # Start new cluster
+            cluster = {
+                "correlation": data["correlation"],
+                "co_failures": data["co_failures"],
+                "tests": [test_a, test_b],
+            }
+            processed_pairs.add((test_a, test_b))
+
+            # Try to expand cluster
+            for (other_a, other_b), other_data in sorted_correlations:
+                # Skip if already processed
+                if (other_a, other_b) in processed_pairs:
+                    continue
+
+                # Check if connected to cluster
+                if other_a in cluster["tests"] or other_b in cluster["tests"]:
+                    # Add the test not in the cluster
+                    new_test = other_b if other_a in cluster["tests"] else other_a
+                    if new_test not in cluster["tests"]:
+                        cluster["tests"].append(new_test)
+
+                    # Mark as processed
+                    processed_pairs.add((other_a, other_b))
+
+                    # Update correlation (use average)
+                    cluster["correlation"] = (cluster["correlation"] + other_data["correlation"]) / 2
+
+            # Add cluster to results
+            clusters.append(cluster)
+
+        return clusters
+
+    def health_score(self) -> Dict[str, Any]:
+        """
+        Calculate a health score for the test suite based on various metrics.
+
+        Returns:
+            Dictionary with overall health score and component scores
+        """
+        if not self._sessions:
+            return {}
+
+        # Initialize scores
+        stability_score = 0.0
+        performance_score = 0.0
+
+        # Get stability metrics
+        stability_data = self.stability()
+        flaky_tests = stability_data.get("flaky_tests", [])
+        unstable_tests = stability_data.get("unstable_tests", [])
+
+        # Calculate stability score (100 - percentage of flaky/unstable tests)
+        test_results = self._get_all_test_results()
+        unique_tests = set(test.nodeid for test in test_results)
+        total_unique_tests = len(unique_tests)
+
+        if total_unique_tests > 0:
+            flaky_count = len(flaky_tests)
+            unstable_count = len(unstable_tests)
+            problem_tests_pct = (flaky_count + unstable_count) / total_unique_tests * 100
+            stability_score = max(0, 100 - problem_tests_pct)
+
+        # Get session analysis for trends
+        session_analysis = SessionAnalysis(self._sessions, self._show_progress)
+
+        # Calculate performance score based on duration trends
+        trends = session_analysis.detect_trends()
+        duration_trend = trends.get("duration", {})
+
+        # Base performance score on trend direction and significance
+        performance_score = 70  # Default score
+
+        if duration_trend:
+            direction = duration_trend.get("direction", "stable")
+            significant = duration_trend.get("significant", False)
+            change_percent = duration_trend.get("change_percent", 0)
+
+            if direction == "improving":
+                # Tests getting faster
+                performance_score += 20 if significant else 10
+            elif direction == "degrading":
+                # Tests getting slower
+                performance_score -= 20 if significant else 10
+
+            # Adjust based on magnitude of change
+            if abs(change_percent) > 20:
+                performance_score += 10 if direction == "improving" else -10
+
+        # Ensure scores are within 0-100 range
+        stability_score = max(0, min(100, stability_score))
+        performance_score = max(0, min(100, performance_score))
+
+        # Calculate overall score (weighted average)
+        overall_score = 0.7 * stability_score + 0.3 * performance_score
+
+        # Calculate category scores
+        categories = {}
+
+        # Group tests by category (using directory structure)
+        test_by_category = {}
+        for test in test_results:
+            # Extract category from nodeid (first directory)
+            parts = test.nodeid.split("/")
+            category = parts[0] if len(parts) > 1 else "unknown"
+
+            if category not in test_by_category:
+                test_by_category[category] = []
+
+            test_by_category[category].append(test)
+
+        # Calculate score for each category
+        for category, tests in test_by_category.items():
+            # Skip categories with too few tests
+            if len(tests) < 5:
+                continue
+
+            # Calculate failure rate
+            failures = sum(1 for test in tests if test.outcome.is_failed())
+            failure_rate = failures / len(tests) if tests else 0
+
+            # Calculate category score
+            category_score = 100 - (failure_rate * 100)
+            categories[category] = category_score
+
+        return {
+            "overall_score": overall_score,
+            "stability_score": stability_score,
+            "performance_score": performance_score,
+            "categories": categories,
+        }
+
+    def behavior_changes(self, days: Optional[int] = 30) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Identify tests that have recently changed behavior (passing to failing or vice versa).
+
+        Args:
+            days: Number of days to consider for "recent" changes
+
+        Returns:
+            Dictionary with lists of recently failing and recently passing tests
+        """
+        if not self._sessions:
+            return {}
+
+        # Filter sessions by days if specified
+        session_analysis = SessionAnalysis(self._sessions, self._show_progress)
+        sessions = session_analysis._filter_sessions_by_days(days) if days else self._sessions
+
+        if not sessions:
+            return {}
+
+        # Sort sessions by timestamp
+        sessions = sorted(sessions, key=lambda s: s.session_start_time)
+
+        # Track test outcomes over time
+        test_history = {}
+
+        # Set up progress reporting
+        total_sessions = len(sessions)
+        with self._progress_context("Analyzing test behavior changes", total_sessions) as progress:
+            # Process each session
+            for i, session in enumerate(sessions):
+                progress.update(i)
+
+                session_time = session.session_start_time or session.timestamp
+
+                # Record outcomes in this session
+                for test_result in session.test_results:
+                    test_id = test_result.nodeid
+                    outcome = test_result.outcome
+
+                    # Initialize test history if not exists
+                    if test_id not in test_history:
+                        test_history[test_id] = []
+
+                    # Record outcome
+                    test_history[test_id].append(
+                        {
+                            "session_id": session.session_id,
+                            "timestamp": session_time,
+                            "outcome": outcome,
+                        }
+                    )
+
+        # Identify behavior changes
+        recently_failing = []
+        recently_passing = []
+
+        # Set up progress reporting
+        total_tests = len(test_history)
+        with self._progress_context("Identifying behavior changes", total_tests) as progress:
+            # Process each test
+            for i, (test_id, history) in enumerate(test_history.items()):
+                progress.update(i)
+
+                # Skip tests with too few data points
+                if len(history) < 3:
+                    continue
+
+                # Analyze recent behavior
+                recent_outcomes = history[-3:]  # Last 3 outcomes
+                older_outcomes = history[:-3]  # Outcomes before that
+
+                if not older_outcomes:
+                    continue
+
+                # Check if recently failing
+                was_passing = all(not o["outcome"].is_failed() for o in older_outcomes[-3:])
+                now_failing = all(o["outcome"].is_failed() for o in recent_outcomes)
+
+                if was_passing and now_failing:
+                    # Find last passed timestamp
+                    last_passed = None
+                    for o in reversed(history):
+                        if not o["outcome"].is_failed():
+                            last_passed = o["timestamp"]
+                            break
+
+                    recently_failing.append(
+                        {
+                            "nodeid": test_id,
+                            "last_passed": last_passed,
+                            "failure_streak": sum(1 for o in recent_outcomes if o["outcome"].is_failed()),
+                        }
+                    )
+
+                # Check if recently passing
+                was_failing = all(o["outcome"].is_failed() for o in older_outcomes[-3:])
+                now_passing = all(not o["outcome"].is_failed() for o in recent_outcomes)
+
+                if was_failing and now_passing:
+                    # Find last failed timestamp
+                    last_failed = None
+                    for o in reversed(history):
+                        if o["outcome"].is_failed():
+                            last_failed = o["timestamp"]
+                            break
+
+                    recently_passing.append(
+                        {
+                            "nodeid": test_id,
+                            "last_failed": last_failed,
+                            "success_streak": sum(1 for o in recent_outcomes if not o["outcome"].is_failed()),
+                        }
+                    )
+
+        return {
+            "recently_failing": recently_failing,
+            "recently_passing": recently_passing,
+        }
+
+
+class TestAnalysis(AnalysisBase):
     """Test-level analytics.
 
     Analyzes patterns and metrics at individual test level:
@@ -575,8 +1068,8 @@ class TestAnalysis:
                          Takes precedence over storage parameter if both are provided.
             show_progress: Whether to show progress bars during analysis
         """
+        super().__init__(show_progress=show_progress)
         self._profile_name = profile_name
-        self._show_progress = show_progress
 
         if storage is None and profile_name is not None:
             storage = get_storage_instance(profile_name=profile_name)
@@ -769,8 +1262,368 @@ class TestAnalysis:
         # TODO: Implement warning analysis
         pass
 
+    def outcome_distribution(self, days: Optional[int] = None) -> Dict[str, int]:
+        """
+        Calculate the distribution of test outcomes across sessions.
 
-class MetricsAnalysis:
+        Args:
+            days: Optional number of days to limit the analysis to
+
+        Returns:
+            Dictionary mapping outcome names to counts
+        """
+        # Filter sessions by days if specified
+        sessions = self._filter_sessions_by_days(days) if days else self._sessions
+
+        if not sessions:
+            return {}
+
+        # Initialize outcome counter
+        outcome_counts = {}
+
+        # Set up progress reporting
+        total_sessions = len(sessions)
+        with self._progress_context("Calculating outcome distribution", total_sessions) as progress:
+            # Process each session
+            for i, session in enumerate(sessions):
+                progress.update(i)
+
+                # Count outcomes in this session
+                for test_result in session.test_results:
+                    outcome_str = test_result.outcome.to_str()
+                    outcome_counts[outcome_str] = outcome_counts.get(outcome_str, 0) + 1
+
+        return outcome_counts
+
+    def co_failures(self, min_correlation: float = 0.7, min_occurrences: int = 3) -> List[Dict[str, Any]]:
+        """
+        Identify clusters of tests that tend to fail together.
+
+        Args:
+            min_correlation: Minimum correlation coefficient to consider tests related
+            min_occurrences: Minimum number of co-occurrences to consider
+
+        Returns:
+            List of co-failure clusters with correlation scores
+        """
+        if not self._sessions:
+            return []
+
+        # Extract all test failures from sessions
+        test_failures = {}
+        session_failures = {}
+
+        # Set up progress reporting
+        total_sessions = len(self._sessions)
+        with self._progress_context("Extracting test failures", total_sessions) as progress:
+            # Process each session
+            for i, session in enumerate(self._sessions):
+                progress.update(i)
+
+                # Record failures in this session
+                session_id = session.session_id
+                session_failures[session_id] = []
+
+                for test_result in session.test_results:
+                    if test_result.outcome.is_failed():
+                        test_id = test_result.nodeid
+
+                        # Initialize test entry if not exists
+                        if test_id not in test_failures:
+                            test_failures[test_id] = set()
+
+                        # Record that this test failed in this session
+                        test_failures[test_id].add(session_id)
+                        session_failures[session_id].append(test_id)
+
+        # Find correlations between tests
+        correlations = {}
+        test_ids = list(test_failures.keys())
+
+        # Skip if not enough tests
+        if len(test_ids) < 2:
+            return []
+
+        # Set up progress reporting
+        total_comparisons = len(test_ids) * (len(test_ids) - 1) // 2
+        with self._progress_context("Calculating test correlations", total_comparisons) as progress:
+            # Compare each pair of tests
+            comparison_count = 0
+            for i in range(len(test_ids)):
+                for j in range(i + 1, len(test_ids)):
+                    progress.update(comparison_count)
+                    comparison_count += 1
+
+                    test_a = test_ids[i]
+                    test_b = test_ids[j]
+
+                    # Get sessions where each test failed
+                    sessions_a = test_failures[test_a]
+                    sessions_b = test_failures[test_b]
+
+                    # Calculate co-occurrence
+                    co_failures = sessions_a.intersection(sessions_b)
+
+                    # Skip if not enough co-occurrences
+                    if len(co_failures) < min_occurrences:
+                        continue
+
+                    # Calculate correlation coefficient (Jaccard similarity)
+                    correlation = len(co_failures) / len(sessions_a.union(sessions_b))
+
+                    # Record if above threshold
+                    if correlation >= min_correlation:
+                        pair_key = (test_a, test_b)
+                        correlations[pair_key] = {
+                            "correlation": correlation,
+                            "co_failures": len(co_failures),
+                            "tests": [test_a, test_b],
+                        }
+
+        # Build clusters from correlations
+        clusters = []
+        processed_pairs = set()
+
+        # Sort correlations by strength
+        sorted_correlations = sorted(correlations.items(), key=lambda x: x[1]["correlation"], reverse=True)
+
+        # Process each correlation
+        for (test_a, test_b), data in sorted_correlations:
+            # Skip if already in a cluster
+            if (test_a, test_b) in processed_pairs:
+                continue
+
+            # Start new cluster
+            cluster = {
+                "correlation": data["correlation"],
+                "co_failures": data["co_failures"],
+                "tests": [test_a, test_b],
+            }
+            processed_pairs.add((test_a, test_b))
+
+            # Try to expand cluster
+            for (other_a, other_b), other_data in sorted_correlations:
+                # Skip if already processed
+                if (other_a, other_b) in processed_pairs:
+                    continue
+
+                # Check if connected to cluster
+                if other_a in cluster["tests"] or other_b in cluster["tests"]:
+                    # Add the test not in the cluster
+                    new_test = other_b if other_a in cluster["tests"] else other_a
+                    if new_test not in cluster["tests"]:
+                        cluster["tests"].append(new_test)
+
+                    # Mark as processed
+                    processed_pairs.add((other_a, other_b))
+
+                    # Update correlation (use average)
+                    cluster["correlation"] = (cluster["correlation"] + other_data["correlation"]) / 2
+
+            # Add cluster to results
+            clusters.append(cluster)
+
+        return clusters
+
+    def health_score(self) -> Dict[str, Any]:
+        """
+        Calculate a health score for the test suite based on various metrics.
+
+        Returns:
+            Dictionary with overall health score and component scores
+        """
+        if not self._sessions:
+            return {}
+
+        # Initialize scores
+        stability_score = 0.0
+        performance_score = 0.0
+
+        # Get stability metrics
+        stability_data = self.stability()
+        flaky_tests = stability_data.get("flaky_tests", [])
+        unstable_tests = stability_data.get("unstable_tests", [])
+
+        # Calculate stability score (100 - percentage of flaky/unstable tests)
+        test_results = self._get_all_test_results()
+        unique_tests = set(test.nodeid for test in test_results)
+        total_unique_tests = len(unique_tests)
+
+        if total_unique_tests > 0:
+            flaky_count = len(flaky_tests)
+            unstable_count = len(unstable_tests)
+            problem_tests_pct = (flaky_count + unstable_count) / total_unique_tests * 100
+            stability_score = max(0, 100 - problem_tests_pct)
+
+        # Get session analysis for trends
+        session_analysis = SessionAnalysis(self._sessions, self._show_progress)
+
+        # Calculate performance score based on duration trends
+        trends = session_analysis.detect_trends()
+        duration_trend = trends.get("duration", {})
+
+        # Base performance score on trend direction and significance
+        performance_score = 70  # Default score
+
+        if duration_trend:
+            direction = duration_trend.get("direction", "stable")
+            significant = duration_trend.get("significant", False)
+            change_percent = duration_trend.get("change_percent", 0)
+
+            if direction == "improving":
+                # Tests getting faster
+                performance_score += 20 if significant else 10
+            elif direction == "degrading":
+                # Tests getting slower
+                performance_score -= 20 if significant else 10
+
+            # Adjust based on magnitude of change
+            if abs(change_percent) > 20:
+                performance_score += 10 if direction == "improving" else -10
+
+        # Ensure scores are within 0-100 range
+        stability_score = max(0, min(100, stability_score))
+        performance_score = max(0, min(100, performance_score))
+
+        # Calculate overall score (weighted average)
+        overall_score = 0.7 * stability_score + 0.3 * performance_score
+
+        # Calculate category scores
+        categories = {}
+
+        # Group tests by category (using directory structure)
+        test_by_category = {}
+        for test in test_results:
+            # Extract category from nodeid (first directory)
+            parts = test.nodeid.split("/")
+            category = parts[0] if len(parts) > 1 else "unknown"
+
+            if category not in test_by_category:
+                test_by_category[category] = []
+
+            test_by_category[category].append(test)
+
+        # Calculate score for each category
+        for category, tests in test_by_category.items():
+            # Skip categories with too few tests
+            if len(tests) < 5:
+                continue
+
+            # Calculate failure rate
+            failures = sum(1 for test in tests if test.outcome.is_failed())
+            failure_rate = failures / len(tests) if tests else 0
+
+            # Calculate category score
+            category_score = 100 - (failure_rate * 100)
+            categories[category] = category_score
+
+        return {
+            "overall_score": overall_score,
+            "stability_score": stability_score,
+            "performance_score": performance_score,
+            "categories": categories,
+        }
+
+    def behavior_changes(self, days: Optional[int] = 30, threshold: int = 3) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Detect tests that have recently changed behavior (failing or passing).
+
+        Args:
+            days: Number of days to look back
+            threshold: Minimum number of consecutive failures/passes to consider
+
+        Returns:
+            Dictionary with lists of recently failing and recently passing tests
+        """
+        # Filter sessions by days if specified
+        sessions = self._filter_sessions_by_days(days) if days else self._sessions
+
+        if not sessions:
+            return {"recently_failing": [], "recently_passing": []}
+
+        # Sort sessions by timestamp
+        sessions = sorted(sessions, key=lambda s: s.session_start_time)
+
+        # Get test outcomes by test ID
+        test_outcomes = defaultdict(list)
+        for session in sessions:
+            for test in session.test_results:
+                test_outcomes[test.nodeid].append({"outcome": test.outcome, "timestamp": session.session_start_time})
+
+        # Identify tests with behavior changes
+        recently_failing = []
+        recently_passing = []
+
+        total_sessions = len(sessions)
+        total_tests = len(test_outcomes)
+
+        with self._progress_context("Analyzing test behavior changes", total_sessions) as progress:
+            for i, session in enumerate(sessions):
+                progress.update(i)
+
+                # Skip if not enough history
+                if i < threshold:
+                    continue
+
+        with self._progress_context("Identifying behavior changes", total_tests) as progress:
+            for i, (test_id, history) in enumerate(test_outcomes.items()):
+                progress.update(i)
+
+                # Skip if not enough history
+                if len(history) < threshold * 2:
+                    continue
+
+                # Split history into recent and older
+                recent_outcomes = history[-threshold:]
+                older_outcomes = history[:-threshold]
+
+                # Check if recently failing
+                was_passing = all(not o["outcome"].is_failed() for o in older_outcomes[-3:])
+                now_failing = all(o["outcome"].is_failed() for o in recent_outcomes)
+
+                if was_passing and now_failing:
+                    # Find last passed timestamp
+                    last_passed = None
+                    for o in reversed(history):
+                        if not o["outcome"].is_failed():
+                            last_passed = o["timestamp"]
+                            break
+
+                    recently_failing.append(
+                        {
+                            "nodeid": test_id,
+                            "last_passed": last_passed,
+                            "failure_streak": sum(1 for o in recent_outcomes if o["outcome"].is_failed()),
+                        }
+                    )
+
+                # Check if recently passing
+                was_failing = all(o["outcome"].is_failed() for o in older_outcomes[-3:])
+                now_passing = all(not o["outcome"].is_failed() for o in recent_outcomes)
+
+                if was_failing and now_passing:
+                    # Find last failed timestamp
+                    last_failed = None
+                    for o in reversed(history):
+                        if o["outcome"].is_failed():
+                            last_failed = o["timestamp"]
+                            break
+
+                    recently_passing.append(
+                        {
+                            "nodeid": test_id,
+                            "last_failed": last_failed,
+                            "success_streak": sum(1 for o in recent_outcomes if not o["outcome"].is_failed()),
+                        }
+                    )
+
+        return {
+            "recently_failing": recently_failing,
+            "recently_passing": recently_passing,
+        }
+
+
+class MetricsAnalysis(AnalysisBase):
     """High-level metrics analysis.
 
     Provides aggregated metrics and health scores:
@@ -797,8 +1650,8 @@ class MetricsAnalysis:
                          Takes precedence over storage parameter if both are provided.
             show_progress: Whether to show progress bars during analysis
         """
+        super().__init__(show_progress=show_progress)
         self._profile_name = profile_name
-        self._show_progress = show_progress
 
         if storage is None and profile_name is not None:
             storage = get_storage_instance(profile_name=profile_name)
@@ -1299,8 +2152,16 @@ class Analysis:
             base_sessions = sorted_sessions[:midpoint]
             target_sessions = sorted_sessions[midpoint:]
 
-        base_analysis = Analysis(storage=self.storage, sessions=base_sessions, show_progress=self._show_progress)
-        target_analysis = Analysis(storage=self.storage, sessions=target_sessions, show_progress=self._show_progress)
+        base_analysis = Analysis(
+            storage=self.storage,
+            sessions=base_sessions,
+            show_progress=self._show_progress,
+        )
+        target_analysis = Analysis(
+            storage=self.storage,
+            sessions=target_sessions,
+            show_progress=self._show_progress,
+        )
 
         base_health = base_analysis.health_report()
         target_health = target_analysis.health_report()
@@ -1375,34 +2236,121 @@ class Analysis:
         if not self._sessions:
             return []
 
-        # Track outcomes per test across all sessions
-        test_outcomes = defaultdict(set)
+        # Extract all test failures from sessions
+        test_failures = {}
+        session_failures = {}
 
-        for session in self._sessions:
-            # Process regular test results
-            for test in session.test_results:
-                test_outcomes[test.nodeid].add(test.outcome)
+        # Set up progress reporting
+        total_sessions = len(self._sessions)
+        with self._progress_context("Extracting test failures", total_sessions) as progress:
+            # Process each session
+            for i, session in enumerate(self._sessions):
+                progress.update(i)
 
-            # Process rerun groups if available
-            if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
-                for rerun_group in session.rerun_test_groups:
-                    nodeid = rerun_group.nodeid
+                # Record failures in this session
+                session_id = session.session_id
+                session_failures[session_id] = []
 
-                    # For rerun groups, use the final outcome
-                    if rerun_group.tests and len(rerun_group.tests) > 0:
-                        final_test = rerun_group.tests[-1]
-                        final_outcome = final_test.outcome
+                for test_result in session.test_results:
+                    if test_result.outcome.is_failed():
+                        test_id = test_result.nodeid
 
-                        if nodeid not in test_outcomes:
-                            test_outcomes[nodeid] = set()
+                        # Initialize test entry if not exists
+                        if test_id not in test_failures:
+                            test_failures[test_id] = set()
 
-                        # Override any previous entry for this test in this session
-                        # with the final outcome from the rerun group
-                        test_outcomes[nodeid].add(final_outcome)
+                        # Record that this test failed in this session
+                        test_failures[test_id].add(session_id)
+                        session_failures[session_id].append(test_id)
 
-        # Tests with multiple outcomes are considered flaky
-        flaky_tests = [nodeid for nodeid, outcomes in test_outcomes.items() if len(outcomes) > 1]
-        return flaky_tests
+        # Find correlations between tests
+        correlations = {}
+        test_ids = list(test_failures.keys())
+
+        # Skip if not enough tests
+        if len(test_ids) < 2:
+            return []
+
+        # Set up progress reporting
+        total_comparisons = len(test_ids) * (len(test_ids) - 1) // 2
+        with self._progress_context("Calculating test correlations", total_comparisons) as progress:
+            # Compare each pair of tests
+            comparison_count = 0
+            for i in range(len(test_ids)):
+                for j in range(i + 1, len(test_ids)):
+                    progress.update(comparison_count)
+                    comparison_count += 1
+
+                    test_a = test_ids[i]
+                    test_b = test_ids[j]
+
+                    # Get sessions where each test failed
+                    sessions_a = test_failures[test_a]
+                    sessions_b = test_failures[test_b]
+
+                    # Calculate co-occurrence
+                    co_failures = sessions_a.intersection(sessions_b)
+
+                    # Skip if not enough co-occurrences
+                    if len(co_failures) < 3:
+                        continue
+
+                    # Calculate correlation coefficient (Jaccard similarity)
+                    correlation = len(co_failures) / len(sessions_a.union(sessions_b))
+
+                    # Record if above threshold
+                    if correlation >= 0.7:
+                        pair_key = (test_a, test_b)
+                        correlations[pair_key] = {
+                            "correlation": correlation,
+                            "co_failures": len(co_failures),
+                            "tests": [test_a, test_b],
+                        }
+
+        # Build clusters from correlations
+        clusters = []
+        processed_pairs = set()
+
+        # Sort correlations by strength
+        sorted_correlations = sorted(correlations.items(), key=lambda x: x[1]["correlation"], reverse=True)
+
+        # Process each correlation
+        for (test_a, test_b), data in sorted_correlations:
+            # Skip if already in a cluster
+            if (test_a, test_b) in processed_pairs:
+                continue
+
+            # Start new cluster
+            cluster = {
+                "correlation": data["correlation"],
+                "co_failures": data["co_failures"],
+                "tests": [test_a, test_b],
+            }
+            processed_pairs.add((test_a, test_b))
+
+            # Try to expand cluster
+            for (other_a, other_b), other_data in sorted_correlations:
+                # Skip if already processed
+                if (other_a, other_b) in processed_pairs:
+                    continue
+
+                # Check if connected to cluster
+                if other_a in cluster["tests"] or other_b in cluster["tests"]:
+                    # Add the test not in the cluster
+                    new_test = other_b if other_a in cluster["tests"] else other_a
+                    if new_test not in cluster["tests"]:
+                        cluster["tests"].append(new_test)
+
+                    # Mark as processed
+                    processed_pairs.add((other_a, other_b))
+
+                    # Update correlation (use average)
+                    cluster["correlation"] = (cluster["correlation"] + other_data["correlation"]) / 2
+
+            # Add cluster to results
+            clusters.append(cluster)
+
+        return clusters
 
     def identify_slowest_tests(self, limit: int = 5) -> List[tuple]:
         """Identify the slowest tests based on average duration.
@@ -1662,12 +2610,9 @@ class Analysis:
             if len(history) < min_consecutive_failures:
                 continue
 
-            # Sort by timestamp to ensure chronological order
-            sorted_history = sorted(history, key=lambda x: x[0])
-
             # Analyze the entire history as a single streak with hysteresis
-            failure_count = sum(1 for _, outcome in sorted_history if outcome == TestOutcome.FAILED)
-            total_count = len(sorted_history)
+            failure_count = sum(1 for _, outcome in history if outcome == TestOutcome.FAILED)
+            total_count = len(history)
 
             # Calculate failure rate
             failure_rate = failure_count / total_count if total_count > 0 else 0.0
@@ -1679,8 +2624,8 @@ class Analysis:
                 and (1.0 - failure_rate) <= hysteresis_threshold
             ):
                 # This test is consistently failing with allowed hysteresis
-                first_timestamp = sorted_history[0][0]
-                last_timestamp = sorted_history[-1][0]
+                first_timestamp = history[0][0]
+                last_timestamp = history[-1][0]
 
                 failing_with_hysteresis.append(
                     {
