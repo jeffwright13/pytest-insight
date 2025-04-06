@@ -1,14 +1,17 @@
+import pytest
 from unittest.mock import MagicMock, mock_open, patch
 
-import pytest
 from pytest_insight.utils.analyze_test_data import analyze_test_data
-from rich.console import Console
 
 
 @pytest.fixture
 def mock_console():
-    """Fixture providing a mocked rich Console."""
-    return MagicMock(spec=Console)
+    """Fixture providing a mocked console."""
+    console_mock = MagicMock()
+    console_mock.print = MagicMock()
+    console_mock.status.return_value.__enter__ = MagicMock()
+    console_mock.status.return_value.__exit__ = MagicMock()
+    return console_mock
 
 
 @pytest.fixture
@@ -85,7 +88,7 @@ class Test_AnalyzeTestData:
     ):
         """Test analyze_test_data function with profile comparison."""
         # Setup
-        mock_console = mock_console_class.return_value
+        # We don't need to use the mock_console fixture anymore since we're patching print directly
 
         # Set up mock InsightAPI to handle both calls
         mock_current_api = MagicMock()
@@ -175,6 +178,7 @@ class Test_AnalyzeTestData:
         mock_insight_api.assert_any_call(profile_name="other-profile")
 
         # 3. Verify that the profile was displayed
+        mock_console = mock_console_class.return_value
         mock_console.print.assert_any_call("[bold]Using profile:[/bold] current-profile")
 
     @patch("pytest_insight.utils.analyze_test_data.get_storage_instance")
@@ -282,7 +286,7 @@ class Test_AnalyzeTestData:
     ):
         """Test analyze_test_data function with profile comparison when an error occurs."""
         # Setup
-        mock_console = mock_console_class.return_value
+        # We don't need to use the mock_console fixture anymore since we're patching print directly
 
         # Set up mock InsightAPI to handle both calls
         mock_current_api = MagicMock()
@@ -353,6 +357,7 @@ class Test_AnalyzeTestData:
         mock_insight_api.assert_any_call(profile_name="other-profile")
 
         # 3. Verify that an error message was displayed (the exact message may vary)
+        mock_console = mock_console_class.return_value
         mock_console.print.assert_any_call("[bold]Using profile:[/bold] current-profile")
         # Check that some error message was displayed
         error_message_found = False
@@ -376,7 +381,7 @@ class Test_AnalyzeTestData:
     ):
         """Test analyze_test_data function with an unknown comparison type."""
         # Setup
-        mock_console = mock_console_class.return_value
+        # We don't need to use the mock_console fixture anymore since we're patching print directly
 
         # Set up mock InsightAPI
         mock_insight_api.return_value = mock_api
@@ -418,6 +423,7 @@ class Test_AnalyzeTestData:
         mock_insight_api.assert_called_once()
 
         # 3. Verify that an error message was displayed (the exact message may vary)
+        mock_console = mock_console_class.return_value
         mock_console.print.assert_any_call("[bold]Using profile:[/bold] current-profile")
         # Check that some error message was displayed
         error_message_found = False
@@ -441,7 +447,7 @@ class Test_AnalyzeTestData:
     ):
         """Test analyze_test_data function with profile comparison when no sessions are found."""
         # Setup
-        mock_console = mock_console_class.return_value
+        # We don't need to use the mock_console fixture anymore since we're patching print directly
 
         # Set up mock InsightAPI
         mock_insight_api.return_value = mock_api
@@ -485,6 +491,7 @@ class Test_AnalyzeTestData:
         mock_get_storage_instance.assert_called_with(profile_name="current-profile")
 
         # 2. Verify warning message was displayed
+        mock_console = mock_console_class.return_value
         mock_console.print.assert_any_call(
             "[bold yellow]Warning:[/bold yellow] No sessions found in profile 'current-profile'."
         )

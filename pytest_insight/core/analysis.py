@@ -84,39 +84,30 @@ class AnalysisBase:
 
             return DummyProgress()
 
-        # Import here to avoid circular imports
-        from rich.progress import (
-            BarColumn,
-            Progress,
-            TaskProgressColumn,
-            TextColumn,
-        )
-
-        progress = Progress(
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            transient=True,
-        )
-        task = progress.add_task(description, total=total)
-
-        # Create a wrapper that exposes the update method directly
-        class ProgressWrapper:
-            def __init__(self, progress, task_id):
-                self.progress = progress
-                self.task_id = task_id
+        # Create a simple progress reporting context manager
+        class SimpleProgressContext:
+            def __init__(self, description, total):
+                self.description = description
+                self.total = total
+                self.current = 0
+                self.last_percent = 0
 
             def __enter__(self):
-                self.progress.__enter__()
+                print(f"{self.description} (0/{self.total}, 0%)")
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
-                self.progress.__exit__(exc_type, exc_val, exc_tb)
+                print(f"{self.description} completed ({self.current}/{self.total}, 100%)")
 
             def update(self, advance=1):
-                self.progress.update(self.task_id, advance=advance)
+                self.current += advance
+                # Only print updates at 10% intervals or at least every 100 items
+                percent = int((self.current / self.total) * 100)
+                if percent >= self.last_percent + 10 or self.current % max(1, min(self.total // 10, 100)) == 0:
+                    print(f"{self.description} ({self.current}/{self.total}, {percent}%)")
+                    self.last_percent = percent
 
-        return ProgressWrapper(progress, task)
+        return SimpleProgressContext(description, total)
 
     def _filter_sessions_by_days(self, days: Optional[int]) -> List[TestSession]:
         """Filter sessions by the number of days from the most recent session.
@@ -295,62 +286,34 @@ class SessionAnalysis(AnalysisBase):
         # Process sessions in chunks for large datasets
         session_chunks = [sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)]
 
-        # Only import rich components if progress bars are enabled
         if self._show_progress:
-            from rich.progress import (
-                BarColumn,
-                Progress,
-                SpinnerColumn,
-                TextColumn,
-                TimeElapsedColumn,
-            )
+            print(f"Processing test metrics for {len(sessions)} sessions...")
+            
+        session_count = 0
+        for chunk in session_chunks:
+            for session in chunk:
+                # Process each test result
+                for test_result in session.test_results:
+                    total_tests += 1
+                    unique_tests.add(test_result.nodeid)
 
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[bold blue]{task.description}"),
-                BarColumn(),
-                TextColumn("[bold green]{task.completed}/{task.total}"),
-                TimeElapsedColumn(),
-            ) as progress:
-                task = progress.add_task("[cyan]Processing test metrics...", total=len(sessions))
+                    if test_result.duration is not None:
+                        durations.append(test_result.duration)
 
-                for chunk in session_chunks:
-                    for session in chunk:
-                        # Process each test result
-                        for test_result in session.test_results:
-                            total_tests += 1
-                            unique_tests.add(test_result.nodeid)
+                    if test_result.outcome == TestOutcome.FAILED:
+                        failed_tests += 1
+                    elif test_result.outcome == TestOutcome.PASSED:
+                        passed_tests += 1
+                    elif test_result.outcome == TestOutcome.SKIPPED:
+                        skipped_tests += 1
 
-                            if test_result.duration is not None:
-                                durations.append(test_result.duration)
-
-                            if test_result.outcome == TestOutcome.FAILED:
-                                failed_tests += 1
-                            elif test_result.outcome == TestOutcome.PASSED:
-                                passed_tests += 1
-                            elif test_result.outcome == TestOutcome.SKIPPED:
-                                skipped_tests += 1
-
-                        # Update progress
-                        progress.update(task, advance=1)
-        else:
-            # Process without progress bar
-            for chunk in session_chunks:
-                for session in chunk:
-                    # Process each test result
-                    for test_result in session.test_results:
-                        total_tests += 1
-                        unique_tests.add(test_result.nodeid)
-
-                        if test_result.duration is not None:
-                            durations.append(test_result.duration)
-
-                        if test_result.outcome == TestOutcome.FAILED:
-                            failed_tests += 1
-                        elif test_result.outcome == TestOutcome.PASSED:
-                            passed_tests += 1
-                        elif test_result.outcome == TestOutcome.SKIPPED:
-                            skipped_tests += 1
+                # Update progress
+                session_count += 1
+                if self._show_progress and session_count % max(1, min(len(sessions) // 10, 100)) == 0:
+                    print(f"Processed {session_count}/{len(sessions)} sessions ({session_count/len(sessions):.1%})...")
+                    
+        if self._show_progress:
+            print(f"Completed processing {session_count} sessions.")
 
         # Calculate metrics
         avg_duration = mean(durations) if durations else 0
@@ -430,44 +393,14 @@ class SessionAnalysis(AnalysisBase):
             step = len(sessions) // MAX_SESSIONS
             sessions = [sessions[i] for i in range(0, len(sessions), step)][:MAX_SESSIONS]
 
-        # Only import rich components if progress bars are enabled
-        if self._show_progress:
-            from rich.progress import (
-                BarColumn,
-                Progress,
-                SpinnerColumn,
-                TextColumn,
-                TimeElapsedColumn,
-            )
+        # Analyze duration trends
+        duration_trend = self._analyze_duration_trend(sessions, window_size)
 
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[bold blue]{task.description}"),
-                BarColumn(),
-                TextColumn("[bold green]{task.completed}/{task.total}"),
-                TimeElapsedColumn(),
-            ) as progress:
-                # Create tasks for each analysis
-                duration_task = progress.add_task("[cyan]Analyzing duration trends...", total=1)
-                failure_task = progress.add_task("[cyan]Analyzing failure trends...", total=1)
-                warning_task = progress.add_task("[cyan]Analyzing warning trends...", total=1)
+        # Analyze failure trends
+        failure_trend = self._analyze_failure_trend(sessions, window_size)
 
-                # Analyze duration trends
-                duration_trend = self._analyze_duration_trend(sessions, window_size)
-                progress.update(duration_task, completed=1)
-
-                # Analyze failure trends
-                failure_trend = self._analyze_failure_trend(sessions, window_size)
-                progress.update(failure_task, completed=1)
-
-                # Analyze warning trends
-                warning_trend = self._analyze_warning_trend(sessions, window_size)
-                progress.update(warning_task, completed=1)
-        else:
-            # Analyze without progress bars
-            duration_trend = self._analyze_duration_trend(sessions, window_size)
-            failure_trend = self._analyze_failure_trend(sessions, window_size)
-            warning_trend = self._analyze_warning_trend(sessions, window_size)
+        # Analyze warning trends
+        warning_trend = self._analyze_warning_trend(sessions, window_size)
 
         return {
             "duration": duration_trend,
@@ -1106,111 +1039,54 @@ class TestAnalysis(AnalysisBase):
         # Process sessions in chunks for large datasets
         session_chunks = [sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)]
 
-        # Only import rich components if progress bars are enabled
         if self._show_progress:
-            from rich.progress import (
-                BarColumn,
-                Progress,
-                SpinnerColumn,
-                TextColumn,
-                TimeElapsedColumn,
-            )
+            print(f"Analyzing test stability for {len(sessions)} sessions...")
+            
+        session_count = 0
+        for chunk in session_chunks:
+            for session in chunk:
+                session_timestamp = session.session_start_time
 
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[bold blue]{task.description}"),
-                BarColumn(),
-                TextColumn("[bold green]{task.completed}/{task.total}"),
-                TimeElapsedColumn(),
-            ) as progress:
-                # Create tasks
-                session_task = progress.add_task("[cyan]Processing sessions...", total=len(sessions))
-                analysis_task = progress.add_task("[cyan]Analyzing test stability...", total=1, visible=False)
-
-                # Process each session
-                for chunk in session_chunks:
-                    for session in chunk:
-                        session_timestamp = session.session_start_time
-
-                        # Process each test result
-                        for test_result in session.test_results:
-                            test_history[test_result.nodeid].append((session_timestamp, test_result.outcome))
-
-                        # Update progress
-                        progress.update(session_task, advance=1)
-
-                # Make analysis task visible and start it
-                progress.update(analysis_task, visible=True)
-
-                # Analyze flaky tests
-                flaky_tests = []
-                for nodeid, outcomes in test_history.items():
-                    # A test is flaky if it has different outcomes
-                    unique_outcomes = set(outcome for _, outcome in outcomes)
-                    if len(unique_outcomes) > 1:
-                        # Calculate flakiness rate
-                        outcome_counts = defaultdict(int)
-                        for _, outcome in outcomes:
-                            outcome_counts[outcome] += 1
-
-                        total_runs = len(outcomes)
-                        most_common_outcome = max(outcome_counts.items(), key=lambda x: x[1])[0]
-                        most_common_count = outcome_counts[most_common_outcome]
-
-                        flakiness_rate = 1.0 - (most_common_count / total_runs)
-
-                        flaky_tests.append(
-                            {
-                                "nodeid": nodeid,
-                                "outcomes": [{"outcome": str(o), "count": c} for o, c in outcome_counts.items()],
-                                "flakiness_rate": flakiness_rate,
-                                "total_runs": total_runs,
-                            }
-                        )
-
-                # Sort by flakiness rate (descending)
-                flaky_tests.sort(key=lambda x: x["flakiness_rate"], reverse=True)
+                # Process each test result
+                for test_result in session.test_results:
+                    test_history[test_result.nodeid].append((session_timestamp, test_result.outcome))
 
                 # Update progress
-                progress.update(analysis_task, completed=1)
-        else:
-            # Process without progress bars
-            for chunk in session_chunks:
-                for session in chunk:
-                    session_timestamp = session.session_start_time
+                session_count += 1
+                if self._show_progress and session_count % max(1, min(len(sessions) // 10, 100)) == 0:
+                    print(f"Processed {session_count}/{len(sessions)} sessions ({session_count/len(sessions):.1%})...")
+                    
+        if self._show_progress:
+            print(f"Completed processing {session_count} sessions.")
 
-                    # Process each test result
-                    for test_result in session.test_results:
-                        test_history[test_result.nodeid].append((session_timestamp, test_result.outcome))
+        # Analyze flaky tests
+        flaky_tests = []
+        for nodeid, outcomes in test_history.items():
+            # A test is flaky if it has different outcomes
+            unique_outcomes = set(outcome for _, outcome in outcomes)
+            if len(unique_outcomes) > 1:
+                # Calculate flakiness rate
+                outcome_counts = defaultdict(int)
+                for _, outcome in outcomes:
+                    outcome_counts[outcome] += 1
 
-            # Analyze flaky tests
-            flaky_tests = []
-            for nodeid, outcomes in test_history.items():
-                # A test is flaky if it has different outcomes
-                unique_outcomes = set(outcome for _, outcome in outcomes)
-                if len(unique_outcomes) > 1:
-                    # Calculate flakiness rate
-                    outcome_counts = defaultdict(int)
-                    for _, outcome in outcomes:
-                        outcome_counts[outcome] += 1
+                total_runs = len(outcomes)
+                most_common_outcome = max(outcome_counts.items(), key=lambda x: x[1])[0]
+                most_common_count = outcome_counts[most_common_outcome]
 
-                    total_runs = len(outcomes)
-                    most_common_outcome = max(outcome_counts.items(), key=lambda x: x[1])[0]
-                    most_common_count = outcome_counts[most_common_outcome]
+                flakiness_rate = 1.0 - (most_common_count / total_runs)
 
-                    flakiness_rate = 1.0 - (most_common_count / total_runs)
+                flaky_tests.append(
+                    {
+                        "nodeid": nodeid,
+                        "outcomes": [{"outcome": str(o), "count": c} for o, c in outcome_counts.items()],
+                        "flakiness_rate": flakiness_rate,
+                        "total_runs": total_runs,
+                    }
+                )
 
-                    flaky_tests.append(
-                        {
-                            "nodeid": nodeid,
-                            "outcomes": [{"outcome": str(o), "count": c} for o, c in outcome_counts.items()],
-                            "flakiness_rate": flakiness_rate,
-                            "total_runs": total_runs,
-                        }
-                    )
-
-            # Sort by flakiness rate (descending)
-            flaky_tests.sort(key=lambda x: x["flakiness_rate"], reverse=True)
+        # Sort by flakiness rate (descending)
+        flaky_tests.sort(key=lambda x: x["flakiness_rate"], reverse=True)
 
         # Find consistently failing tests (separate from flaky tests)
         unstable_tests = []

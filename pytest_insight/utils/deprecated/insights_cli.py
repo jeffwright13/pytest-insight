@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """
+DEPRECATED: This CLI implementation has been replaced by the implementation in pytest_insight/__main__.py.
+
+This file is kept for reference purposes only and will be removed in a future version.
+Notable features that could be incorporated into the main CLI:
+1. Dynamic API discovery using introspection
+2. Rich formatting functions for various data types
+
 Pytest-Insight CLI
 
 A dynamic CLI interface for the pytest-insight API.

@@ -1,6 +1,5 @@
 import json
 import os
-from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -173,29 +172,37 @@ def test_handles_invalid_data_format(mocker, json_storage):
 
 def test_handles_invalid_session_data(mocker, json_storage, get_test_time):
     """Test handling of invalid session data within a valid JSON list."""
-    # Create a JSON list with one valid and one invalid session
-    timestamp = get_test_time()
-    mock_data = {
-        "sessions": [
-            {
-                "sut_name": "valid",
-                "session_id": "valid",
-                "session_start_time": timestamp.isoformat(),
-                "session_stop_time": (timestamp + timedelta(seconds=30)).isoformat(),
-                "session_duration": 30,
-                "test_results": [],
-            },
-            {"invalid_session": "missing required fields"},
-        ]
-    }
+    # Create one valid and one invalid session
+    valid_session = TestSession(
+        sut_name="valid-test",
+        session_id="valid-test",
+        session_start_time=get_test_time(),
+        session_duration=30,
+        test_results=[],
+    )
 
-    # Mock the _read_json_safely method
-    mocker.patch.object(json_storage, "_read_json_safely", return_value=mock_data)
+    # Write directly to the storage file
+    with open(json_storage.file_path, "w") as f:
+        json.dump(
+            {
+                "sessions": [
+                    valid_session.to_dict(),
+                    {"invalid": "not a valid session"},
+                ]
+            },
+            f,
+        )
+
+    # Mock print function to capture error messages
+    print_mock = mocker.patch("builtins.print")
 
     # Should load the valid session and skip the invalid one
     sessions = json_storage.load_sessions()
     assert len(sessions) == 1
-    assert sessions[0].session_id == "valid"
+    assert sessions[0].session_id == "valid-test"
+    
+    # Verify error was printed
+    print_mock.assert_any_call(mocker.ANY)  # Any call with string containing error message
 
 
 def test_backup_on_json_decode_error(mocker, tmp_path):
@@ -848,17 +855,18 @@ def test_load_sessions_with_progress(mocker, tmp_path, get_test_time):
         )
         sessions.append(session)
 
-    # Save sessions directly using _write_json_safely
-    storage._write_json_safely([s.to_dict() for s in sessions])
+    # Save sessions directly to the file in the expected format
+    with open(storage_path, "w") as f:
+        json.dump({"sessions": [s.to_dict() for s in sessions]}, f)
 
-    # Mock rich.progress to verify it's used
-    progress_mock = mocker.patch("rich.progress.Progress", autospec=True)
+    # Mock print function to capture progress messages
+    print_mock = mocker.patch("builtins.print")
 
     # Load sessions with progress
     loaded_sessions = storage.load_sessions(show_progress=True)
 
-    # Verify Progress was used
-    progress_mock.assert_called_once()
+    # Verify print was called for progress reporting
+    print_mock.assert_called()
 
     # Verify all sessions were loaded
     assert len(loaded_sessions) == 5
@@ -883,21 +891,59 @@ def test_load_sessions_without_progress(mocker, tmp_path, get_test_time):
         )
         sessions.append(session)
 
-    # Save sessions directly using _write_json_safely
-    storage._write_json_safely([s.to_dict() for s in sessions])
-
-    # Mock rich.progress to verify it's not used
-    progress_mock = mocker.patch("rich.progress.Progress", autospec=True)
+    # Save sessions directly to the file in the expected format
+    with open(storage_path, "w") as f:
+        json.dump({"sessions": [s.to_dict() for s in sessions]}, f)
 
     # Load sessions without progress
     loaded_sessions = storage.load_sessions(show_progress=False)
 
-    # Verify Progress was not used
-    progress_mock.assert_not_called()
-
     # Verify all sessions were loaded
     assert len(loaded_sessions) == 3
     assert {s.session_id for s in loaded_sessions} == {f"no-progress-test-{i}" for i in range(3)}
+
+
+def test_load_sessions_streaming(mocker, tmp_path, get_test_time):
+    """Test loading sessions with streaming parser."""
+    import importlib.util
+    if importlib.util.find_spec("ijson") is None:
+        pytest.skip("ijson not available, skipping streaming test")
+    
+    # Create a storage instance
+    storage_path = tmp_path / "sessions.json"
+    storage = JSONStorage(file_path=storage_path)
+
+    # Create test sessions
+    sessions = []
+    for i in range(5):
+        session = TestSession(
+            sut_name=f"streaming-test-{i}",
+            session_id=f"streaming-test-{i}",
+            session_start_time=get_test_time(i * 600),
+            session_duration=30,
+            test_results=[],
+        )
+        sessions.append(session)
+
+    # Save sessions directly using _write_json_safely
+    storage._write_json_safely({"sessions": [s.to_dict() for s in sessions]})
+
+    # Mock the _load_sessions_streaming method to ensure it's called
+    streaming_mock = mocker.patch.object(
+        storage, 
+        '_load_sessions_streaming', 
+        return_value=sessions
+    )
+
+    # Load sessions with streaming
+    loaded_sessions = storage.load_sessions(use_streaming=True, show_progress=True)
+
+    # Verify streaming method was called
+    streaming_mock.assert_called_once_with(1000, True)
+
+    # Verify all sessions were loaded
+    assert len(loaded_sessions) == 5
+    assert {s.session_id for s in loaded_sessions} == {f"streaming-test-{i}" for i in range(5)}
 
 
 def test_load_sessions_with_invalid_session_data(mocker, tmp_path):
@@ -941,28 +987,41 @@ def test_load_sessions_with_invalid_session_data(mocker, tmp_path):
     print_mock.assert_any_call(mocker.ANY)  # Any call with string containing error message
 
 
-def test_load_sessions_with_rich_import_error(mocker, tmp_path, get_test_time):
-    """Test loading sessions when rich module import fails."""
+def test_load_sessions_fallback_when_ijson_not_available(mocker, tmp_path, get_test_time):
+    """Test fallback to standard loading when ijson is not available."""
     # Create a storage instance
     storage_path = tmp_path / "sessions.json"
     storage = JSONStorage(file_path=storage_path)
 
-    # Create and save a test session
-    session = TestSession(
-        sut_name="import-error-test",
-        session_id="import-error-test",
-        session_start_time=get_test_time(),
-        session_duration=30,
-        test_results=[],
-    )
-    storage._write_json_safely([session.to_dict()])
+    # Create test sessions
+    sessions = []
+    for i in range(3):
+        session = TestSession(
+            sut_name=f"fallback-test-{i}",
+            session_id=f"fallback-test-{i}",
+            session_start_time=get_test_time(i * 600),
+            session_duration=30,
+            test_results=[],
+        )
+        sessions.append(session)
 
-    # Mock rich.progress to raise ImportError
-    mocker.patch("rich.progress.Progress", side_effect=ImportError("Mocked import error"))
+    # Save sessions directly to the file
+    session_data = {"sessions": [s.to_dict() for s in sessions]}
+    with open(storage_path, "w") as f:
+        json.dump(session_data, f)
 
-    # Load sessions with progress (should fall back to non-progress version)
-    loaded_sessions = storage.load_sessions(show_progress=True)
+    # Mock importlib.util.find_spec to simulate ijson not being available
+    mocker.patch("importlib.util.find_spec", return_value=None)
+    
+    # Mock print function to capture warnings
+    warning_mock = mocker.patch("builtins.print")
+    
+    # Try to load sessions with streaming (should fall back to regular loading)
+    loaded_sessions = storage.load_sessions(use_streaming=True)
 
-    # Verify session was loaded despite the import error
-    assert len(loaded_sessions) == 1
-    assert loaded_sessions[0].session_id == "import-error-test"
+    # Verify warning was printed
+    warning_mock.assert_any_call("Warning: ijson not installed. Falling back to standard JSON loading.")
+    
+    # Verify all sessions were loaded correctly using the fallback method
+    assert len(loaded_sessions) == 3
+    assert {s.session_id for s in loaded_sessions} == {f"fallback-test-{i}" for i in range(3)}

@@ -364,11 +364,23 @@ class BaseStorage:
 
     def save_session(self, test_session: TestSession) -> None:
         """Persist a test session."""
-        raise NotImplementedError
+        raise NotImplementedError(f"{self.__class__.__name__} does not implement the save_session method...did you mean to call it on the {self.__class__.__name__} class?")
 
-    def load_sessions(self) -> List[TestSession]:
-        """Retrieve past test sessions."""
-        raise NotImplementedError
+    def load_sessions(self, **kwargs) -> List[TestSession]:
+        """Retrieve past test sessions.
+
+        This base implementation provides a common interface for all storage types.
+        Subclasses can implement additional parameters via **kwargs.
+
+        Common parameters that may be supported by subclasses:
+            chunk_size: Number of sessions to load at once (for large files)
+            show_progress: Whether to show progress reporting
+            use_streaming: Whether to use streaming parser for large files
+
+        Returns:
+            List of TestSession objects
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not implement the load_sessions method...did you mean to call it on the {self.__class__.__name__} class?")
 
     def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
         """Remove stored sessions.
@@ -380,12 +392,21 @@ class BaseStorage:
         Returns:
             Number of sessions removed
         """
-        raise NotImplementedError
+        raise NotImplementedError(f"{self.__class__.__name__} does not implement the clear_sessions method...did you mean to call it on the {self.__class__.__name__} class?")
 
     def get_session_by_id(self, session_id: str) -> Optional[TestSession]:
         """Retrieve a test session by its unique identifier."""
         sessions = self.load_sessions()
         return next((s for s in sessions if s.session_id == session_id), None)
+
+    def get_last_session(self) -> Optional[TestSession]:
+        """Get the most recent test session.
+
+        Returns:
+            The most recent session, or None if no sessions exist
+        """
+        sessions = self.load_sessions()
+        return max(sessions, key=lambda s: s.session_start_time) if sessions else None
 
 
 class InMemoryStorage(BaseStorage):
@@ -396,8 +417,21 @@ class InMemoryStorage(BaseStorage):
         super().__init__()
         self._sessions = sessions if sessions is not None else []
 
-    def load_sessions(self) -> List[TestSession]:
-        """Get all stored sessions."""
+    def load_sessions(self, show_progress: bool = False, **kwargs) -> List[TestSession]:
+        """Get all stored sessions.
+
+        Args:
+            show_progress: Whether to show progress reporting (ignored in memory storage)
+            **kwargs: Additional parameters (ignored in memory storage)
+
+        Returns:
+            List of TestSession objects
+        """
+        # In-memory storage doesn't need progress reporting or streaming
+        # but we accept the parameters for API compatibility
+        if show_progress:
+            print(f"Loading {len(self._sessions)} sessions from memory...")
+
         return self._sessions
 
     def save_session(self, session: TestSession) -> None:
@@ -447,133 +481,36 @@ class JSONStorage(BaseStorage):
         if not self.file_path.exists():
             self._write_json_safely([])
 
-    def load_sessions_with_progress(self, show_progress: bool = True) -> List[TestSession]:
-        """Load sessions with progress reporting.
-
-        Args:
-            show_progress: Whether to show progress bars during loading
-
-        Returns:
-            List of TestSession objects
-        """
-        if not os.path.exists(self.file_path):
-            return []
-
-        try:
-            with open(self.file_path, "r") as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            print(f"Failed to decode JSON from {self.file_path}")
-            return []
-
-        if not data:
-            return []
-
-        sessions_data = data.get("sessions", [])
-
-        if show_progress:
-            from rich.progress import (
-                BarColumn,
-                Progress,
-                SpinnerColumn,
-                TextColumn,
-                TimeElapsedColumn,
-            )
-
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[bold blue]{task.description}"),
-                BarColumn(),
-                TextColumn("[bold green]{task.completed}/{task.total}"),
-                TimeElapsedColumn(),
-            ) as progress:
-                task = progress.add_task("[cyan]Loading sessions...", total=len(sessions_data))
-
-                sessions = []
-                for session_data in sessions_data:
-                    try:
-                        session = TestSession.from_dict(session_data)
-                        sessions.append(session)
-                    except Exception as e:
-                        print(f"Failed to load session: {e}")
-
-                    progress.update(task, advance=1)
-
-                return sessions
-        else:
-            # Load without progress reporting
-            sessions = []
-            for session_data in sessions_data:
-                try:
-                    session = TestSession.from_dict(session_data)
-                    sessions.append(session)
-                except Exception as e:
-                    print(f"Failed to load session: {e}")
-
-            return sessions
-
-    def load_sessions(self, chunk_size: int = 1000, show_progress: bool = True) -> List[TestSession]:
+    def load_sessions(self, chunk_size: int = 1000, show_progress: bool = True, use_streaming: bool = False, **kwargs) -> List[TestSession]:
         """Load all test sessions from storage.
 
         Args:
             chunk_size: Number of sessions to load at once (for large files)
-            show_progress: Whether to show progress bars during loading
+            show_progress: Whether to show progress reporting
+            use_streaming: Whether to use streaming parser for large files (requires ijson)
 
         Returns:
             List of TestSession objects
         """
-        if not self.file_path.exists():
-            return []
+        # Use streaming parser for large files if requested
+        if use_streaming:
+            try:
+                # Try to import ijson only when needed
+                import importlib.util
+                if importlib.util.find_spec("ijson") is not None:
+                    return self._load_sessions_streaming(chunk_size, show_progress)
+                else:
+                    print("Warning: ijson not installed. Falling back to standard JSON loading.")
+            except ImportError:
+                print("Warning: Could not check for ijson. Falling back to standard JSON loading.")
+                # Fall back to regular loading if import check fails
 
         try:
+            # Use _read_json_safely to get data from storage file
             data = self._read_json_safely()
-            sessions_data = data.get("sessions", [])
 
-            if not sessions_data:
+            if not data:
                 return []
-
-            # Process sessions in chunks to avoid memory issues with large files
-            if show_progress:
-                try:
-                    from rich.progress import Progress, SpinnerColumn, TextColumn
-
-                    sessions = []
-                    with Progress(
-                        SpinnerColumn(),
-                        TextColumn("[progress.description]{task.description}"),
-                        transient=True,
-                    ) as progress:
-                        # Create a task with the file size as total
-                        task = progress.add_task(
-                            f"Loading {len(sessions_data)} sessions...",
-                            total=len(sessions_data),
-                        )
-
-                        for session_data in sessions_data:
-                            try:
-                                session = TestSession.from_dict(session_data)
-                                sessions.append(session)
-                            except Exception as e:
-                                print(f"Failed to load session: {e}")
-
-                            progress.update(task, advance=1)
-
-                    return sessions
-                except ImportError:
-                    # Fall back to non-progress version if rich is not available
-                    show_progress = False
-
-            # Load without progress reporting
-            sessions = []
-            for session_data in sessions_data:
-                try:
-                    session = TestSession.from_dict(session_data)
-                    sessions.append(session)
-                except Exception as e:
-                    print(f"Failed to load session: {e}")
-
-            return sessions
-
         except json.JSONDecodeError:
             # Create backup of corrupted file
             backup_path = self.file_path.with_suffix(".bak")
@@ -581,28 +518,58 @@ class JSONStorage(BaseStorage):
             print(f"Warning: JSON decode error in {self.file_path}. Backup created at {backup_path}")
             return []
 
+        # Handle both formats: {"sessions": [...]} and directly [...]
+        sessions_data = data.get("sessions", []) if isinstance(data, dict) else data
+
+        # Ensure sessions_data is a list
+        if not isinstance(sessions_data, list):
+            print(f"Warning: Invalid sessions data format. Expected list, got {type(sessions_data).__name__}")
+            return []
+
+        total_sessions = len(sessions_data)
+
+        if show_progress:
+            print(f"Loading {total_sessions} sessions...")
+
+        # Process sessions in chunks to avoid memory issues with large files
+        sessions = []
+        for i in range(0, total_sessions, chunk_size):
+            chunk = sessions_data[i : i + chunk_size]
+            for j, session_data in enumerate(chunk):
+                try:
+                    # Handle both dictionary and TestSession objects
+                    if isinstance(session_data, dict):
+                        session = TestSession.from_dict(session_data)
+                        sessions.append(session)
+                    elif isinstance(session_data, TestSession):
+                        sessions.append(session_data)
+                    else:
+                        print(f"Warning: Invalid session data type: {type(session_data).__name__}")
+                except Exception as e:
+                    print(f"Failed to load session: {e}")
+
+            # Print progress every chunk
+            if show_progress:
+                loaded = len(sessions)
+                print(f"Loaded {loaded}/{total_sessions} sessions ({loaded/total_sessions:.1%})...")
+
+        if show_progress:
+            print(f"Completed loading {len(sessions)} sessions.")
+
+        return sessions
+
     def _load_sessions_streaming(self, chunk_size: int = 1000, show_progress: bool = True) -> List[TestSession]:
         """Load sessions using a streaming JSON parser for large files.
 
         Args:
             chunk_size: Number of sessions to process at once
-            show_progress: Whether to show progress bars during loading
+            show_progress: Whether to show progress reporting
 
         Returns:
             List of TestSession objects
         """
         # Import ijson here to avoid making it a hard dependency
         import ijson
-
-        # Only import rich components if progress bars are enabled
-        if show_progress:
-            from rich.progress import (
-                BarColumn,
-                Progress,
-                SpinnerColumn,
-                TextColumn,
-                TimeElapsedColumn,
-            )
 
         sessions = []
         try:
@@ -622,100 +589,49 @@ class JSONStorage(BaseStorage):
                     # Parse from the sessions array within the object
                     sessions_array = ijson.items(f, "sessions.item")
 
-                # First pass to count total items (optional but gives better progress feedback)
                 # Get file size as a proxy for progress
                 file_size = os.path.getsize(self.file_path)
-
-                # Process sessions in chunks with progress bar if enabled
                 if show_progress:
-                    with Progress(
-                        SpinnerColumn(),
-                        TextColumn("[bold blue]Loading sessions..."),
-                        BarColumn(),
-                        TextColumn("[bold green]{task.completed}/{task.total}"),
-                        TimeElapsedColumn(),
-                    ) as progress:
-                        # Create a task with the file size as total
-                        task = progress.add_task("[cyan]Processing...", total=file_size)
+                    print(f"Streaming {file_size} bytes of session data...")
 
-                        chunk = []
-                        last_pos = 0
-                        for session_dict in sessions_array:
-                            try:
-                                # Convert any decimal values to floats
-                                self._convert_decimal_to_float(session_dict)
-                                session = TestSession.from_dict(session_dict)
-                                chunk.append(session)
+                # Process sessions in chunks
+                chunk = []
+                last_pos = 0
+                for session_dict in sessions_array:
+                    try:
+                        # Convert any decimal values to floats
+                        self._convert_decimal_to_float(session_dict)
+                        session = TestSession.from_dict(session_dict)
+                        chunk.append(session)
 
-                                # Process chunk when it reaches the desired size
-                                if len(chunk) >= chunk_size:
-                                    sessions.extend(chunk)
-                                    chunk = []
-
-                                # Update progress based on file position
-                                current_pos = f.tell()
-                                if current_pos > last_pos:
-                                    progress.update(task, completed=current_pos)
-                                    last_pos = current_pos
-
-                            except Exception as e:
-                                print(f"Error parsing session: {e}")
-                                continue
-
-                        # Add any remaining sessions
-                        if chunk:
+                        # Process chunk when it reaches the desired size
+                        if len(chunk) >= chunk_size:
                             sessions.extend(chunk)
+                            chunk = []
 
-                        # Ensure progress bar completes
-                        progress.update(task, completed=file_size)
-                else:
-                    # Process without progress bar
-                    chunk = []
-                    for session_dict in sessions_array:
-                        try:
-                            # Convert any decimal values to floats
-                            self._convert_decimal_to_float(session_dict)
-                            session = TestSession.from_dict(session_dict)
-                            chunk.append(session)
+                        # Update progress based on file position
+                        current_pos = f.tell()
+                        if current_pos > last_pos and show_progress:
+                            progress_pct = current_pos / file_size
+                            print(f"Processed {current_pos}/{file_size} bytes ({progress_pct:.1%})...")
+                            last_pos = current_pos
 
-                            # Process chunk when it reaches the desired size
-                            if len(chunk) >= chunk_size:
-                                sessions.extend(chunk)
-                                chunk = []
-                        except Exception as e:
-                            print(f"Error parsing session: {e}")
-                            continue
+                    except Exception as e:
+                        print(f"Error parsing session: {e}")
+                        continue
 
-                    # Add any remaining sessions
-                    if chunk:
-                        sessions.extend(chunk)
+                # Add any remaining sessions
+                if chunk:
+                    sessions.extend(chunk)
+
+                # Final progress update
+                if show_progress:
+                    print(f"Completed loading {len(sessions)} sessions from {file_size} bytes")
 
             return sessions
         except Exception as e:
-            print(f"Error loading sessions streaming: {e}")
-            # Fall back to empty list on error
+            print(f"Error loading sessions: {e}")
             return []
-
-    def _convert_decimal_to_float(self, obj):
-        """Recursively convert decimal values to floats in a dictionary or list.
-
-        Args:
-            obj: The object to convert (dict, list, or scalar value)
-        """
-        import decimal
-
-        if isinstance(obj, dict):
-            for key, value in obj.items():
-                if isinstance(value, decimal.Decimal):
-                    obj[key] = float(value)
-                elif isinstance(value, (dict, list)):
-                    self._convert_decimal_to_float(value)
-        elif isinstance(obj, list):
-            for i, value in enumerate(obj):
-                if isinstance(value, decimal.Decimal):
-                    obj[i] = float(value)
-                elif isinstance(value, (dict, list)):
-                    self._convert_decimal_to_float(value)
 
     def save_session(self, session: TestSession) -> None:
         """Save a single test session to storage.
@@ -961,29 +877,25 @@ class JSONStorage(BaseStorage):
             os.unlink(temp_file.name)
             raise e
 
-    def _read_json_safely(self) -> Dict:
-        """Read JSON data safely from storage file.
+    def _read_json_safely(self) -> Any:
+        """Read JSON data from storage file. Creates a backup if the file is corrupted, then returns empty list. Also returns empty list if file doesn't exist or is invalid.
 
         Returns:
-            Dictionary containing the loaded JSON data
-
-        Raises:
-            json.JSONDecodeError: If the file contains invalid JSON
+            Parsed JSON data, or empty list if file was corrupted, doesn't exist or is invalid
         """
         if not self.file_path.exists():
-            return {"sessions": []}
+            return []
 
-        # Create a backup before reading in case we encounter corruption
-        backup_path = None
         try:
             with open(self.file_path, "r") as f:
                 data = json.load(f)
-                return data
-        except json.JSONDecodeError as e:
+            return data
+        except json.JSONDecodeError:
             # Create backup of corrupted file
             backup_path = self.file_path.with_suffix(".bak")
             shutil.copy2(self.file_path, backup_path)
-            raise e
+            print(f"Warning: JSON decode error in {self.file_path}. Backup created at {backup_path}")
+            return []
 
 
 def get_storage_instance(
@@ -1111,24 +1023,27 @@ def load_sessions(
     profile_name: Optional[str] = None,
     chunk_size: int = 1000,
     show_progress: bool = True,
+    use_streaming: bool = False,
 ) -> List[TestSession]:
     """Load sessions from the specified storage profile.
 
     Args:
         profile_name: Storage profile name to use
         chunk_size: Number of sessions to load at once (for large files)
-        show_progress: Whether to show progress bars during loading
+        show_progress: Whether to show progress reporting
+        use_streaming: Whether to use streaming parser for large files (requires ijson)
 
     Returns:
         List of TestSession objects
     """
     storage_instance = get_storage_instance(profile_name=profile_name)
 
-    # Handle different storage types
-    if isinstance(storage_instance, JSONStorage):
-        # JSONStorage supports show_progress and chunk_size
-        return storage_instance.load_sessions(chunk_size=chunk_size, show_progress=show_progress)
-    return storage_instance.load_sessions()
+    # All storage classes now support the same parameters via **kwargs
+    return storage_instance.load_sessions(
+        chunk_size=chunk_size,
+        show_progress=show_progress,
+        use_streaming=use_streaming
+    )
 
 
 # Main entry point

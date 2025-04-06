@@ -66,7 +66,7 @@ def list_all_profiles():
     table.add_column("Path", style="blue")
 
     for name, profile in profiles.items():
-        active_marker = "✓" if name == active else ""
+        active_marker = "*" if name == active else ""
         table.add_row(active_marker, name, profile.storage_type, str(profile.file_path))
 
     console.print(table)

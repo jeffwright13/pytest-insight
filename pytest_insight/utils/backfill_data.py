@@ -10,7 +10,7 @@ The script will:
 3. Vary the SUT names between "sample-app", "api-service", "web-frontend", etc.
 4. Create realistic variations in test outcomes (75% pass rate, 15% failure rate, etc.)
 5. Add the new sessions to your practice.json file
-6. This will give you a rich dataset spanning a month, which you can use to analyze trends over time.
+6. This will give you a dataset spanning a month, which you can use to analyze trends over time.
 The script preserves your existing data while adding new historical data before it.
 """
 

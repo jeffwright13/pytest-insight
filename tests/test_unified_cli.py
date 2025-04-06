@@ -170,7 +170,7 @@ class TestProfileCommands:
             result = runner.invoke(app, ["profile", "active"])
             assert result.exit_code == 0
             assert "test1" in result.stdout
-            assert "Active profile" in result.stdout
+            assert "Active Profile" in result.stdout
 
     def test_create_profile(self, runner, mock_get_profile_manager):
         """Test the 'profile create' command."""

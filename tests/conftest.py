@@ -1,5 +1,3 @@
-"""Pytest configuration and fixtures."""
-
 import random
 from importlib.metadata import version
 from pathlib import Path
