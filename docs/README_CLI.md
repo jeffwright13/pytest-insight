@@ -10,6 +10,7 @@ The Pytest-Insight CLI provides a comprehensive interface to the entire pytest-i
 - Query test results with flexible filters
 - Compare test metrics between different systems under test
 - Generate detailed reports and visualizations
+- Manage storage profiles and test sessions
 
 The CLI is designed to be dynamic, automatically discovering and exposing methods from the entire pytest-insight API, including:
 
@@ -137,7 +138,17 @@ Commands for analyzing test data:
 - `analyze-with_profile`: Set the storage profile for analysis
 - `analyze-with_query`: Apply a query function to filter sessions
 
-## Examples
+#### Profile
+
+Commands for managing storage profiles:
+
+- `profile-create`: Create a new storage profile
+- `profile-delete`: Delete an existing storage profile
+- `profile-list`: List all available storage profiles
+- `profile-merge`: Merge two or more storage profiles into a single profile
+- `profile-rename`: Rename an existing storage profile
+
+### Examples
 
 ### Analyze Error Patterns
 
@@ -161,6 +172,12 @@ python -m pytest_insight.utils.insights_cli analyze-health_report --format json
 
 ```bash
 python -m pytest_insight.utils.insights_cli compare-between_suts --sut system1 --target-sut system2
+```
+
+### Merge Storage Profiles
+
+```bash
+python -m pytest_insight.utils.insights_cli profile-merge --profile profile1 --target-profile profile2
 ```
 
 ## Backward Compatibility

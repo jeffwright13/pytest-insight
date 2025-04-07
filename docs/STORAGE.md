@@ -124,6 +124,12 @@ insight profile clean --pattern "test-*" --dry-run
 
 # Skip confirmation prompt
 insight profile clean --pattern "test-*" --force
+
+# Merge sessions from multiple profiles into a target profile
+insight profile merge source1,source2 target-profile --create --strategy keep_both
+
+# Merge with filtering
+insight profile merge source1,source2 target-profile --filter "test_*" --strategy replace_existing
 ```
 
 In-memory profiles are not persisted to the configuration file, which helps prevent accumulation of unnecessary profiles. The `clean` command is particularly useful for removing temporary profiles that may have been created during testing or development.
@@ -159,6 +165,87 @@ export PYTEST_INSIGHT_PROFILE=demo
 ```
 
 This is particularly useful in CI/CD environments like Jenkins jobs running in Docker containers, where you can set different profiles for different jobs.
+
+## Profile Merging
+
+The profile merge command allows you to combine test sessions from multiple source profiles into a target profile. This is useful for:
+
+1. **Consolidating Data**: Combine test results from multiple environments or test runs
+2. **Creating Aggregated Views**: Build comprehensive profiles that include data from various sources
+3. **Data Migration**: Move specific sessions between profiles while applying filters
+4. **Backup and Restore**: Create merged backups of critical test data
+
+### Merge Command Syntax
+
+```bash
+insight profile merge SOURCE_PROFILES TARGET_PROFILE [OPTIONS]
+```
+
+Where:
+- `SOURCE_PROFILES`: Comma-separated list of source profile names
+- `TARGET_PROFILE`: Name of the target profile to merge into
+
+### Merge Options
+
+| Option | Description |
+|--------|-------------|
+| `--create, -c` | Create target profile if it doesn't exist |
+| `--type, -t` | Storage type for target profile if creating new ('json' or 'memory') |
+| `--strategy, -s` | How to handle duplicate sessions: 'skip_existing', 'replace_existing', or 'keep_both' |
+| `--filter, -f` | Only merge sessions matching this pattern |
+| `--dry-run` | Show what would be merged without actually merging |
+
+### Merge Strategies
+
+The merge command supports three strategies for handling duplicate sessions:
+
+1. **skip_existing** (default): Skip sessions that already exist in the target profile
+2. **replace_existing**: Replace existing sessions in the target with those from the source profiles
+3. **keep_both**: Keep both versions by renaming the imported sessions with a unique suffix
+
+### Examples
+
+```bash
+# Basic merge from two profiles into a third
+insight profile merge profile1,profile2 combined-profile
+
+# Create the target profile if it doesn't exist
+insight profile merge profile1,profile2 new-profile --create --type json
+
+# Replace existing sessions in the target
+insight profile merge profile1,profile2 target --strategy replace_existing
+
+# Keep both versions of duplicate sessions
+insight profile merge profile1,profile2 target --strategy keep_both
+
+# Only merge sessions matching a pattern
+insight profile merge profile1,profile2 target --filter "test_api_*"
+
+# Preview what would be merged without making changes
+insight profile merge profile1,profile2 target --dry-run
+```
+
+### Programmatic Merging
+
+While the CLI provides a convenient interface for merging profiles, you can also perform similar operations programmatically:
+
+```python
+from pytest_insight.core.storage import load_sessions, get_profile_manager
+
+# Load sessions from source profiles
+source1_sessions = load_sessions("profile1")
+source2_sessions = load_sessions("profile2")
+
+# Get the profile manager
+profile_manager = get_profile_manager()
+
+# Merge sessions into target profile
+for session_id, session in source1_sessions.items():
+    profile_manager.save_session("target", session, session_id)
+    
+for session_id, session in source2_sessions.items():
+    profile_manager.save_session("target", session, session_id)
+```
 
 ## Simple File Exchange (SFE)
 

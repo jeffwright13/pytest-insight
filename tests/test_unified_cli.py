@@ -109,13 +109,10 @@ def mock_storage_instance():
 
 
 @pytest.fixture
-def mock_get_storage_instance(mock_storage_instance):
-    """Mock the get_storage_instance function."""
-    with mock.patch(
-        "pytest_insight.core.storage.get_storage_instance",
-        return_value=mock_storage_instance,
-    ):
-        yield
+def mock_get_storage_instance():
+    """Mock the load_sessions function."""
+    with mock.patch("pytest_insight.__main__.load_sessions") as mock_load_sessions:
+        yield mock_load_sessions
 
 
 @pytest.fixture
@@ -163,6 +160,12 @@ class TestProfileCommands:
         """Mock the switch_profile function."""
         with mock.patch("pytest_insight.__main__.switch_profile") as mock_switch:
             yield mock_switch
+
+    @pytest.fixture
+    def mock_get_storage_instance(self):
+        """Mock the load_sessions function."""
+        with mock.patch("pytest_insight.__main__.load_sessions") as mock_load_sessions:
+            yield mock_load_sessions
 
     def test_profile_create(self, runner, mock_create_profile):
         """Test the 'profile create' command."""
@@ -411,6 +414,193 @@ class TestProfileCommands:
             mock_list_profiles.assert_called_once()
             # Check that no profiles were actually deleted
             assert not deleted_profiles
+
+    def test_profile_merge(self, runner, mock_list_profiles, mock_get_profile_manager, mock_create_profile):
+        """Test the 'profile merge' command."""
+        import uuid
+        from pytest_insight.core.models import TestSession
+        from pytest_insight.core.storage import StorageProfile
+
+        # Create test profiles
+        source1_profile = mock.MagicMock(spec=StorageProfile)
+        source1_profile.name = "source1"
+        source1_profile.storage_type = "json"
+        source1_profile.file_path = "/mock/path/source1.json"
+
+        source2_profile = mock.MagicMock(spec=StorageProfile)
+        source2_profile.name = "source2"
+        source2_profile.storage_type = "json"
+        source2_profile.file_path = "/mock/path/source2.json"
+
+        target_profile = mock.MagicMock(spec=StorageProfile)
+        target_profile.name = "target"
+        target_profile.storage_type = "json"
+        target_profile.file_path = "/mock/path/target.json"
+
+        # Set up the profiles dictionary
+        all_profiles = {
+            "source1": source1_profile,
+            "source2": source2_profile,
+            "target": target_profile,
+        }
+
+        # Mock the list_profiles function to return our test profiles
+        mock_list_profiles.return_value = all_profiles
+
+        # Create mock sessions for source profiles
+        source1_sessions = {
+            "session1": mock.MagicMock(spec=TestSession),
+            "session2": mock.MagicMock(spec=TestSession),
+        }
+
+        source2_sessions = {
+            "session3": mock.MagicMock(spec=TestSession),
+            "session4": mock.MagicMock(spec=TestSession),
+        }
+
+        # Create mock sessions for target profile (to test merge strategies)
+        target_sessions = {
+            "session1": mock.MagicMock(spec=TestSession),  # Duplicate with source1
+        }
+
+        # Mock the load_sessions function to return our mock sessions
+        def mock_load_sessions(profile_name):
+            if profile_name == "source1":
+                return source1_sessions
+            elif profile_name == "source2":
+                return source2_sessions
+            elif profile_name == "target":
+                return target_sessions
+            return {}
+
+        # Set up the mock profile manager
+        profile_manager = mock_get_profile_manager
+        profile_manager.save_session = mock.MagicMock()
+
+        # Test 1: Merging with skip_existing strategy
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
+            with mock.patch("pytest_insight.__main__.get_profile_manager", return_value=profile_manager):
+                with mock.patch("typer.confirm", return_value=True):
+                    result = runner.invoke(app, ["profile", "merge", "source1,source2", "target", "--strategy", "skip_existing"])
+                    assert result.exit_code == 0
+
+                    # Verify sessions were saved to target
+                    # session1 should be skipped (already exists), others should be saved
+                    assert profile_manager.save_session.call_count == 3
+
+                    # Check that the right sessions were saved
+                    saved_sessions = []
+                    for call in profile_manager.save_session.call_args_list:
+                        args, kwargs = call
+                        target_name, session, session_id = args
+                        saved_sessions.append(session_id)
+
+                    # session1 should be skipped, so not in saved_sessions
+                    assert "session1" not in saved_sessions
+                    assert "session2" in saved_sessions
+                    assert "session3" in saved_sessions
+                    assert "session4" in saved_sessions
+
+        # Test 2: Merging with replace_existing strategy
+        profile_manager.save_session.reset_mock()
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
+            with mock.patch("pytest_insight.__main__.get_profile_manager", return_value=profile_manager):
+                with mock.patch("typer.confirm", return_value=True):
+                    result = runner.invoke(app, ["profile", "merge", "source1,source2", "target", "--strategy", "replace_existing"])
+                    assert result.exit_code == 0
+
+                    # Verify sessions were saved to target
+                    # All sessions should be saved, including session1 which replaces the existing one
+                    assert profile_manager.save_session.call_count == 4
+
+                    # Check that the right sessions were saved
+                    saved_sessions = []
+                    for call in profile_manager.save_session.call_args_list:
+                        args, kwargs = call
+                        target_name, session, session_id = args
+                        saved_sessions.append(session_id)
+
+                    # session1 should be replaced
+                    assert "session1" in saved_sessions
+                    assert "session2" in saved_sessions
+                    assert "session3" in saved_sessions
+                    assert "session4" in saved_sessions
+
+        # Test 3: Merging with keep_both strategy
+        profile_manager.save_session.reset_mock()
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
+            with mock.patch("pytest_insight.__main__.get_profile_manager", return_value=profile_manager):
+                # Also mock uuid to get predictable session IDs
+                with mock.patch("uuid.uuid4") as mock_uuid:
+                    mock_uuid.return_value.hex = "abcdef1234567890"
+                    with mock.patch("typer.confirm", return_value=True):
+                        result = runner.invoke(app, ["profile", "merge", "source1,source2", "target", "--strategy", "keep_both"])
+                        assert result.exit_code == 0
+
+                        # Verify sessions were saved to target
+                        # All sessions should be saved, with session1 renamed
+                        assert profile_manager.save_session.call_count == 4
+
+                        # Check that the right sessions were saved
+                        saved_sessions = []
+                        for call in profile_manager.save_session.call_args_list:
+                            args, kwargs = call
+                            target_name, session, session_id = args
+                            saved_sessions.append(session_id)
+
+                        # Original session1 should not be in saved_sessions, but a renamed version should be
+                        assert "session1" not in saved_sessions
+                        assert any(s.startswith("session1_source1_") for s in saved_sessions)
+                        assert "session2" in saved_sessions
+                        assert "session3" in saved_sessions
+                        assert "session4" in saved_sessions
+
+        # Test 4: Test with filter pattern
+        profile_manager.save_session.reset_mock()
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
+            with mock.patch("pytest_insight.__main__.get_profile_manager", return_value=profile_manager):
+                with mock.patch("typer.confirm", return_value=True):
+                    result = runner.invoke(app, ["profile", "merge", "source1,source2", "target", "--filter", "session[34]*"])
+                    assert result.exit_code == 0
+
+                    # Verify sessions were saved to target
+                    # Only sessions matching the pattern should be saved
+                    assert profile_manager.save_session.call_count == 2
+
+                    # Check that the right sessions were saved
+                    saved_sessions = []
+                    for call in profile_manager.save_session.call_args_list:
+                        args, kwargs = call
+                        target_name, session, session_id = args
+                        saved_sessions.append(session_id)
+
+                    # Only session3 and session4 should be saved
+                    assert "session1" not in saved_sessions
+                    assert "session2" not in saved_sessions
+                    assert "session3" in saved_sessions
+                    assert "session4" in saved_sessions
+
+        # Test 5: Test with create target option
+        profile_manager.save_session.reset_mock()
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
+            with mock.patch("pytest_insight.__main__.get_profile_manager", return_value=profile_manager):
+                with mock.patch("typer.confirm", return_value=True):
+                    # Remove target from available profiles
+                    new_profiles = all_profiles.copy()
+                    del new_profiles["target"]
+                    mock_list_profiles.return_value = new_profiles
+                    
+                    # Mock the create_profile function
+                    mock_create_profile.return_value = target_profile
+                    
+                    result = runner.invoke(app, ["profile", "merge", "source1,source2", "target", "--create", "--type", "json"])
+                    assert result.exit_code == 0
+
+                    # Verify target profile was created
+                    mock_create_profile.assert_called_once_with("target", "json")
+                    
+                    # Verify sessions were saved to target
+                    assert profile_manager.save_session.call_count > 0
 
 
 class TestGenerateCommands:

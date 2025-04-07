@@ -277,20 +277,211 @@ def clean_profiles(
     console.print(f"[green]Successfully deleted {deleted_count} profiles.[/green]")
 
 
+@profile_app.command("merge")
+def merge_profiles(
+    sources: str = typer.Argument(
+        ..., help="Source profile names to merge from (comma-separated)"
+    ),
+    target: str = typer.Argument(
+        ..., help="Target profile name to merge into"
+    ),
+    create_target: bool = typer.Option(
+        False, "--create", "-c", help="Create target profile if it doesn't exist"
+    ),
+    target_type: str = typer.Option(
+        "json", "--type", "-t", help="Storage type for target profile if creating new ('json' or 'memory')"
+    ),
+    merge_strategy: str = typer.Option(
+        "skip_existing", "--strategy", "-s", 
+        help="How to handle duplicate sessions: 'skip_existing', 'replace_existing', or 'keep_both'"
+    ),
+    filter_pattern: Optional[str] = typer.Option(
+        None, "--filter", "-f", help="Only merge sessions matching this pattern"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be merged without actually merging"
+    ),
+):
+    """
+    Merge test sessions from multiple source profiles into a target profile.
+    
+    Example:
+        insight profile merge profile1,profile2 new-combined-profile --create
+    """
+    console = Console()
+    
+    try:
+        # Validate merge strategy
+        valid_strategies = ["skip_existing", "replace_existing", "keep_both"]
+        if merge_strategy not in valid_strategies:
+            console.print(f"[red]Error: Invalid merge strategy '{merge_strategy}'.[/red]")
+            console.print(f"[yellow]Valid strategies: {', '.join(valid_strategies)}[/yellow]")
+            return
+        
+        # Parse source profiles
+        source_names = [s.strip() for s in sources.split(",")]
+        if not source_names:
+            console.print("[red]Error: No source profiles specified.[/red]")
+            return
+        
+        # Get all available profiles
+        all_profiles = list_profiles()
+        
+        # Validate source profiles exist
+        missing_sources = [name for name in source_names if name not in all_profiles]
+        if missing_sources:
+            console.print(f"[red]Error: Source profiles not found: {', '.join(missing_sources)}[/red]")
+            return
+        
+        # Check if target profile exists
+        target_exists = target in all_profiles
+        
+        # Handle target profile creation if needed
+        if not target_exists:
+            if not create_target:
+                console.print(f"[red]Error: Target profile '{target}' does not exist.[/red]")
+                console.print("[yellow]Use --create to create it automatically.[/yellow]")
+                return
+            
+            # Validate target type
+            if target_type not in ["json", "memory"]:
+                console.print(f"[red]Error: Invalid target profile type '{target_type}'.[/red]")
+                console.print("[yellow]Valid types: json, memory[/yellow]")
+                return
+            
+            # Create the target profile
+            if not dry_run:
+                create_profile(target, target_type)
+                console.print(f"[green]Created new target profile '{target}' with type '{target_type}'.[/green]")
+        
+        # Get the profile manager
+        profile_manager = get_profile_manager()
+        
+        # Load sessions from source profiles
+        source_sessions = {}
+        session_counts = {}
+        
+        for source_name in source_names:
+            # Skip if source and target are the same
+            if source_name == target:
+                console.print(f"[yellow]Skipping source profile '{source_name}' as it's the same as the target.[/yellow]")
+                continue
+            
+            # Load sessions from this source
+            try:
+                # Load all sessions from this profile
+                profile_sessions = load_sessions(source_name)
+                
+                # Apply filter if specified
+                if filter_pattern:
+                    import fnmatch
+                    filtered_sessions = {}
+                    for session_id, session in profile_sessions.items():
+                        # Filter based on session ID or other attributes
+                        if fnmatch.fnmatch(session_id, filter_pattern):
+                            filtered_sessions[session_id] = session
+                    profile_sessions = filtered_sessions
+                
+                # Add to our collection
+                source_sessions[source_name] = profile_sessions
+                session_counts[source_name] = len(profile_sessions)
+                
+            except Exception as e:
+                console.print(f"[red]Error loading sessions from '{source_name}': {str(e)}[/red]")
+                return
+        
+        # Display summary of what will be merged
+        table = Table(title="Sessions to Merge")
+        table.add_column("Source Profile", style="cyan")
+        table.add_column("Sessions", style="green")
+        
+        total_sessions = 0
+        for source_name, count in session_counts.items():
+            table.add_row(source_name, str(count))
+            total_sessions += count
+        
+        console.print(table)
+        console.print(f"Total sessions to merge: {total_sessions}")
+        console.print(f"Target profile: {target}")
+        console.print(f"Merge strategy: {merge_strategy}")
+        
+        # If dry run, stop here
+        if dry_run:
+            console.print("[yellow]Dry run completed. No sessions were merged.[/yellow]")
+            return
+        
+        # Confirm the merge
+        if not typer.confirm("Proceed with merge?"):
+            console.print("[yellow]Operation cancelled.[/yellow]")
+            return
+        
+        # Get existing sessions in target
+        target_sessions = load_sessions(target)
+        
+        # Track statistics
+        stats = {
+            "added": 0,
+            "skipped": 0,
+            "replaced": 0,
+            "renamed": 0,
+            "errors": 0
+        }
+        
+        # Process each source profile's sessions
+        for source_name, sessions in source_sessions.items():
+            console.print(f"Merging sessions from '{source_name}'...")
+            
+            # Process each session
+            for session_id, session in sessions.items():
+                try:
+                    # Check if session already exists in target
+                    session_exists = session_id in target_sessions
+                    
+                    if session_exists:
+                        if merge_strategy == "skip_existing":
+                            stats["skipped"] += 1
+                            continue
+                        elif merge_strategy == "replace_existing":
+                            # Will be replaced below
+                            stats["replaced"] += 1
+                        elif merge_strategy == "keep_both":
+                            # Generate a new unique ID for this session
+                            import uuid
+                            new_id = f"{session_id}_{source_name}_{uuid.uuid4().hex[:8]}"
+                            session_id = new_id
+                            stats["renamed"] += 1
+                    else:
+                        stats["added"] += 1
+                    
+                    # Save the session to the target profile
+                    profile_manager.save_session(target, session, session_id)
+                    
+                except Exception as e:
+                    console.print(f"[red]Error merging session '{session_id}': {str(e)}[/red]")
+                    stats["errors"] += 1
+        
+        # Display results
+        console.print("\n[bold]Merge Results:[/bold]")
+        console.print(f"Added: {stats['added']}")
+        console.print(f"Skipped (already existed): {stats['skipped']}")
+        console.print(f"Replaced: {stats['replaced']}")
+        console.print(f"Renamed (kept both): {stats['renamed']}")
+        console.print(f"Errors: {stats['errors']}")
+        
+        console.print(f"\n[green]Successfully merged sessions into profile '{target}'.[/green]")
+        
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+
+
 # Generate data commands
 @generate_app.command("practice")
 def generate_practice_data(
     storage_profile: Optional[str] = typer.Option(
-        None,
-        "--profile",
-        "-p",
-        help="Storage profile to use for data generation (preferred over output path)",
+        None, "--profile", "-p", help="Storage profile to use for data generation (preferred over output path)"
     ),
     output_path: Optional[str] = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output path for generated data (only used if profile not specified)",
+        None, "--output", "-o", help="Output path for generated data (only used if profile not specified)"
     ),
     days: int = typer.Option(
         7,
