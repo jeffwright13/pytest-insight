@@ -1,6 +1,6 @@
-import pytest
 from unittest.mock import MagicMock, mock_open, patch
 
+import pytest
 from pytest_insight.utils.analyze_test_data import analyze_test_data
 
 

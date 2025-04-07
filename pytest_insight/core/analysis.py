@@ -288,7 +288,7 @@ class SessionAnalysis(AnalysisBase):
 
         if self._show_progress:
             print(f"Processing test metrics for {len(sessions)} sessions...")
-            
+
         session_count = 0
         for chunk in session_chunks:
             for session in chunk:
@@ -311,7 +311,7 @@ class SessionAnalysis(AnalysisBase):
                 session_count += 1
                 if self._show_progress and session_count % max(1, min(len(sessions) // 10, 100)) == 0:
                     print(f"Processed {session_count}/{len(sessions)} sessions ({session_count/len(sessions):.1%})...")
-                    
+
         if self._show_progress:
             print(f"Completed processing {session_count} sessions.")
 
@@ -1041,7 +1041,7 @@ class TestAnalysis(AnalysisBase):
 
         if self._show_progress:
             print(f"Analyzing test stability for {len(sessions)} sessions...")
-            
+
         session_count = 0
         for chunk in session_chunks:
             for session in chunk:
@@ -1055,7 +1055,7 @@ class TestAnalysis(AnalysisBase):
                 session_count += 1
                 if self._show_progress and session_count % max(1, min(len(sessions) // 10, 100)) == 0:
                     print(f"Processed {session_count}/{len(sessions)} sessions ({session_count/len(sessions):.1%})...")
-                    
+
         if self._show_progress:
             print(f"Completed processing {session_count} sessions.")
 

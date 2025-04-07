@@ -63,9 +63,7 @@ def _get_method_info(method) -> Dict[str, Any]:
 
         param_info = {
             "name": name,
-            "default": (
-                None if param.default is inspect.Parameter.empty else param.default
-            ),
+            "default": (None if param.default is inspect.Parameter.empty else param.default),
             "required": param.default is inspect.Parameter.empty,
             "type": type_hints.get(name, Any),
             "kind": str(param.kind),
@@ -91,9 +89,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
     insights = Insights()
 
     # TestInsights methods
-    for method_name, method in inspect.getmembers(
-        insights.tests, predicate=inspect.ismethod
-    ):
+    for method_name, method in inspect.getmembers(insights.tests, predicate=inspect.ismethod):
         if method_name.startswith("_"):
             continue
 
@@ -106,9 +102,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
         }
 
     # SessionInsights methods
-    for method_name, method in inspect.getmembers(
-        insights.sessions, predicate=inspect.ismethod
-    ):
+    for method_name, method in inspect.getmembers(insights.sessions, predicate=inspect.ismethod):
         if method_name.startswith("_"):
             continue
 
@@ -121,9 +115,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
         }
 
     # TrendInsights methods
-    for method_name, method in inspect.getmembers(
-        insights.trends, predicate=inspect.ismethod
-    ):
+    for method_name, method in inspect.getmembers(insights.trends, predicate=inspect.ismethod):
         if method_name.startswith("_"):
             continue
 
@@ -202,9 +194,7 @@ def _format_rich_output(data: Dict[str, Any], title: str = None) -> None:
                     else:
                         console.print(f"  {item}")
                 if len(value) > 10:
-                    console.print(
-                        f"  [dim]...and {len(value) - 10} more items[/dim]"
-                    )
+                    console.print(f"  [dim]...and {len(value) - 10} more items[/dim]")
             else:
                 console.print(f"[bold]{key}:[/bold] {value}")
     elif isinstance(data, list):
@@ -233,21 +223,11 @@ def _create_dynamic_command(method_info: Dict[str, Any]):
 
     # Create command function
     def command_func(
-        data_path: Optional[str] = typer.Option(
-            None, "--data-path", "-d", help="Path to test data"
-        ),
-        sut_filter: Optional[str] = typer.Option(
-            None, "--sut", "-s", help="Filter by system under test"
-        ),
-        days: Optional[int] = typer.Option(
-            None, "--days", help="Filter by number of days"
-        ),
-        test_pattern: Optional[str] = typer.Option(
-            None, "--test", "-t", help="Filter by test name pattern"
-        ),
-        profile: Optional[str] = typer.Option(
-            None, "--profile", "-p", help="Storage profile to use"
-        ),
+        data_path: Optional[str] = typer.Option(None, "--data-path", "-d", help="Path to test data"),
+        sut_filter: Optional[str] = typer.Option(None, "--sut", "-s", help="Filter by system under test"),
+        days: Optional[int] = typer.Option(None, "--days", help="Filter by number of days"),
+        test_pattern: Optional[str] = typer.Option(None, "--test", "-t", help="Filter by test name pattern"),
+        profile: Optional[str] = typer.Option(None, "--profile", "-p", help="Storage profile to use"),
         output_format: OutputFormat = typer.Option(
             OutputFormat.TEXT, "--format", "-f", help="Output format (text or json)"
         ),
@@ -266,15 +246,9 @@ def _create_dynamic_command(method_info: Dict[str, Any]):
 
         # Apply filters if provided
         if any([sut_filter, days, test_pattern]):
-            insights = insights.with_query(
-                lambda q: q.filter_by_sut(sut_filter) if sut_filter else q
-            )
-            insights = insights.with_query(
-                lambda q: q.in_last_days(days) if days else q
-            )
-            insights = insights.with_query(
-                lambda q: q.filter_by_test_name(test_pattern) if test_pattern else q
-            )
+            insights = insights.with_query(lambda q: q.filter_by_sut(sut_filter) if sut_filter else q)
+            insights = insights.with_query(lambda q: q.in_last_days(days) if days else q)
+            insights = insights.with_query(lambda q: q.filter_by_test_name(test_pattern) if test_pattern else q)
 
         # Get the component
         if class_instance == "insights":
@@ -312,7 +286,7 @@ def _create_dynamic_command(method_info: Dict[str, Any]):
 def list_api_methods():
     """List all available API methods."""
     api_methods = _discover_api_methods()
-    
+
     # Group methods by component
     methods_by_component = {}
     for key, method_info in api_methods.items():
@@ -320,21 +294,21 @@ def list_api_methods():
         if component not in methods_by_component:
             methods_by_component[component] = []
         methods_by_component[component].append((key, method_info))
-    
+
     # Display methods grouped by component
     for component, methods in sorted(methods_by_component.items()):
         console.print(f"\n[bold]{component.upper()}[/bold]")
-        
+
         component_table = Table(box=SIMPLE, show_header=True)
         component_table.add_column("Method", style="cyan")
         component_table.add_column("Description", style="green")
         component_table.add_column("Parameters", style="yellow")
-        
+
         for key, method_info in sorted(methods, key=lambda x: x[1]["name"]):
             # Get first line of docstring as description
             docstring = method_info["info"]["docstring"]
             description = docstring.split("\n")[0] if docstring else "No description"
-            
+
             # Format parameters
             params = method_info["info"]["params"]
             if not params:
@@ -348,7 +322,7 @@ def list_api_methods():
                         type_str = param_type.__name__
                     else:
                         type_str = str(param_type).replace("typing.", "")
-                    
+
                     # Format with required/optional and default value
                     if param_info["required"]:
                         param_items.append(f"{name}: {type_str} (required)")
@@ -356,15 +330,11 @@ def list_api_methods():
                         default = param_info["default"]
                         default_str = str(default) if default is not None else "None"
                         param_items.append(f"{name}: {type_str} = {default_str}")
-                
+
                 param_str = "\n".join(param_items)
-            
-            component_table.add_row(
-                method_info["name"],
-                description,
-                param_str
-            )
-        
+
+            component_table.add_row(method_info["name"], description, param_str)
+
         console.print(component_table)
 
 
@@ -372,7 +342,7 @@ def list_api_methods():
 def show_method_details(method_path: str = typer.Argument(..., help="Method path (e.g., insights.tests.flaky_tests)")):
     """Show detailed information about a specific API method."""
     api_methods = _discover_api_methods()
-    
+
     if method_path not in api_methods:
         console.print(f"[bold red]Method '{method_path}' not found.[/bold red]")
         # Show similar methods as suggestions
@@ -382,25 +352,25 @@ def show_method_details(method_path: str = typer.Argument(..., help="Method path
             for m in similar_methods:
                 console.print(f"  {m}")
         return
-    
+
     method_info = api_methods[method_path]
     info = method_info["info"]
-    
+
     # Create a panel with method details
     panel_content = []
     panel_content.append(f"[bold cyan]Method:[/bold cyan] {method_path}")
     panel_content.append("")
-    
+
     # Add docstring
     if info["docstring"]:
         panel_content.append("[bold]Description:[/bold]")
         panel_content.append(info["docstring"])
         panel_content.append("")
-    
+
     # Add signature
     panel_content.append(f"[bold]Signature:[/bold] {info['signature']}")
     panel_content.append("")
-    
+
     # Add parameters
     if info["params"]:
         panel_content.append("[bold]Parameters:[/bold]")
@@ -411,7 +381,7 @@ def show_method_details(method_path: str = typer.Argument(..., help="Method path
                 type_str = param_type.__name__
             else:
                 type_str = str(param_type).replace("typing.", "")
-            
+
             # Format with required/optional and default value
             if param_info["required"]:
                 panel_content.append(f"  [cyan]{name}[/cyan]: {type_str} (required)")
@@ -421,7 +391,7 @@ def show_method_details(method_path: str = typer.Argument(..., help="Method path
                 panel_content.append(f"  [cyan]{name}[/cyan]: {type_str} = {default_str}")
     else:
         panel_content.append("[bold]Parameters:[/bold] None")
-    
+
     # Add return type
     panel_content.append("")
     return_type = info["return_type"]
@@ -430,28 +400,30 @@ def show_method_details(method_path: str = typer.Argument(..., help="Method path
     else:
         return_str = str(return_type).replace("typing.", "")
     panel_content.append(f"[bold]Returns:[/bold] {return_str}")
-    
+
     # Display the panel
-    console.print(Panel(
-        "\n".join(panel_content),
-        title=f"{method_info['component'].capitalize()} {method_info['name']}",
-        border_style="green",
-        expand=False
-    ))
-    
+    console.print(
+        Panel(
+            "\n".join(panel_content),
+            title=f"{method_info['component'].capitalize()} {method_info['name']}",
+            border_style="green",
+            expand=False,
+        )
+    )
+
     # Show example usage
     console.print("\n[bold]Example Usage:[/bold]")
     command_name = method_path.replace(".", "-")
     example = f"python -m pytest_insight.utils.dev_cli {command_name}"
-    
+
     # Add common options
     example += " --profile default"
-    
+
     # Add method-specific parameters
     for name, param_info in info["params"].items():
         if not param_info["required"]:
             continue
-        
+
         param_type = param_info["type"]
         if isinstance(param_type, type) and param_type is int:
             example += f" --{name.replace('_', '-')} 10"
@@ -459,7 +431,7 @@ def show_method_details(method_path: str = typer.Argument(..., help="Method path
             example += f" --{name.replace('_', '-')} value"
         elif isinstance(param_type, type) and param_type is bool:
             example += f" --{name.replace('_', '-')}"
-    
+
     console.print(f"  {example}")
 
 

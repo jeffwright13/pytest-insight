@@ -13,6 +13,8 @@ dependencies = [
     "typer>=0.15.0",
     "colorama>=0.4.6",
     "ijson>=3.3.0",
+    "prompt-toolkit>=3.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]

@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from pytest_insight.cli.cli_dev import app as dev_cli
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.insights import Insights
 from pytest_insight.core.storage import (
@@ -28,17 +29,19 @@ from pytest_insight.utils.db_generator import PracticeDataGenerator
 
 # Create the main app
 app = typer.Typer(
-    name="insight",
-    help="pytest-insight: Test analytics and insights for pytest",
-    add_completion=False,
+    help="Command-line interface for pytest-insight",
     context_settings={"help_option_names": ["--help", "-h"]},
 )
+
+# Add the developer CLI as a subcommand
+app.add_typer(dev_cli, name="dev")
 
 # Create subcommand groups
 profile_app = typer.Typer(
     help="Manage storage profiles",
     context_settings={"help_option_names": ["--help", "-h"]},
 )
+
 generate_app = typer.Typer(
     help="Generate practice test data",
     context_settings={"help_option_names": ["--help", "-h"]},
@@ -892,4 +895,9 @@ def analyze(
 
 # Main entry point
 if __name__ == "__main__":
-    app()
+    try:
+        app()
+    except Exception as e:
+        console = Console()
+        console.print(f"[bold red]Error:[/bold red] {str(e)}")
+        console.print(traceback.format_exc(), style="red")

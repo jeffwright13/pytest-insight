@@ -200,7 +200,7 @@ def test_handles_invalid_session_data(mocker, json_storage, get_test_time):
     sessions = json_storage.load_sessions()
     assert len(sessions) == 1
     assert sessions[0].session_id == "valid-test"
-    
+
     # Verify error was printed
     print_mock.assert_any_call(mocker.ANY)  # Any call with string containing error message
 
@@ -906,9 +906,10 @@ def test_load_sessions_without_progress(mocker, tmp_path, get_test_time):
 def test_load_sessions_streaming(mocker, tmp_path, get_test_time):
     """Test loading sessions with streaming parser."""
     import importlib.util
+
     if importlib.util.find_spec("ijson") is None:
         pytest.skip("ijson not available, skipping streaming test")
-    
+
     # Create a storage instance
     storage_path = tmp_path / "sessions.json"
     storage = JSONStorage(file_path=storage_path)
@@ -929,11 +930,7 @@ def test_load_sessions_streaming(mocker, tmp_path, get_test_time):
     storage._write_json_safely({"sessions": [s.to_dict() for s in sessions]})
 
     # Mock the _load_sessions_streaming method to ensure it's called
-    streaming_mock = mocker.patch.object(
-        storage, 
-        '_load_sessions_streaming', 
-        return_value=sessions
-    )
+    streaming_mock = mocker.patch.object(storage, "_load_sessions_streaming", return_value=sessions)
 
     # Load sessions with streaming
     loaded_sessions = storage.load_sessions(use_streaming=True, show_progress=True)
@@ -1012,16 +1009,16 @@ def test_load_sessions_fallback_when_ijson_not_available(mocker, tmp_path, get_t
 
     # Mock importlib.util.find_spec to simulate ijson not being available
     mocker.patch("importlib.util.find_spec", return_value=None)
-    
+
     # Mock print function to capture warnings
     warning_mock = mocker.patch("builtins.print")
-    
+
     # Try to load sessions with streaming (should fall back to regular loading)
     loaded_sessions = storage.load_sessions(use_streaming=True)
 
     # Verify warning was printed
     warning_mock.assert_any_call("Warning: ijson not installed. Falling back to standard JSON loading.")
-    
+
     # Verify all sessions were loaded correctly using the fallback method
     assert len(loaded_sessions) == 3
     assert {s.session_id for s in loaded_sessions} == {f"fallback-test-{i}" for i in range(3)}

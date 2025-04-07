@@ -364,7 +364,9 @@ class BaseStorage:
 
     def save_session(self, test_session: TestSession) -> None:
         """Persist a test session."""
-        raise NotImplementedError(f"{self.__class__.__name__} does not implement the save_session method...did you mean to call it on the {self.__class__.__name__} class?")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement the save_session method...did you mean to call it on the {self.__class__.__name__} class?"
+        )
 
     def load_sessions(self, **kwargs) -> List[TestSession]:
         """Retrieve past test sessions.
@@ -380,7 +382,9 @@ class BaseStorage:
         Returns:
             List of TestSession objects
         """
-        raise NotImplementedError(f"{self.__class__.__name__} does not implement the load_sessions method...did you mean to call it on the {self.__class__.__name__} class?")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement the load_sessions method...did you mean to call it on the {self.__class__.__name__} class?"
+        )
 
     def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
         """Remove stored sessions.
@@ -392,7 +396,9 @@ class BaseStorage:
         Returns:
             Number of sessions removed
         """
-        raise NotImplementedError(f"{self.__class__.__name__} does not implement the clear_sessions method...did you mean to call it on the {self.__class__.__name__} class?")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement the clear_sessions method...did you mean to call it on the {self.__class__.__name__} class?"
+        )
 
     def get_session_by_id(self, session_id: str) -> Optional[TestSession]:
         """Retrieve a test session by its unique identifier."""
@@ -481,7 +487,13 @@ class JSONStorage(BaseStorage):
         if not self.file_path.exists():
             self._write_json_safely([])
 
-    def load_sessions(self, chunk_size: int = 1000, show_progress: bool = True, use_streaming: bool = False, **kwargs) -> List[TestSession]:
+    def load_sessions(
+        self,
+        chunk_size: int = 1000,
+        show_progress: bool = True,
+        use_streaming: bool = False,
+        **kwargs,
+    ) -> List[TestSession]:
         """Load all test sessions from storage.
 
         Args:
@@ -497,6 +509,7 @@ class JSONStorage(BaseStorage):
             try:
                 # Try to import ijson only when needed
                 import importlib.util
+
                 if importlib.util.find_spec("ijson") is not None:
                     return self._load_sessions_streaming(chunk_size, show_progress)
                 else:
@@ -1040,9 +1053,7 @@ def load_sessions(
 
     # All storage classes now support the same parameters via **kwargs
     return storage_instance.load_sessions(
-        chunk_size=chunk_size,
-        show_progress=show_progress,
-        use_streaming=use_streaming
+        chunk_size=chunk_size, show_progress=show_progress, use_streaming=use_streaming
     )
 
 
