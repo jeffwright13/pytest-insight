@@ -550,70 +550,80 @@ def analyze(
 
         # Initialize stability with a default empty dictionary
         stability = {"flaky_tests": []}
+        trends = {}
 
         # Get trends with progress indicator
         if analysis_type in ["standard", "comprehensive", "trends"]:
-            console.print("[bold]Calculating trends...[/bold]")
+            # Show progress message
+            console.print("[bold]Calculating trends...[/bold]", end="")
+
+            # Do the actual work
             trends = analysis.sessions.detect_trends(days)
 
-            # Get test stability metrics with progress indicator
-            console.print("[bold]Analyzing test stability...[/bold]")
+            # Clear the progress message by overwriting with spaces and moving back to start of line
+            console.print("\r" + " " * 50 + "\r", end="")
+
+            # Show progress message for stability analysis
+            console.print("[bold]Analyzing test stability...[/bold]", end="")
+
+            # Do the actual work
             stability = analysis.tests.stability(chunk_size=chunk_size)
+
+            # Clear the progress message
+            console.print("\r" + " " * 50 + "\r", end="")
 
             console.print(f"[bold]Flaky tests:[/bold] [cyan]{len(stability.get('flaky_tests', []))}")
 
-            # Print trend information
-            trends_table = Table(title="Trends", show_header=True, header_style="bold magenta")
-            trends_table.add_column("Trend Type", style="dim")
-            trends_table.add_column("Direction", style="cyan")
-            trends_table.add_column("Change", style="green")
+        # Print trend information
+        trends_table = Table(title="Trends", show_header=True, header_style="bold magenta")
+        trends_table.add_column("Trend Type", style="dim")
+        trends_table.add_column("Direction", style="cyan")
+        trends_table.add_column("Change", style="green")
 
-            duration_trend = trends.get("duration", {})
-            direction = duration_trend.get("direction", "stable")
+        duration_trend = trends.get("duration", {})
+        direction = duration_trend.get("direction", "stable")
+        direction_style = "green" if direction == "improving" else "red" if direction == "worsening" else "yellow"
+
+        change_text = ""
+        if duration_trend.get("significant", False):
+            change_text = f"Significant: {duration_trend.get('change_percent', 0):.1f}%"
+
+        trends_table.add_row(
+            "Duration",
+            f"[{direction_style}]{direction}[/{direction_style}]",
+            change_text,
+        )
+
+        failure_trend = trends.get("failures", {})
+        direction = failure_trend.get("direction", "stable")
+        direction_style = "green" if direction == "improving" else "red" if direction == "worsening" else "yellow"
+
+        change_text = ""
+        if failure_trend.get("significant", False):
+            change_text = f"Significant: {failure_trend.get('change_percent', 0):.1f}%"
+
+        trends_table.add_row(
+            "Failures",
+            f"[{direction_style}]{direction}[/{direction_style}]",
+            change_text,
+        )
+
+        warning_trend = trends.get("warnings", {})
+        if warning_trend:
+            direction = warning_trend.get("direction", "stable")
             direction_style = "green" if direction == "improving" else "red" if direction == "worsening" else "yellow"
 
             change_text = ""
-            if duration_trend.get("significant", False):
-                change_text = f"Significant: {duration_trend.get('change_percent', 0):.1f}%"
+            if warning_trend.get("significant", False):
+                change_text = f"Significant: {warning_trend.get('change_percent', 0):.1f}%"
 
             trends_table.add_row(
-                "Duration",
+                "Warnings",
                 f"[{direction_style}]{direction}[/{direction_style}]",
                 change_text,
             )
 
-            failure_trend = trends.get("failures", {})
-            direction = failure_trend.get("direction", "stable")
-            direction_style = "green" if direction == "improving" else "red" if direction == "worsening" else "yellow"
-
-            change_text = ""
-            if failure_trend.get("significant", False):
-                change_text = f"Significant: {failure_trend.get('change_percent', 0):.1f}%"
-
-            trends_table.add_row(
-                "Failures",
-                f"[{direction_style}]{direction}[/{direction_style}]",
-                change_text,
-            )
-
-            warning_trend = trends.get("warnings", {})
-            if warning_trend:
-                direction = warning_trend.get("direction", "stable")
-                direction_style = (
-                    "green" if direction == "improving" else "red" if direction == "worsening" else "yellow"
-                )
-
-                change_text = ""
-                if warning_trend.get("significant", False):
-                    change_text = f"Significant: {warning_trend.get('change_percent', 0):.1f}%"
-
-                trends_table.add_row(
-                    "Warnings",
-                    f"[{direction_style}]{direction}[/{direction_style}]",
-                    change_text,
-                )
-
-            console.print(trends_table)
+        console.print(trends_table)
 
         # Print top flaky tests if available
         flaky_tests = stability.get("flaky_tests", [])
@@ -692,10 +702,14 @@ def analyze(
 
         # Add test relationship analysis
         if analysis_type in ["comprehensive", "relationships"]:
-            console.print("[bold]Analyzing co-failures...[/bold]")
+            # Show progress message
+            console.print("[bold]Analyzing co-failures...[/bold]", end="")
 
             # Calculate co-failures (tests that tend to fail together)
             co_failures = analysis.tests.co_failures(min_correlation=0.7)
+
+            # Clear the progress message
+            console.print("\r" + " " * 50 + "\r", end="")
 
             if co_failures:
                 co_failure_table = Table(
@@ -730,8 +744,14 @@ def analyze(
 
         # Add health score analysis
         if analysis_type in ["comprehensive", "health"]:
+            # Show progress message with end="" to keep cursor on same line
+            console.print("[bold]Calculating health score...[/bold]", end="")
+
             # Calculate overall health score
             health_score = analysis.tests.health_score()
+
+            # Clear the progress message
+            console.print("\r" + " " * 50 + "\r", end="")
 
             if health_score:
                 overall_score = health_score.get("overall_score", 0)
@@ -790,8 +810,14 @@ def analyze(
 
         # Add recently failing/passing tests analysis
         if analysis_type in ["comprehensive", "standard"]:
-            # Get recently failing and recently passing tests
+            # Show progress message with end="" to keep cursor on same line
+            console.print("[bold]Analyzing behavior changes...[/bold]", end="")
+
+            # Calculate behavior changes
             behavior_changes = analysis.tests.behavior_changes(days=days or 30)
+
+            # Clear the progress message
+            console.print("\r" + " " * 50 + "\r", end="")
 
             if behavior_changes:
                 # Recently failing tests (were passing, now failing)

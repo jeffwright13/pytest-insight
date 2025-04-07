@@ -70,44 +70,19 @@ class AnalysisBase:
         Returns:
             A context manager for progress reporting
         """
-        if not self._show_progress:
-            # Return a dummy context manager if progress is disabled
-            class DummyProgress:
-                def __enter__(self):
-                    return self
 
-                def __exit__(self, exc_type, exc_val, exc_tb):
-                    pass
-
-                def update(self, *args, **kwargs):
-                    pass
-
-            return DummyProgress()
-
-        # Create a simple progress reporting context manager
-        class SimpleProgressContext:
-            def __init__(self, description, total):
-                self.description = description
-                self.total = total
-                self.current = 0
-                self.last_percent = 0
-
+        # Return a dummy context manager - progress indicators are handled at the CLI level
+        class DummyProgress:
             def __enter__(self):
-                print(f"{self.description} (0/{self.total}, 0%)")
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
-                print(f"{self.description} completed ({self.current}/{self.total}, 100%)")
+                pass
 
-            def update(self, advance=1):
-                self.current += advance
-                # Only print updates at 10% intervals or at least every 100 items
-                percent = int((self.current / self.total) * 100)
-                if percent >= self.last_percent + 10 or self.current % max(1, min(self.total // 10, 100)) == 0:
-                    print(f"{self.description} ({self.current}/{self.total}, {percent}%)")
-                    self.last_percent = percent
+            def update(self, *args, **kwargs):
+                pass
 
-        return SimpleProgressContext(description, total)
+        return DummyProgress()
 
     def _filter_sessions_by_days(self, days: Optional[int]) -> List[TestSession]:
         """Filter sessions by the number of days from the most recent session.
@@ -286,9 +261,6 @@ class SessionAnalysis(AnalysisBase):
         # Process sessions in chunks for large datasets
         session_chunks = [sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)]
 
-        if self._show_progress:
-            print(f"Processing test metrics for {len(sessions)} sessions...")
-
         session_count = 0
         for chunk in session_chunks:
             for session in chunk:
@@ -309,11 +281,6 @@ class SessionAnalysis(AnalysisBase):
 
                 # Update progress
                 session_count += 1
-                if self._show_progress and session_count % max(1, min(len(sessions) // 10, 100)) == 0:
-                    print(f"Processed {session_count}/{len(sessions)} sessions ({session_count/len(sessions):.1%})...")
-
-        if self._show_progress:
-            print(f"Completed processing {session_count} sessions.")
 
         # Calculate metrics
         avg_duration = mean(durations) if durations else 0
@@ -611,17 +578,12 @@ class SessionAnalysis(AnalysisBase):
         # Initialize outcome counter
         outcome_counts = {}
 
-        # Set up progress reporting
-        total_sessions = len(sessions)
-        with self._progress_context("Calculating outcome distribution", total_sessions) as progress:
-            # Process each session
-            for i, session in enumerate(sessions):
-                progress.update(i)
-
-                # Count outcomes in this session
-                for test_result in session.test_results:
-                    outcome_str = test_result.outcome.to_str()
-                    outcome_counts[outcome_str] = outcome_counts.get(outcome_str, 0) + 1
+        # Process each session
+        for session in sessions:
+            # Count outcomes in this session
+            for test_result in session.test_results:
+                outcome_str = test_result.outcome.to_str()
+                outcome_counts[outcome_str] = outcome_counts.get(outcome_str, 0) + 1
 
         return outcome_counts
 
@@ -643,28 +605,23 @@ class SessionAnalysis(AnalysisBase):
         test_failures = {}
         session_failures = {}
 
-        # Set up progress reporting
-        total_sessions = len(self._sessions)
-        with self._progress_context("Extracting test failures", total_sessions) as progress:
-            # Process each session
-            for i, session in enumerate(self._sessions):
-                progress.update(i)
+        # Process each session
+        for session in self._sessions:
+            # Record failures in this session
+            session_id = session.session_id
+            session_failures[session_id] = []
 
-                # Record failures in this session
-                session_id = session.session_id
-                session_failures[session_id] = []
+            for test_result in session.test_results:
+                if test_result.outcome.is_failed():
+                    test_id = test_result.nodeid
 
-                for test_result in session.test_results:
-                    if test_result.outcome.is_failed():
-                        test_id = test_result.nodeid
+                    # Initialize test entry if not exists
+                    if test_id not in test_failures:
+                        test_failures[test_id] = set()
 
-                        # Initialize test entry if not exists
-                        if test_id not in test_failures:
-                            test_failures[test_id] = set()
-
-                        # Record that this test failed in this session
-                        test_failures[test_id].add(session_id)
-                        session_failures[session_id].append(test_id)
+                    # Record that this test failed in this session
+                    test_failures[test_id].add(session_id)
+                    session_failures[session_id].append(test_id)
 
         # Find correlations between tests
         correlations = {}
@@ -674,41 +631,34 @@ class SessionAnalysis(AnalysisBase):
         if len(test_ids) < 2:
             return []
 
-        # Set up progress reporting
-        total_comparisons = len(test_ids) * (len(test_ids) - 1) // 2
-        with self._progress_context("Calculating test correlations", total_comparisons) as progress:
-            # Compare each pair of tests
-            comparison_count = 0
-            for i in range(len(test_ids)):
-                for j in range(i + 1, len(test_ids)):
-                    progress.update(comparison_count)
-                    comparison_count += 1
+        # Compare each pair of tests
+        for i in range(len(test_ids)):
+            for j in range(i + 1, len(test_ids)):
+                test_a = test_ids[i]
+                test_b = test_ids[j]
 
-                    test_a = test_ids[i]
-                    test_b = test_ids[j]
+                # Get sessions where each test failed
+                sessions_a = test_failures[test_a]
+                sessions_b = test_failures[test_b]
 
-                    # Get sessions where each test failed
-                    sessions_a = test_failures[test_a]
-                    sessions_b = test_failures[test_b]
+                # Calculate co-occurrence
+                co_failures = sessions_a.intersection(sessions_b)
 
-                    # Calculate co-occurrence
-                    co_failures = sessions_a.intersection(sessions_b)
+                # Skip if not enough co-occurrences
+                if len(co_failures) < min_occurrences:
+                    continue
 
-                    # Skip if not enough co-occurrences
-                    if len(co_failures) < min_occurrences:
-                        continue
+                # Calculate correlation coefficient (Jaccard similarity)
+                correlation = len(co_failures) / len(sessions_a.union(sessions_b))
 
-                    # Calculate correlation coefficient (Jaccard similarity)
-                    correlation = len(co_failures) / len(sessions_a.union(sessions_b))
-
-                    # Record if above threshold
-                    if correlation >= min_correlation:
-                        pair_key = (test_a, test_b)
-                        correlations[pair_key] = {
-                            "correlation": correlation,
-                            "co_failures": len(co_failures),
-                            "tests": [test_a, test_b],
-                        }
+                # Record if above threshold
+                if correlation >= min_correlation:
+                    pair_key = (test_a, test_b)
+                    correlations[pair_key] = {
+                        "correlation": correlation,
+                        "co_failures": len(co_failures),
+                        "tests": [test_a, test_b],
+                    }
 
         # Build clusters from correlations
         clusters = []
@@ -877,97 +827,65 @@ class SessionAnalysis(AnalysisBase):
         # Sort sessions by timestamp
         sessions = sorted(sessions, key=lambda s: s.session_start_time)
 
-        # Track test outcomes over time
-        test_history = {}
+        # Get test outcomes by test ID
+        test_outcomes = defaultdict(list)
+        for session in sessions:
+            for test in session.test_results:
+                test_outcomes[test.nodeid].append({"outcome": test.outcome, "timestamp": session.session_start_time})
 
-        # Set up progress reporting
-        total_sessions = len(sessions)
-        with self._progress_context("Analyzing test behavior changes", total_sessions) as progress:
-            # Process each session
-            for i, session in enumerate(sessions):
-                progress.update(i)
-
-                session_time = session.session_start_time or session.timestamp
-
-                # Record outcomes in this session
-                for test_result in session.test_results:
-                    test_id = test_result.nodeid
-                    outcome = test_result.outcome
-
-                    # Initialize test history if not exists
-                    if test_id not in test_history:
-                        test_history[test_id] = []
-
-                    # Record outcome
-                    test_history[test_id].append(
-                        {
-                            "session_id": session.session_id,
-                            "timestamp": session_time,
-                            "outcome": outcome,
-                        }
-                    )
-
-        # Identify behavior changes
+        # Identify tests with behavior changes
         recently_failing = []
         recently_passing = []
 
-        # Set up progress reporting
-        total_tests = len(test_history)
-        with self._progress_context("Identifying behavior changes", total_tests) as progress:
-            # Process each test
-            for i, (test_id, history) in enumerate(test_history.items()):
-                progress.update(i)
+        # Process each test to identify behavior changes
+        for test_id, history in test_outcomes.items():
+            # Skip if not enough history
+            if len(history) < 6:
+                continue
 
-                # Skip tests with too few data points
-                if len(history) < 3:
-                    continue
+            # Split history into recent and older
+            recent_outcomes = history[-3:]
+            older_outcomes = history[:-3]
 
-                # Analyze recent behavior
-                recent_outcomes = history[-3:]  # Last 3 outcomes
-                older_outcomes = history[:-3]  # Outcomes before that
+            # Check if recently failing
+            was_passing = all(not o["outcome"].is_failed() for o in older_outcomes[-3:])
+            now_failing = all(o["outcome"].is_failed() for o in recent_outcomes)
 
-                if not older_outcomes:
-                    continue
+            if was_passing and now_failing:
+                # Find last passed timestamp
+                last_passed = None
+                for o in reversed(history):
+                    if not o["outcome"].is_failed():
+                        last_passed = o["timestamp"]
+                        break
 
-                # Check if recently failing
-                was_passing = all(not o["outcome"].is_failed() for o in older_outcomes[-3:])
-                now_failing = all(o["outcome"].is_failed() for o in recent_outcomes)
+                recently_failing.append(
+                    {
+                        "nodeid": test_id,
+                        "last_passed": last_passed,
+                        "failure_streak": sum(1 for o in recent_outcomes if o["outcome"].is_failed()),
+                    }
+                )
 
-                if was_passing and now_failing:
-                    # Find last passed timestamp
-                    last_passed = None
-                    for o in reversed(history):
-                        if not o["outcome"].is_failed():
-                            last_passed = o["timestamp"]
-                            break
+            # Check if recently passing
+            was_failing = all(o["outcome"].is_failed() for o in older_outcomes[-3:])
+            now_passing = all(not o["outcome"].is_failed() for o in recent_outcomes)
 
-                    recently_failing.append(
-                        {
-                            "nodeid": test_id,
-                            "last_passed": last_passed,
-                            "failure_streak": sum(1 for o in recent_outcomes if o["outcome"].is_failed()),
-                        }
-                    )
+            if was_failing and now_passing:
+                # Find last failed timestamp
+                last_failed = None
+                for o in reversed(history):
+                    if o["outcome"].is_failed():
+                        last_failed = o["timestamp"]
+                        break
 
-                # Check if recently passing
-                was_failing = all(o["outcome"].is_failed() for o in older_outcomes[-3:])
-                now_passing = all(not o["outcome"].is_failed() for o in recent_outcomes)
-
-                if was_failing and now_passing:
-                    # Find last failed timestamp
-                    last_failed = None
-                    for o in reversed(history):
-                        if o["outcome"].is_failed():
-                            last_failed = o["timestamp"]
-                            break
-
-                    recently_passing.append(
-                        {
-                            "nodeid": test_id,
-                            "last_failed": last_failed,
-                            "success_streak": sum(1 for o in recent_outcomes if not o["outcome"].is_failed()),
-                        }
-                    )
+                recently_passing.append(
+                    {
+                        "nodeid": test_id,
+                        "last_failed": last_failed,
+                        "success_streak": sum(1 for o in recent_outcomes if not o["outcome"].is_failed()),
+                    }
+                )
 
         return {
             "recently_failing": recently_failing,
@@ -1039,9 +957,6 @@ class TestAnalysis(AnalysisBase):
         # Process sessions in chunks for large datasets
         session_chunks = [sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)]
 
-        if self._show_progress:
-            print(f"Analyzing test stability for {len(sessions)} sessions...")
-
         session_count = 0
         for chunk in session_chunks:
             for session in chunk:
@@ -1053,11 +968,6 @@ class TestAnalysis(AnalysisBase):
 
                 # Update progress
                 session_count += 1
-                if self._show_progress and session_count % max(1, min(len(sessions) // 10, 100)) == 0:
-                    print(f"Processed {session_count}/{len(sessions)} sessions ({session_count/len(sessions):.1%})...")
-
-        if self._show_progress:
-            print(f"Completed processing {session_count} sessions.")
 
         # Analyze flaky tests
         flaky_tests = []
@@ -1157,17 +1067,12 @@ class TestAnalysis(AnalysisBase):
         # Initialize outcome counter
         outcome_counts = {}
 
-        # Set up progress reporting
-        total_sessions = len(sessions)
-        with self._progress_context("Calculating outcome distribution", total_sessions) as progress:
-            # Process each session
-            for i, session in enumerate(sessions):
-                progress.update(i)
-
-                # Count outcomes in this session
-                for test_result in session.test_results:
-                    outcome_str = test_result.outcome.to_str()
-                    outcome_counts[outcome_str] = outcome_counts.get(outcome_str, 0) + 1
+        # Process each session
+        for session in sessions:
+            # Count outcomes in this session
+            for test_result in session.test_results:
+                outcome_str = test_result.outcome.to_str()
+                outcome_counts[outcome_str] = outcome_counts.get(outcome_str, 0) + 1
 
         return outcome_counts
 
@@ -1189,28 +1094,23 @@ class TestAnalysis(AnalysisBase):
         test_failures = {}
         session_failures = {}
 
-        # Set up progress reporting
-        total_sessions = len(self._sessions)
-        with self._progress_context("Extracting test failures", total_sessions) as progress:
-            # Process each session
-            for i, session in enumerate(self._sessions):
-                progress.update(i)
+        # Process each session
+        for session in self._sessions:
+            # Record failures in this session
+            session_id = session.session_id
+            session_failures[session_id] = []
 
-                # Record failures in this session
-                session_id = session.session_id
-                session_failures[session_id] = []
+            for test_result in session.test_results:
+                if test_result.outcome.is_failed():
+                    test_id = test_result.nodeid
 
-                for test_result in session.test_results:
-                    if test_result.outcome.is_failed():
-                        test_id = test_result.nodeid
+                    # Initialize test entry if not exists
+                    if test_id not in test_failures:
+                        test_failures[test_id] = set()
 
-                        # Initialize test entry if not exists
-                        if test_id not in test_failures:
-                            test_failures[test_id] = set()
-
-                        # Record that this test failed in this session
-                        test_failures[test_id].add(session_id)
-                        session_failures[session_id].append(test_id)
+                    # Record that this test failed in this session
+                    test_failures[test_id].add(session_id)
+                    session_failures[session_id].append(test_id)
 
         # Find correlations between tests
         correlations = {}
@@ -1220,41 +1120,34 @@ class TestAnalysis(AnalysisBase):
         if len(test_ids) < 2:
             return []
 
-        # Set up progress reporting
-        total_comparisons = len(test_ids) * (len(test_ids) - 1) // 2
-        with self._progress_context("Calculating test correlations", total_comparisons) as progress:
-            # Compare each pair of tests
-            comparison_count = 0
-            for i in range(len(test_ids)):
-                for j in range(i + 1, len(test_ids)):
-                    progress.update(comparison_count)
-                    comparison_count += 1
+        # Compare each pair of tests
+        for i in range(len(test_ids)):
+            for j in range(i + 1, len(test_ids)):
+                test_a = test_ids[i]
+                test_b = test_ids[j]
 
-                    test_a = test_ids[i]
-                    test_b = test_ids[j]
+                # Get sessions where each test failed
+                sessions_a = test_failures[test_a]
+                sessions_b = test_failures[test_b]
 
-                    # Get sessions where each test failed
-                    sessions_a = test_failures[test_a]
-                    sessions_b = test_failures[test_b]
+                # Calculate co-occurrence
+                co_failures = sessions_a.intersection(sessions_b)
 
-                    # Calculate co-occurrence
-                    co_failures = sessions_a.intersection(sessions_b)
+                # Skip if not enough co-occurrences
+                if len(co_failures) < min_occurrences:
+                    continue
 
-                    # Skip if not enough co-occurrences
-                    if len(co_failures) < min_occurrences:
-                        continue
+                # Calculate correlation coefficient (Jaccard similarity)
+                correlation = len(co_failures) / len(sessions_a.union(sessions_b))
 
-                    # Calculate correlation coefficient (Jaccard similarity)
-                    correlation = len(co_failures) / len(sessions_a.union(sessions_b))
-
-                    # Record if above threshold
-                    if correlation >= min_correlation:
-                        pair_key = (test_a, test_b)
-                        correlations[pair_key] = {
-                            "correlation": correlation,
-                            "co_failures": len(co_failures),
-                            "tests": [test_a, test_b],
-                        }
+                # Record if above threshold
+                if correlation >= min_correlation:
+                    pair_key = (test_a, test_b)
+                    correlations[pair_key] = {
+                        "correlation": correlation,
+                        "co_failures": len(co_failures),
+                        "tests": [test_a, test_b],
+                    }
 
         # Build clusters from correlations
         clusters = []
@@ -1430,68 +1323,55 @@ class TestAnalysis(AnalysisBase):
         recently_failing = []
         recently_passing = []
 
-        total_sessions = len(sessions)
-        total_tests = len(test_outcomes)
+        # Process each test to identify behavior changes
+        for test_id, history in test_outcomes.items():
+            # Skip if not enough history
+            if len(history) < threshold * 2:
+                continue
 
-        with self._progress_context("Analyzing test behavior changes", total_sessions) as progress:
-            for i, session in enumerate(sessions):
-                progress.update(i)
+            # Split history into recent and older
+            recent_outcomes = history[-threshold:]
+            older_outcomes = history[:-threshold]
 
-                # Skip if not enough history
-                if i < threshold:
-                    continue
+            # Check if recently failing
+            was_passing = all(not o["outcome"].is_failed() for o in older_outcomes[-3:])
+            now_failing = all(o["outcome"].is_failed() for o in recent_outcomes)
 
-        with self._progress_context("Identifying behavior changes", total_tests) as progress:
-            for i, (test_id, history) in enumerate(test_outcomes.items()):
-                progress.update(i)
+            if was_passing and now_failing:
+                # Find last passed timestamp
+                last_passed = None
+                for o in reversed(history):
+                    if not o["outcome"].is_failed():
+                        last_passed = o["timestamp"]
+                        break
 
-                # Skip if not enough history
-                if len(history) < threshold * 2:
-                    continue
+                recently_failing.append(
+                    {
+                        "nodeid": test_id,
+                        "last_passed": last_passed,
+                        "failure_streak": sum(1 for o in recent_outcomes if o["outcome"].is_failed()),
+                    }
+                )
 
-                # Split history into recent and older
-                recent_outcomes = history[-threshold:]
-                older_outcomes = history[:-threshold]
+            # Check if recently passing
+            was_failing = all(o["outcome"].is_failed() for o in older_outcomes[-3:])
+            now_passing = all(not o["outcome"].is_failed() for o in recent_outcomes)
 
-                # Check if recently failing
-                was_passing = all(not o["outcome"].is_failed() for o in older_outcomes[-3:])
-                now_failing = all(o["outcome"].is_failed() for o in recent_outcomes)
+            if was_failing and now_passing:
+                # Find last failed timestamp
+                last_failed = None
+                for o in reversed(history):
+                    if o["outcome"].is_failed():
+                        last_failed = o["timestamp"]
+                        break
 
-                if was_passing and now_failing:
-                    # Find last passed timestamp
-                    last_passed = None
-                    for o in reversed(history):
-                        if not o["outcome"].is_failed():
-                            last_passed = o["timestamp"]
-                            break
-
-                    recently_failing.append(
-                        {
-                            "nodeid": test_id,
-                            "last_passed": last_passed,
-                            "failure_streak": sum(1 for o in recent_outcomes if o["outcome"].is_failed()),
-                        }
-                    )
-
-                # Check if recently passing
-                was_failing = all(o["outcome"].is_failed() for o in older_outcomes[-3:])
-                now_passing = all(not o["outcome"].is_failed() for o in recent_outcomes)
-
-                if was_failing and now_passing:
-                    # Find last failed timestamp
-                    last_failed = None
-                    for o in reversed(history):
-                        if o["outcome"].is_failed():
-                            last_failed = o["timestamp"]
-                            break
-
-                    recently_passing.append(
-                        {
-                            "nodeid": test_id,
-                            "last_failed": last_failed,
-                            "success_streak": sum(1 for o in recent_outcomes if not o["outcome"].is_failed()),
-                        }
-                    )
+                recently_passing.append(
+                    {
+                        "nodeid": test_id,
+                        "last_failed": last_failed,
+                        "success_streak": sum(1 for o in recent_outcomes if not o["outcome"].is_failed()),
+                    }
+                )
 
         return {
             "recently_failing": recently_failing,
@@ -2116,28 +1996,23 @@ class Analysis:
         test_failures = {}
         session_failures = {}
 
-        # Set up progress reporting
-        total_sessions = len(self._sessions)
-        with self._progress_context("Extracting test failures", total_sessions) as progress:
-            # Process each session
-            for i, session in enumerate(self._sessions):
-                progress.update(i)
+        # Process each session
+        for session in self._sessions:
+            # Record failures in this session
+            session_id = session.session_id
+            session_failures[session_id] = []
 
-                # Record failures in this session
-                session_id = session.session_id
-                session_failures[session_id] = []
+            for test_result in session.test_results:
+                if test_result.outcome.is_failed():
+                    test_id = test_result.nodeid
 
-                for test_result in session.test_results:
-                    if test_result.outcome.is_failed():
-                        test_id = test_result.nodeid
+                    # Initialize test entry if not exists
+                    if test_id not in test_failures:
+                        test_failures[test_id] = set()
 
-                        # Initialize test entry if not exists
-                        if test_id not in test_failures:
-                            test_failures[test_id] = set()
-
-                        # Record that this test failed in this session
-                        test_failures[test_id].add(session_id)
-                        session_failures[session_id].append(test_id)
+                    # Record that this test failed in this session
+                    test_failures[test_id].add(session_id)
+                    session_failures[session_id].append(test_id)
 
         # Find correlations between tests
         correlations = {}
@@ -2147,41 +2022,34 @@ class Analysis:
         if len(test_ids) < 2:
             return []
 
-        # Set up progress reporting
-        total_comparisons = len(test_ids) * (len(test_ids) - 1) // 2
-        with self._progress_context("Calculating test correlations", total_comparisons) as progress:
-            # Compare each pair of tests
-            comparison_count = 0
-            for i in range(len(test_ids)):
-                for j in range(i + 1, len(test_ids)):
-                    progress.update(comparison_count)
-                    comparison_count += 1
+        # Compare each pair of tests
+        for i in range(len(test_ids)):
+            for j in range(i + 1, len(test_ids)):
+                test_a = test_ids[i]
+                test_b = test_ids[j]
 
-                    test_a = test_ids[i]
-                    test_b = test_ids[j]
+                # Get sessions where each test failed
+                sessions_a = test_failures[test_a]
+                sessions_b = test_failures[test_b]
 
-                    # Get sessions where each test failed
-                    sessions_a = test_failures[test_a]
-                    sessions_b = test_failures[test_b]
+                # Calculate co-occurrence
+                co_failures = sessions_a.intersection(sessions_b)
 
-                    # Calculate co-occurrence
-                    co_failures = sessions_a.intersection(sessions_b)
+                # Skip if not enough co-occurrences
+                if len(co_failures) < 3:
+                    continue
 
-                    # Skip if not enough co-occurrences
-                    if len(co_failures) < 3:
-                        continue
+                # Calculate correlation coefficient (Jaccard similarity)
+                correlation = len(co_failures) / len(sessions_a.union(sessions_b))
 
-                    # Calculate correlation coefficient (Jaccard similarity)
-                    correlation = len(co_failures) / len(sessions_a.union(sessions_b))
-
-                    # Record if above threshold
-                    if correlation >= 0.7:
-                        pair_key = (test_a, test_b)
-                        correlations[pair_key] = {
-                            "correlation": correlation,
-                            "co_failures": len(co_failures),
-                            "tests": [test_a, test_b],
-                        }
+                # Record if above threshold
+                if correlation >= 0.7:
+                    pair_key = (test_a, test_b)
+                    correlations[pair_key] = {
+                        "correlation": correlation,
+                        "co_failures": len(co_failures),
+                        "tests": [test_a, test_b],
+                    }
 
         # Build clusters from correlations
         clusters = []

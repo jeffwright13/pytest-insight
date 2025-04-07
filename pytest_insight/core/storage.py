@@ -433,12 +433,7 @@ class InMemoryStorage(BaseStorage):
         Returns:
             List of TestSession objects
         """
-        # In-memory storage doesn't need progress reporting or streaming
-        # but we accept the parameters for API compatibility
-        if show_progress:
-            print(f"Loading {len(self._sessions)} sessions from memory...")
-
-        return self._sessions
+        return self._sessions.copy()
 
     def save_session(self, session: TestSession) -> None:
         """Save a test session."""
@@ -541,9 +536,6 @@ class JSONStorage(BaseStorage):
 
         total_sessions = len(sessions_data)
 
-        if show_progress:
-            print(f"Loading {total_sessions} sessions...")
-
         # Process sessions in chunks to avoid memory issues with large files
         sessions = []
         for i in range(0, total_sessions, chunk_size):
@@ -561,14 +553,6 @@ class JSONStorage(BaseStorage):
                 except Exception as e:
                     print(f"Failed to load session: {e}")
 
-            # Print progress every chunk
-            if show_progress:
-                loaded = len(sessions)
-                print(f"Loaded {loaded}/{total_sessions} sessions ({loaded/total_sessions:.1%})...")
-
-        if show_progress:
-            print(f"Completed loading {len(sessions)} sessions.")
-
         return sessions
 
     def _load_sessions_streaming(self, chunk_size: int = 1000, show_progress: bool = True) -> List[TestSession]:
@@ -581,69 +565,60 @@ class JSONStorage(BaseStorage):
         Returns:
             List of TestSession objects
         """
-        # Import ijson here to avoid making it a hard dependency
-        import ijson
+        try:
+            import ijson
+        except ImportError:
+            print("Error: ijson package is required for streaming. Install with: pip install ijson")
+            return []
 
         sessions = []
+
         try:
             with open(self.file_path, "rb") as f:
-                # First try to detect the format by reading a small part
-                f.seek(0)
-                start_bytes = f.read(100)  # Read first 100 bytes to check format
-                f.seek(0)  # Reset file position
-
-                # Check if the file starts with an array or an object
-                is_array = start_bytes.strip().startswith(b"[")
-
-                if is_array:
-                    # Parse directly from the root array
-                    sessions_array = ijson.items(f, "item")
-                else:
-                    # Parse from the sessions array within the object
-                    sessions_array = ijson.items(f, "sessions.item")
-
                 # Get file size as a proxy for progress
-                file_size = os.path.getsize(self.file_path)
-                if show_progress:
-                    print(f"Streaming {file_size} bytes of session data...")
+                os.fstat(f.fileno()).st_size
 
-                # Process sessions in chunks
-                chunk = []
-                last_pos = 0
-                for session_dict in sessions_array:
+                # Determine if we're parsing a list or a dict with "sessions" key
+                # Read a small chunk to check format
+                first_bytes = f.read(100)
+                f.seek(0)  # Reset position
+
+                # Check if file starts with an array or object
+                is_array = first_bytes.lstrip().startswith(b"[")
+
+                # Set the appropriate path prefix for ijson
+                prefix = "item" if is_array else "sessions.item"
+
+                # Parse the file
+                current_chunk = []
+
+                for session_data in ijson.items(f, prefix):
                     try:
-                        # Convert any decimal values to floats
-                        self._convert_decimal_to_float(session_dict)
-                        session = TestSession.from_dict(session_dict)
-                        chunk.append(session)
+                        # Create session object
+                        session = TestSession.from_dict(session_data)
+                        current_chunk.append(session)
 
-                        # Process chunk when it reaches the desired size
-                        if len(chunk) >= chunk_size:
-                            sessions.extend(chunk)
-                            chunk = []
+                        # Process in chunks
+                        if len(current_chunk) >= chunk_size:
+                            sessions.extend(current_chunk)
+                            current_chunk = []
 
-                        # Update progress based on file position
-                        current_pos = f.tell()
-                        if current_pos > last_pos and show_progress:
-                            progress_pct = current_pos / file_size
-                            print(f"Processed {current_pos}/{file_size} bytes ({progress_pct:.1%})...")
-                            last_pos = current_pos
+                            # Get current position in file
+                            f.tell()
+
+                        # Save last position
 
                     except Exception as e:
                         print(f"Error parsing session: {e}")
-                        continue
 
                 # Add any remaining sessions
-                if chunk:
-                    sessions.extend(chunk)
-
-                # Final progress update
-                if show_progress:
-                    print(f"Completed loading {len(sessions)} sessions from {file_size} bytes")
+                if current_chunk:
+                    sessions.extend(current_chunk)
 
             return sessions
+
         except Exception as e:
-            print(f"Error loading sessions: {e}")
+            print(f"Error streaming sessions: {e}")
             return []
 
     def save_session(self, session: TestSession) -> None:

@@ -61,12 +61,6 @@ def pytest_addoption(parser):
         default="default",
         help="Name of the storage profile to use (defaults to 'default')",
     )
-    group.addoption(
-        "--insight-environment",
-        action="store",
-        default="test",
-        help="Environment name (e.g., dev, test, prod)",
-    )
 
 
 @pytest.hookimpl
