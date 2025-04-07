@@ -368,7 +368,11 @@ class BaseStorage:
             f"{self.__class__.__name__} does not implement the save_session method...did you mean to call it on the {self.__class__.__name__} class?"
         )
 
-    def load_sessions(self, **kwargs) -> List[TestSession]:
+    def load_sessions(
+        self,
+        chunk_size: int = 1000,
+        **kwargs,
+    ) -> List[TestSession]:
         """Retrieve past test sessions.
 
         This base implementation provides a common interface for all storage types.
@@ -376,8 +380,6 @@ class BaseStorage:
 
         Common parameters that may be supported by subclasses:
             chunk_size: Number of sessions to load at once (for large files)
-            show_progress: Whether to show progress reporting
-            use_streaming: Whether to use streaming parser for large files
 
         Returns:
             List of TestSession objects
@@ -423,11 +425,10 @@ class InMemoryStorage(BaseStorage):
         super().__init__()
         self._sessions = sessions if sessions is not None else []
 
-    def load_sessions(self, show_progress: bool = False, **kwargs) -> List[TestSession]:
+    def load_sessions(self, **kwargs) -> List[TestSession]:
         """Get all stored sessions.
 
         Args:
-            show_progress: Whether to show progress reporting (ignored in memory storage)
             **kwargs: Additional parameters (ignored in memory storage)
 
         Returns:
@@ -485,7 +486,6 @@ class JSONStorage(BaseStorage):
     def load_sessions(
         self,
         chunk_size: int = 1000,
-        show_progress: bool = True,
         use_streaming: bool = False,
         **kwargs,
     ) -> List[TestSession]:
@@ -493,7 +493,6 @@ class JSONStorage(BaseStorage):
 
         Args:
             chunk_size: Number of sessions to load at once (for large files)
-            show_progress: Whether to show progress reporting
             use_streaming: Whether to use streaming parser for large files (requires ijson)
 
         Returns:
@@ -506,7 +505,7 @@ class JSONStorage(BaseStorage):
                 import importlib.util
 
                 if importlib.util.find_spec("ijson") is not None:
-                    return self._load_sessions_streaming(chunk_size, show_progress)
+                    return self._load_sessions_streaming(chunk_size)
                 else:
                     print("Warning: ijson not installed. Falling back to standard JSON loading.")
             except ImportError:
@@ -555,12 +554,11 @@ class JSONStorage(BaseStorage):
 
         return sessions
 
-    def _load_sessions_streaming(self, chunk_size: int = 1000, show_progress: bool = True) -> List[TestSession]:
+    def _load_sessions_streaming(self, chunk_size: int = 1000) -> List[TestSession]:
         """Load sessions using a streaming JSON parser for large files.
 
         Args:
             chunk_size: Number of sessions to process at once
-            show_progress: Whether to show progress reporting
 
         Returns:
             List of TestSession objects
@@ -575,9 +573,6 @@ class JSONStorage(BaseStorage):
 
         try:
             with open(self.file_path, "rb") as f:
-                # Get file size as a proxy for progress
-                os.fstat(f.fileno()).st_size
-
                 # Determine if we're parsing a list or a dict with "sessions" key
                 # Read a small chunk to check format
                 first_bytes = f.read(100)
@@ -602,11 +597,6 @@ class JSONStorage(BaseStorage):
                         if len(current_chunk) >= chunk_size:
                             sessions.extend(current_chunk)
                             current_chunk = []
-
-                            # Get current position in file
-                            f.tell()
-
-                        # Save last position
 
                     except Exception as e:
                         print(f"Error parsing session: {e}")
@@ -1010,7 +1000,6 @@ def get_active_profile() -> StorageProfile:
 def load_sessions(
     profile_name: Optional[str] = None,
     chunk_size: int = 1000,
-    show_progress: bool = True,
     use_streaming: bool = False,
 ) -> List[TestSession]:
     """Load sessions from the specified storage profile.
@@ -1018,7 +1007,6 @@ def load_sessions(
     Args:
         profile_name: Storage profile name to use
         chunk_size: Number of sessions to load at once (for large files)
-        show_progress: Whether to show progress reporting
         use_streaming: Whether to use streaming parser for large files (requires ijson)
 
     Returns:
@@ -1027,9 +1015,7 @@ def load_sessions(
     storage_instance = get_storage_instance(profile_name=profile_name)
 
     # All storage classes now support the same parameters via **kwargs
-    return storage_instance.load_sessions(
-        chunk_size=chunk_size, show_progress=show_progress, use_streaming=use_streaming
-    )
+    return storage_instance.load_sessions(chunk_size=chunk_size, use_streaming=use_streaming)
 
 
 # Main entry point

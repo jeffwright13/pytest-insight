@@ -837,44 +837,8 @@ class TestStorageWithProfiles:
         assert active.name == "profile1"
 
 
-def test_load_sessions_with_progress(mocker, tmp_path, get_test_time):
-    """Test loading sessions with progress reporting."""
-    # Create a storage instance
-    storage_path = tmp_path / "sessions.json"
-    storage = JSONStorage(file_path=storage_path)
-
-    # Create test sessions
-    sessions = []
-    for i in range(5):
-        session = TestSession(
-            sut_name=f"progress-test-{i}",
-            session_id=f"progress-test-{i}",
-            session_start_time=get_test_time(i * 600),
-            session_duration=30,
-            test_results=[],
-        )
-        sessions.append(session)
-
-    # Save sessions directly to the file in the expected format
-    with open(storage_path, "w") as f:
-        json.dump({"sessions": [s.to_dict() for s in sessions]}, f)
-
-    # Mock print function to capture progress messages
-    print_mock = mocker.patch("builtins.print")
-
-    # Load sessions with progress
-    loaded_sessions = storage.load_sessions(show_progress=True)
-
-    # Verify print was called for progress reporting
-    print_mock.assert_called()
-
-    # Verify all sessions were loaded
-    assert len(loaded_sessions) == 5
-    assert {s.session_id for s in loaded_sessions} == {f"progress-test-{i}" for i in range(5)}
-
-
-def test_load_sessions_without_progress(mocker, tmp_path, get_test_time):
-    """Test loading sessions without progress reporting."""
+def test_load_sessions(mocker, tmp_path, get_test_time):
+    """Test loading sessions."""
     # Create a storage instance
     storage_path = tmp_path / "sessions.json"
     storage = JSONStorage(file_path=storage_path)
@@ -883,8 +847,8 @@ def test_load_sessions_without_progress(mocker, tmp_path, get_test_time):
     sessions = []
     for i in range(3):
         session = TestSession(
-            sut_name=f"no-progress-test-{i}",
-            session_id=f"no-progress-test-{i}",
+            sut_name=f"test-{i}",
+            session_id=f"test-{i}",
             session_start_time=get_test_time(i * 600),
             session_duration=30,
             test_results=[],
@@ -895,12 +859,12 @@ def test_load_sessions_without_progress(mocker, tmp_path, get_test_time):
     with open(storage_path, "w") as f:
         json.dump({"sessions": [s.to_dict() for s in sessions]}, f)
 
-    # Load sessions without progress
-    loaded_sessions = storage.load_sessions(show_progress=False)
+    # Load sessions
+    loaded_sessions = storage.load_sessions()
 
     # Verify all sessions were loaded
     assert len(loaded_sessions) == 3
-    assert {s.session_id for s in loaded_sessions} == {f"no-progress-test-{i}" for i in range(3)}
+    assert {s.session_id for s in loaded_sessions} == {f"test-{i}" for i in range(3)}
 
 
 def test_load_sessions_streaming(mocker, tmp_path, get_test_time):
@@ -933,10 +897,10 @@ def test_load_sessions_streaming(mocker, tmp_path, get_test_time):
     streaming_mock = mocker.patch.object(storage, "_load_sessions_streaming", return_value=sessions)
 
     # Load sessions with streaming
-    loaded_sessions = storage.load_sessions(use_streaming=True, show_progress=True)
+    loaded_sessions = storage.load_sessions(use_streaming=True)
 
     # Verify streaming method was called
-    streaming_mock.assert_called_once_with(1000, True)
+    streaming_mock.assert_called_once_with(1000)
 
     # Verify all sessions were loaded
     assert len(loaded_sessions) == 5

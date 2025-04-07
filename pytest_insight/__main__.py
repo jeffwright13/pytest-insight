@@ -431,11 +431,13 @@ def analyze(
     try:
         console = Console()
 
-        # Display profile information
         console.print(f"[bold blue]Using profile:[/bold blue] [cyan]{profile}[/cyan]")
 
         # Load sessions from storage
-        sessions = load_sessions(profile_name=profile, show_progress=not no_progress)
+        # Show progress for loading sessions at the CLI level
+        if not no_progress:
+            console.print(f"[bold]Loading sessions from profile[/bold] [cyan]'{profile}'[/cyan]...")
+        sessions = load_sessions(profile_name=profile)
 
         if not sessions:
             console.print(
@@ -461,8 +463,8 @@ def analyze(
                 )
                 return
 
-        # Create analysis instance with progress configuration
-        analysis = Analysis(profile_name=profile, sessions=sessions, show_progress=not no_progress)
+        # Create analysis instance
+        analysis = Analysis(profile_name=profile, sessions=sessions)
 
         # Create insights instance
         insights = Insights(profile_name=profile)

@@ -50,39 +50,11 @@ from pytest_insight.core.storage import BaseStorage, get_storage_instance
 
 
 class AnalysisBase:
-    """Base class for analysis components with shared functionality."""
+    """Base class for all analysis classes."""
 
-    def __init__(self, show_progress: bool = True):
-        """Initialize base analysis class.
-
-        Args:
-            show_progress: Whether to show progress bars during analysis
-        """
-        self._show_progress = show_progress
-
-    def _progress_context(self, description: str, total: int):
-        """Create a progress context for long-running operations.
-
-        Args:
-            description: Description of the operation
-            total: Total number of items to process
-
-        Returns:
-            A context manager for progress reporting
-        """
-
-        # Return a dummy context manager - progress indicators are handled at the CLI level
-        class DummyProgress:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc_val, exc_tb):
-                pass
-
-            def update(self, *args, **kwargs):
-                pass
-
-        return DummyProgress()
+    def __init__(self):
+        """Initialize base analysis class."""
+        pass
 
     def _filter_sessions_by_days(self, days: Optional[int]) -> List[TestSession]:
         """Filter sessions by the number of days from the most recent session.
@@ -141,7 +113,6 @@ class SessionAnalysis(AnalysisBase):
         storage: Optional[BaseStorage] = None,
         sessions: Optional[List[TestSession]] = None,
         profile_name: Optional[str] = None,
-        show_progress: bool = True,
     ):
         """Initialize with storage and optional session list.
 
@@ -151,9 +122,8 @@ class SessionAnalysis(AnalysisBase):
                      will analyze all sessions from storage.
             profile_name: Optional profile name to use for storage configuration.
                          Takes precedence over storage parameter if both are provided.
-            show_progress: Whether to show progress bars during analysis
         """
-        super().__init__(show_progress=show_progress)
+        super().__init__()
         self._profile_name = profile_name
 
         if storage is None and profile_name is not None:
@@ -279,7 +249,6 @@ class SessionAnalysis(AnalysisBase):
                     elif test_result.outcome == TestOutcome.SKIPPED:
                         skipped_tests += 1
 
-                # Update progress
                 session_count += 1
 
         # Calculate metrics
@@ -736,7 +705,7 @@ class SessionAnalysis(AnalysisBase):
             stability_score = max(0, 100 - problem_tests_pct)
 
         # Get session analysis for trends
-        session_analysis = SessionAnalysis(self._sessions, self._show_progress)
+        session_analysis = SessionAnalysis(self._sessions)
 
         # Calculate performance score based on duration trends
         trends = session_analysis.detect_trends()
@@ -818,7 +787,7 @@ class SessionAnalysis(AnalysisBase):
             return {}
 
         # Filter sessions by days if specified
-        session_analysis = SessionAnalysis(self._sessions, self._show_progress)
+        session_analysis = SessionAnalysis(self._sessions)
         sessions = session_analysis._filter_sessions_by_days(days) if days else self._sessions
 
         if not sessions:
@@ -907,7 +876,6 @@ class TestAnalysis(AnalysisBase):
         storage: Optional[BaseStorage] = None,
         sessions: Optional[List[TestSession]] = None,
         profile_name: Optional[str] = None,
-        show_progress: bool = True,
     ):
         """Initialize with storage and optional session list.
 
@@ -917,9 +885,8 @@ class TestAnalysis(AnalysisBase):
                      will analyze all sessions from storage.
             profile_name: Optional profile name to use for storage configuration.
                          Takes precedence over storage parameter if both are provided.
-            show_progress: Whether to show progress bars during analysis
         """
-        super().__init__(show_progress=show_progress)
+        super().__init__()
         self._profile_name = profile_name
 
         if storage is None and profile_name is not None:
@@ -966,7 +933,6 @@ class TestAnalysis(AnalysisBase):
                 for test_result in session.test_results:
                     test_history[test_result.nodeid].append((session_timestamp, test_result.outcome))
 
-                # Update progress
                 session_count += 1
 
         # Analyze flaky tests
@@ -1225,7 +1191,7 @@ class TestAnalysis(AnalysisBase):
             stability_score = max(0, 100 - problem_tests_pct)
 
         # Get session analysis for trends
-        session_analysis = SessionAnalysis(self._sessions, self._show_progress)
+        session_analysis = SessionAnalysis(self._sessions)
 
         # Calculate performance score based on duration trends
         trends = session_analysis.detect_trends()
@@ -1394,7 +1360,6 @@ class MetricsAnalysis(AnalysisBase):
         storage: Optional[BaseStorage] = None,
         sessions: Optional[List[TestSession]] = None,
         profile_name: Optional[str] = None,
-        show_progress: bool = True,
     ):
         """Initialize with storage and optional session list.
 
@@ -1404,9 +1369,8 @@ class MetricsAnalysis(AnalysisBase):
                      will analyze all sessions from storage.
             profile_name: Optional profile name to use for storage configuration.
                          Takes precedence over storage parameter if both are provided.
-            show_progress: Whether to show progress bars during analysis
         """
-        super().__init__(show_progress=show_progress)
+        super().__init__()
         self._profile_name = profile_name
 
         if storage is None and profile_name is not None:
@@ -1749,7 +1713,6 @@ class Analysis:
         storage: Optional[BaseStorage] = None,
         sessions: Optional[List[TestSession]] = None,
         profile_name: Optional[str] = None,
-        show_progress: bool = True,
     ):
         """Initialize analysis components.
 
@@ -1759,10 +1722,8 @@ class Analysis:
             sessions: Optional list of sessions to analyze
             profile_name: Optional profile name to use for storage configuration.
                          Takes precedence over storage parameter if both are provided.
-            show_progress: Whether to show progress bars during analysis
         """
         self._profile_name = profile_name
-        self._show_progress = show_progress
 
         if storage is None:
             storage = get_storage_instance(profile_name=profile_name)
@@ -1771,9 +1732,9 @@ class Analysis:
         self._sessions = sessions
 
         # Initialize analysis components
-        self.sessions = SessionAnalysis(storage, sessions, profile_name, show_progress)
-        self.tests = TestAnalysis(storage, sessions, profile_name, show_progress)
-        self.metrics = MetricsAnalysis(storage, sessions, profile_name, show_progress)
+        self.sessions = SessionAnalysis(storage, sessions, profile_name)
+        self.tests = TestAnalysis(storage, sessions, profile_name)
+        self.metrics = MetricsAnalysis(storage, sessions, profile_name)
 
     def with_profile(self, profile_name: str) -> "Analysis":
         """Set the storage profile for analysis.
@@ -1791,9 +1752,9 @@ class Analysis:
         self.storage = get_storage_instance(profile_name=profile_name)
 
         # Update analysis components with new storage
-        self.sessions = SessionAnalysis(self.storage, self._sessions, profile_name, self._show_progress)
-        self.tests = TestAnalysis(self.storage, self._sessions, profile_name, self._show_progress)
-        self.metrics = MetricsAnalysis(self.storage, self._sessions, profile_name, self._show_progress)
+        self.sessions = SessionAnalysis(self.storage, self._sessions, profile_name)
+        self.tests = TestAnalysis(self.storage, self._sessions, profile_name)
+        self.metrics = MetricsAnalysis(self.storage, self._sessions, profile_name)
 
         return self
 
@@ -1819,7 +1780,6 @@ class Analysis:
             storage=self.storage,
             sessions=filtered_sessions,
             profile_name=self._profile_name,
-            show_progress=self._show_progress,
         )
 
     def health_report(self, days: Optional[int] = None) -> Dict[str, Any]:
@@ -1911,12 +1871,12 @@ class Analysis:
         base_analysis = Analysis(
             storage=self.storage,
             sessions=base_sessions,
-            show_progress=self._show_progress,
+            profile_name=self._profile_name,
         )
         target_analysis = Analysis(
             storage=self.storage,
             sessions=target_sessions,
-            show_progress=self._show_progress,
+            profile_name=self._profile_name,
         )
 
         base_health = base_analysis.health_report()
@@ -2395,7 +2355,6 @@ class Analysis:
 def analysis(
     profile_name: Optional[str] = None,
     sessions: Optional[List[TestSession]] = None,
-    show_progress: bool = True,
 ) -> Analysis:
     """Create a new Analysis instance.
 
@@ -2405,7 +2364,6 @@ def analysis(
     Args:
         profile_name: Optional profile name to use for storage configuration.
         sessions: Optional list of sessions to analyze
-        show_progress: Whether to show progress bars during analysis
 
     Returns:
         New Analysis instance ready for building analysis
@@ -2417,10 +2375,10 @@ def analysis(
         # With profile
         result = analysis(profile_name="prod").health_report()
     """
-    return Analysis(profile_name=profile_name, sessions=sessions, show_progress=show_progress)
+    return Analysis(profile_name=profile_name, sessions=sessions)
 
 
-def analysis_with_profile(profile_name: str, show_progress: bool = True) -> Analysis:
+def analysis_with_profile(profile_name: str) -> Analysis:
     """Create a new Analysis instance with a specific profile.
 
     This is a convenience function for creating a new Analysis instance
@@ -2428,7 +2386,6 @@ def analysis_with_profile(profile_name: str, show_progress: bool = True) -> Anal
 
     Args:
         profile_name: Name of the profile to use
-        show_progress: Whether to show progress bars during analysis
 
     Returns:
         New Analysis instance configured with the specified profile
@@ -2437,4 +2394,4 @@ def analysis_with_profile(profile_name: str, show_progress: bool = True) -> Anal
         # Analyze production data
         result = analysis_with_profile("prod").health_report()
     """
-    return Analysis(profile_name=profile_name, show_progress=show_progress)
+    return Analysis(profile_name=profile_name)

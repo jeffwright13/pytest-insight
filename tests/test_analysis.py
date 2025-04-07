@@ -335,8 +335,8 @@ class Test_Analysis:
 
         # Test analysis function
         analysis(profile_name="test_profile")
-        mock_analysis.assert_called_with(profile_name="test_profile", sessions=None, show_progress=True)
+        mock_analysis.assert_called_with(profile_name="test_profile", sessions=None)
 
         # Test analysis_with_profile function
         analysis_with_profile("test_profile")
-        mock_analysis.assert_called_with(profile_name="test_profile", show_progress=True)
+        mock_analysis.assert_called_with(profile_name="test_profile")
