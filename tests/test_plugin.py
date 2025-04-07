@@ -459,6 +459,30 @@ class Test_StorageConfiguration:
             """
         )
 
+        # Create a setup file that captures stderr output
+        tester.makepyfile(
+            conftest="""
+            import sys
+            import pytest
+            
+            @pytest.hookimpl(trylast=True)
+            def pytest_configure(config):
+                # This will run after the plugin's pytest_configure
+                if hasattr(config, 'workerinput'):  # xdist
+                    return
+                # Get the profile name that was used
+                profile_name = config.getoption("insight_profile", "default")
+                # Verify the profile was created by trying to access it
+                from pytest_insight.core.storage import get_profile_manager
+                profile_manager = get_profile_manager()
+                try:
+                    profile = profile_manager.get_profile(profile_name)
+                    print(f"PROFILE_CREATED:{profile_name}", file=sys.stderr)
+                except ValueError:
+                    print(f"PROFILE_NOT_CREATED:{profile_name}", file=sys.stderr)
+            """
+        )
+
         # Use a non-existent profile name
         nonexistent_profile = f"nonexistent_profile_{int(time.time())}"
 
@@ -468,10 +492,79 @@ class Test_StorageConfiguration:
         # Test should still pass
         assert result.ret == pytest.ExitCode.OK
 
-        # Since the warning might be printed to stderr during plugin initialization,
-        # we can't reliably capture it in the test. Let's just verify the test passes
-        # and the default profile is created and used.
+        # Verify the test passes
         assert "1 passed" in result.stdout.str()
+
+        # Note: This test is kept for compatibility but may not accurately test the new behavior
+        # until the package is reinstalled with the changes. The direct test_create_nonexistent_profile
+        # below tests the function directly.
+
+    def test_create_nonexistent_profile(self, monkeypatch):
+        """Test that pytest_configure creates a non-existent profile rather than falling back to default."""
+        import io
+        import sys
+
+        from pytest_insight.core.storage import get_profile_manager
+        from pytest_insight.plugin import insight_enabled, pytest_configure
+
+        # Create a mock config object
+        class MockConfig:
+            def __init__(self):
+                self.option = type("obj", (object,), {"insight": True})
+                self._insight_profile = "test_new_profile"
+
+            def getoption(self, name, default=None):
+                if name == "insight_profile":
+                    return self._insight_profile
+                return default
+
+            def addinivalue_line(self, *args, **kwargs):
+                pass
+
+        # Create a unique profile name
+        profile_name = f"test_new_profile_{int(time.time())}"
+        mock_config = MockConfig()
+        mock_config._insight_profile = profile_name
+
+        # Capture stderr output
+        stderr_capture = io.StringIO()
+        monkeypatch.setattr(sys, "stderr", stderr_capture)
+
+        # Make sure the profile doesn't exist before the test
+        profile_manager = get_profile_manager()
+        try:
+            profile_manager.delete_profile(profile_name)
+        except ValueError:
+            pass  # Profile didn't exist, which is what we want
+
+        # Reset the plugin's global state
+        monkeypatch.setattr("pytest_insight.plugin._INSIGHT_INITIALIZED", False)
+        monkeypatch.setattr("pytest_insight.plugin._INSIGHT_ENABLED", False)
+        monkeypatch.setattr("pytest_insight.plugin.storage", None)
+
+        # Initialize the plugin state
+        insight_enabled(mock_config)
+
+        # Call the function we're testing
+        pytest_configure(mock_config)
+
+        # Check that the profile was created
+        try:
+            profile = profile_manager.get_profile(profile_name)
+            assert profile.name == profile_name, f"Profile name mismatch: {profile.name} != {profile_name}"
+            assert profile.storage_type == "json", f"Storage type should be json, got {profile.storage_type}"
+
+            # Clean up - delete the profile we created
+            profile_manager.delete_profile(profile_name)
+
+        except ValueError as e:
+            assert False, f"Profile {profile_name} was not created: {str(e)}"
+
+        # Check that the correct message was printed to stderr
+        stderr_output = stderr_capture.getvalue()
+        assert (
+            f"Created new profile '{profile_name}'" in stderr_output
+        ), f"Expected message about creating profile not found in stderr: {stderr_output}"
 
     def test_json_storage_creation(self, tester, tmp_path):
         """Test JSON storage creation and initialization with profiles."""

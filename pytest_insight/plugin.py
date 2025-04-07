@@ -80,22 +80,9 @@ def pytest_configure(config: Config):
         try:
             profile_manager.get_profile(profile_name)
         except ValueError:
-            # Profile doesn't exist, create the default profile if it's the default one
-            if profile_name == "default":
-                # Create a default profile with json storage
-                create_profile("default", "json", None)  # None will use the default path
-                print("[pytest-insight] Created default profile", file=sys.stderr)
-            else:
-                print(
-                    f"[pytest-insight] Warning: Profile '{profile_name}' not found",
-                    file=sys.stderr,
-                )
-                print(
-                    "[pytest-insight] Creating a default profile and using it instead",
-                    file=sys.stderr,
-                )
-                create_profile("default", "json", None)
-                profile_name = "default"
+            # Profile doesn't exist, create it
+            create_profile(profile_name, "json", None)  # None will use the default path
+            print(f"[pytest-insight] Created new profile '{profile_name}'", file=sys.stderr)
 
         # Now get the storage instance using the profile
         storage = get_storage_instance(profile_name=profile_name)

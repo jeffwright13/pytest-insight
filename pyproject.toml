@@ -1,7 +1,7 @@
 [project]
 name = "pytest-insight"
-version = "0.2.0"
-description = "A pytest plugin for collecting, analyzing, and visualizing test metrics"
+version = "0.3.0"
+description = "A pytest plugin for collecting, analyzing, and visualizing test and test-session metrics"
 readme = "README.md"
 authors = [
     { name = "Jeff Wright", email = "jeff.washcloth@gmail.com" }

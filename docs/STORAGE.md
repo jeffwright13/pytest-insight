@@ -83,6 +83,15 @@ profiles = list_profiles()
 active_profile = get_active_profile()
 ```
 
+### Automatic Profile Creation
+
+When using pytest with the `--insight-profile` option, if the specified profile doesn't exist, it will be automatically created with default settings (JSON storage type and default file path). This allows you to easily create and use new profiles on the fly:
+
+```bash
+# This will automatically create a new profile named "new-profile" if it doesn't exist
+pytest --insight --insight-profile=new-profile
+```
+
 ### Using Profiles with Storage
 
 ```python
