@@ -54,7 +54,14 @@ app.add_typer(generate_app, name="generate")
 
 # Profile management commands
 @profile_app.command("list")
-def list_all_profiles():
+def list_all_profiles(
+    type_filter: Optional[str] = typer.Option(
+        None, "--type", "-t", help="Filter profiles by type (e.g., 'json', 'memory')"
+    ),
+    pattern: Optional[str] = typer.Option(
+        None, "--pattern", "-p", help="Pattern to match profile names (e.g., 'test-*')"
+    ),
+):
     """List all available storage profiles."""
     console = Console()
     profiles = list_profiles()
@@ -68,7 +75,34 @@ def list_all_profiles():
     table.add_column("Type", style="green")
     table.add_column("Path", style="blue")
 
+    filtered_profiles = {}
+
+    # Apply filters
     for name, profile in profiles.items():
+        # Apply type filter if provided
+        if type_filter and profile.storage_type.lower() != type_filter.lower():
+            continue
+
+        # Apply pattern filter if provided
+        if pattern:
+            import fnmatch
+
+            if not fnmatch.fnmatch(name, pattern):
+                continue
+
+        filtered_profiles[name] = profile
+
+    if not filtered_profiles:
+        filter_desc = []
+        if type_filter:
+            filter_desc.append(f"type: '{type_filter}'")
+        if pattern:
+            filter_desc.append(f"pattern: '{pattern}'")
+
+        console.print(f"[yellow]No profiles found with {', '.join(filter_desc)}[/yellow]")
+        return
+
+    for name, profile in filtered_profiles.items():
         active_marker = "*" if name == active else ""
         table.add_row(active_marker, name, profile.storage_type, str(profile.file_path))
 
@@ -161,6 +195,86 @@ def delete_existing_profile(
     except ValueError as e:
         console.print(Panel(f"[bold red]{str(e)}[/bold red]", title="Error", border_style="red"))
         raise typer.Exit(code=1)
+
+
+@profile_app.command("clean")
+def clean_profiles(
+    type_filter: str = typer.Option(
+        "memory", "--type", "-t", help="Type of profiles to delete (e.g., 'memory', 'json')"
+    ),
+    pattern: Optional[str] = typer.Option(
+        None, "--pattern", "-p", help="Pattern to match profile names (e.g., 'test-*')"
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Force deletion without confirmation"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-d", help="Show which profiles would be deleted without actually deleting them"
+    ),
+):
+    """Bulk delete profiles by type and/or pattern."""
+    console = Console()
+    profile_manager = get_profile_manager()
+    profiles = list_profiles()
+    active_profile = get_active_profile().name
+
+    # Filter profiles by type
+    filtered_profiles = {}
+    for name, profile in profiles.items():
+        if profile.storage_type.lower() == type_filter.lower():
+            # Skip the active profile
+            if name == active_profile:
+                continue
+
+            # Apply pattern filter if provided
+            if pattern:
+                import fnmatch
+
+                if fnmatch.fnmatch(name, pattern):
+                    filtered_profiles[name] = profile
+            else:
+                filtered_profiles[name] = profile
+
+    if not filtered_profiles:
+        console.print(
+            f"[yellow]No profiles found matching the criteria (type: '{type_filter}'{f', pattern: {pattern}' if pattern else ''})[/yellow]"
+        )
+        return
+
+    # Display profiles that will be deleted
+    console.print(
+        f"[bold]{'The following profiles would be' if dry_run else 'Preparing to delete'} {len(filtered_profiles)} profiles:[/bold]"
+    )
+
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Name", style="cyan")
+    table.add_column("Type", style="green")
+    table.add_column("Path", style="blue")
+
+    for name, profile in filtered_profiles.items():
+        table.add_row(name, profile.storage_type, str(profile.file_path))
+
+    console.print(table)
+
+    if dry_run:
+        console.print("[yellow]Dry run completed. No profiles were deleted.[/yellow]")
+        return
+
+    # Confirm deletion if not forced
+    if not force:
+        confirm = typer.confirm(f"Are you sure you want to delete these {len(filtered_profiles)} profiles?")
+        if not confirm:
+            console.print("[yellow]Operation cancelled.[/yellow]")
+            return
+
+    # Delete profiles
+    deleted_count = 0
+    for name in filtered_profiles:
+        try:
+            profile_manager.delete_profile(name)
+            deleted_count += 1
+        except Exception as e:
+            console.print(f"[red]Error deleting profile '{name}': {str(e)}[/red]")
+
+    console.print(f"[green]Successfully deleted {deleted_count} profiles.[/green]")
 
 
 # Generate data commands

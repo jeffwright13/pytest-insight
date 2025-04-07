@@ -83,6 +83,51 @@ profiles = list_profiles()
 active_profile = get_active_profile()
 ```
 
+### CLI Profile Management
+
+pytest-insight provides a command-line interface for managing storage profiles:
+
+```bash
+# List all profiles
+insight profile list
+
+# List profiles by type
+insight profile list --type json
+insight profile list --type memory
+
+# List profiles by name pattern
+insight profile list --pattern "test-*"
+
+# Combine filters
+insight profile list --type json --pattern "prod*"
+
+# Create a new profile
+insight profile create my-profile --type json
+
+# Switch to a profile
+insight profile switch my-profile
+
+# Delete a single profile
+insight profile delete old-profile
+
+# Bulk delete profiles
+insight profile clean  # Deletes all memory profiles by default
+
+# Bulk delete with pattern matching
+insight profile clean --pattern "test-*"  # Deletes memory profiles matching pattern
+
+# Bulk delete with type filtering
+insight profile clean --type json --pattern "temp-*"  # Deletes JSON profiles matching pattern
+
+# Preview which profiles would be deleted (dry run)
+insight profile clean --pattern "test-*" --dry-run
+
+# Skip confirmation prompt
+insight profile clean --pattern "test-*" --force
+```
+
+In-memory profiles are not persisted to the configuration file, which helps prevent accumulation of unnecessary profiles. The `clean` command is particularly useful for removing temporary profiles that may have been created during testing or development.
+
 ### Automatic Profile Creation
 
 When using pytest with the `--insight-profile` option, if the specified profile doesn't exist, it will be automatically created with default settings (JSON storage type and default file path). This allows you to easily create and use new profiles on the fly:

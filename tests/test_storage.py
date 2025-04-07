@@ -544,13 +544,17 @@ class TestProfileManager:
         # Create a new profile manager with the same config path
         manager2 = ProfileManager(config_path=config_path)
 
-        # Profiles should be loaded
+        # Verify that the JSON profile was loaded
         profiles = manager2.list_profiles()
         assert "test1" in profiles
-        assert "test2" in profiles
+        assert profiles["test1"].storage_type == "json"
         assert profiles["test1"].file_path == "/test1/path"
-        assert profiles["test2"].file_path == "/test2/path"
-        assert manager2.active_profile_name == "test1"
+
+        # Memory profiles are not persisted, so test2 should not be in the loaded profiles
+        assert "test2" not in profiles
+
+        # Verify active profile was persisted
+        assert manager2.get_active_profile().name == "test1"
 
     def test_env_var_override(self, profile_manager, monkeypatch):
         """Test environment variable override for active profile."""
@@ -672,10 +676,11 @@ class TestProfileManager:
         success = manager.restore_from_backup(backup_path)
         assert success
 
-        # Verify original profiles are restored
+        # Verify original JSON profile is restored
+        # Memory profiles are not persisted in backups, so original2 won't be restored
         restored_profiles = manager.list_profiles()
         assert "original1" in restored_profiles
-        assert "original2" in restored_profiles
+        assert "original2" not in restored_profiles  # Memory profiles are not persisted
         assert "new_profile" not in restored_profiles
 
     def test_restore_nonexistent_backup(self, tmp_path):
@@ -715,6 +720,169 @@ class TestProfileManager:
         # Verify another backup was created
         backup_files_after = list(backup_dir.glob("profiles_backup_*.json"))
         assert len(backup_files_after) > len(backup_files)  # More backups than before
+
+    def test_memory_profiles_not_persisted(self, tmp_path):
+        """Test that in-memory profiles are not persisted to the configuration file."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a test config file
+        config_path = tmp_path / "profiles.json"
+        profile_manager = ProfileManager(config_path=config_path)
+
+        # Create a JSON profile (should be persisted)
+        json_profile_name = "test-json-profile"
+        profile_manager._create_profile(json_profile_name, "json", str(tmp_path / "json-sessions.json"))
+
+        # Create an in-memory profile (should not be persisted)
+        memory_profile_name = "test-memory-profile"
+        profile_manager._create_profile(memory_profile_name, "memory")
+
+        # Verify both profiles are available during the session
+        assert profile_manager.get_profile(json_profile_name) is not None
+        assert profile_manager.get_profile(memory_profile_name) is not None
+
+        # Create a new profile manager instance that reads from the same config file
+        # This simulates restarting the application
+        new_profile_manager = ProfileManager(config_path=config_path)
+
+        # Verify the JSON profile was persisted
+        assert json_profile_name in new_profile_manager.profiles
+
+        # Verify the in-memory profile was NOT persisted
+        assert memory_profile_name not in new_profile_manager.profiles
+
+    def test_list_profiles_with_type_filter(self, tmp_path):
+        """Test filtering profiles by storage type."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a test config file
+        config_path = tmp_path / "profiles.json"
+        profile_manager = ProfileManager(config_path=config_path)
+
+        # Create profiles with different storage types
+        profile_manager._create_profile("json-profile-1", "json", str(tmp_path / "json1.json"))
+        profile_manager._create_profile("json-profile-2", "json", str(tmp_path / "json2.json"))
+        profile_manager._create_profile("memory-profile-1", "memory")
+        profile_manager._create_profile("memory-profile-2", "memory")
+
+        # Test filtering by JSON type
+        json_profiles = profile_manager.list_profiles(storage_type="json")
+        # Note: There's a default profile with storage_type="json" that's created automatically
+        assert "default" in json_profiles
+        assert "json-profile-1" in json_profiles
+        assert "json-profile-2" in json_profiles
+        assert "memory-profile-1" not in json_profiles
+        assert "memory-profile-2" not in json_profiles
+
+        # Test filtering by memory type
+        memory_profiles = profile_manager.list_profiles(storage_type="memory")
+        assert len(memory_profiles) == 2
+        assert "memory-profile-1" in memory_profiles
+        assert "memory-profile-2" in memory_profiles
+        assert "json-profile-1" not in memory_profiles
+        assert "json-profile-2" not in memory_profiles
+        assert "default" not in memory_profiles
+
+    def test_list_profiles_with_pattern_filter(self, tmp_path):
+        """Test filtering profiles by name pattern."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a test config file
+        config_path = tmp_path / "profiles.json"
+        profile_manager = ProfileManager(config_path=config_path)
+
+        # Create profiles with different name patterns
+        profile_manager._create_profile("test-abc-1", "json", str(tmp_path / "abc1.json"))
+        profile_manager._create_profile("test-abc-2", "json", str(tmp_path / "abc2.json"))
+        profile_manager._create_profile("test-xyz-1", "json", str(tmp_path / "xyz1.json"))
+        profile_manager._create_profile("other-profile", "json", str(tmp_path / "other.json"))
+
+        # Test filtering by pattern
+        abc_profiles = profile_manager.list_profiles(pattern="test-abc*")
+        assert len(abc_profiles) == 2
+        assert "test-abc-1" in abc_profiles
+        assert "test-abc-2" in abc_profiles
+        assert "test-xyz-1" not in abc_profiles
+        assert "other-profile" not in abc_profiles
+
+        # Test filtering by more specific pattern
+        specific_profiles = profile_manager.list_profiles(pattern="test-abc-1")
+        assert len(specific_profiles) == 1
+        assert "test-abc-1" in specific_profiles
+        assert "test-abc-2" not in specific_profiles
+
+        # Test filtering by combined pattern
+        test_profiles = profile_manager.list_profiles(pattern="test-*")
+        assert len(test_profiles) == 3
+        assert "test-abc-1" in test_profiles
+        assert "test-abc-2" in test_profiles
+        assert "test-xyz-1" in test_profiles
+        assert "other-profile" not in test_profiles
+
+    def test_bulk_delete_profiles(self, tmp_path):
+        """Test bulk deletion of profiles by type and pattern."""
+        from pytest_insight.core.storage import ProfileManager
+
+        # Create a profile manager with a test config file
+        config_path = tmp_path / "profiles.json"
+        profile_manager = ProfileManager(config_path=config_path)
+
+        # Create various profiles for testing bulk deletion
+        profile_manager._create_profile("active-profile", "json", str(tmp_path / "active.json"))
+        profile_manager._create_profile("json-test-1", "json", str(tmp_path / "json1.json"))
+        profile_manager._create_profile("json-test-2", "json", str(tmp_path / "json2.json"))
+        profile_manager._create_profile("memory-test-1", "memory")
+        profile_manager._create_profile("memory-test-2", "memory")
+        profile_manager._create_profile("memory-other", "memory")
+
+        # Set the active profile
+        profile_manager.switch_profile("active-profile")
+
+        # Test bulk deletion of memory profiles
+        memory_profiles_before = profile_manager.list_profiles(storage_type="memory")
+        assert len(memory_profiles_before) == 3
+
+        # Delete all memory profiles
+        deleted_memory = []
+        for name in list(memory_profiles_before.keys()):
+            try:
+                profile_manager.delete_profile(name)
+                deleted_memory.append(name)
+            except ValueError:
+                # Skip active profile
+                pass
+
+        memory_profiles_after = profile_manager.list_profiles(storage_type="memory")
+        assert len(memory_profiles_after) == 0
+        assert "memory-test-1" in deleted_memory
+        assert "memory-test-2" in deleted_memory
+        assert "memory-other" in deleted_memory
+
+        # Test bulk deletion by pattern
+        json_test_profiles_before = profile_manager.list_profiles(storage_type="json", pattern="json-test*")
+        assert len(json_test_profiles_before) == 2
+
+        # Delete JSON profiles matching pattern
+        deleted_json = []
+        for name in list(json_test_profiles_before.keys()):
+            try:
+                profile_manager.delete_profile(name)
+                deleted_json.append(name)
+            except ValueError:
+                # Skip active profile
+                pass
+
+        json_test_profiles_after = profile_manager.list_profiles(storage_type="json", pattern="json-test*")
+        assert len(json_test_profiles_after) == 0
+        assert "json-test-1" in deleted_json
+        assert "json-test-2" in deleted_json
+
+        # Verify active profile is still there
+        assert "active-profile" in profile_manager.profiles
+
+        # Verify attempting to delete active profile raises error
+        with pytest.raises(ValueError, match="Cannot delete the active profile"):
+            profile_manager.delete_profile("active-profile")
 
 
 class TestStorageWithProfiles:

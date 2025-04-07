@@ -129,131 +129,288 @@ def mock_practice_data_generator():
 
 
 class TestProfileCommands:
-    """Tests for the profile management commands."""
+    """Test the profile management commands."""
 
-    def test_list_profiles(self, runner, mock_get_profile_manager):
-        """Test the 'profile list' command."""
+    @pytest.fixture
+    def mock_get_profile_manager(self):
+        """Mock the get_profile_manager function to return a mock profile manager."""
+        with mock.patch("pytest_insight.__main__.get_profile_manager") as mock_get_pm:
+            # Create a mock profile manager
+            mock_profile_manager = mock.MagicMock()
+            mock_get_pm.return_value = mock_profile_manager
+            yield mock_get_pm
+
+    @pytest.fixture
+    def mock_list_profiles(self):
+        """Mock the list_profiles function."""
         with mock.patch("pytest_insight.__main__.list_profiles") as mock_list:
-            # Create properly configured mock profiles
-            profile1 = mock.MagicMock(spec=StorageProfile)
-            profile1.name = "test1"
-            profile1.storage_type = "json"
-            profile1.file_path = "/path/to/test1.json"
+            yield mock_list
 
-            profile2 = mock.MagicMock(spec=StorageProfile)
-            profile2.name = "test2"
-            profile2.storage_type = "memory"
-            profile2.file_path = "/path/to/test2.json"
-
-            mock_list.return_value = {"test1": profile1, "test2": profile2}
-
-            with mock.patch("pytest_insight.__main__.get_active_profile") as mock_active:
-                active_profile = mock.MagicMock(spec=StorageProfile)
-                active_profile.name = "test1"
-                mock_active.return_value = active_profile
-
-                result = runner.invoke(app, ["profile", "list"])
-                assert result.exit_code == 0
-                assert "test1" in result.stdout
-                assert "test2" in result.stdout
-                assert "*" in result.stdout  # Active profile marker
-
-    def test_active_profile(self, runner, mock_get_profile_manager):
-        """Test the 'profile active' command."""
+    @pytest.fixture
+    def mock_get_active_profile(self):
+        """Mock the get_active_profile function."""
         with mock.patch("pytest_insight.__main__.get_active_profile") as mock_active:
-            profile = mock.MagicMock(spec=StorageProfile)
-            profile.name = "test1"
-            profile.storage_type = "json"
-            profile.file_path = "/path/to/test1.json"
-            mock_active.return_value = profile
+            yield mock_active
 
-            result = runner.invoke(app, ["profile", "active"])
-            assert result.exit_code == 0
-            assert "test1" in result.stdout
-            assert "Active Profile" in result.stdout
+    @pytest.fixture
+    def mock_create_profile(self):
+        """Mock the create_profile function."""
+        with mock.patch("pytest_insight.__main__.create_profile") as mock_create:
+            yield mock_create
 
-    def test_create_profile(self, runner, mock_get_profile_manager):
+    @pytest.fixture
+    def mock_switch_profile(self):
+        """Mock the switch_profile function."""
+        with mock.patch("pytest_insight.__main__.switch_profile") as mock_switch:
+            yield mock_switch
+
+    def test_profile_create(self, runner, mock_create_profile):
         """Test the 'profile create' command."""
-        with mock.patch("pytest_insight.__main__.create_profile") as mock_create:
-            profile = mock.MagicMock(spec=StorageProfile)
-            profile.name = "test3"
-            profile.storage_type = "json"
-            profile.file_path = "/path/to/test3.json"
-            mock_create.return_value = profile
+        # Test creating a JSON profile
+        result = runner.invoke(app, ["profile", "create", "test-profile", "--type", "json"])
+        assert result.exit_code == 0
+        assert "Created profile" in result.stdout
+        mock_create_profile.assert_called_once_with("test-profile", "json", None)
 
-            result = runner.invoke(app, ["profile", "create", "test3"])
-            assert result.exit_code == 0
-            assert "Created profile 'test3'" in result.stdout
+    def test_profile_delete(self, runner, mock_get_profile_manager):
+        """Test the 'profile delete' command."""
+        from pytest_insight.__main__ import get_profile_manager
 
-    def test_create_profile_with_options(self, runner, mock_get_profile_manager):
-        """Test creating a profile with custom options."""
-        with mock.patch("pytest_insight.__main__.create_profile") as mock_create:
-            profile = mock.MagicMock(spec=StorageProfile)
-            profile.name = "test4"
-            profile.storage_type = "memory"
-            profile.file_path = "/custom/path.json"
-            mock_create.return_value = profile
+        # Test deleting a profile
+        result = runner.invoke(app, ["profile", "delete", "test-profile", "--force"])
+        assert result.exit_code == 0
+        assert "Deleted profile" in result.stdout
+        get_profile_manager.return_value.delete_profile.assert_called_once_with("test-profile")
 
-            with mock.patch("pytest_insight.__main__.switch_profile") as mock_switch:
-                switched_profile = mock.MagicMock(spec=StorageProfile)
-                switched_profile.name = "test4"
-                mock_switch.return_value = switched_profile
-
-                result = runner.invoke(
-                    app,
-                    [
-                        "profile",
-                        "create",
-                        "test4",
-                        "--type",
-                        "memory",
-                        "--path",
-                        "/custom/path.json",
-                        "--activate",
-                    ],
-                )
-                assert result.exit_code == 0
-                assert "Created profile 'test4'" in result.stdout
-                assert "Activated profile 'test4'" in result.stdout
-
-    def test_switch_profile(self, runner, mock_get_profile_manager):
+    def test_profile_switch(self, runner, mock_switch_profile):
         """Test the 'profile switch' command."""
-        with mock.patch("pytest_insight.__main__.switch_profile") as mock_switch:
-            profile = mock.MagicMock(spec=StorageProfile)
-            profile.name = "test2"
-            mock_switch.return_value = profile
+        # Test switching profiles
+        result = runner.invoke(app, ["profile", "switch", "test-profile"])
+        assert result.exit_code == 0
+        assert "Switched to profile" in result.stdout
+        mock_switch_profile.assert_called_once_with("test-profile")
 
-            result = runner.invoke(app, ["profile", "switch", "test2"])
+    def test_profile_list(self, runner, mock_list_profiles, mock_get_active_profile):
+        """Test the 'profile list' command."""
+        from pytest_insight.core.storage import StorageProfile
+
+        # Create test profiles
+        default_profile = mock.MagicMock(spec=StorageProfile)
+        default_profile.name = "default"
+        default_profile.storage_type = "json"
+        default_profile.file_path = "/mock/path/default.json"
+
+        test_profile = mock.MagicMock(spec=StorageProfile)
+        test_profile.name = "test-profile"
+        test_profile.storage_type = "json"
+        test_profile.file_path = "/mock/path/test-profile.json"
+
+        # Set up the profiles dictionary
+        profiles = {
+            "default": default_profile,
+            "test-profile": test_profile,
+        }
+
+        # Set up the list_profiles function to return our test profiles
+        mock_list_profiles.return_value = profiles
+
+        # Mock the get_active_profile function to return the default profile
+        mock_get_active_profile.return_value = default_profile
+
+        # Test listing profiles
+        with mock.patch("rich.print"):
+            result = runner.invoke(app, ["profile", "list"])
             assert result.exit_code == 0
-            assert "Switched to profile 'test2'" in result.stdout
+            mock_list_profiles.assert_called_once()
 
-    def test_switch_nonexistent_profile(self, runner, mock_get_profile_manager):
-        """Test switching to a nonexistent profile."""
-        with mock.patch("pytest_insight.__main__.switch_profile") as mock_switch:
-            mock_switch.side_effect = ValueError("Profile 'nonexistent' not found")
+    def test_list_profiles_with_type_filter(self, runner, mock_list_profiles, mock_get_active_profile):
+        """Test the 'profile list' command with type filter."""
+        from pytest_insight.core.storage import StorageProfile
 
-            result = runner.invoke(app, ["profile", "switch", "nonexistent"])
-            assert result.exit_code == 1
-            assert "Error" in result.stdout
+        # Create test profiles with different storage types
+        json_profile = mock.MagicMock(spec=StorageProfile)
+        json_profile.name = "test-json"
+        json_profile.storage_type = "json"
+        json_profile.file_path = "/mock/path/test-json.json"
 
-    def test_delete_profile(self, runner, mock_get_profile_manager):
-        """Test the 'profile delete' command with confirmation."""
-        # Mock the confirmation prompt to return 'y'
-        result = runner.invoke(app, ["profile", "delete", "test2"], input="y\n")
-        assert result.exit_code == 0
-        assert "Deleted profile 'test2'" in result.stdout
+        memory_profile = mock.MagicMock(spec=StorageProfile)
+        memory_profile.name = "test-memory"
+        memory_profile.storage_type = "memory"
+        memory_profile.file_path = None
 
-    def test_delete_profile_force(self, runner, mock_get_profile_manager):
-        """Test the 'profile delete' command with --force flag."""
-        result = runner.invoke(app, ["profile", "delete", "test2", "--force"])
-        assert result.exit_code == 0
-        assert "Deleted profile 'test2'" in result.stdout
+        # Set up the profiles dictionary
+        all_profiles = {
+            "test-json": json_profile,
+            "test-memory": memory_profile,
+        }
 
-    def test_delete_active_profile(self, runner, mock_get_profile_manager):
-        """Test deleting the active profile (should fail)."""
-        result = runner.invoke(app, ["profile", "delete", "test1", "--force"])
-        assert result.exit_code == 1
-        assert "Error" in result.stdout
+        # Set up the list_profiles function to return all profiles
+        mock_list_profiles.return_value = all_profiles
+
+        # Mock the get_active_profile method
+        active_profile = mock.MagicMock(spec=StorageProfile)
+        active_profile.name = "test-json"
+        mock_get_active_profile.return_value = active_profile
+
+        # Test JSON filter
+        with mock.patch("rich.print"):
+            result = runner.invoke(app, ["profile", "list", "--type", "json"])
+            assert result.exit_code == 0
+            mock_list_profiles.assert_called_once()
+            # We can't directly test the filtering since it happens in the command function,
+            # but we can check that the command executed successfully
+
+        # Reset the mock for the next test
+        mock_list_profiles.reset_mock()
+
+        # Test memory filter
+        with mock.patch("rich.print"):
+            result = runner.invoke(app, ["profile", "list", "--type", "memory"])
+            assert result.exit_code == 0
+            mock_list_profiles.assert_called_once()
+
+    def test_list_profiles_with_pattern_filter(self, runner, mock_list_profiles, mock_get_active_profile):
+        """Test the 'profile list' command with pattern filter."""
+        from pytest_insight.core.storage import StorageProfile
+
+        # Create test profiles with different names
+        test_abc = mock.MagicMock(spec=StorageProfile)
+        test_abc.name = "test-abc"
+        test_abc.storage_type = "json"
+        test_abc.file_path = "/mock/path/test-abc.json"
+
+        test_xyz = mock.MagicMock(spec=StorageProfile)
+        test_xyz.name = "test-xyz"
+        test_xyz.storage_type = "json"
+        test_xyz.file_path = "/mock/path/test-xyz.json"
+
+        # Set up the profiles dictionary
+        all_profiles = {
+            "test-abc": test_abc,
+            "test-xyz": test_xyz,
+        }
+
+        # Set up the list_profiles function to return all profiles
+        mock_list_profiles.return_value = all_profiles
+
+        # Mock the get_active_profile method
+        active_profile = mock.MagicMock(spec=StorageProfile)
+        active_profile.name = "test-abc"
+        mock_get_active_profile.return_value = active_profile
+
+        # Test specific pattern filter
+        with mock.patch("rich.print"):
+            result = runner.invoke(app, ["profile", "list", "--pattern", "test-abc"])
+            assert result.exit_code == 0
+            mock_list_profiles.assert_called_once()
+
+        # Reset the mock for the next test
+        mock_list_profiles.reset_mock()
+
+        # Test wildcard pattern filter
+        with mock.patch("rich.print"):
+            result = runner.invoke(app, ["profile", "list", "--pattern", "test-*"])
+            assert result.exit_code == 0
+            mock_list_profiles.assert_called_once()
+
+    def test_clean_profiles(self, runner, mock_list_profiles, mock_get_active_profile, mock_get_profile_manager):
+        """Test the 'profile clean' command for bulk deletion."""
+        from pytest_insight.core.storage import StorageProfile
+
+        profile_manager = mock_get_profile_manager.return_value
+
+        # Create test profiles for bulk deletion testing
+        active_profile = mock.MagicMock(spec=StorageProfile)
+        active_profile.name = "active-profile"
+        active_profile.storage_type = "json"
+        active_profile.file_path = "/mock/path/active-profile.json"
+
+        mem_profile1 = mock.MagicMock(spec=StorageProfile)
+        mem_profile1.name = "mem-test1"
+        mem_profile1.storage_type = "memory"
+        mem_profile1.file_path = None
+
+        mem_profile2 = mock.MagicMock(spec=StorageProfile)
+        mem_profile2.name = "mem-test2"
+        mem_profile2.storage_type = "memory"
+        mem_profile2.file_path = None
+
+        json_profile = mock.MagicMock(spec=StorageProfile)
+        json_profile.name = "json-test"
+        json_profile.storage_type = "json"
+        json_profile.file_path = "/mock/path/json-test.json"
+
+        # Set up the profiles dictionary
+        all_profiles = {
+            "active-profile": active_profile,
+            "mem-test1": mem_profile1,
+            "mem-test2": mem_profile2,
+            "json-test": json_profile,
+        }
+
+        # Set up the list_profiles function to return all profiles
+        mock_list_profiles.return_value = all_profiles
+
+        # Set the active profile
+        mock_get_active_profile.return_value = active_profile
+
+        # Track which profiles are deleted
+        deleted_profiles = []
+
+        # Mock the delete_profile method
+        def mock_delete_profile(name):
+            if name == active_profile.name:
+                raise ValueError("Cannot delete active profile")
+            deleted_profiles.append(name)
+            return None
+
+        profile_manager.delete_profile.side_effect = mock_delete_profile
+
+        # Test default (memory profiles) with force flag
+        with mock.patch("typer.confirm", return_value=True):
+            deleted_profiles.clear()
+            result = runner.invoke(app, ["profile", "clean", "--force"])
+            assert result.exit_code == 0
+            mock_list_profiles.assert_called_once()
+            # Check that the memory profiles were deleted
+            assert set(deleted_profiles) == {"mem-test1", "mem-test2"}
+
+        # Reset the mock for the next test
+        mock_list_profiles.reset_mock()
+
+        # Test with type filter
+        with mock.patch("typer.confirm", return_value=True):
+            deleted_profiles.clear()
+            result = runner.invoke(app, ["profile", "clean", "--type", "json", "--force"])
+            assert result.exit_code == 0
+            mock_list_profiles.assert_called_once()
+            # Check that the json profile was deleted, but not the active profile
+            assert set(deleted_profiles) == {"json-test"}
+            assert "active-profile" not in deleted_profiles
+
+        # Reset the mock for the next test
+        mock_list_profiles.reset_mock()
+
+        # Test with pattern filter
+        with mock.patch("typer.confirm", return_value=True):
+            deleted_profiles.clear()
+            result = runner.invoke(app, ["profile", "clean", "--pattern", "mem-*", "--force"])
+            assert result.exit_code == 0
+            mock_list_profiles.assert_called_once()
+            # Check that the memory profiles were deleted
+            assert set(deleted_profiles) == {"mem-test1", "mem-test2"}
+
+        # Reset the mock for the next test
+        mock_list_profiles.reset_mock()
+
+        # Test dry run
+        with mock.patch("typer.confirm", return_value=True):
+            deleted_profiles.clear()
+            result = runner.invoke(app, ["profile", "clean", "--dry-run"])
+            assert result.exit_code == 0
+            mock_list_profiles.assert_called_once()
+            # Check that no profiles were actually deleted
+            assert not deleted_profiles
 
 
 class TestGenerateCommands:

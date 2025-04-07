@@ -103,8 +103,13 @@ class ProfileManager:
         if self.config_path.exists():
             self.backup_profiles()
 
+        # Only include non-memory profiles for persistence
+        persistent_profiles = {
+            name: profile for name, profile in self.profiles.items() if profile.storage_type != "memory"
+        }
+
         data = {
-            "profiles": {name: profile.to_dict() for name, profile in self.profiles.items()},
+            "profiles": {name: profile.to_dict() for name, profile in persistent_profiles.items()},
             "active_profile": self.active_profile_name,
         }
 
@@ -209,13 +214,31 @@ class ProfileManager:
         del self.profiles[name]
         self._save_profiles()
 
-    def list_profiles(self) -> Dict[str, StorageProfile]:
-        """List all available profiles.
+    def list_profiles(
+        self, storage_type: Optional[str] = None, pattern: Optional[str] = None
+    ) -> Dict[str, StorageProfile]:
+        """List available profiles, optionally filtered by storage type and/or name pattern.
+
+        Args:
+            storage_type: Optional filter by storage type ('json' or 'memory')
+            pattern: Optional glob pattern to filter profile names
 
         Returns:
-            Dictionary of profile names to profile objects
+            Dictionary of profile names to profile objects that match the filters
         """
-        return self.profiles
+        result = self.profiles.copy()
+
+        # Filter by storage type if specified
+        if storage_type:
+            result = {name: profile for name, profile in result.items() if profile.storage_type == storage_type}
+
+        # Filter by pattern if specified
+        if pattern:
+            import fnmatch
+
+            result = {name: profile for name, profile in result.items() if fnmatch.fnmatch(name, pattern)}
+
+        return result
 
     def get_active_profile(self) -> StorageProfile:
         """Get the currently active profile.
@@ -978,13 +1001,17 @@ def switch_profile(name: str) -> StorageProfile:
     return get_profile_manager().switch_profile(name)
 
 
-def list_profiles() -> Dict[str, StorageProfile]:
-    """List all available profiles.
+def list_profiles(storage_type: Optional[str] = None, pattern: Optional[str] = None) -> Dict[str, StorageProfile]:
+    """List available profiles, optionally filtered by storage type and/or name pattern.
+
+    Args:
+        storage_type: Optional filter by storage type ('json' or 'memory')
+        pattern: Optional glob pattern to filter profile names
 
     Returns:
-        Dictionary of profile names to profile objects
+        Dictionary of profile names to profile objects that match the filters
     """
-    return get_profile_manager().list_profiles()
+    return get_profile_manager().list_profiles(storage_type, pattern)
 
 
 def get_active_profile() -> StorageProfile:
