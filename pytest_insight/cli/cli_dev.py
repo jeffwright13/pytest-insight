@@ -17,7 +17,13 @@ from rich.table import Table
 
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.comparison import Comparison
-from pytest_insight.core.core_api import InsightAPI
+from pytest_insight.core.core_api import (
+    InsightAPI,
+    analyze as core_analyze,
+    compare as core_compare,
+    get_insights as core_get_insights,
+    query as core_query,
+)
 from pytest_insight.core.insights import Insights
 from pytest_insight.core.query import Query
 from pytest_insight.core.storage import get_active_profile, get_profile_manager
@@ -276,13 +282,13 @@ def _start_interactive_shell():
     )
     console.print("Type 'help' for a list of commands, 'exit' or 'quit' to exit.")
 
-    # Import core API classes to make them available in this scope
-    from pytest_insight.core.analysis import Analysis
-    from pytest_insight.core.comparison import Comparison
-    from pytest_insight.core.core_api import compare as core_compare
-    from pytest_insight.core.core_api import query as core_query
-    from pytest_insight.core.insights import Insights
-    from pytest_insight.core.query import Query
+    # Set up the prompt session with history
+    history_file = os.path.expanduser("~/.insight_history")
+    history = FileHistory(history_file) if os.path.exists(os.path.dirname(history_file)) else InMemoryHistory()
+    session = PromptSession(history=history)
+
+    # Set up console for rich output
+    console = Console()
 
     # Initialize context
     context = {
@@ -300,7 +306,6 @@ def _start_interactive_shell():
         "Analysis": Analysis,
         "Comparison": Comparison,
         "Insights": Insights,
-        "InsightAPI": InsightAPI,
         # Make core API functions available
         "query": core_query,
         "compare": core_compare,
@@ -352,19 +357,6 @@ def _start_interactive_shell():
     ]
 
     # Create prompt session with history and auto-completion
-    try:
-        from pathlib import Path
-
-        # Create history directory if it doesn't exist
-        history_dir = Path.home() / ".pytest_insight"
-        history_dir.mkdir(exist_ok=True)
-        history_file = history_dir / "shell_history"
-
-        history = FileHistory(str(history_file))
-    except Exception:
-        # Fall back to in-memory history if file history fails
-        history = InMemoryHistory()
-
     completer = WordCompleter(commands, ignore_case=True)
 
     style = Style.from_dict(
@@ -2206,7 +2198,7 @@ def _start_interactive_shell():
 
                     # Parse the command: api exec [object] [method] [args...]
                     exec_parts = user_input.split(" ", 3)[2:]  # Skip 'api exec'
-
+                    
                     if len(exec_parts) < 2:
                         console.print(
                             "[bold red]Error:[/bold red] Missing object or method name"
@@ -2218,15 +2210,26 @@ def _start_interactive_shell():
                         continue
 
                     obj_name = exec_parts[0].lower()
-                    method_name = exec_parts[1]
-
+                    
+                    # Extract method name and arguments
+                    remaining_parts = exec_parts[1].split() if len(exec_parts) == 2 else exec_parts[1].split() + exec_parts[2].split() if len(exec_parts) > 2 else []
+                    if not remaining_parts:
+                        console.print(
+                            "[bold red]Error:[/bold red] Missing method name"
+                        )
+                        console.print("Usage: api exec [object] [method] [args...]")
+                        context["history"][history_index]["result"] = {
+                            "error": "Missing method name"
+                        }
+                        continue
+                        
+                    method_name = remaining_parts[0]
+                    
                     # Parse arguments if any
                     args = []
-                    if len(exec_parts) > 2:
-                        arg_str = exec_parts[2]
-                        # Simple argument parsing - split by spaces for positional args
-                        raw_args = [arg.strip() for arg in arg_str.split()]
-
+                    if len(remaining_parts) > 1:
+                        raw_args = remaining_parts[1:]
+                        
                         # Convert arguments to appropriate types
                         for arg in raw_args:
                             try:
@@ -2242,7 +2245,7 @@ def _start_interactive_shell():
                                     args.append(arg)
                             except Exception:
                                 args.append(arg)
-
+                    
                     # Get the object to execute the method on
                     target_obj = None
                     if obj_name == "query":
@@ -2978,10 +2981,17 @@ def cli_generate_insights(
     format: OutputFormat = typer.Option(
         OutputFormat.TEXT, help="Output format (text or json)"
     ),
+    config_file: Optional[str] = typer.Option(None, help="Path to configuration file"),
+    include_metrics: Optional[str] = typer.Option(None, help="Comma-separated list of metrics to include (e.g., 'pass_rate,flaky_rate')"),
+    include_sections: Optional[str] = typer.Option(None, help="Comma-separated list of sections to include (e.g., 'top_failures,top_flaky')"),
+    exclude_metrics: Optional[str] = typer.Option(None, help="Comma-separated list of metrics to exclude"),
+    exclude_sections: Optional[str] = typer.Option(None, help="Comma-separated list of sections to exclude"),
 ):
     """Generate insights from test data.
 
     This command generates various types of insights from test data, including summary reports, error patterns, stability trends, and test dependencies.
+    
+    The insights can be configured using a configuration file or command-line options to specify which metrics and sections to include or exclude.
     """
     console = Console()
 
@@ -2990,7 +3000,7 @@ def cli_generate_insights(
         api = InsightAPI()
         if profile:
             api = api.with_profile(profile)
-
+        
         # Build query
         query = api.query()
         if sut:
@@ -2998,13 +3008,55 @@ def cli_generate_insights(
         query = query.in_last_days(days)
         if test_pattern:
             query = query.with_test_pattern(test_pattern)
-
+        
         # Create insights instance with the query
         insight_api = api.insights().with_query(query)
-
+        
+        # Load configuration
+        from pytest_insight.core.config import load_config
+        
+        config = {}
+        if config_file:
+            config = load_config(config_file)
+        
+        # Apply command-line overrides for metrics and sections
+        if include_metrics or exclude_metrics or include_sections or exclude_sections:
+            if "reports" not in config:
+                config["reports"] = {}
+            if insight_type not in config["reports"]:
+                config["reports"][insight_type] = {}
+            
+            # Handle metrics
+            if include_metrics:
+                config["reports"][insight_type]["metrics"] = [
+                    m.strip() for m in include_metrics.split(",")
+                ]
+            elif exclude_metrics and "metrics" in config["reports"][insight_type]:
+                exclude_list = [m.strip() for m in exclude_metrics.split(",")]
+                config["reports"][insight_type]["metrics"] = [
+                    m for m in config["reports"][insight_type]["metrics"] 
+                    if m not in exclude_list
+                ]
+            
+            # Handle sections
+            if include_sections:
+                config["reports"][insight_type]["sections"] = [
+                    s.strip() for s in include_sections.split(",")
+                ]
+            elif exclude_sections and "sections" in config["reports"][insight_type]:
+                exclude_list = [s.strip() for s in exclude_sections.split(",")]
+                config["reports"][insight_type]["sections"] = [
+                    s for s in config["reports"][insight_type]["sections"] 
+                    if s not in exclude_list
+                ]
+        
+        # Apply configuration if we have any overrides
+        if config:
+            insight_api = insight_api.with_config(config)
+        
         # Set up console for rich output
         console = Console()
-
+        
         # Execute the appropriate insights based on insight type
         if insight_type == "summary":
             result = insight_api.summary_report()

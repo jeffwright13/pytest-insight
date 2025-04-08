@@ -1,0 +1,45 @@
+# pytest-insight configuration file
+# This file controls how insights are generated and displayed
+
+[reports.summary]
+enabled = true
+# Metrics to include in summary reports
+metrics = [
+    "pass_rate",
+    "flaky_rate", 
+    "test_count", 
+    "session_count"
+]
+# Sections to include in summary reports
+sections = [
+    "top_failures",
+    "top_flaky", 
+    "performance_issues"
+]
+
+[reports.stability]
+enabled = true
+# Minimum pass rate to be considered stable
+threshold = 0.85
+# Maximum flaky rate to be considered stable
+flaky_threshold = 0.05
+
+[reports.performance]
+enabled = true
+# Tests taking longer than this threshold (in seconds) are considered slow
+slow_test_threshold = 1.0
+
+[reports.patterns]
+enabled = true
+# Minimum occurrences to identify a pattern
+min_frequency = 2
+
+[reports.trends]
+enabled = true
+# Days to include in each trend point
+window_size = 7
+
+[reports.dependencies]
+enabled = true
+# Minimum correlation to consider a dependency
+min_correlation = 0.5

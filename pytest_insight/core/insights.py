@@ -1,25 +1,22 @@
-"""High-level insights for pytest-insight.
+"""
+Insights module for pytest-insight.
 
-This module provides advanced insights and analytics that build upon the core Analysis class:
+This module provides classes for generating insights from test data.
+It includes functionality for analyzing test outcomes, identifying patterns,
+and generating recommendations.
 
-1. TestInsights - Extracts patterns and trends from test data
-2. SessionInsights - Analyzes session-level metrics and health
-3. TrendInsights - Identifies trends over time
-4. PatternInsights - Detects test patterns and correlations
-
-These insights follow the fluent interface pattern established in the pytest-insight API,
+The API follows a fluent interface design pattern,
 allowing for intuitive method chaining while preserving session context.
 """
 
 from collections import Counter, defaultdict
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from pytest_insight.core.analysis import Analysis
+from pytest_insight.core.config import InsightConfig
 from pytest_insight.core.models import TestOutcome
-from pytest_insight.core.storage import (
-    get_storage_instance,
-)
-
+from pytest_insight.core.storage import get_storage_instance
 
 class TestInsights:
     """Test-level insights and analytics.
@@ -1855,9 +1852,7 @@ class Insights:
                     for test in session.test_results:
                         if test.nodeid == nodeid:
                             outcome = (
-                                test.outcome.to_str()
-                                if hasattr(test.outcome, "to_str")
-                                else str(test.outcome)
+                                test.outcome.to_str() if hasattr(test.outcome, "to_str") else str(test.outcome)
                             )
                             if outcome.lower() in ["failed", "error"]:
                                 color = RED
@@ -1922,3 +1917,73 @@ def insights_with_profile(profile_name: str) -> Insights:
         insights_with_profile("production").summary_report()
     """
     return Insights(profile_name=profile_name)
+
+
+class SummaryReport:
+    """Summary report of insights.
+
+    Contains metrics, recommendations, and high-level insights.
+    """
+
+    def __init__(self):
+        """Initialize an empty summary report."""
+        # Initialize with default values
+        self.test_count = 0
+        self.session_count = 0
+        self.pass_rate = 0.0
+        self.flaky_rate = 0.0
+        self.top_failures = []
+        self.top_flaky = []
+        self.performance_issues = []
+        self.recommendations = []
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the report to a dictionary for serialization.
+
+        Returns:
+            Dict containing all report data
+        """
+        return {
+            "test_count": self.test_count,
+            "session_count": self.session_count,
+            "pass_rate": self.pass_rate,
+            "flaky_rate": self.flaky_rate,
+            "top_failures": self.top_failures,
+            "top_flaky": self.top_flaky,
+            "performance_issues": self.performance_issues,
+            "recommendations": self.recommendations,
+        }
+
+    def add_recommendation(self, recommendation: str) -> None:
+        """Add a recommendation to the report.
+
+        Args:
+            recommendation: Recommendation text
+        """
+        self.recommendations.append(recommendation)
+
+    def generate_recommendations(self) -> None:
+        """Generate recommendations based on the report data."""
+        # Clear existing recommendations
+        self.recommendations = []
+
+        # Add recommendations based on metrics
+        if self.pass_rate < 0.85:
+            self.add_recommendation(
+                "Investigate failing tests to improve overall pass rate."
+            )
+
+        if self.flaky_rate > 0.05:
+            self.add_recommendation(
+                "Address flaky tests to improve test reliability."
+            )
+
+        if self.top_failures:
+            self.add_recommendation(
+                f"Focus on fixing the top {len(self.top_failures)} consistently failing tests."
+            )
+
+        if self.performance_issues:
+            self.add_recommendation(
+                "Optimize slow tests to improve overall test suite performance."
+            )
