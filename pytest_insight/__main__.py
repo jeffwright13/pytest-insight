@@ -101,7 +101,9 @@ def list_all_profiles(
         if pattern:
             filter_desc.append(f"pattern: '{pattern}'")
 
-        console.print(f"[yellow]No profiles found with {', '.join(filter_desc)}[/yellow]")
+        console.print(
+            f"[yellow]No profiles found with {', '.join(filter_desc)}[/yellow]"
+        )
         return
 
     for name, profile in filtered_profiles.items():
@@ -115,7 +117,9 @@ def list_all_profiles(
         else:
             file_size = "Not found"
 
-        table.add_row(active_marker, name, profile.storage_type, str(profile.file_path), file_size)
+        table.add_row(
+            active_marker, name, profile.storage_type, str(profile.file_path), file_size
+        )
 
     console.print(table)
 
@@ -135,9 +139,15 @@ def format_file_size(size_bytes):
 @profile_app.command("create")
 def create_new_profile(
     name: str = typer.Argument(..., help="Name for the new profile"),
-    storage_type: str = typer.Option("json", "--type", "-t", help="Storage type (json, memory)"),
-    file_path: Optional[str] = typer.Option(None, "--path", "-p", help="Custom file path for storage"),
-    activate: bool = typer.Option(False, "--activate", "-a", help="Set as active profile after creation"),
+    storage_type: str = typer.Option(
+        "json", "--type", "-t", help="Storage type (json, memory)"
+    ),
+    file_path: Optional[str] = typer.Option(
+        None, "--path", "-p", help="Custom file path for storage"
+    ),
+    activate: bool = typer.Option(
+        False, "--activate", "-a", help="Set as active profile after creation"
+    ),
 ):
     """Create a new storage profile."""
     console = Console()
@@ -152,12 +162,16 @@ def create_new_profile(
 
         console.print(Panel(success_msg, title="Profile Created", border_style="green"))
     except ValueError as e:
-        console.print(Panel(f"[bold red]{str(e)}[/bold red]", title="Error", border_style="red"))
+        console.print(
+            Panel(f"[bold red]{str(e)}[/bold red]", title="Error", border_style="red")
+        )
         raise typer.Exit(code=1)
 
 
 @profile_app.command("switch")
-def switch_to_profile(name: str = typer.Argument(..., help="Name of the profile to switch to")):
+def switch_to_profile(
+    name: str = typer.Argument(..., help="Name of the profile to switch to")
+):
     """Switch to a different storage profile."""
     console = Console()
     try:
@@ -170,7 +184,9 @@ def switch_to_profile(name: str = typer.Argument(..., help="Name of the profile 
             )
         )
     except ValueError as e:
-        console.print(Panel(f"[bold red]{str(e)}[/bold red]", title="Error", border_style="red"))
+        console.print(
+            Panel(f"[bold red]{str(e)}[/bold red]", title="Error", border_style="red")
+        )
         raise typer.Exit(code=1)
 
 
@@ -194,7 +210,9 @@ def show_active_profile():
 @profile_app.command("delete")
 def delete_existing_profile(
     name: str = typer.Argument(..., help="Name of the profile to delete"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force deletion without confirmation"),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Force deletion without confirmation"
+    ),
 ):
     """Delete a storage profile."""
     console = Console()
@@ -216,21 +234,31 @@ def delete_existing_profile(
             )
         )
     except ValueError as e:
-        console.print(Panel(f"[bold red]{str(e)}[/bold red]", title="Error", border_style="red"))
+        console.print(
+            Panel(f"[bold red]{str(e)}[/bold red]", title="Error", border_style="red")
+        )
         raise typer.Exit(code=1)
 
 
 @profile_app.command("clean")
 def clean_profiles(
     type_filter: str = typer.Option(
-        "memory", "--type", "-t", help="Type of profiles to delete (e.g., 'memory', 'json')"
+        "memory",
+        "--type",
+        "-t",
+        help="Type of profiles to delete (e.g., 'memory', 'json')",
     ),
     pattern: Optional[str] = typer.Option(
         None, "--pattern", "-p", help="Pattern to match profile names (e.g., 'test-*')"
     ),
-    force: bool = typer.Option(False, "--force", "-f", help="Force deletion without confirmation"),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Force deletion without confirmation"
+    ),
     dry_run: bool = typer.Option(
-        False, "--dry-run", "-d", help="Show which profiles would be deleted without actually deleting them"
+        False,
+        "--dry-run",
+        "-d",
+        help="Show which profiles would be deleted without actually deleting them",
     ),
 ):
     """Bulk delete profiles by type and/or pattern."""
@@ -283,7 +311,9 @@ def clean_profiles(
 
     # Confirm deletion if not forced
     if not force:
-        confirm = typer.confirm(f"Are you sure you want to delete these {len(filtered_profiles)} profiles?")
+        confirm = typer.confirm(
+            f"Are you sure you want to delete these {len(filtered_profiles)} profiles?"
+        )
         if not confirm:
             console.print("[yellow]Operation cancelled.[/yellow]")
             return
@@ -302,11 +332,18 @@ def clean_profiles(
 
 @profile_app.command("merge")
 def merge_profiles(
-    sources: str = typer.Argument(..., help="Source profile names to merge from (comma-separated)"),
+    sources: str = typer.Argument(
+        ..., help="Source profile names to merge from (comma-separated)"
+    ),
     target: str = typer.Argument(..., help="Target profile name to merge into"),
-    create_target: bool = typer.Option(False, "--create", "-c", help="Create target profile if it doesn't exist"),
+    create_target: bool = typer.Option(
+        False, "--create", "-c", help="Create target profile if it doesn't exist"
+    ),
     target_type: str = typer.Option(
-        "json", "--type", "-t", help="Storage type for target profile if creating new ('json' or 'memory')"
+        "json",
+        "--type",
+        "-t",
+        help="Storage type for target profile if creating new ('json' or 'memory')",
     ),
     merge_strategy: str = typer.Option(
         "skip_existing",
@@ -317,7 +354,9 @@ def merge_profiles(
     filter_pattern: Optional[str] = typer.Option(
         None, "--filter", "-f", help="Only merge sessions matching this pattern"
     ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be merged without actually merging"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be merged without actually merging"
+    ),
 ):
     """
     Merge test sessions from multiple source profiles into a target profile.
@@ -331,8 +370,12 @@ def merge_profiles(
         # Validate merge strategy
         valid_strategies = ["skip_existing", "replace_existing", "keep_both"]
         if merge_strategy not in valid_strategies:
-            console.print(f"[red]Error: Invalid merge strategy '{merge_strategy}'.[/red]")
-            console.print(f"[yellow]Valid strategies: {', '.join(valid_strategies)}[/yellow]")
+            console.print(
+                f"[red]Error: Invalid merge strategy '{merge_strategy}'.[/red]"
+            )
+            console.print(
+                f"[yellow]Valid strategies: {', '.join(valid_strategies)}[/yellow]"
+            )
             return
 
         # Parse source profiles
@@ -347,7 +390,9 @@ def merge_profiles(
         # Validate source profiles exist
         missing_sources = [name for name in source_names if name not in all_profiles]
         if missing_sources:
-            console.print(f"[red]Error: Source profiles not found: {', '.join(missing_sources)}[/red]")
+            console.print(
+                f"[red]Error: Source profiles not found: {', '.join(missing_sources)}[/red]"
+            )
             return
 
         # Check if target profile exists
@@ -356,20 +401,28 @@ def merge_profiles(
         # Handle target profile creation if needed
         if not target_exists:
             if not create_target:
-                console.print(f"[red]Error: Target profile '{target}' does not exist.[/red]")
-                console.print("[yellow]Use --create to create it automatically.[/yellow]")
+                console.print(
+                    f"[red]Error: Target profile '{target}' does not exist.[/red]"
+                )
+                console.print(
+                    "[yellow]Use --create to create it automatically.[/yellow]"
+                )
                 return
 
             # Validate target type
             if target_type not in ["json", "memory"]:
-                console.print(f"[red]Error: Invalid target profile type '{target_type}'.[/red]")
+                console.print(
+                    f"[red]Error: Invalid target profile type '{target_type}'.[/red]"
+                )
                 console.print("[yellow]Valid types: json, memory[/yellow]")
                 return
 
             # Create the target profile
             if not dry_run:
                 create_profile(target, target_type)
-                console.print(f"[green]Created new target profile '{target}' with type '{target_type}'.[/green]")
+                console.print(
+                    f"[green]Created new target profile '{target}' with type '{target_type}'.[/green]"
+                )
 
         # Get the profile manager
         profile_manager = get_profile_manager()
@@ -407,7 +460,9 @@ def merge_profiles(
                 session_counts[source_name] = len(profile_sessions)
 
             except Exception as e:
-                console.print(f"[red]Error loading sessions from '{source_name}': {str(e)}[/red]")
+                console.print(
+                    f"[red]Error loading sessions from '{source_name}': {str(e)}[/red]"
+                )
                 return
 
         # Display summary of what will be merged
@@ -427,7 +482,9 @@ def merge_profiles(
 
         # If dry run, stop here
         if dry_run:
-            console.print("[yellow]Dry run completed. No sessions were merged.[/yellow]")
+            console.print(
+                "[yellow]Dry run completed. No sessions were merged.[/yellow]"
+            )
             return
 
         # Confirm the merge
@@ -462,7 +519,9 @@ def merge_profiles(
                             # Generate a new unique ID for this session
                             import uuid
 
-                            new_id = f"{session_id}_{source_name}_{uuid.uuid4().hex[:8]}"
+                            new_id = (
+                                f"{session_id}_{source_name}_{uuid.uuid4().hex[:8]}"
+                            )
                             session_id = new_id
                             stats["renamed"] += 1
                     else:
@@ -472,7 +531,9 @@ def merge_profiles(
                     profile_manager.save_session(target, session, session_id)
 
                 except Exception as e:
-                    console.print(f"[red]Error merging session '{session_id}': {str(e)}[/red]")
+                    console.print(
+                        f"[red]Error merging session '{session_id}': {str(e)}[/red]"
+                    )
                     stats["errors"] += 1
 
         # Display results
@@ -483,7 +544,9 @@ def merge_profiles(
         console.print(f"Renamed (kept both): {stats['renamed']}")
         console.print(f"Errors: {stats['errors']}")
 
-        console.print(f"\n[green]Successfully merged sessions into profile '{target}'.[/green]")
+        console.print(
+            f"\n[green]Successfully merged sessions into profile '{target}'.[/green]"
+        )
 
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
@@ -493,10 +556,16 @@ def merge_profiles(
 @generate_app.command("practice")
 def generate_practice_data(
     storage_profile: Optional[str] = typer.Option(
-        None, "--profile", "-p", help="Storage profile to use for data generation (preferred over output path)"
+        None,
+        "--profile",
+        "-p",
+        help="Storage profile to use for data generation (preferred over output path)",
     ),
     output_path: Optional[str] = typer.Option(
-        None, "--output", "-o", help="Output path for generated data (only used if profile not specified)"
+        None,
+        "--output",
+        "-o",
+        help="Output path for generated data (only used if profile not specified)",
     ),
     days: int = typer.Option(
         7,
@@ -594,14 +663,18 @@ def generate_practice_data(
             output_path = str(Path.home() / ".pytest_insight" / "practice_data.json")
             target = f"file '[cyan]{output_path}[/cyan]'"
             output_type = "file"
-            console.print(f"[yellow]No profile or output path specified. Using default: {output_path}[/yellow]")
+            console.print(
+                f"[yellow]No profile or output path specified. Using default: {output_path}[/yellow]"
+            )
 
         # Always ensure output_path is a string if provided
         if output_path is not None:
             output_path = str(output_path)
 
         # Create generator
-        with console.status("[bold green]Setting up data generator...[/bold green]", spinner="dots") as _:
+        with console.status(
+            "[bold green]Setting up data generator...[/bold green]", spinner="dots"
+        ) as _:
             # Always provide a valid target_path to avoid NoneType errors
             target_path = None
             if output_type == "file" and output_path:
@@ -651,7 +724,9 @@ def generate_practice_data(
 
         # Generate the data
         try:
-            with console.status("[bold green]Generating practice data...[/bold green]", spinner="dots") as _:
+            with console.status(
+                "[bold green]Generating practice data...[/bold green]", spinner="dots"
+            ) as _:
                 # Capture print output from the generator
                 original_stdout = sys.stdout
                 sys.stdout = io.StringIO()
@@ -724,12 +799,23 @@ def generate_practice_data(
 )
 def analyze(
     profile: Optional[str] = typer.Option(
-        None, "--profile", "-p", help="Storage profile to use (defaults to active profile)"
+        None,
+        "--profile",
+        "-p",
+        help="Storage profile to use (defaults to active profile)",
     ),
-    days: Optional[int] = typer.Option(None, "--days", "-d", help="Number of days to analyze"),
-    output: str = typer.Option("text", "--output", "-o", help="Output format (text, json)"),
-    chunk_size: int = typer.Option(1000, "--chunk-size", "-c", help="Chunk size for processing large datasets"),
-    no_progress: bool = typer.Option(False, "--no-progress", help="Disable progress bars"),
+    days: Optional[int] = typer.Option(
+        None, "--days", "-d", help="Number of days to analyze"
+    ),
+    output: str = typer.Option(
+        "text", "--output", "-o", help="Output format (text, json)"
+    ),
+    chunk_size: int = typer.Option(
+        1000, "--chunk-size", "-c", help="Chunk size for processing large datasets"
+    ),
+    no_progress: bool = typer.Option(
+        False, "--no-progress", help="Disable progress bars"
+    ),
     analysis_type: str = typer.Option(
         "standard",
         "--type",
@@ -746,8 +832,12 @@ def analyze(
         "--slow-threshold",
         help="Threshold for considering a test slow (in seconds, 0.0 means auto-detect)",
     ),
-    export_path: Optional[str] = typer.Option(None, "--export", "-e", help="Export analysis results to file path"),
-    sut_name: Optional[str] = typer.Option(None, "--sut", "-s", help="Filter analysis to specific SUT name"),
+    export_path: Optional[str] = typer.Option(
+        None, "--export", "-e", help="Export analysis results to file path"
+    ),
+    sut_name: Optional[str] = typer.Option(
+        None, "--sut", "-s", help="Filter analysis to specific SUT name"
+    ),
 ):
     """Analyze test sessions."""
     try:
@@ -757,13 +847,15 @@ def analyze(
         if profile is None:
             active_profile = get_active_profile()
             profile = active_profile.name
-            
+
         console.print(f"[bold blue]Using profile:[/bold blue] [cyan]{profile}[/cyan]")
 
         # Load sessions from storage
         # Show progress for loading sessions at the CLI level
         if not no_progress:
-            console.print(f"[bold]Loading sessions from profile[/bold] [cyan]'{profile}'[/cyan]...")
+            console.print(
+                f"[bold]Loading sessions from profile[/bold] [cyan]'{profile}'[/cyan]..."
+            )
         sessions = load_sessions(profile_name=profile)
 
         if not sessions:
@@ -778,7 +870,9 @@ def analyze(
 
         # Apply SUT filter if specified
         if sut_name:
-            console.print(f"[bold]Filtering sessions for SUT:[/bold] [cyan]{sut_name}[/cyan]")
+            console.print(
+                f"[bold]Filtering sessions for SUT:[/bold] [cyan]{sut_name}[/cyan]"
+            )
             sessions = [s for s in sessions if s.sut == sut_name]
             if not sessions:
                 console.print(
@@ -801,7 +895,9 @@ def analyze(
             console.print(f"[bold]Limiting analysis to[/bold] [cyan]{days}[/cyan] days")
 
         # Show progress for large datasets
-        console.print(f"[bold]Loading and processing test sessions from profile[/bold] [cyan]'{profile}'[/cyan]...")
+        console.print(
+            f"[bold]Loading and processing test sessions from profile[/bold] [cyan]'{profile}'[/cyan]..."
+        )
 
         # Get session metrics with optimized processing
         session_metrics = analysis.sessions.test_metrics(days, chunk_size=chunk_size)
@@ -810,7 +906,9 @@ def analyze(
         failure_rate = analysis.sessions.failure_rate(days)
 
         # Print summary statistics
-        summary_table = Table(title="Test Session Summary", show_header=True, header_style="bold magenta")
+        summary_table = Table(
+            title="Test Session Summary", show_header=True, header_style="bold magenta"
+        )
         summary_table.add_column("Metric", style="dim")
         summary_table.add_column("Value", style="cyan")
 
@@ -819,8 +917,12 @@ def analyze(
             str(len(analysis._sessions) if analysis._sessions else "Unknown"),
         )
         summary_table.add_row("Total tests", str(session_metrics.get("total_tests", 0)))
-        summary_table.add_row("Unique tests", str(session_metrics.get("unique_tests", 0)))
-        summary_table.add_row("Average duration", f"{session_metrics.get('avg_duration', 0):.2f} seconds")
+        summary_table.add_row(
+            "Unique tests", str(session_metrics.get("unique_tests", 0))
+        )
+        summary_table.add_row(
+            "Average duration", f"{session_metrics.get('avg_duration', 0):.2f} seconds"
+        )
 
         # Add session start/end time range
         if analysis._sessions:
@@ -835,7 +937,10 @@ def analyze(
             for s in analysis._sessions:
                 if hasattr(s, "session_stop_time") and s.session_stop_time is not None:
                     end_times.append(s.session_stop_time)
-                elif hasattr(s, "session_start_time") and s.session_start_time is not None:
+                elif (
+                    hasattr(s, "session_start_time")
+                    and s.session_start_time is not None
+                ):
                     # Fallback to session_start_time if end_time not available
                     end_times.append(s.session_start_time)
                 elif hasattr(s, "timestamp") and s.timestamp is not None:
@@ -853,7 +958,9 @@ def analyze(
         console.print(summary_table)
 
         # Test Health section
-        health_table = Table(title="Test Health", show_header=True, header_style="bold magenta")
+        health_table = Table(
+            title="Test Health", show_header=True, header_style="bold magenta"
+        )
         health_table.add_column("Metric", style="dim")
         health_table.add_column("Value", style="cyan")
         health_table.add_row("Session failure rate", f"{failure_rate:.1%}")
@@ -901,17 +1008,25 @@ def analyze(
             # Clear the progress message
             console.print("\r" + " " * 50 + "\r", end="")
 
-            console.print(f"[bold]Flaky tests:[/bold] [cyan]{len(stability.get('flaky_tests', []))}")
+            console.print(
+                f"[bold]Flaky tests:[/bold] [cyan]{len(stability.get('flaky_tests', []))}"
+            )
 
         # Print trend information
-        trends_table = Table(title="Trends", show_header=True, header_style="bold magenta")
+        trends_table = Table(
+            title="Trends", show_header=True, header_style="bold magenta"
+        )
         trends_table.add_column("Trend Type", style="dim")
         trends_table.add_column("Direction", style="cyan")
         trends_table.add_column("Change", style="green")
 
         duration_trend = trends.get("duration", {})
         direction = duration_trend.get("direction", "stable")
-        direction_style = "green" if direction == "improving" else "red" if direction == "worsening" else "yellow"
+        direction_style = (
+            "green"
+            if direction == "improving"
+            else "red" if direction == "worsening" else "yellow"
+        )
 
         change_text = ""
         if duration_trend.get("significant", False):
@@ -925,7 +1040,11 @@ def analyze(
 
         failure_trend = trends.get("failures", {})
         direction = failure_trend.get("direction", "stable")
-        direction_style = "green" if direction == "improving" else "red" if direction == "worsening" else "yellow"
+        direction_style = (
+            "green"
+            if direction == "improving"
+            else "red" if direction == "worsening" else "yellow"
+        )
 
         change_text = ""
         if failure_trend.get("significant", False):
@@ -940,11 +1059,17 @@ def analyze(
         warning_trend = trends.get("warnings", {})
         if warning_trend:
             direction = warning_trend.get("direction", "stable")
-            direction_style = "green" if direction == "improving" else "red" if direction == "worsening" else "yellow"
+            direction_style = (
+                "green"
+                if direction == "improving"
+                else "red" if direction == "worsening" else "yellow"
+            )
 
             change_text = ""
             if warning_trend.get("significant", False):
-                change_text = f"Significant: {warning_trend.get('change_percent', 0):.1f}%"
+                change_text = (
+                    f"Significant: {warning_trend.get('change_percent', 0):.1f}%"
+                )
 
             trends_table.add_row(
                 "Warnings",
@@ -957,7 +1082,9 @@ def analyze(
         # Print top flaky tests if available
         flaky_tests = stability.get("flaky_tests", [])
         if flaky_tests:
-            flaky_table = Table(title="Top Flaky Tests", show_header=True, header_style="bold magenta")
+            flaky_table = Table(
+                title="Top Flaky Tests", show_header=True, header_style="bold magenta"
+            )
             flaky_table.add_column("#", style="dim")
             flaky_table.add_column("Test ID", style="cyan")
             flaky_table.add_column("Flakiness Rate", style="red")
@@ -971,7 +1098,10 @@ def analyze(
                 outcome_str = ""
                 if outcomes and len(outcomes) > 0:
                     outcome_str = ", ".join(
-                        [f"{o.get('outcome', '').split('.')[-1]}: {o.get('count', 0)}" for o in outcomes[:3]]
+                        [
+                            f"{o.get('outcome', '').split('.')[-1]}: {o.get('count', 0)}"
+                            for o in outcomes[:3]
+                        ]
                     )
                     if len(outcomes) > 3:
                         outcome_str += "..."
@@ -1051,9 +1181,13 @@ def analyze(
                 co_failure_table.add_column("Tests", style="yellow")
 
                 for i, cluster in enumerate(co_failures[:5], 1):
-                    tests_str = "\n".join([f"- {test}" for test in cluster.get("tests", [])[:3]])
+                    tests_str = "\n".join(
+                        [f"- {test}" for test in cluster.get("tests", [])[:3]]
+                    )
                     if len(cluster.get("tests", [])) > 3:
-                        tests_str += f"\n- ... and {len(cluster.get('tests', [])) - 3} more"
+                        tests_str += (
+                            f"\n- ... and {len(cluster.get('tests', [])) - 3} more"
+                        )
 
                     co_failure_table.add_row(
                         f"Cluster {i}",
@@ -1096,10 +1230,20 @@ def analyze(
                 health_score_table.add_column("Score", style="cyan")
 
                 # Determine color based on score value
-                overall_color = "green" if overall_score >= 80 else "yellow" if overall_score >= 60 else "red"
-                stability_color = "green" if stability_score >= 80 else "yellow" if stability_score >= 60 else "red"
+                overall_color = (
+                    "green"
+                    if overall_score >= 80
+                    else "yellow" if overall_score >= 60 else "red"
+                )
+                stability_color = (
+                    "green"
+                    if stability_score >= 80
+                    else "yellow" if stability_score >= 60 else "red"
+                )
                 performance_color = (
-                    "green" if performance_score >= 80 else "yellow" if performance_score >= 60 else "red"
+                    "green"
+                    if performance_score >= 80
+                    else "yellow" if performance_score >= 60 else "red"
                 )
 
                 health_score_table.add_row(
@@ -1129,7 +1273,11 @@ def analyze(
                     category_table.add_column("Score", style="cyan")
 
                     for category, score in categories.items():
-                        category_color = "green" if score >= 80 else "yellow" if score >= 60 else "red"
+                        category_color = (
+                            "green"
+                            if score >= 80
+                            else "yellow" if score >= 60 else "red"
+                        )
                         category_table.add_row(
                             category,
                             f"[{category_color}]{score:.1f}/100[/{category_color}]",
@@ -1202,7 +1350,9 @@ def analyze(
                 "timestamp": datetime.now().isoformat(),
                 "profile": profile,
                 "session_summary": {
-                    "total_sessions": (len(analysis._sessions) if analysis._sessions else 0),
+                    "total_sessions": (
+                        len(analysis._sessions) if analysis._sessions else 0
+                    ),
                     "total_tests": session_metrics.get("total_tests", 0),
                     "unique_tests": session_metrics.get("unique_tests", 0),
                     "avg_duration": session_metrics.get("avg_duration", 0),

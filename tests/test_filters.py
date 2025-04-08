@@ -4,6 +4,7 @@ import datetime as dt_module
 from datetime import timedelta
 
 import pytest
+
 from pytest_insight.core.models import TestOutcome, TestResult, TestSession
 from pytest_insight.core.query import Query
 from pytest_insight.core.storage import InMemoryStorage
@@ -62,7 +63,9 @@ def test_sut_filter(test_session_no_reruns):
     assert len(result.sessions) == 1
 
     # All tests preserved in matching sessions
-    assert len(result.sessions[0].test_results) == len(test_session_no_reruns.test_results)
+    assert len(result.sessions[0].test_results) == len(
+        test_session_no_reruns.test_results
+    )
 
 
 def test_days_filter(test_session_no_reruns, get_test_time, mocker):
@@ -77,9 +80,13 @@ def test_days_filter(test_session_no_reruns, get_test_time, mocker):
     mock_datetime = mocker.MagicMock()
     mock_datetime.now.return_value = mock_now
     # Preserve the original timedelta for calculations
-    mock_datetime.timedelta = mocker.patch("pytest_insight.core.query.dt_module.timedelta", wraps=dt_module.timedelta)
+    mock_datetime.timedelta = mocker.patch(
+        "pytest_insight.core.query.dt_module.timedelta", wraps=dt_module.timedelta
+    )
     # Preserve the original timezone for UTC
-    mock_datetime.timezone = mocker.patch("pytest_insight.core.query.dt_module.timezone", wraps=dt_module.timezone)
+    mock_datetime.timezone = mocker.patch(
+        "pytest_insight.core.query.dt_module.timezone", wraps=dt_module.timezone
+    )
 
     # Patch dt_module.datetime, not dt_module.datetime.now
     mocker.patch("pytest_insight.core.query.dt_module.datetime", mock_datetime)
@@ -106,7 +113,9 @@ def test_days_filter(test_session_no_reruns, get_test_time, mocker):
     assert len(result.sessions) == 1
 
     # All tests preserved in matching sessions
-    assert len(result.sessions[0].test_results) == len(test_session_no_reruns.test_results)
+    assert len(result.sessions[0].test_results) == len(
+        test_session_no_reruns.test_results
+    )
 
     # Test old session gets filtered out
     old_session = TestSession(
@@ -288,7 +297,12 @@ def test_pattern_matching(get_test_time):
         sessions=storage.load_sessions() if sessions is None else sessions
     )
 
-    result = query.filter_by_test().with_pattern("test_get", field_name="nodeid").apply().execute()
+    result = (
+        query.filter_by_test()
+        .with_pattern("test_get", field_name="nodeid")
+        .apply()
+        .execute()
+    )
     assert len(result.sessions) == 1
     # Only matching test included
     assert len(result.sessions[0].test_results) == 1
@@ -303,7 +317,12 @@ def test_pattern_matching(get_test_time):
         sessions=storage.load_sessions() if sessions is None else sessions
     )
 
-    result = query.filter_by_test().with_pattern("API", field_name="caplog").apply().execute()
+    result = (
+        query.filter_by_test()
+        .with_pattern("API", field_name="caplog")
+        .apply()
+        .execute()
+    )
     assert len(result.sessions) == 1
     # Both tests match pattern in caplog
     assert all("API" in r.caplog for r in result.sessions[0].test_results)
@@ -317,7 +336,12 @@ def test_pattern_matching(get_test_time):
         sessions=storage.load_sessions() if sessions is None else sessions
     )
 
-    result = query.filter_by_test().with_pattern("api", field_name="caplog").apply().execute()
+    result = (
+        query.filter_by_test()
+        .with_pattern("api", field_name="caplog")
+        .apply()
+        .execute()
+    )
     assert len(result.sessions) == 0  # No matches due to case sensitivity
 
 
@@ -346,9 +370,13 @@ def test_multiple_filters(test_session_no_reruns, get_test_time, mocker):
     mock_datetime = mocker.MagicMock()
     mock_datetime.now.return_value = mock_now
     # Preserve the original timedelta for calculations
-    mock_datetime.timedelta = mocker.patch("pytest_insight.core.query.dt_module.timedelta", wraps=dt_module.timedelta)
+    mock_datetime.timedelta = mocker.patch(
+        "pytest_insight.core.query.dt_module.timedelta", wraps=dt_module.timedelta
+    )
     # Preserve the original timezone for UTC
-    mock_datetime.timezone = mocker.patch("pytest_insight.core.query.dt_module.timezone", wraps=dt_module.timezone)
+    mock_datetime.timezone = mocker.patch(
+        "pytest_insight.core.query.dt_module.timezone", wraps=dt_module.timezone
+    )
 
     # Patch dt_module.datetime, not dt_module.datetime.now
     mocker.patch("pytest_insight.core.query.dt_module.datetime", mock_datetime)
@@ -407,7 +435,9 @@ def test_multiple_filters(test_session_no_reruns, get_test_time, mocker):
     )
 
     assert not result.empty
-    assert len(result.sessions) == 1  # Session is included because it has a matching test
+    assert (
+        len(result.sessions) == 1
+    )  # Session is included because it has a matching test
     filtered_session = result.sessions[0]
 
     # Verify session-level filters worked

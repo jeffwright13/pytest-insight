@@ -20,15 +20,14 @@ from enum import Enum
 from typing import Any, Dict, Optional, get_type_hints
 
 import typer
-from rich.box import SIMPLE
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.comparison import Comparison
 from pytest_insight.core.insights import Insights
 from pytest_insight.core.query import Query
+from rich.box import SIMPLE
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 # Create Typer app
 app = typer.Typer(

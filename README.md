@@ -11,6 +11,7 @@ A pytest plugin for analyzing test health, performance, and patterns across test
 - **Session Context**: Preserve test relationships and session metadata
 - **Metrics Visualization**: Expose metrics via REST API and visualize in Grafana
 - **Storage Profiles**: Manage multiple storage configurations for different environments
+- **Interactive CLI**: Explore the API through a guided, interactive command-line interface
 
 ## Installation
 
@@ -116,6 +117,26 @@ insight-metrics --host 0.0.0.0 --port 8000 --profile my_profile
 ```
 
 The metrics server provides a REST API with Swagger documentation at `/docs` and can be integrated with Grafana for visualization.
+
+### Interactive CLI
+
+The interactive CLI provides a guided exploration of the pytest-insight API:
+
+```bash
+# Start the interactive CLI
+insight core_api
+
+# Or with a specific profile
+insight core_api --profile my_profile
+```
+
+This interactive shell allows you to:
+- Build complex queries step-by-step
+- Compare test runs with guided workflows
+- Explore test data with rich terminal visualizations
+- Generate sample test data for experimentation
+
+The CLI retains context between steps and provides progressive disclosure of features, making it ideal for both learning the API and for daily test analysis tasks.
 
 ### API Servers
 
