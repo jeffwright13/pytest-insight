@@ -723,7 +723,9 @@ def generate_practice_data(
     context_settings={"help_option_names": ["--help", "-h"]},
 )
 def analyze(
-    profile: str = typer.Option("default", "--profile", "-p", help="Storage profile to use"),
+    profile: Optional[str] = typer.Option(
+        None, "--profile", "-p", help="Storage profile to use (defaults to active profile)"
+    ),
     days: Optional[int] = typer.Option(None, "--days", "-d", help="Number of days to analyze"),
     output: str = typer.Option("text", "--output", "-o", help="Output format (text, json)"),
     chunk_size: int = typer.Option(1000, "--chunk-size", "-c", help="Chunk size for processing large datasets"),
@@ -751,6 +753,11 @@ def analyze(
     try:
         console = Console()
 
+        # Use active profile if none specified
+        if profile is None:
+            active_profile = get_active_profile()
+            profile = active_profile.name
+            
         console.print(f"[bold blue]Using profile:[/bold blue] [cyan]{profile}[/cyan]")
 
         # Load sessions from storage

@@ -492,10 +492,10 @@ def main(
         "-q",
         help="Suppress detailed output, only show essential information",
     ),
-    storage_profile: str = typer.Option(
+    storage_profile: Optional[str] = typer.Option(
         None,
         "--storage-profile",
-        help="Storage profile to use for data generation (preferred over output path)",
+        help="Storage profile to use for data generation (defaults to active profile if not specified)",
     ),
 ):
     """Generate practice test data with configurable parameters.
@@ -564,6 +564,13 @@ def main(
             sut_filter=sut_filter,
             test_categories=test_categories,
         )
+
+        # If no storage profile is specified, use the active profile
+        if storage_profile is None and not output:
+            from pytest_insight.core.storage import get_active_profile
+            active_profile = get_active_profile()
+            storage_profile = active_profile.name
+            print(f"Using active profile: {storage_profile}")
 
         # Generate practice data
         generator.generate_practice_data()

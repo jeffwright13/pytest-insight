@@ -19,7 +19,7 @@ from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.comparison import Comparison
 from pytest_insight.core.insights import Insights
 from pytest_insight.core.query import Query
-from pytest_insight.core.storage import get_profile_manager
+from pytest_insight.core.storage import get_active_profile, get_profile_manager
 
 # Create CLI app
 app = typer.Typer(
@@ -275,7 +275,7 @@ def _start_interactive_shell():
 
     # Initialize context
     context = {
-        "active_profile": "default",
+        "active_profile": get_active_profile().name,  # Use system's active profile
         "queries": {},  # Store queries by name
         "results": {},  # Store results by name
         "current_query": None,
