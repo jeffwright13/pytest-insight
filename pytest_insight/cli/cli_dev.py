@@ -19,9 +19,17 @@ from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.comparison import Comparison
 from pytest_insight.core.core_api import (
     InsightAPI,
+)
+from pytest_insight.core.core_api import (
     analyze as core_analyze,
+)
+from pytest_insight.core.core_api import (
     compare as core_compare,
+)
+from pytest_insight.core.core_api import (
     get_insights as core_get_insights,
+)
+from pytest_insight.core.core_api import (
     query as core_query,
 )
 from pytest_insight.core.insights import Insights
@@ -72,11 +80,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
                     "parameters": [
                         {
                             "name": param_name,
-                            "default": (
-                                param.default
-                                if param.default is not inspect.Parameter.empty
-                                else None
-                            ),
+                            "default": (param.default if param.default is not inspect.Parameter.empty else None),
                             "required": param.default is inspect.Parameter.empty
                             and param.kind != inspect.Parameter.VAR_POSITIONAL
                             and param.kind != inspect.Parameter.VAR_KEYWORD,
@@ -205,23 +209,17 @@ def _execute_stub_method(class_name: str, method_name: str, **kwargs):
     else:
         console.print("No arguments provided", style="yellow")
 
-    console.print(
-        "[yellow]This method is currently stubbed and not fully implemented.[/yellow]"
-    )
+    console.print("[yellow]This method is currently stubbed and not fully implemented.[/yellow]")
     return None
 
 
-def _create_method_command(
-    class_name: str, method_name: str, method_info: Dict[str, Any]
-) -> Callable:
+def _create_method_command(class_name: str, method_name: str, method_info: Dict[str, Any]) -> Callable:
     """Create a command function for a specific API method."""
 
     def command_function(**kwargs):
         """Dynamic command function for API methods."""
         console = Console()
-        console.print(
-            f"Executing {class_name.capitalize()}.{method_name}...", style="blue"
-        )
+        console.print(f"Executing {class_name.capitalize()}.{method_name}...", style="blue")
 
         # Execute the appropriate method
         if class_name == "query":
@@ -230,9 +228,7 @@ def _create_method_command(
             result = _execute_stub_method(class_name, method_name, **kwargs)
 
         if result is not None:
-            _format_rich_output(
-                result, title=f"Result of {class_name.capitalize()}.{method_name}"
-            )
+            _format_rich_output(result, title=f"Result of {class_name.capitalize()}.{method_name}")
 
     # Update function metadata
     command_function.__name__ = f"{class_name}_{method_name}"
@@ -277,9 +273,7 @@ def _register_api_commands():
 def _start_interactive_shell():
     """Start an interactive shell for exploring the API."""
     console = Console()
-    console.print(
-        "[bold green]Starting interactive pytest-insight shell...[/bold green]"
-    )
+    console.print("[bold green]Starting interactive pytest-insight shell...[/bold green]")
     console.print("Type 'help' for a list of commands, 'exit' or 'quit' to exit.")
 
     # Set up the prompt session with history
@@ -371,9 +365,7 @@ def _start_interactive_shell():
     while True:
         try:
             # Get user input with current profile in prompt
-            user_input = prompt_session.prompt(
-                f"\n[pytest-insight:{context['active_profile']}] > "
-            )
+            user_input = prompt_session.prompt(f"\n[pytest-insight:{context['active_profile']}] > ")
 
             # Skip empty input
             if not user_input.strip():
@@ -395,39 +387,21 @@ def _start_interactive_shell():
                 console.print("    exit, quit            - Exit the shell")
                 console.print("    history               - Show command history")
                 console.print("    clear                 - Clear the screen")
-                console.print(
-                    "    debug on/off/status   - Enable/disable/check debug mode"
-                )
-                console.print(
-                    "    python EXPRESSION     - Execute a Python expression in the shell context"
-                )
+                console.print("    debug on/off/status   - Enable/disable/check debug mode")
+                console.print("    python EXPRESSION     - Execute a Python expression in the shell context")
 
                 console.print("\n  [bold cyan]Core API Access:[/bold cyan]")
-                console.print(
-                    "    api help              - Show help for working with core API classes directly"
-                )
-                console.print(
-                    "    api query             - Create a new Query instance using the core API"
-                )
-                console.print(
-                    "    api compare           - Create a new Comparison instance using the core API"
-                )
-                console.print(
-                    "    api analyze           - Create a new Analysis instance using the core API"
-                )
-                console.print(
-                    "    api insights          - Create a new Insights instance using the core API"
-                )
-                console.print(
-                    "    api exec              - Execute a method on a core API object"
-                )
+                console.print("    api help              - Show help for working with core API classes directly")
+                console.print("    api query             - Create a new Query instance using the core API")
+                console.print("    api compare           - Create a new Comparison instance using the core API")
+                console.print("    api analyze           - Create a new Analysis instance using the core API")
+                console.print("    api insights          - Create a new Insights instance using the core API")
+                console.print("    api exec              - Execute a method on a core API object")
 
                 console.print("\n  [bold cyan]Profile Management:[/bold cyan]")
                 console.print("    profile list          - List all available profiles")
                 console.print("    profile create NAME   - Create a new profile")
-                console.print(
-                    "    profile switch NAME   - Switch to a different profile"
-                )
+                console.print("    profile switch NAME   - Switch to a different profile")
                 console.print("    profile active        - Show the active profile")
 
                 console.print("\n  [bold cyan]Query Management:[/bold cyan]")
@@ -437,40 +411,20 @@ def _start_interactive_shell():
                 console.print("    query save NAME       - Save the current query")
                 console.print("    query load NAME       - Load a saved query")
                 console.print("    query execute         - Execute the current query")
-                console.print(
-                    "    query filter_by_test  - Start building test-level filters"
-                )
-                console.print(
-                    "    query test_filter TYPE VALUE - Add a test filter (when in test filter mode)"
-                )
-                console.print(
-                    "    query apply_test_filter - Apply test filters and return to query context"
-                )
+                console.print("    query filter_by_test  - Start building test-level filters")
+                console.print("    query test_filter TYPE VALUE - Add a test filter (when in test filter mode)")
+                console.print("    query apply_test_filter - Apply test filters and return to query context")
 
                 console.print("\n  [bold cyan]Filtering (Detailed):[/bold cyan]")
-                console.print(
-                    "    query filter_by_test  - Start building test-level filters"
-                )
-                console.print(
-                    "    query test_filter TYPE VALUE - Add a test filter (when in test filter mode)"
-                )
-                console.print(
-                    "    query apply_test_filter - Apply test filters and return to query context"
-                )
+                console.print("    query filter_by_test  - Start building test-level filters")
+                console.print("    query test_filter TYPE VALUE - Add a test filter (when in test filter mode)")
+                console.print("    query apply_test_filter - Apply test filters and return to query context")
 
                 console.print("\n  [bold cyan]Filtering (Streamlined):[/bold cyan]")
-                console.print(
-                    "    query filter TYPE VALUE - Add a session-level filter (e.g., days, sut, outcome)"
-                )
-                console.print(
-                    "    query test TYPE VALUE   - Add a test-level filter (automatically applies)"
-                )
-                console.print(
-                    "    query chain FILTER1:VALUE1 FILTER2:VALUE2 ... - Create a complete query in one line"
-                )
-                console.print(
-                    "      Example: query chain days:7 sut:myapp test:outcome:failed test:duration_gt:5"
-                )
+                console.print("    query filter TYPE VALUE - Add a session-level filter (e.g., days, sut, outcome)")
+                console.print("    query test TYPE VALUE   - Add a test-level filter (automatically applies)")
+                console.print("    query chain FILTER1:VALUE1 FILTER2:VALUE2 ... - Create a complete query in one line")
+                console.print("      Example: query chain days:7 sut:myapp test:outcome:failed test:duration_gt:5")
 
                 console.print("\n  [bold cyan]Result Management:[/bold cyan]")
                 console.print("    result list           - List saved results")
@@ -479,14 +433,10 @@ def _start_interactive_shell():
                 console.print("    result compare NAME1 NAME2 - Compare two results")
 
                 console.print("\n  [bold cyan]Session Management:[/bold cyan]")
-                console.print(
-                    "    session list          - List sessions in current result"
-                )
+                console.print("    session list          - List sessions in current result")
                 console.print("    session show ID       - Show details of a session")
                 console.print("    session tests ID      - List tests in a session")
-                console.print(
-                    "    session failures ID   - List failed tests in a session"
-                )
+                console.print("    session failures ID   - List failed tests in a session")
                 continue
 
             # History command
@@ -496,15 +446,10 @@ def _start_interactive_shell():
                 table.add_column("Command")
                 table.add_column("Result")
 
-                for i, item in enumerate(
-                    context["history"][:-1]
-                ):  # Skip current command
+                for i, item in enumerate(context["history"][:-1]):  # Skip current command
                     result_summary = "N/A"
                     if item["result"]:
-                        if (
-                            isinstance(item["result"], dict)
-                            and "summary" in item["result"]
-                        ):
+                        if isinstance(item["result"], dict) and "summary" in item["result"]:
                             result_summary = item["result"]["summary"]
                         else:
                             result_summary = (
@@ -516,71 +461,46 @@ def _start_interactive_shell():
                     table.add_row(str(i), item["command"], result_summary)
 
                 console.print(table)
-                context["history"][history_index]["result"] = {
-                    "summary": "Showed command history"
-                }
+                context["history"][history_index]["result"] = {"summary": "Showed command history"}
                 continue
 
             # Clear command
             if user_input.lower() == "clear":
                 console.clear()
-                context["history"][history_index]["result"] = {
-                    "action": "cleared screen"
-                }
+                context["history"][history_index]["result"] = {"action": "cleared screen"}
                 continue
 
             # Debug command
             elif user_input.lower().startswith("debug"):
                 parts = user_input.lower().split()
                 if len(parts) < 2:
-                    console.print(
-                        "[bold red]Error:[/bold red] Debug command requires an argument (on, off, or status)"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Missing debug argument"
-                    }
+                    console.print("[bold red]Error:[/bold red] Debug command requires an argument (on, off, or status)")
+                    context["history"][history_index]["result"] = {"error": "Missing debug argument"}
                     continue
 
                 debug_action = parts[1]
                 if debug_action == "on":
                     context["debug_mode"] = True
                     console.print("[bold green]Debug mode enabled[/bold green]")
-                    context["history"][history_index]["result"] = {
-                        "action": "debug mode enabled"
-                    }
+                    context["history"][history_index]["result"] = {"action": "debug mode enabled"}
                 elif debug_action == "off":
                     context["debug_mode"] = False
                     console.print("[bold yellow]Debug mode disabled[/bold yellow]")
-                    context["history"][history_index]["result"] = {
-                        "action": "debug mode disabled"
-                    }
+                    context["history"][history_index]["result"] = {"action": "debug mode disabled"}
                 elif debug_action == "status":
                     status = "enabled" if context["debug_mode"] else "disabled"
-                    console.print(
-                        f"[bold blue]Debug mode is currently {status}[/bold blue]"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "status": f"debug mode {status}"
-                    }
+                    console.print(f"[bold blue]Debug mode is currently {status}[/bold blue]")
+                    context["history"][history_index]["result"] = {"status": f"debug mode {status}"}
                 else:
-                    console.print(
-                        "[bold red]Error:[/bold red] Invalid debug argument. Use 'on', 'off', or 'status'"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Invalid debug argument"
-                    }
+                    console.print("[bold red]Error:[/bold red] Invalid debug argument. Use 'on', 'off', or 'status'")
+                    context["history"][history_index]["result"] = {"error": "Invalid debug argument"}
                 continue
 
             # Query chain command - show current query chain
-            elif (
-                user_input.lower() == "query chain"
-                or user_input.lower() == "query.chain"
-            ):
+            elif user_input.lower() == "query chain" or user_input.lower() == "query.chain":
                 if context["current_query"] is None:
                     console.print("[bold red]Error:[/bold red] No active query")
-                    context["history"][history_index]["result"] = {
-                        "error": "No active query"
-                    }
+                    context["history"][history_index]["result"] = {"error": "No active query"}
                     continue
 
                 # Get the chain of methods that have been called
@@ -620,18 +540,12 @@ def _start_interactive_shell():
 
                 # Show more detailed information in debug mode
                 if context["debug_mode"]:
-                    console.print(
-                        "\n[bold blue]DEBUG: Query Object Details:[/bold blue]"
-                    )
+                    console.print("\n[bold blue]DEBUG: Query Object Details:[/bold blue]")
 
                     # Show all attributes of the query object
                     for attr_name in dir(query_obj):
                         # Skip private attributes and methods
-                        if (
-                            attr_name.startswith("_")
-                            and attr_name != "_profile_name"
-                            and attr_name != "_filters"
-                        ):
+                        if attr_name.startswith("_") and attr_name != "_profile_name" and attr_name != "_filters":
                             continue
 
                         # Skip methods
@@ -643,12 +557,8 @@ def _start_interactive_shell():
                         console.print(f"[blue]{attr_name}: {repr(attr)}[/blue]")
 
                     # Show equivalent Python code
-                    console.print(
-                        "\n[bold blue]DEBUG: Equivalent Python Code:[/bold blue]"
-                    )
-                    console.print(
-                        "[blue]from pytest_insight.core.query import Query[/blue]"
-                    )
+                    console.print("\n[bold blue]DEBUG: Equivalent Python Code:[/bold blue]")
+                    console.print("[blue]from pytest_insight.core.query import Query[/blue]")
                     console.print(f"[blue]query = {chain_str}[/blue]")
                     console.print("[blue]result = query.execute()[/blue]")
 
@@ -659,12 +569,8 @@ def _start_interactive_shell():
             elif user_input.lower().startswith("query."):
                 parts = user_input.lower().split(".", 1)
                 if len(parts) < 2:
-                    console.print(
-                        "[bold red]Error:[/bold red] Invalid query command format"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Invalid query command format"
-                    }
+                    console.print("[bold red]Error:[/bold red] Invalid query command format")
+                    context["history"][history_index]["result"] = {"error": "Invalid query command format"}
                     continue
 
                 # Extract method name and arguments
@@ -702,9 +608,7 @@ def _start_interactive_shell():
 
                 # Show debug information if debug mode is enabled
                 if context["debug_mode"]:
-                    console.print(
-                        "[bold blue]DEBUG: Executing Python API call:[/bold blue]"
-                    )
+                    console.print("[bold blue]DEBUG: Executing Python API call:[/bold blue]")
                     arg_display = ", ".join([repr(a) for a in args])
                     api_call = f"Query.{method_name}({arg_display})"
                     console.print(f"[blue]{api_call}[/blue]")
@@ -714,9 +618,7 @@ def _start_interactive_shell():
                     # Special handling for chain command
                     if context["current_query"] is None:
                         console.print("[bold red]Error:[/bold red] No active query")
-                        context["history"][history_index]["result"] = {
-                            "error": "No active query"
-                        }
+                        context["history"][history_index]["result"] = {"error": "No active query"}
                         continue
 
                     # Get the chain of methods that have been called
@@ -748,30 +650,20 @@ def _start_interactive_shell():
                                 chain_str += f".with_session_tag('{filter_value}')"
                                 chain.append(f"with_session_tag('{filter_value}')")
                             elif filter_type == "session_id_pattern":
-                                chain_str += (
-                                    f".with_session_id_pattern('{filter_value}')"
-                                )
-                                chain.append(
-                                    f"with_session_id_pattern('{filter_value}')"
-                                )
+                                chain_str += f".with_session_id_pattern('{filter_value}')"
+                                chain.append(f"with_session_id_pattern('{filter_value}')")
 
                     console.print("[bold]Current Query Chain:[/bold]")
                     console.print(chain_str)
 
                     # Show more detailed information in debug mode
                     if context["debug_mode"]:
-                        console.print(
-                            "\n[bold blue]DEBUG: Query Object Details:[/bold blue]"
-                        )
+                        console.print("\n[bold blue]DEBUG: Query Object Details:[/bold blue]")
 
                         # Show all attributes of the query object
                         for attr_name in dir(query_obj):
                             # Skip private attributes and methods
-                            if (
-                                attr_name.startswith("_")
-                                and attr_name != "_profile_name"
-                                and attr_name != "_filters"
-                            ):
+                            if attr_name.startswith("_") and attr_name != "_profile_name" and attr_name != "_filters":
                                 continue
 
                             # Skip methods
@@ -783,12 +675,8 @@ def _start_interactive_shell():
                             console.print(f"[blue]{attr_name}: {repr(attr)}[/blue]")
 
                         # Show equivalent Python code
-                        console.print(
-                            "\n[bold blue]DEBUG: Equivalent Python Code:[/bold blue]"
-                        )
-                        console.print(
-                            "[blue]from pytest_insight.core.query import Query[/blue]"
-                        )
+                        console.print("\n[bold blue]DEBUG: Equivalent Python Code:[/bold blue]")
+                        console.print("[blue]from pytest_insight.core.query import Query[/blue]")
                         console.print(f"[blue]query = {chain_str}[/blue]")
                         console.print("[blue]result = query.execute()[/blue]")
 
@@ -805,14 +693,8 @@ def _start_interactive_shell():
                             context["current_result"] = result
 
                             # Display result summary
-                            session_count = (
-                                len(result.sessions)
-                                if hasattr(result, "sessions")
-                                else 0
-                            )
-                            console.print(
-                                "[bold green]Query executed successfully.[/bold green]"
-                            )
+                            session_count = len(result.sessions) if hasattr(result, "sessions") else 0
+                            console.print("[bold green]Query executed successfully.[/bold green]")
                             console.print(f"Found {session_count} sessions.")
 
                             # Create a table to display the sessions
@@ -823,9 +705,7 @@ def _start_interactive_shell():
                             table.add_column("Duration (s)")
                             table.add_column("Tests")
 
-                            for session in result.sessions[
-                                :10
-                            ]:  # Limit to 10 sessions for display
+                            for session in result.sessions[:10]:  # Limit to 10 sessions for display
                                 table.add_row(
                                     session.session_id,
                                     session.sut_name,
@@ -837,9 +717,7 @@ def _start_interactive_shell():
                             console.print(table)
 
                             if len(result.sessions) > 10:
-                                console.print(
-                                    f"Showing 10 of {len(result.sessions)} sessions."
-                                )
+                                console.print(f"Showing 10 of {len(result.sessions)} sessions.")
                         else:
                             # For other methods, update the query object
                             result = method(context["current_query"], *args)
@@ -847,9 +725,7 @@ def _start_interactive_shell():
                             # If the method returns a new Query object, update current_query
                             if isinstance(result, Query):
                                 context["current_query"] = result
-                                console.print(
-                                    f"[bold green]Applied {method_name}[/bold green]"
-                                )
+                                console.print(f"[bold green]Applied {method_name}[/bold green]")
                             else:
                                 console.print(
                                     f"[bold yellow]Warning: {method_name} did not return a Query object[/bold yellow]"
@@ -860,18 +736,12 @@ def _start_interactive_shell():
                                 "args": args,
                             }
                     except Exception as e:
-                        console.print(
-                            f"[bold red]Error executing {method_name}:[/bold red] {str(e)}"
-                        )
+                        console.print(f"[bold red]Error executing {method_name}:[/bold red] {str(e)}")
                         console.print(traceback.format_exc(), style="red")
                         context["history"][history_index]["result"] = {"error": str(e)}
                 else:
-                    console.print(
-                        f"[bold red]Error:[/bold red] Unknown query method: {method_name}"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": f"Unknown query method: {method_name}"
-                    }
+                    console.print(f"[bold red]Error:[/bold red] Unknown query method: {method_name}")
+                    context["history"][history_index]["result"] = {"error": f"Unknown query method: {method_name}"}
 
                 continue
 
@@ -885,12 +755,8 @@ def _start_interactive_shell():
             # Profile management commands
             if command == "profile":
                 if len(parts) < 2:
-                    console.print(
-                        "[bold red]Error:[/bold red] Missing profile subcommand"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Missing profile subcommand"
-                    }
+                    console.print("[bold red]Error:[/bold red] Missing profile subcommand")
+                    context["history"][history_index]["result"] = {"error": "Missing profile subcommand"}
                     continue
 
                 subcommand = parts[1].lower()
@@ -933,67 +799,43 @@ def _start_interactive_shell():
                         table.add_row(name, file_path, file_size, is_active)
 
                     console.print(table)
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Listed {len(profiles)} profiles"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Listed {len(profiles)} profiles"}
                 elif subcommand == "create":
                     if len(parts) < 3:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing profile name"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing profile name"
-                        }
+                        console.print("[bold red]Error:[/bold red] Missing profile name")
+                        context["history"][history_index]["result"] = {"error": "Missing profile name"}
                         continue
 
                     name = parts[2]
                     console.print(f"Created profile [bold]{name}[/bold]")
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Created profile {name}"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Created profile {name}"}
 
                 elif subcommand == "switch":
                     if len(parts) < 3:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing profile name"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing profile name"
-                        }
+                        console.print("[bold red]Error:[/bold red] Missing profile name")
+                        context["history"][history_index]["result"] = {"error": "Missing profile name"}
                         continue
 
                     name = parts[2]
                     context["active_profile"] = name
                     console.print(f"Switched to profile [bold]{name}[/bold]")
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Switched to profile {name}"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Switched to profile {name}"}
 
                 elif subcommand == "active":
-                    console.print(
-                        f"Active profile: [bold]{context['active_profile']}[/bold]"
-                    )
+                    console.print(f"Active profile: [bold]{context['active_profile']}[/bold]")
                     context["history"][history_index]["result"] = {
                         "summary": f"Active profile: {context['active_profile']}"
                     }
 
                 else:
-                    console.print(
-                        f"[bold red]Error:[/bold red] Unknown profile subcommand: {subcommand}"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": f"Unknown profile subcommand: {subcommand}"
-                    }
+                    console.print(f"[bold red]Error:[/bold red] Unknown profile subcommand: {subcommand}")
+                    context["history"][history_index]["result"] = {"error": f"Unknown profile subcommand: {subcommand}"}
 
             # Query commands
             elif command == "query":
                 if len(parts) < 2:
-                    console.print(
-                        "[bold red]Error:[/bold red] Missing query subcommand"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Missing query subcommand"
-                    }
+                    console.print("[bold red]Error:[/bold red] Missing query subcommand")
+                    context["history"][history_index]["result"] = {"error": "Missing query subcommand"}
                     continue
 
                 subcommand = parts[1].lower()
@@ -1001,16 +843,12 @@ def _start_interactive_shell():
                 if subcommand == "new":
                     context["current_query"] = Query()
                     console.print("Created a new query")
-                    context["history"][history_index]["result"] = {
-                        "summary": "Created new query"
-                    }
+                    context["history"][history_index]["result"] = {"summary": "Created new query"}
 
                 elif subcommand == "list":
                     if not context["queries"]:
                         console.print("No saved queries")
-                        context["history"][history_index]["result"] = {
-                            "summary": "No saved queries"
-                        }
+                        context["history"][history_index]["result"] = {"summary": "No saved queries"}
                         continue
 
                     table = Table(title="Saved Queries")
@@ -1029,19 +867,13 @@ def _start_interactive_shell():
                 elif subcommand == "show":
                     if len(parts) < 3:
                         console.print("[bold red]Error:[/bold red] Missing query name")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing query name"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing query name"}
                         continue
 
                     name = parts[2]
                     if name not in context["queries"]:
-                        console.print(
-                            f"[bold red]Error:[/bold red] Query '{name}' not found"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": f"Query '{name}' not found"
-                        }
+                        console.print(f"[bold red]Error:[/bold red] Query '{name}' not found")
+                        context["history"][history_index]["result"] = {"error": f"Query '{name}' not found"}
                         continue
 
                     query = context["queries"][name]
@@ -1054,69 +886,47 @@ def _start_interactive_shell():
 
                 elif subcommand == "save":
                     if not context["current_query"]:
-                        console.print(
-                            "[bold red]Error:[/bold red] No active query to save"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active query to save"
-                        }
+                        console.print("[bold red]Error:[/bold red] No active query to save")
+                        context["history"][history_index]["result"] = {"error": "No active query to save"}
                         continue
 
                     if len(parts) < 3:
                         console.print("[bold red]Error:[/bold red] Missing query name")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing query name"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing query name"}
                         continue
 
                     name = parts[2]
                     context["queries"][name] = context["current_query"]
                     console.print(f"Saved query as [bold]{name}[/bold]")
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Saved query as {name}"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Saved query as {name}"}
 
                 elif subcommand == "load":
                     if len(parts) < 3:
                         console.print("[bold red]Error:[/bold red] Missing query name")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing query name"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing query name"}
                         continue
 
                     name = parts[2]
                     if name not in context["queries"]:
-                        console.print(
-                            f"[bold red]Error:[/bold red] Query '{name}' not found"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": f"Query '{name}' not found"
-                        }
+                        console.print(f"[bold red]Error:[/bold red] Query '{name}' not found")
+                        context["history"][history_index]["result"] = {"error": f"Query '{name}' not found"}
                         continue
 
                     context["current_query"] = context["queries"][name]
                     console.print(f"Loaded query [bold]{name}[/bold]")
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Loaded query {name}"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Loaded query {name}"}
 
                 elif subcommand == "execute":
                     if not context["current_query"]:
-                        console.print(
-                            "[bold red]Error:[/bold red] No active query to execute"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active query to execute"
-                        }
+                        console.print("[bold red]Error:[/bold red] No active query to execute")
+                        context["history"][history_index]["result"] = {"error": "No active query to execute"}
                         continue
 
                     try:
                         result = context["current_query"].execute()
                         context["current_result"] = result
 
-                        console.print(
-                            f"Query executed successfully. Found {len(result.sessions)} sessions."
-                        )
+                        console.print(f"Query executed successfully. Found {len(result.sessions)} sessions.")
                         context["history"][history_index]["result"] = {
                             "summary": f"Query executed, found {len(result.sessions)} sessions",
                             "session_count": len(result.sessions),
@@ -1130,9 +940,7 @@ def _start_interactive_shell():
                             table.add_column("Duration (s)")
                             table.add_column("Tests")
 
-                            for session in result.sessions[
-                                :10
-                            ]:  # Limit to 10 sessions for display
+                            for session in result.sessions[:10]:  # Limit to 10 sessions for display
                                 table.add_row(
                                     session.session_id,
                                     session.sut_name,
@@ -1144,9 +952,7 @@ def _start_interactive_shell():
                             console.print(table)
 
                             if len(result.sessions) > 10:
-                                console.print(
-                                    f"Showing 10 of {len(result.sessions)} sessions."
-                                )
+                                console.print(f"Showing 10 of {len(result.sessions)} sessions.")
                     except Exception as e:
                         console.print(f"[bold red]Error:[/bold red] {str(e)}")
                         console.print(traceback.format_exc(), style="red")
@@ -1154,46 +960,29 @@ def _start_interactive_shell():
 
                 elif subcommand == "filter_by_test":
                     if not context["current_query"]:
-                        console.print(
-                            "[bold red]Error:[/bold red] No active query. Use 'query new' first."
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active query to filter"
-                        }
+                        console.print("[bold red]Error:[/bold red] No active query. Use 'query new' first.")
+                        context["history"][history_index]["result"] = {"error": "No active query to filter"}
                         continue
 
                     # Enter test filter mode
                     context["in_test_filter"] = True
-                    context["test_filter_builder"] = context[
-                        "current_query"
-                    ].filter_by_test()
+                    context["test_filter_builder"] = context["current_query"].filter_by_test()
                     console.print(
                         "[bold green]Entered test filter mode.[/bold green] Use 'query test_filter TYPE VALUE' to add filters and 'query apply_test_filter' when done."
                     )
-                    context["history"][history_index]["result"] = {
-                        "summary": "Entered test filter mode"
-                    }
+                    context["history"][history_index]["result"] = {"summary": "Entered test filter mode"}
 
                 elif subcommand == "test_filter":
-                    if (
-                        not context["in_test_filter"]
-                        or not context["test_filter_builder"]
-                    ):
+                    if not context["in_test_filter"] or not context["test_filter_builder"]:
                         console.print(
                             "[bold red]Error:[/bold red] Not in test filter mode. Use 'query filter_by_test' first."
                         )
-                        context["history"][history_index]["result"] = {
-                            "error": "Not in test filter mode"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Not in test filter mode"}
                         continue
 
                     if len(parts) < 4:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing filter type or value"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing filter type or value"
-                        }
+                        console.print("[bold red]Error:[/bold red] Missing filter type or value")
+                        context["history"][history_index]["result"] = {"error": "Missing filter type or value"}
                         continue
 
                     filter_type = parts[2].lower()
@@ -1205,30 +994,22 @@ def _start_interactive_shell():
                         if filter_type == "outcome":
                             builder = builder.with_outcome(filter_value)
                         elif filter_type == "duration_gt":
-                            builder = builder.with_duration_greater_than(
-                                float(filter_value)
-                            )
+                            builder = builder.with_duration_greater_than(float(filter_value))
                         elif filter_type == "duration_lt":
-                            builder = builder.with_duration_less_than(
-                                float(filter_value)
-                            )
+                            builder = builder.with_duration_less_than(float(filter_value))
                         elif filter_type == "nodeid":
                             builder = builder.with_nodeid_pattern(filter_value)
                         elif filter_type == "name":
                             builder = builder.with_name_pattern(filter_value)
                         else:
-                            console.print(
-                                f"[bold red]Error:[/bold red] Unknown test filter type: {filter_type}"
-                            )
+                            console.print(f"[bold red]Error:[/bold red] Unknown test filter type: {filter_type}")
                             context["history"][history_index]["result"] = {
                                 "error": f"Unknown test filter type: {filter_type}"
                             }
                             continue
 
                         context["test_filter_builder"] = builder
-                        console.print(
-                            f"Added test filter: {filter_type} = {filter_value}"
-                        )
+                        console.print(f"Added test filter: {filter_type} = {filter_value}")
                         context["history"][history_index]["result"] = {
                             "summary": f"Added test filter: {filter_type} = {filter_value}"
                         }
@@ -1238,31 +1019,20 @@ def _start_interactive_shell():
                         context["history"][history_index]["result"] = {"error": str(e)}
 
                 elif subcommand == "apply_test_filter":
-                    if (
-                        not context["in_test_filter"]
-                        or not context["test_filter_builder"]
-                    ):
+                    if not context["in_test_filter"] or not context["test_filter_builder"]:
                         console.print(
                             "[bold red]Error:[/bold red] Not in test filter mode. Use 'query filter_by_test' first."
                         )
-                        context["history"][history_index]["result"] = {
-                            "error": "Not in test filter mode"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Not in test filter mode"}
                         continue
 
                     try:
                         # Apply the test filters and return to query context
-                        context["current_query"] = context[
-                            "test_filter_builder"
-                        ].apply()
+                        context["current_query"] = context["test_filter_builder"].apply()
                         context["in_test_filter"] = False
                         context["test_filter_builder"] = None
-                        console.print(
-                            "[bold green]Applied test filters.[/bold green] Returned to query context."
-                        )
-                        context["history"][history_index]["result"] = {
-                            "summary": "Applied test filters"
-                        }
+                        console.print("[bold green]Applied test filters.[/bold green] Returned to query context.")
+                        context["history"][history_index]["result"] = {"summary": "Applied test filters"}
                     except Exception as e:
                         console.print(f"[bold red]Error:[/bold red] {str(e)}")
                         console.print(traceback.format_exc(), style="red")
@@ -1270,21 +1040,13 @@ def _start_interactive_shell():
 
                 elif subcommand == "filter":
                     if not context["current_query"]:
-                        console.print(
-                            "[bold red]Error:[/bold red] No active query. Use 'query new' first."
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active query to filter"
-                        }
+                        console.print("[bold red]Error:[/bold red] No active query. Use 'query new' first.")
+                        context["history"][history_index]["result"] = {"error": "No active query to filter"}
                         continue
 
                     if len(parts) < 4:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing filter type or value"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing filter type or value"
-                        }
+                        console.print("[bold red]Error:[/bold red] Missing filter type or value")
+                        context["history"][history_index]["result"] = {"error": "Missing filter type or value"}
                         continue
 
                     filter_type = parts[2].lower()
@@ -1308,9 +1070,7 @@ def _start_interactive_shell():
                         elif filter_type == "nodeid":
                             query = query.test_nodeid_contains(filter_value)
                         else:
-                            console.print(
-                                f"[bold red]Error:[/bold red] Unknown filter type: {filter_type}"
-                            )
+                            console.print(f"[bold red]Error:[/bold red] Unknown filter type: {filter_type}")
                             context["history"][history_index]["result"] = {
                                 "error": f"Unknown filter type: {filter_type}"
                             }
@@ -1328,21 +1088,13 @@ def _start_interactive_shell():
 
                 elif subcommand == "test":
                     if not context["current_query"]:
-                        console.print(
-                            "[bold red]Error:[/bold red] No active query. Use 'query new' first."
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active query to filter"
-                        }
+                        console.print("[bold red]Error:[/bold red] No active query. Use 'query new' first.")
+                        context["history"][history_index]["result"] = {"error": "No active query to filter"}
                         continue
 
                     if len(parts) < 4:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing filter type or value"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing filter type or value"
-                        }
+                        console.print("[bold red]Error:[/bold red] Missing filter type or value")
+                        context["history"][history_index]["result"] = {"error": "Missing filter type or value"}
                         continue
 
                     filter_type = parts[2].lower()
@@ -1352,30 +1104,22 @@ def _start_interactive_shell():
                         # Create a test filter builder if not already in test mode
                         if not context["in_test_filter"]:
                             context["in_test_filter"] = True
-                            context["test_filter_builder"] = context[
-                                "current_query"
-                            ].filter_by_test()
+                            context["test_filter_builder"] = context["current_query"].filter_by_test()
 
                         builder = context["test_filter_builder"]
 
                         if filter_type == "outcome":
                             builder = builder.with_outcome(filter_value)
                         elif filter_type == "duration_gt":
-                            builder = builder.with_duration_greater_than(
-                                float(filter_value)
-                            )
+                            builder = builder.with_duration_greater_than(float(filter_value))
                         elif filter_type == "duration_lt":
-                            builder = builder.with_duration_less_than(
-                                float(filter_value)
-                            )
+                            builder = builder.with_duration_less_than(float(filter_value))
                         elif filter_type == "nodeid":
                             builder = builder.with_nodeid_pattern(filter_value)
                         elif filter_type == "name":
                             builder = builder.with_name_pattern(filter_value)
                         else:
-                            console.print(
-                                f"[bold red]Error:[/bold red] Unknown test filter type: {filter_type}"
-                            )
+                            console.print(f"[bold red]Error:[/bold red] Unknown test filter type: {filter_type}")
                             context["history"][history_index]["result"] = {
                                 "error": f"Unknown test filter type: {filter_type}"
                             }
@@ -1388,9 +1132,7 @@ def _start_interactive_shell():
                         context["in_test_filter"] = False
                         context["test_filter_builder"] = None
 
-                        console.print(
-                            f"Added and applied test filter: {filter_type} = {filter_value}"
-                        )
+                        console.print(f"Added and applied test filter: {filter_type} = {filter_value}")
                         context["history"][history_index]["result"] = {
                             "summary": f"Added and applied test filter: {filter_type} = {filter_value}"
                         }
@@ -1401,12 +1143,8 @@ def _start_interactive_shell():
 
                 elif subcommand == "chain":
                     if len(parts) < 3:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing filter specifications"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing filter specifications"
-                        }
+                        console.print("[bold red]Error:[/bold red] Missing filter specifications")
+                        context["history"][history_index]["result"] = {"error": "Missing filter specifications"}
                         continue
 
                     # Create a new query
@@ -1424,9 +1162,7 @@ def _start_interactive_shell():
                         for spec in filter_specs:
                             # Parse filter specification (type:value)
                             if ":" not in spec:
-                                raise ValueError(
-                                    f"Invalid filter specification: {spec}. Format should be type:value"
-                                )
+                                raise ValueError(f"Invalid filter specification: {spec}. Format should be type:value")
 
                             parts = spec.split(":", 1)
                             filter_type = parts[0].lower()
@@ -1444,41 +1180,23 @@ def _start_interactive_shell():
 
                                 # Apply the test filter
                                 if test_filter_type == "outcome":
-                                    test_filter_builder = (
-                                        test_filter_builder.with_outcome(filter_value)
-                                    )
+                                    test_filter_builder = test_filter_builder.with_outcome(filter_value)
                                 elif test_filter_type == "duration_gt":
-                                    test_filter_builder = (
-                                        test_filter_builder.with_duration_greater_than(
-                                            float(filter_value)
-                                        )
+                                    test_filter_builder = test_filter_builder.with_duration_greater_than(
+                                        float(filter_value)
                                     )
                                 elif test_filter_type == "duration_lt":
-                                    test_filter_builder = (
-                                        test_filter_builder.with_duration_less_than(
-                                            float(filter_value)
-                                        )
+                                    test_filter_builder = test_filter_builder.with_duration_less_than(
+                                        float(filter_value)
                                     )
                                 elif test_filter_type == "nodeid":
-                                    test_filter_builder = (
-                                        test_filter_builder.with_nodeid_pattern(
-                                            filter_value
-                                        )
-                                    )
+                                    test_filter_builder = test_filter_builder.with_nodeid_pattern(filter_value)
                                 elif test_filter_type == "name":
-                                    test_filter_builder = (
-                                        test_filter_builder.with_name_pattern(
-                                            filter_value
-                                        )
-                                    )
+                                    test_filter_builder = test_filter_builder.with_name_pattern(filter_value)
                                 else:
-                                    raise ValueError(
-                                        f"Unknown test filter type: {test_filter_type}"
-                                    )
+                                    raise ValueError(f"Unknown test filter type: {test_filter_type}")
 
-                                applied_filters.append(
-                                    f"test:{test_filter_type}:{filter_value}"
-                                )
+                                applied_filters.append(f"test:{test_filter_type}:{filter_value}")
                             else:
                                 # If we were in test filter mode, apply those filters first
                                 if in_test_filter:
@@ -1502,9 +1220,7 @@ def _start_interactive_shell():
                                 elif filter_type == "nodeid":
                                     query = query.test_nodeid_contains(filter_value)
                                 else:
-                                    raise ValueError(
-                                        f"Unknown filter type: {filter_type}"
-                                    )
+                                    raise ValueError(f"Unknown filter type: {filter_type}")
 
                                 applied_filters.append(f"{filter_type}:{filter_value}")
 
@@ -1516,9 +1232,7 @@ def _start_interactive_shell():
                         context["current_query"] = query
 
                         # Show summary
-                        console.print(
-                            "[bold green]Created query with filters:[/bold green]"
-                        )
+                        console.print("[bold green]Created query with filters:[/bold green]")
                         for filter_spec in applied_filters:
                             console.print(f"  - {filter_spec}")
 
@@ -1534,12 +1248,8 @@ def _start_interactive_shell():
             # Result commands
             elif command == "result":
                 if len(parts) < 2:
-                    console.print(
-                        "[bold red]Error:[/bold red] Missing result subcommand"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Missing result subcommand"
-                    }
+                    console.print("[bold red]Error:[/bold red] Missing result subcommand")
+                    context["history"][history_index]["result"] = {"error": "Missing result subcommand"}
                     continue
 
                 subcommand = parts[1].lower()
@@ -1547,9 +1257,7 @@ def _start_interactive_shell():
                 if subcommand == "list":
                     if not context["results"]:
                         console.print("No saved results")
-                        context["history"][history_index]["result"] = {
-                            "summary": "No saved results"
-                        }
+                        context["history"][history_index]["result"] = {"summary": "No saved results"}
                         continue
 
                     table = Table(title="Saved Results")
@@ -1567,19 +1275,13 @@ def _start_interactive_shell():
                 elif subcommand == "show":
                     if len(parts) < 3:
                         console.print("[bold red]Error:[/bold red] Missing result name")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing result name"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing result name"}
                         continue
 
                     name = parts[2]
                     if name not in context["results"]:
-                        console.print(
-                            f"[bold red]Error:[/bold red] Result '{name}' not found"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": f"Result '{name}' not found"
-                        }
+                        console.print(f"[bold red]Error:[/bold red] Result '{name}' not found")
+                        context["history"][history_index]["result"] = {"error": f"Result '{name}' not found"}
                         continue
 
                     result = context["results"][name]
@@ -1594,9 +1296,7 @@ def _start_interactive_shell():
                         table.add_column("Duration (s)")
                         table.add_column("Tests")
 
-                        for session in result.sessions[
-                            :10
-                        ]:  # Limit to 10 sessions for display
+                        for session in result.sessions[:10]:  # Limit to 10 sessions for display
                             table.add_row(
                                 session.session_id,
                                 session.sut_name,
@@ -1608,67 +1308,43 @@ def _start_interactive_shell():
                         console.print(table)
 
                         if len(result.sessions) > 10:
-                            console.print(
-                                f"Showing 10 of {len(result.sessions)} sessions."
-                            )
+                            console.print(f"Showing 10 of {len(result.sessions)} sessions.")
 
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Showed result {name}"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Showed result {name}"}
 
                 elif subcommand == "save":
                     if not context["current_result"]:
-                        console.print(
-                            "[bold red]Error:[/bold red] No active result to save"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active result to save"
-                        }
+                        console.print("[bold red]Error:[/bold red] No active result to save")
+                        context["history"][history_index]["result"] = {"error": "No active result to save"}
                         continue
 
                     if len(parts) < 3:
                         console.print("[bold red]Error:[/bold red] Missing result name")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing result name"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing result name"}
                         continue
 
                     name = parts[2]
                     context["results"][name] = context["current_result"]
                     console.print(f"Saved result as [bold]{name}[/bold]")
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Saved result as {name}"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Saved result as {name}"}
 
                 elif subcommand == "compare":
                     if len(parts) < 4:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing result names to compare"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing result names to compare"
-                        }
+                        console.print("[bold red]Error:[/bold red] Missing result names to compare")
+                        context["history"][history_index]["result"] = {"error": "Missing result names to compare"}
                         continue
 
                     name1 = parts[2]
                     name2 = parts[3]
 
                     if name1 not in context["results"]:
-                        console.print(
-                            f"[bold red]Error:[/bold red] Result '{name1}' not found"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": f"Result '{name1}' not found"
-                        }
+                        console.print(f"[bold red]Error:[/bold red] Result '{name1}' not found")
+                        context["history"][history_index]["result"] = {"error": f"Result '{name1}' not found"}
                         continue
 
                     if name2 not in context["results"]:
-                        console.print(
-                            f"[bold red]Error:[/bold red] Result '{name2}' not found"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": f"Result '{name2}' not found"
-                        }
+                        console.print(f"[bold red]Error:[/bold red] Result '{name2}' not found")
+                        context["history"][history_index]["result"] = {"error": f"Result '{name2}' not found"}
                         continue
 
                     result1 = context["results"][name1]
@@ -1704,64 +1380,39 @@ def _start_interactive_shell():
                     )
 
                     console.print(table)
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Compared results {name1} and {name2}"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Compared results {name1} and {name2}"}
 
                 else:
-                    console.print(
-                        f"[bold red]Error:[/bold red] Unknown result subcommand: {subcommand}"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": f"Unknown result subcommand: {subcommand}"
-                    }
+                    console.print(f"[bold red]Error:[/bold red] Unknown result subcommand: {subcommand}")
+                    context["history"][history_index]["result"] = {"error": f"Unknown result subcommand: {subcommand}"}
 
             # Session commands
             elif user_input.lower().startswith("session."):
                 if context["current_result"] is None:
-                    console.print(
-                        "[bold red]Error:[/bold red] No query results available. Execute a query first."
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "No query results"
-                    }
+                    console.print("[bold red]Error:[/bold red] No query results available. Execute a query first.")
+                    context["history"][history_index]["result"] = {"error": "No query results"}
                     continue
 
                 parts = user_input.split(".", 1)
                 if len(parts) < 2:
-                    console.print(
-                        "[bold red]Error:[/bold red] Invalid session command format"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Invalid session command format"
-                    }
+                    console.print("[bold red]Error:[/bold red] Invalid session command format")
+                    context["history"][history_index]["result"] = {"error": "Invalid session command format"}
                     continue
 
                 subcommand = parts[1].strip()
 
                 # Show debug information if debug mode is enabled
                 if context["debug_mode"]:
-                    console.print(
-                        "[bold blue]DEBUG: Executing session operation:[/bold blue]"
-                    )
+                    console.print("[bold blue]DEBUG: Executing session operation:[/bold blue]")
                     if hasattr(context["current_result"], "sessions"):
                         session_count = len(context["current_result"].sessions)
-                        console.print(
-                            f"[blue]# Processing QueryResult with {session_count} sessions[/blue]"
-                        )
+                        console.print(f"[blue]# Processing QueryResult with {session_count} sessions[/blue]")
                         console.print(f"[blue]# Operation: {subcommand}[/blue]")
 
                 if subcommand == "list":
-                    if (
-                        not context["current_result"]
-                        or not context["current_result"].sessions
-                    ):
-                        console.print(
-                            "[bold red]Error:[/bold red] No active result with sessions"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active result with sessions"
-                        }
+                    if not context["current_result"] or not context["current_result"].sessions:
+                        console.print("[bold red]Error:[/bold red] No active result with sessions")
+                        context["history"][history_index]["result"] = {"error": "No active result with sessions"}
                         continue
 
                     table = Table(title="Sessions")
@@ -1786,42 +1437,25 @@ def _start_interactive_shell():
                     }
 
                 elif subcommand == "show":
-                    if (
-                        not context["current_result"]
-                        or not context["current_result"].sessions
-                    ):
-                        console.print(
-                            "[bold red]Error:[/bold red] No active result with sessions"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active result with sessions"
-                        }
+                    if not context["current_result"] or not context["current_result"].sessions:
+                        console.print("[bold red]Error:[/bold red] No active result with sessions")
+                        context["history"][history_index]["result"] = {"error": "No active result with sessions"}
                         continue
 
                     if len(parts) < 3:
                         console.print("[bold red]Error:[/bold red] Missing session ID")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing session ID"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing session ID"}
                         continue
 
                     session_id = parts[2]
                     session = next(
-                        (
-                            s
-                            for s in context["current_result"].sessions
-                            if s.id == session_id
-                        ),
+                        (s for s in context["current_result"].sessions if s.id == session_id),
                         None,
                     )
 
                     if not session:
-                        console.print(
-                            f"[bold red]Error:[/bold red] Session '{session_id}' not found"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": f"Session '{session_id}' not found"
-                        }
+                        console.print(f"[bold red]Error:[/bold red] Session '{session_id}' not found")
+                        context["history"][history_index]["result"] = {"error": f"Session '{session_id}' not found"}
                         continue
 
                     console.print(f"Session: [bold]{session.session_id}[/bold]")
@@ -1836,47 +1470,28 @@ def _start_interactive_shell():
                         for key, value in session.metadata.items():
                             console.print(f"  {key}: {value}")
 
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Showed session {session_id}"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Showed session {session_id}"}
 
                 elif subcommand == "tests":
-                    if (
-                        not context["current_result"]
-                        or not context["current_result"].sessions
-                    ):
-                        console.print(
-                            "[bold red]Error:[/bold red] No active result with sessions"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active result with sessions"
-                        }
+                    if not context["current_result"] or not context["current_result"].sessions:
+                        console.print("[bold red]Error:[/bold red] No active result with sessions")
+                        context["history"][history_index]["result"] = {"error": "No active result with sessions"}
                         continue
 
                     if len(parts) < 3:
                         console.print("[bold red]Error:[/bold red] Missing session ID")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing session ID"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing session ID"}
                         continue
 
                     session_id = parts[2]
                     session = next(
-                        (
-                            s
-                            for s in context["current_result"].sessions
-                            if s.id == session_id
-                        ),
+                        (s for s in context["current_result"].sessions if s.id == session_id),
                         None,
                     )
 
                     if not session:
-                        console.print(
-                            f"[bold red]Error:[/bold red] Session '{session_id}' not found"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": f"Session '{session_id}' not found"
-                        }
+                        console.print(f"[bold red]Error:[/bold red] Session '{session_id}' not found")
+                        context["history"][history_index]["result"] = {"error": f"Session '{session_id}' not found"}
                         continue
 
                     table = Table(title=f"Tests in Session {session.session_id}")
@@ -1890,11 +1505,7 @@ def _start_interactive_shell():
                             test.id,
                             test.nodeid,
                             test.outcome,
-                            (
-                                str(round(test.duration, 3))
-                                if test.duration is not None
-                                else "N/A"
-                            ),
+                            (str(round(test.duration, 3)) if test.duration is not None else "N/A"),
                         )
 
                     console.print(table)
@@ -1903,47 +1514,28 @@ def _start_interactive_shell():
                     }
 
                 elif subcommand == "failures":
-                    if (
-                        not context["current_result"]
-                        or not context["current_result"].sessions
-                    ):
-                        console.print(
-                            "[bold red]Error:[/bold red] No active result with sessions"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": "No active result with sessions"
-                        }
+                    if not context["current_result"] or not context["current_result"].sessions:
+                        console.print("[bold red]Error:[/bold red] No active result with sessions")
+                        context["history"][history_index]["result"] = {"error": "No active result with sessions"}
                         continue
 
                     if len(parts) < 3:
                         console.print("[bold red]Error:[/bold red] Missing session ID")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing session ID"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing session ID"}
                         continue
 
                     session_id = parts[2]
                     session = next(
-                        (
-                            s
-                            for s in context["current_result"].sessions
-                            if s.id == session_id
-                        ),
+                        (s for s in context["current_result"].sessions if s.id == session_id),
                         None,
                     )
 
                     if not session:
-                        console.print(
-                            f"[bold red]Error:[/bold red] Session '{session_id}' not found"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": f"Session '{session_id}' not found"
-                        }
+                        console.print(f"[bold red]Error:[/bold red] Session '{session_id}' not found")
+                        context["history"][history_index]["result"] = {"error": f"Session '{session_id}' not found"}
                         continue
 
-                    failures = [
-                        t for t in session.test_results if t.outcome == "failed"
-                    ]
+                    failures = [t for t in session.test_results if t.outcome == "failed"]
 
                     if not failures:
                         console.print(f"No failures in session {session.session_id}")
@@ -1961,11 +1553,7 @@ def _start_interactive_shell():
                         table.add_row(
                             test.id,
                             test.nodeid,
-                            (
-                                str(round(test.duration, 3))
-                                if test.duration is not None
-                                else "N/A"
-                            ),
+                            (str(round(test.duration, 3)) if test.duration is not None else "N/A"),
                         )
 
                     console.print(table)
@@ -1973,9 +1561,7 @@ def _start_interactive_shell():
                     # Show failure details
                     for i, test in enumerate(failures):
                         if hasattr(test, "longrepr") and test.longrepr:
-                            console.print(
-                                f"\n[bold red]Failure {i+1}:[/bold red] {test.nodeid}"
-                            )
+                            console.print(f"\n[bold red]Failure {i+1}:[/bold red] {test.nodeid}")
                             console.print(test.longrepr)
 
                     context["history"][history_index]["result"] = {
@@ -1983,23 +1569,15 @@ def _start_interactive_shell():
                     }
 
                 else:
-                    console.print(
-                        f"[bold red]Error:[/bold red] Unknown session subcommand: {subcommand}"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": f"Unknown session subcommand: {subcommand}"
-                    }
+                    console.print(f"[bold red]Error:[/bold red] Unknown session subcommand: {subcommand}")
+                    context["history"][history_index]["result"] = {"error": f"Unknown session subcommand: {subcommand}"}
 
             # Python command - execute Python code directly
             elif user_input.lower().startswith("python "):
                 python_code = user_input[7:].strip()
                 if not python_code:
-                    console.print(
-                        "[bold red]Error:[/bold red] Missing Python expression"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Missing Python expression"
-                    }
+                    console.print("[bold red]Error:[/bold red] Missing Python expression")
+                    context["history"][history_index]["result"] = {"error": "Missing Python expression"}
                     continue
 
                 try:
@@ -2007,9 +1585,7 @@ def _start_interactive_shell():
                     result = eval(python_code, globals(), context)
 
                     # Display the result
-                    console.print(
-                        "[bold green]Python expression executed:[/bold green]"
-                    )
+                    console.print("[bold green]Python expression executed:[/bold green]")
 
                     # Format the result for display
                     if result is not None:
@@ -2024,9 +1600,7 @@ def _start_interactive_shell():
                         "result": str(result) if result is not None else "None",
                     }
                 except Exception as e:
-                    console.print(
-                        f"[bold red]Error executing Python expression:[/bold red] {str(e)}"
-                    )
+                    console.print(f"[bold red]Error executing Python expression:[/bold red] {str(e)}")
                     console.print(traceback.format_exc(), style="red")
                     context["history"][history_index]["result"] = {"error": str(e)}
                 continue
@@ -2036,9 +1610,7 @@ def _start_interactive_shell():
                 parts = user_input.lower().split(" ", 2)
                 if len(parts) < 2:
                     console.print("[bold red]Error:[/bold red] Missing API subcommand")
-                    context["history"][history_index]["result"] = {
-                        "error": "Missing API subcommand"
-                    }
+                    context["history"][history_index]["result"] = {"error": "Missing API subcommand"}
                     continue
 
                 subcommand = parts[1].lower()
@@ -2048,9 +1620,7 @@ def _start_interactive_shell():
                     console.print(
                         "The interactive shell provides direct access to the pytest-insight core API classes."
                     )
-                    console.print(
-                        "You can use these classes directly in Python expressions or with the api commands."
-                    )
+                    console.print("You can use these classes directly in Python expressions or with the api commands.")
 
                     console.print("\n[bold cyan]Available Core Classes:[/bold cyan]")
                     console.print("  Query       - Find and filter test sessions")
@@ -2059,45 +1629,23 @@ def _start_interactive_shell():
                     console.print("  Insights    - Generate comprehensive insights")
                     console.print("  InsightAPI  - Unified API for all components")
 
-                    console.print(
-                        "\n[bold cyan]Using Core Classes with Python Commands:[/bold cyan]"
-                    )
-                    console.print(
-                        "  python Query().with_profile('default').in_last_days(7).execute()"
-                    )
-                    console.print(
-                        "  python InsightAPI().query().in_last_days(7).execute()"
-                    )
+                    console.print("\n[bold cyan]Using Core Classes with Python Commands:[/bold cyan]")
+                    console.print("  python Query().with_profile('default').in_last_days(7).execute()")
+                    console.print("  python InsightAPI().query().in_last_days(7).execute()")
                     console.print("  query('default').in_last_days(7).execute()")
 
-                    console.print(
-                        "\n[bold cyan]Using Core API Factory Functions:[/bold cyan]"
-                    )
+                    console.print("\n[bold cyan]Using Core API Factory Functions:[/bold cyan]")
                     console.print("  python query()      - Create a new Query instance")
-                    console.print(
-                        "  python compare()    - Create a new Comparison instance"
-                    )
-                    console.print(
-                        "  python analyze()    - Create a new Analysis instance"
-                    )
-                    console.print(
-                        "  python get_insights() - Create a new Insights instance"
-                    )
+                    console.print("  python compare()    - Create a new Comparison instance")
+                    console.print("  python analyze()    - Create a new Analysis instance")
+                    console.print("  python get_insights() - Create a new Insights instance")
 
                     console.print("\n[bold cyan]Direct Method Execution:[/bold cyan]")
-                    console.print(
-                        "  api exec query in_last_days 7    - Execute method on current query object"
-                    )
-                    console.print(
-                        "  api exec analysis health_report  - Execute method on current analysis object"
-                    )
-                    console.print(
-                        "  api exec comparison compare_suts my-app1 my-app2 - Execute with arguments"
-                    )
+                    console.print("  api exec query in_last_days 7    - Execute method on current query object")
+                    console.print("  api exec analysis health_report  - Execute method on current analysis object")
+                    console.print("  api exec comparison compare_suts my-app1 my-app2 - Execute with arguments")
 
-                    context["history"][history_index]["result"] = {
-                        "action": "showed API help"
-                    }
+                    context["history"][history_index]["result"] = {"action": "showed API help"}
 
                 elif subcommand == "query":
                     # Create a new Query instance using the core API
@@ -2108,13 +1656,9 @@ def _start_interactive_shell():
                     result = core_query(profile_name)
                     context["current_query"] = result
 
-                    console.print(
-                        f"[bold green]Created new Query instance with profile '{profile_name}'[/bold green]"
-                    )
+                    console.print(f"[bold green]Created new Query instance with profile '{profile_name}'[/bold green]")
                     console.print("Use 'query chain' to see the current query chain")
-                    console.print(
-                        "Use 'python' commands to work with the query directly"
-                    )
+                    console.print("Use 'python' commands to work with the query directly")
 
                     context["history"][history_index]["result"] = {
                         "action": "created Query instance",
@@ -2133,9 +1677,7 @@ def _start_interactive_shell():
                     console.print(
                         f"[bold green]Created new Comparison instance with profile '{profile_name}'[/bold green]"
                     )
-                    console.print(
-                        "Use 'python' commands to work with the comparison directly"
-                    )
+                    console.print("Use 'python' commands to work with the comparison directly")
 
                     context["history"][history_index]["result"] = {
                         "action": "created Comparison instance",
@@ -2154,9 +1696,7 @@ def _start_interactive_shell():
                     console.print(
                         f"[bold green]Created new Analysis instance with profile '{profile_name}'[/bold green]"
                     )
-                    console.print(
-                        "Use 'python' commands to work with the analysis directly"
-                    )
+                    console.print("Use 'python' commands to work with the analysis directly")
 
                     context["history"][history_index]["result"] = {
                         "action": "created Analysis instance",
@@ -2175,9 +1715,7 @@ def _start_interactive_shell():
                     console.print(
                         f"[bold green]Created new Insights instance with profile '{profile_name}'[/bold green]"
                     )
-                    console.print(
-                        "Use 'python' commands to work with the insights directly"
-                    )
+                    console.print("Use 'python' commands to work with the insights directly")
 
                     context["history"][history_index]["result"] = {
                         "action": "created Insights instance",
@@ -2187,9 +1725,7 @@ def _start_interactive_shell():
                 elif subcommand == "exec":
                     # Execute a method on a core API object
                     if len(parts) < 2:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing object and method specification"
-                        )
+                        console.print("[bold red]Error:[/bold red] Missing object and method specification")
                         console.print("Usage: api exec [object] [method] [args...]")
                         context["history"][history_index]["result"] = {
                             "error": "Missing object and method specification"
@@ -2198,38 +1734,36 @@ def _start_interactive_shell():
 
                     # Parse the command: api exec [object] [method] [args...]
                     exec_parts = user_input.split(" ", 3)[2:]  # Skip 'api exec'
-                    
+
                     if len(exec_parts) < 2:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing object or method name"
-                        )
+                        console.print("[bold red]Error:[/bold red] Missing object or method name")
                         console.print("Usage: api exec [object] [method] [args...]")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing object or method name"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing object or method name"}
                         continue
 
                     obj_name = exec_parts[0].lower()
-                    
+
                     # Extract method name and arguments
-                    remaining_parts = exec_parts[1].split() if len(exec_parts) == 2 else exec_parts[1].split() + exec_parts[2].split() if len(exec_parts) > 2 else []
+                    remaining_parts = (
+                        exec_parts[1].split()
+                        if len(exec_parts) == 2
+                        else exec_parts[1].split() + exec_parts[2].split()
+                        if len(exec_parts) > 2
+                        else []
+                    )
                     if not remaining_parts:
-                        console.print(
-                            "[bold red]Error:[/bold red] Missing method name"
-                        )
+                        console.print("[bold red]Error:[/bold red] Missing method name")
                         console.print("Usage: api exec [object] [method] [args...]")
-                        context["history"][history_index]["result"] = {
-                            "error": "Missing method name"
-                        }
+                        context["history"][history_index]["result"] = {"error": "Missing method name"}
                         continue
-                        
+
                     method_name = remaining_parts[0]
-                    
+
                     # Parse arguments if any
                     args = []
                     if len(remaining_parts) > 1:
                         raw_args = remaining_parts[1:]
-                        
+
                         # Convert arguments to appropriate types
                         for arg in raw_args:
                             try:
@@ -2245,65 +1779,41 @@ def _start_interactive_shell():
                                     args.append(arg)
                             except Exception:
                                 args.append(arg)
-                    
+
                     # Get the object to execute the method on
                     target_obj = None
                     if obj_name == "query":
                         target_obj = context.get("current_query")
                         if target_obj is None:
-                            console.print(
-                                "[bold red]Error:[/bold red] No active Query object"
-                            )
-                            console.print(
-                                "Create one first with 'api query' or 'query new'"
-                            )
-                            context["history"][history_index]["result"] = {
-                                "error": "No active Query object"
-                            }
+                            console.print("[bold red]Error:[/bold red] No active Query object")
+                            console.print("Create one first with 'api query' or 'query new'")
+                            context["history"][history_index]["result"] = {"error": "No active Query object"}
                             continue
                     elif obj_name == "analysis":
                         target_obj = context.get("current_analysis")
                         if target_obj is None:
-                            console.print(
-                                "[bold red]Error:[/bold red] No active Analysis object"
-                            )
+                            console.print("[bold red]Error:[/bold red] No active Analysis object")
                             console.print("Create one first with 'api analyze'")
-                            context["history"][history_index]["result"] = {
-                                "error": "No active Analysis object"
-                            }
+                            context["history"][history_index]["result"] = {"error": "No active Analysis object"}
                             continue
                     elif obj_name == "comparison":
                         target_obj = context.get("current_comparison")
                         if target_obj is None:
-                            console.print(
-                                "[bold red]Error:[/bold red] No active Comparison object"
-                            )
+                            console.print("[bold red]Error:[/bold red] No active Comparison object")
                             console.print("Create one first with 'api compare'")
-                            context["history"][history_index]["result"] = {
-                                "error": "No active Comparison object"
-                            }
+                            context["history"][history_index]["result"] = {"error": "No active Comparison object"}
                             continue
                     elif obj_name == "insights":
                         target_obj = context.get("current_insights")
                         if target_obj is None:
-                            console.print(
-                                "[bold red]Error:[/bold red] No active Insights object"
-                            )
+                            console.print("[bold red]Error:[/bold red] No active Insights object")
                             console.print("Create one first with 'api insights'")
-                            context["history"][history_index]["result"] = {
-                                "error": "No active Insights object"
-                            }
+                            context["history"][history_index]["result"] = {"error": "No active Insights object"}
                             continue
                     else:
-                        console.print(
-                            f"[bold red]Error:[/bold red] Unknown object type: {obj_name}"
-                        )
-                        console.print(
-                            "Available objects: query, analysis, comparison, insights"
-                        )
-                        context["history"][history_index]["result"] = {
-                            "error": f"Unknown object type: {obj_name}"
-                        }
+                        console.print(f"[bold red]Error:[/bold red] Unknown object type: {obj_name}")
+                        console.print("Available objects: query, analysis, comparison, insights")
+                        context["history"][history_index]["result"] = {"error": f"Unknown object type: {obj_name}"}
                         continue
 
                     # Check if the method exists
@@ -2323,9 +1833,7 @@ def _start_interactive_shell():
                         for method in methods:
                             console.print(f"  {method}")
 
-                        context["history"][history_index]["result"] = {
-                            "error": f"Method '{method_name}' not found"
-                        }
+                        context["history"][history_index]["result"] = {"error": f"Method '{method_name}' not found"}
                         continue
 
                     # Get the method
@@ -2333,9 +1841,7 @@ def _start_interactive_shell():
 
                     # Show debug information if debug mode is enabled
                     if context["debug_mode"]:
-                        console.print(
-                            "[bold blue]DEBUG: Executing API method call:[/bold blue]"
-                        )
+                        console.print("[bold blue]DEBUG: Executing API method call:[/bold blue]")
                         arg_display = ", ".join([repr(a) for a in args])
                         api_call = f"{obj_name}.{method_name}({arg_display})"
                         console.print(f"[blue]{api_call}[/blue]")
@@ -2345,9 +1851,7 @@ def _start_interactive_shell():
                         result = method(*args)
 
                         # Handle the result
-                        console.print(
-                            f"[bold green]Method {method_name} executed successfully[/bold green]"
-                        )
+                        console.print(f"[bold green]Method {method_name} executed successfully[/bold green]")
 
                         # Store the result if it's a new object of a known type
                         if isinstance(result, Query):
@@ -2366,36 +1870,24 @@ def _start_interactive_shell():
                         # Display the result
                         if result is not None:
                             if isinstance(result, (dict, list)):
-                                _format_rich_output(
-                                    result, title=f"Result of {method_name}"
-                                )
+                                _format_rich_output(result, title=f"Result of {method_name}")
                             else:
                                 console.print(f"Result: {result}")
 
                         context["history"][history_index]["result"] = {
                             "action": f"executed {obj_name}.{method_name}",
                             "args": args,
-                            "result_type": (
-                                type(result).__name__ if result is not None else "None"
-                            ),
+                            "result_type": (type(result).__name__ if result is not None else "None"),
                         }
                     except Exception as e:
-                        console.print(
-                            f"[bold red]Error executing {method_name}:[/bold red] {str(e)}"
-                        )
+                        console.print(f"[bold red]Error executing {method_name}:[/bold red] {str(e)}")
                         console.print(traceback.format_exc(), style="red")
                         context["history"][history_index]["result"] = {"error": str(e)}
 
                 else:
-                    console.print(
-                        f"[bold red]Error:[/bold red] Unknown API subcommand: {subcommand}"
-                    )
-                    console.print(
-                        "Available subcommands: help, query, compare, analyze, insights, exec"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": f"Unknown API subcommand: {subcommand}"
-                    }
+                    console.print(f"[bold red]Error:[/bold red] Unknown API subcommand: {subcommand}")
+                    console.print("Available subcommands: help, query, compare, analyze, insights, exec")
+                    context["history"][history_index]["result"] = {"error": f"Unknown API subcommand: {subcommand}"}
 
                 continue
 
@@ -2403,50 +1895,32 @@ def _start_interactive_shell():
             elif user_input.lower().startswith("debug"):
                 parts = user_input.lower().split()
                 if len(parts) < 2:
-                    console.print(
-                        "[bold red]Error:[/bold red] Debug command requires an argument (on, off, or status)"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Missing debug argument"
-                    }
+                    console.print("[bold red]Error:[/bold red] Debug command requires an argument (on, off, or status)")
+                    context["history"][history_index]["result"] = {"error": "Missing debug argument"}
                     continue
 
                 debug_action = parts[1]
                 if debug_action == "on":
                     context["debug_mode"] = True
                     console.print("[bold green]Debug mode enabled[/bold green]")
-                    context["history"][history_index]["result"] = {
-                        "action": "debug mode enabled"
-                    }
+                    context["history"][history_index]["result"] = {"action": "debug mode enabled"}
                 elif debug_action == "off":
                     context["debug_mode"] = False
                     console.print("[bold yellow]Debug mode disabled[/bold yellow]")
-                    context["history"][history_index]["result"] = {
-                        "action": "debug mode disabled"
-                    }
+                    context["history"][history_index]["result"] = {"action": "debug mode disabled"}
                 elif debug_action == "status":
                     status = "enabled" if context["debug_mode"] else "disabled"
-                    console.print(
-                        f"[bold blue]Debug mode is currently {status}[/bold blue]"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "status": f"debug mode {status}"
-                    }
+                    console.print(f"[bold blue]Debug mode is currently {status}[/bold blue]")
+                    context["history"][history_index]["result"] = {"status": f"debug mode {status}"}
                 else:
-                    console.print(
-                        "[bold red]Error:[/bold red] Invalid debug argument. Use 'on', 'off', or 'status'"
-                    )
-                    context["history"][history_index]["result"] = {
-                        "error": "Invalid debug argument"
-                    }
+                    console.print("[bold red]Error:[/bold red] Invalid debug argument. Use 'on', 'off', or 'status'")
+                    context["history"][history_index]["result"] = {"error": "Invalid debug argument"}
                 continue
 
             # Unknown command
             else:
                 console.print(f"[bold red]Error:[/bold red] Unknown command: {command}")
-                context["history"][history_index]["result"] = {
-                    "error": f"Unknown command: {command}"
-                }
+                context["history"][history_index]["result"] = {"error": f"Unknown command: {command}"}
 
         except KeyboardInterrupt:
             # Handle Ctrl+C
@@ -2465,9 +1939,7 @@ def main(ctx: typer.Context):
         _start_interactive_shell()
 
 
-@app.command(
-    "shell", help="Start an interactive shell for exploring the pytest-insight API"
-)
+@app.command("shell", help="Start an interactive shell for exploring the pytest-insight API")
 def interactive_shell():
     """Start an interactive shell for exploring the pytest-insight API."""
     try:
@@ -2478,9 +1950,7 @@ def interactive_shell():
             raise ImportError("prompt_toolkit not found")
     except ImportError:
         console = Console()
-        console.print(
-            "[bold red]Error:[/bold red] prompt_toolkit is required for the interactive shell."
-        )
+        console.print("[bold red]Error:[/bold red] prompt_toolkit is required for the interactive shell.")
         console.print("Please install it with: pip install prompt-toolkit")
         return
 
@@ -2496,13 +1966,9 @@ def cli_compare(
     base_sut: str = typer.Option(..., help="Base SUT name"),
     target_sut: str = typer.Option(..., help="Target SUT name"),
     days: Optional[int] = typer.Option(None, help="Number of days to look back"),
-    test_pattern: Optional[str] = typer.Option(
-        None, help="Test pattern (supports wildcards)"
-    ),
+    test_pattern: Optional[str] = typer.Option(None, help="Test pattern (supports wildcards)"),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
-    format: OutputFormat = typer.Option(
-        OutputFormat.TEXT, help="Output format (text or json)"
-    ),
+    format: OutputFormat = typer.Option(OutputFormat.TEXT, help="Output format (text or json)"),
 ):
     """Compare test results between two SUTs.
 
@@ -2512,12 +1978,21 @@ def cli_compare(
     console = Console()
 
     try:
+        # Load configuration
+        from pytest_insight.core.config import load_config
+
+        load_config()
+
         # Create comparison instance with optional profile
         from pytest_insight.core.comparison import comparison
 
-        comp = comparison(base_profile=profile, target_profile=profile)
+        # Initialize comparison with profile if specified
+        if profile:
+            comp = comparison(base_profile=profile, target_profile=profile)
+        else:
+            comp = comparison()
 
-        # Configure the comparison
+        # Apply SUT filter
         comp = comp.between_suts(base_sut, target_sut)
 
         # Apply days filter if specified
@@ -2525,10 +2000,8 @@ def cli_compare(
             comp = comp.apply_to_both(lambda q: q.in_last_days(days))
 
         # Apply test pattern filter if specified
-        if test_pattern is not None:
-            comp = comp.apply_to_both(
-                lambda q: q.filter_by_test().with_pattern(test_pattern).apply()
-            )
+        if test_pattern:
+            comp = comp.apply_to_both(lambda q: q.filter_by_test().with_pattern(test_pattern).apply())
 
         # Execute the comparison
         result = comp.execute()
@@ -2568,11 +2041,7 @@ def cli_compare(
             )
 
             # Create a table for the summary
-            table = Table(
-                title="Comparison Summary",
-                show_header=True,
-                header_style="bold magenta",
-            )
+            table = Table(title="Comparison Summary", show_header=True, header_style="bold magenta")
             table.add_column("Category", style="cyan")
             table.add_column("Count", style="green")
             table.add_column("Details", style="yellow")
@@ -2581,56 +2050,45 @@ def cli_compare(
             table.add_row(
                 "New Failures",
                 str(len(result.new_failures)),
-                ", ".join(result.new_failures[:5])
-                + ("..." if len(result.new_failures) > 5 else ""),
+                ", ".join(result.new_failures[:5]) + ("..." if len(result.new_failures) > 5 else ""),
             )
             table.add_row(
                 "Fixed Tests",
                 str(len(result.new_passes)),
-                ", ".join(result.new_passes[:5])
-                + ("..." if len(result.new_passes) > 5 else ""),
+                ", ".join(result.new_passes[:5]) + ("..." if len(result.new_passes) > 5 else ""),
             )
             table.add_row(
                 "Flaky Tests",
                 str(len(result.flaky_tests)),
-                ", ".join(result.flaky_tests[:5])
-                + ("..." if len(result.flaky_tests) > 5 else ""),
+                ", ".join(result.flaky_tests[:5]) + ("..." if len(result.flaky_tests) > 5 else ""),
             )
             table.add_row(
                 "Slower Tests",
                 str(len(result.slower_tests)),
-                ", ".join(result.slower_tests[:5])
-                + ("..." if len(result.slower_tests) > 5 else ""),
+                ", ".join(result.slower_tests[:5]) + ("..." if len(result.slower_tests) > 5 else ""),
             )
             table.add_row(
                 "Faster Tests",
                 str(len(result.faster_tests)),
-                ", ".join(result.faster_tests[:5])
-                + ("..." if len(result.faster_tests) > 5 else ""),
+                ", ".join(result.faster_tests[:5]) + ("..." if len(result.faster_tests) > 5 else ""),
             )
             table.add_row(
                 "Missing Tests",
                 str(len(result.missing_tests)),
-                ", ".join(result.missing_tests[:5])
-                + ("..." if len(result.missing_tests) > 5 else ""),
+                ", ".join(result.missing_tests[:5]) + ("..." if len(result.missing_tests) > 5 else ""),
             )
             table.add_row(
                 "New Tests",
                 str(len(result.new_tests)),
-                ", ".join(result.new_tests[:5])
-                + ("..." if len(result.new_tests) > 5 else ""),
+                ", ".join(result.new_tests[:5]) + ("..." if len(result.new_tests) > 5 else ""),
             )
 
             console.print(table)
 
             # Session information
             console.print("\n[bold]Session Information:[/bold]")
-            console.print(
-                f"  Base: [cyan]{result.base_session.sut}[/cyan] ({result.base_session.timestamp})"
-            )
-            console.print(
-                f"  Target: [cyan]{result.target_session.sut}[/cyan] ({result.target_session.timestamp})"
-            )
+            console.print(f"  Base: [cyan]{result.base_session.sut}[/cyan] ({result.base_session.timestamp})")
+            console.print(f"  Target: [cyan]{result.target_session.sut}[/cyan] ({result.target_session.timestamp})")
 
             # Provide guidance on next steps
             if result.has_changes():
@@ -2646,9 +2104,7 @@ def cli_compare(
                         target_sut,
                     )
             else:
-                console.print(
-                    "\n[bold green]No significant changes detected between the SUTs.[/bold green]"
-                )
+                console.print("\n[bold green]No significant changes detected between the SUTs.[/bold green]")
 
     except Exception as e:
         if format == OutputFormat.JSON:
@@ -2664,17 +2120,12 @@ def cli_compare(
 def cli_analyze(
     sut: Optional[str] = typer.Option(None, help="System Under Test name"),
     days: Optional[int] = typer.Option(7, help="Number of days to analyze"),
-    test_pattern: Optional[str] = typer.Option(
-        None, help="Test pattern (supports wildcards)"
-    ),
+    test_pattern: Optional[str] = typer.Option(None, help="Test pattern (supports wildcards)"),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
-    report_type: str = typer.Option(
-        "health", help="Type of report (health, stability, performance, flaky)"
-    ),
+    report_type: str = typer.Option("health", help="Type of report (health, stability, performance, flaky)"),
     flaky_only: bool = typer.Option(False, help="Focus only on flaky tests"),
-    format: OutputFormat = typer.Option(
-        OutputFormat.TEXT, help="Output format (text or json)"
-    ),
+    format: OutputFormat = typer.Option(OutputFormat.TEXT, help="Output format (text or json)"),
+    config_file: Optional[str] = typer.Option(None, help="Path to configuration file"),
 ):
     """Analyze test results for a specific SUT.
 
@@ -2684,6 +2135,11 @@ def cli_analyze(
     console = Console()
 
     try:
+        # Load configuration
+        from pytest_insight.core.config import load_config
+
+        config = load_config(config_file)
+
         # Create analysis instance with optional profile
         from pytest_insight.core.analysis import analysis
 
@@ -2697,15 +2153,77 @@ def cli_analyze(
         if sut:
             analyzer = analyzer.for_sut(sut)
 
-        # Apply days filter
+        # Apply days filter - use config if available
+        if days is None and config and "analysis" in config and "default_days" in config["analysis"]:
+            days = config["analysis"]["default_days"]
         analyzer = analyzer.in_last_days(days)
 
         # Apply test pattern filter if specified
         if test_pattern:
             analyzer = analyzer.with_test_pattern(test_pattern)
 
+        # Check if the requested report type is enabled in config
+        report_enabled = True
+        if config and "reports" in config and report_type in config["reports"]:
+            report_config = config["reports"][report_type]
+            if "enabled" in report_config:
+                report_enabled = report_config["enabled"]
+
+        if not report_enabled:
+            console.print(f"[bold red]Error:[/bold red] Report type '{report_type}' is disabled in configuration.")
+            return
+
+        # Display active configuration for the selected report type
+        if format == OutputFormat.TEXT and config and "reports" in config and report_type in config["reports"]:
+            report_config = config["reports"][report_type]
+            console.print("\n[bold blue]Active Configuration:[/bold blue]")
+
+            # Create a table to display the configuration
+            table = Table(title=f"{report_type.capitalize()} Report Configuration")
+            table.add_column("Setting", style="cyan")
+            table.add_column("Value", style="green")
+
+            for key, value in report_config.items():
+                if isinstance(value, list):
+                    value_str = ", ".join(value)
+                else:
+                    value_str = str(value)
+                table.add_row(key.replace("_", " ").title(), value_str)
+
+            console.print(table)
+            console.print()
+
         # Execute the appropriate analysis based on report type
         if report_type == "health":
+            # Get metrics to include from configuration
+            metrics_to_include = [
+                "pass_rate",
+                "failure_rate",
+                "skip_rate",
+                "error_rate",
+                "flaky_rate",
+                "total_tests",
+                "total_sessions",
+            ]
+            if (
+                config
+                and "reports" in config
+                and "summary" in config["reports"]
+                and "metrics" in config["reports"]["summary"]
+            ):
+                metrics_to_include = config["reports"]["summary"]["metrics"]
+
+            # Get sections to include from configuration
+            sections_to_include = ["top_failures", "top_flaky", "performance_issues"]
+            if (
+                config
+                and "reports" in config
+                and "summary" in config["reports"]
+                and "sections" in config["reports"]["summary"]
+            ):
+                sections_to_include = config["reports"]["summary"]["sections"]
+
+            # Generate health report
             result = analyzer.health_report()
 
             if format == OutputFormat.JSON:
@@ -2713,15 +2231,24 @@ def cli_analyze(
 
                 # Convert result to JSON-serializable dict
                 result_dict = {
-                    "pass_rate": result.pass_rate,
-                    "failure_rate": result.failure_rate,
-                    "skip_rate": result.skip_rate,
-                    "error_rate": result.error_rate,
-                    "flaky_rate": result.flaky_rate,
-                    "total_tests": result.total_tests,
-                    "total_sessions": result.total_sessions,
                     "days_analyzed": days,
                 }
+
+                # Add metrics based on configuration
+                if "pass_rate" in metrics_to_include:
+                    result_dict["pass_rate"] = result.pass_rate
+                if "failure_rate" in metrics_to_include:
+                    result_dict["failure_rate"] = result.failure_rate
+                if "skip_rate" in metrics_to_include:
+                    result_dict["skip_rate"] = result.skip_rate
+                if "error_rate" in metrics_to_include:
+                    result_dict["error_rate"] = result.error_rate
+                if "flaky_rate" in metrics_to_include:
+                    result_dict["flaky_rate"] = result.flaky_rate
+                if "test_count" in metrics_to_include:
+                    result_dict["total_tests"] = result.total_tests
+                if "session_count" in metrics_to_include:
+                    result_dict["total_sessions"] = result.total_sessions
 
                 print(json.dumps(result_dict, indent=2))
             else:
@@ -2741,35 +2268,60 @@ def cli_analyze(
                 table.add_column("Metric", style="cyan")
                 table.add_column("Value", style="green")
 
-                # Add rows for each metric
-                table.add_row("Pass Rate", f"{result.pass_rate:.1%}")
-                table.add_row("Failure Rate", f"{result.failure_rate:.1%}")
-                table.add_row("Skip Rate", f"{result.skip_rate:.1%}")
-                table.add_row("Error Rate", f"{result.error_rate:.1%}")
-                table.add_row("Flaky Rate", f"{result.flaky_rate:.1%}")
-                table.add_row("Total Tests", str(result.total_tests))
-                table.add_row("Total Sessions", str(result.total_sessions))
+                # Add rows for each metric based on configuration
+                metric_mapping = {
+                    "pass_rate": ("Pass Rate", lambda r: f"{r.pass_rate:.1%}"),
+                    "failure_rate": ("Failure Rate", lambda r: f"{r.failure_rate:.1%}"),
+                    "skip_rate": ("Skip Rate", lambda r: f"{r.skip_rate:.1%}"),
+                    "error_rate": ("Error Rate", lambda r: f"{r.error_rate:.1%}"),
+                    "flaky_rate": ("Flaky Rate", lambda r: f"{r.flaky_rate:.1%}"),
+                    "test_count": ("Total Tests", lambda r: str(r.total_tests)),
+                    "session_count": ("Total Sessions", lambda r: str(r.total_sessions)),
+                }
+
+                for metric in metrics_to_include:
+                    if metric in metric_mapping:
+                        display_name, value_func = metric_mapping[metric]
+                        table.add_row(display_name, value_func(result))
 
                 console.print(table)
 
-                # Health assessment
-                if result.pass_rate >= 0.95:
-                    console.print(
-                        "\n[bold green]Overall Health: Excellent[/bold green]"
-                    )
-                    console.print("Test suite is performing well with high pass rates.")
-                elif result.pass_rate >= 0.85:
-                    console.print("\n[bold yellow]Overall Health: Good[/bold yellow]")
-                    console.print(
-                        "Test suite is generally healthy but has room for improvement."
-                    )
-                else:
-                    console.print(
-                        "\n[bold red]Overall Health: Needs Attention[/bold red]"
-                    )
-                    console.print(
-                        "Test suite has significant issues that should be addressed."
-                    )
+                # Add sections based on configuration
+                if "top_failures" in sections_to_include and hasattr(result, "top_failures") and result.top_failures:
+                    console.print("\n[bold]Top Failing Tests:[/bold]")
+                    failure_table = Table(show_header=True, header_style="bold red")
+                    failure_table.add_column("Test", style="cyan")
+                    failure_table.add_column("Failure Rate", style="red")
+
+                    for test in result.top_failures[:10]:  # Limit to 10 for readability
+                        if hasattr(test, "failure_rate") and hasattr(test, "nodeid"):
+                            failure_table.add_row(test.nodeid, f"{test.failure_rate:.1%}")
+
+                    console.print(failure_table)
+
+                if "top_flaky" in sections_to_include and hasattr(result, "flaky_tests") and result.flaky_tests:
+                    console.print("\n[bold]Top Flaky Tests:[/bold]")
+                    flaky_table = Table(show_header=True, header_style="bold yellow")
+                    flaky_table.add_column("Test", style="cyan")
+                    flaky_table.add_column("Flaky Rate", style="yellow")
+
+                    for test in result.flaky_tests[:10]:  # Limit to 10 for readability
+                        if hasattr(test, "flaky_rate") and hasattr(test, "nodeid"):
+                            flaky_table.add_row(test.nodeid, f"{test.flaky_rate:.1%}")
+
+                    console.print(flaky_table)
+
+                if "performance_issues" in sections_to_include and hasattr(result, "slow_tests") and result.slow_tests:
+                    console.print("\n[bold]Performance Issues:[/bold]")
+                    perf_table = Table(show_header=True, header_style="bold magenta")
+                    perf_table.add_column("Test", style="cyan")
+                    perf_table.add_column("Duration (s)", style="magenta")
+
+                    for test in result.slow_tests[:10]:  # Limit to 10 for readability
+                        if hasattr(test, "duration") and hasattr(test, "nodeid"):
+                            perf_table.add_row(test.nodeid, f"{test.duration:.2f}")
+
+                    console.print(perf_table)
 
                 # Recommendations
                 console.print("\n[bold]Recommendations:[/bold]")
@@ -2779,7 +2331,11 @@ def cli_analyze(
                     )
                 if result.failure_rate > 0.1:
                     console.print(
-                        "  - [red]High failure rate detected.[/red] Run 'insight analyze --report-type stability' to identify consistently failing tests."
+                        "  - [red]High failure rate detected.[/red] Run 'insight analyze --report-type stability' to identify failing tests."
+                    )
+                if hasattr(result, "slow_tests") and result.slow_tests:
+                    console.print(
+                        "  - [magenta]Slow tests detected.[/magenta] Run 'insight analyze --report-type performance' for performance analysis."
                     )
 
         elif report_type == "stability":
@@ -2849,10 +2405,7 @@ def cli_analyze(
                 import json
 
                 result_dict = {
-                    "slowest_tests": [
-                        {"nodeid": test.nodeid, "duration": test.duration}
-                        for test in slowest_tests
-                    ],
+                    "slowest_tests": [{"nodeid": test.nodeid, "duration": test.duration} for test in slowest_tests],
                     "days_analyzed": days,
                 }
 
@@ -2881,12 +2434,8 @@ def cli_analyze(
 
                     # Recommendations
                     console.print("\n[bold]Performance Recommendations:[/bold]")
-                    console.print(
-                        "  - Consider optimizing tests that take longer than 1 second"
-                    )
-                    console.print(
-                        "  - Look for common patterns in slow tests (e.g., database access, file I/O)"
-                    )
+                    console.print("  - Consider optimizing tests that take longer than 1 second")
+                    console.print("  - Look for common patterns in slow tests (e.g., database access, file I/O)")
                 else:
                     console.print("[yellow]No test duration data available.[/yellow]")
 
@@ -2929,9 +2478,7 @@ def cli_analyze(
                     console.print(table)
 
                     # Recommendations for flaky tests
-                    console.print(
-                        "\n[bold]Recommendations for Addressing Flaky Tests:[/bold]"
-                    )
+                    console.print("\n[bold]Recommendations for Addressing Flaky Tests:[/bold]")
                     console.print(
                         "  1. [yellow]Identify patterns[/yellow] - Look for common factors (async, timing, resources)"
                     )
@@ -2945,17 +2492,11 @@ def cli_analyze(
                         "  4. [yellow]Consider quarantine[/yellow] - Move highly flaky tests to a separate suite"
                     )
                 else:
-                    console.print(
-                        "[green]No flaky tests found in the analyzed period.[/green]"
-                    )
+                    console.print("[green]No flaky tests found in the analyzed period.[/green]")
 
         else:
-            console.print(
-                f"[bold red]Error:[/bold red] Unknown report type: {report_type}"
-            )
-            console.print(
-                "Available report types: health, stability, performance, flaky"
-            )
+            console.print(f"[bold red]Error:[/bold red] Unknown report type: {report_type}")
+            console.print("Available report types: health, stability, performance, flaky")
 
     except Exception as e:
         if format == OutputFormat.JSON:
@@ -2971,26 +2512,24 @@ def cli_analyze(
 def cli_generate_insights(
     sut: Optional[str] = typer.Option(None, help="System Under Test name"),
     days: Optional[int] = typer.Option(7, help="Number of days to analyze"),
-    test_pattern: Optional[str] = typer.Option(
-        None, help="Test pattern (supports wildcards)"
-    ),
+    test_pattern: Optional[str] = typer.Option(None, help="Test pattern (supports wildcards)"),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
-    insight_type: str = typer.Option(
-        "summary", help="Type of insights (summary, patterns, trends, dependencies)"
-    ),
-    format: OutputFormat = typer.Option(
-        OutputFormat.TEXT, help="Output format (text or json)"
-    ),
+    insight_type: str = typer.Option("summary", help="Type of insights (summary, patterns, trends, dependencies)"),
+    format: OutputFormat = typer.Option(OutputFormat.TEXT, help="Output format (text or json)"),
     config_file: Optional[str] = typer.Option(None, help="Path to configuration file"),
-    include_metrics: Optional[str] = typer.Option(None, help="Comma-separated list of metrics to include (e.g., 'pass_rate,flaky_rate')"),
-    include_sections: Optional[str] = typer.Option(None, help="Comma-separated list of sections to include (e.g., 'top_failures,top_flaky')"),
+    include_metrics: Optional[str] = typer.Option(
+        None, help="Comma-separated list of metrics to include (e.g., 'pass_rate,flaky_rate')"
+    ),
+    include_sections: Optional[str] = typer.Option(
+        None, help="Comma-separated list of sections to include (e.g., 'top_failures,top_flaky')"
+    ),
     exclude_metrics: Optional[str] = typer.Option(None, help="Comma-separated list of metrics to exclude"),
     exclude_sections: Optional[str] = typer.Option(None, help="Comma-separated list of sections to exclude"),
 ):
     """Generate insights from test data.
 
     This command generates various types of insights from test data, including summary reports, error patterns, stability trends, and test dependencies.
-    
+
     The insights can be configured using a configuration file or command-line options to specify which metrics and sections to include or exclude.
     """
     console = Console()
@@ -3000,7 +2539,7 @@ def cli_generate_insights(
         api = InsightAPI()
         if profile:
             api = api.with_profile(profile)
-        
+
         # Build query
         query = api.query()
         if sut:
@@ -3008,55 +2547,49 @@ def cli_generate_insights(
         query = query.in_last_days(days)
         if test_pattern:
             query = query.with_test_pattern(test_pattern)
-        
+
         # Create insights instance with the query
         insight_api = api.insights().with_query(query)
-        
+
         # Load configuration
         from pytest_insight.core.config import load_config
-        
+
         config = {}
         if config_file:
             config = load_config(config_file)
-        
+
         # Apply command-line overrides for metrics and sections
         if include_metrics or exclude_metrics or include_sections or exclude_sections:
             if "reports" not in config:
                 config["reports"] = {}
             if insight_type not in config["reports"]:
                 config["reports"][insight_type] = {}
-            
+
             # Handle metrics
             if include_metrics:
-                config["reports"][insight_type]["metrics"] = [
-                    m.strip() for m in include_metrics.split(",")
-                ]
+                config["reports"][insight_type]["metrics"] = [m.strip() for m in include_metrics.split(",")]
             elif exclude_metrics and "metrics" in config["reports"][insight_type]:
                 exclude_list = [m.strip() for m in exclude_metrics.split(",")]
                 config["reports"][insight_type]["metrics"] = [
-                    m for m in config["reports"][insight_type]["metrics"] 
-                    if m not in exclude_list
+                    m for m in config["reports"][insight_type]["metrics"] if m not in exclude_list
                 ]
-            
+
             # Handle sections
             if include_sections:
-                config["reports"][insight_type]["sections"] = [
-                    s.strip() for s in include_sections.split(",")
-                ]
+                config["reports"][insight_type]["sections"] = [s.strip() for s in include_sections.split(",")]
             elif exclude_sections and "sections" in config["reports"][insight_type]:
                 exclude_list = [s.strip() for s in exclude_sections.split(",")]
                 config["reports"][insight_type]["sections"] = [
-                    s for s in config["reports"][insight_type]["sections"] 
-                    if s not in exclude_list
+                    s for s in config["reports"][insight_type]["sections"] if s not in exclude_list
                 ]
-        
+
         # Apply configuration if we have any overrides
         if config:
             insight_api = insight_api.with_config(config)
-        
+
         # Set up console for rich output
         console = Console()
-        
+
         # Execute the appropriate insights based on insight type
         if insight_type == "summary":
             result = insight_api.summary_report()
@@ -3123,9 +2656,7 @@ def cli_generate_insights(
                 # Overall assessment
                 console.print("\n[bold]Overall Assessment:[/bold]")
                 if result.pass_rate >= 0.95 and result.flaky_rate < 0.02:
-                    console.print(
-                        "[bold green]Excellent[/bold green] - Test suite is healthy and stable."
-                    )
+                    console.print("[bold green]Excellent[/bold green] - Test suite is healthy and stable.")
                 elif result.pass_rate >= 0.85 and result.flaky_rate < 0.05:
                     console.print(
                         "[bold yellow]Good[/bold yellow] - Test suite is generally healthy with minor issues."
@@ -3138,17 +2669,11 @@ def cli_generate_insights(
                 # Recommendations
                 console.print("\n[bold]Recommended Actions:[/bold]")
                 if result.top_failures:
-                    console.print(
-                        "  - Investigate top failing tests with: insight analyze --report-type stability"
-                    )
+                    console.print("  - Investigate top failing tests with: insight analyze --report-type stability")
                 if result.top_flaky:
-                    console.print(
-                        "  - Address flaky tests with: insight analyze --report-type flaky"
-                    )
+                    console.print("  - Address flaky tests with: insight analyze --report-type flaky")
                 if result.performance_issues:
-                    console.print(
-                        "  - Optimize slow tests with: insight analyze --report-type performance"
-                    )
+                    console.print("  - Optimize slow tests with: insight analyze --report-type performance")
 
         elif insight_type == "patterns":
             result = insight_api.test_insights().error_patterns()
@@ -3181,30 +2706,20 @@ def cli_generate_insights(
                     table.add_column("Frequency", style="green", justify="right")
                     table.add_column("Example Tests", style="yellow")
 
-                    for pattern in result.patterns[
-                        :10
-                    ]:  # Limit to 10 patterns for readability
+                    for pattern in result.patterns[:10]:  # Limit to 10 patterns for readability
                         example_tests = ", ".join(pattern.example_tests[:2])
                         if len(pattern.example_tests) > 2:
                             example_tests += "..."
-                        table.add_row(
-                            pattern.pattern, str(pattern.frequency), example_tests
-                        )
+                        table.add_row(pattern.pattern, str(pattern.frequency), example_tests)
 
                     console.print(table)
 
                     # Recommendations
                     console.print("\n[bold]Pattern Analysis Recommendations:[/bold]")
-                    console.print(
-                        "  - Look for common root causes in tests with similar error patterns"
-                    )
-                    console.print(
-                        "  - Consider refactoring test fixtures or setup code for recurring patterns"
-                    )
+                    console.print("  - Look for common root causes in tests with similar error patterns")
+                    console.print("  - Consider refactoring test fixtures or setup code for recurring patterns")
                 else:
-                    console.print(
-                        "[green]No significant error patterns found in the analyzed period.[/green]"
-                    )
+                    console.print("[green]No significant error patterns found in the analyzed period.[/green]")
 
         elif insight_type == "trends":
             result = insight_api.test_insights().stability_timeline()
@@ -3257,25 +2772,15 @@ def cli_generate_insights(
                     # Trend assessment
                     console.print("\n[bold]Trend Assessment:[/bold]")
                     if result.trend == "improving":
-                        console.print(
-                            "[bold green]Improving[/bold green] - Test stability is trending upward."
-                        )
+                        console.print("[bold green]Improving[/bold green] - Test stability is trending upward.")
                     elif result.trend == "stable":
-                        console.print(
-                            "[bold blue]Stable[/bold blue] - Test stability is consistent."
-                        )
+                        console.print("[bold blue]Stable[/bold blue] - Test stability is consistent.")
                     elif result.trend == "declining":
-                        console.print(
-                            "[bold red]Declining[/bold red] - Test stability is trending downward."
-                        )
+                        console.print("[bold red]Declining[/bold red] - Test stability is trending downward.")
                     else:
-                        console.print(
-                            "[bold yellow]Inconclusive[/bold yellow] - Not enough data to determine trend."
-                        )
+                        console.print("[bold yellow]Inconclusive[/bold yellow] - Not enough data to determine trend.")
                 else:
-                    console.print(
-                        "[yellow]Insufficient data for trend analysis.[/yellow]"
-                    )
+                    console.print("[yellow]Insufficient data for trend analysis.[/yellow]")
 
         elif insight_type == "dependencies":
             result = insight_api.test_insights().dependency_graph()
@@ -3285,9 +2790,7 @@ def cli_generate_insights(
 
                 # Convert result to JSON-serializable dict
                 result_dict = {
-                    "nodes": [
-                        {"id": node.id, "type": node.type} for node in result.nodes
-                    ],
+                    "nodes": [{"id": node.id, "type": node.type} for node in result.nodes],
                     "edges": [
                         {
                             "source": edge.source,
@@ -3316,19 +2819,13 @@ def cli_generate_insights(
                         console.print(f"  Cluster {i}: {len(cluster)} tests")
 
                     if len(result.clusters) > 5:
-                        console.print(
-                            f"  ... and {len(result.clusters) - 5} more clusters"
-                        )
+                        console.print(f"  ... and {len(result.clusters) - 5} more clusters")
 
                     # Show high-impact nodes
                     console.print("\n[bold]High-Impact Components:[/bold]")
                     high_impact = sorted(
                         result.nodes,
-                        key=lambda n: sum(
-                            e.weight
-                            for e in result.edges
-                            if e.source == n.id or e.target == n.id
-                        ),
+                        key=lambda n: sum(e.weight for e in result.edges if e.source == n.id or e.target == n.id),
                         reverse=True,
                     )
                     for node in high_impact[:5]:
@@ -3336,24 +2833,14 @@ def cli_generate_insights(
 
                     # Recommendations
                     console.print("\n[bold]Dependency Analysis Recommendations:[/bold]")
-                    console.print(
-                        "  - Consider refactoring highly connected components to reduce coupling"
-                    )
-                    console.print(
-                        "  - Look for opportunities to parallelize isolated test clusters"
-                    )
+                    console.print("  - Consider refactoring highly connected components to reduce coupling")
+                    console.print("  - Look for opportunities to parallelize isolated test clusters")
                 else:
-                    console.print(
-                        "[yellow]Insufficient data for dependency analysis.[/yellow]"
-                    )
+                    console.print("[yellow]Insufficient data for dependency analysis.[/yellow]")
 
         else:
-            console.print(
-                f"[bold red]Error:[/bold red] Unknown insight type: {insight_type}"
-            )
-            console.print(
-                "Available insight types: summary, patterns, trends, dependencies"
-            )
+            console.print(f"[bold red]Error:[/bold red] Unknown insight type: {insight_type}")
+            console.print("Available insight types: summary, patterns, trends, dependencies")
 
     except Exception as e:
         if format == OutputFormat.JSON:

@@ -1,6 +1,89 @@
 # pytest-insight configuration file
 # This file controls how insights are generated and displayed
 
+# ==============================
+# Core API Configuration
+# ==============================
+
+[core]
+# Default profile to use for storage
+default_profile = "default"
+# Enable debug output
+debug_mode = false
+
+# ==============================
+# Query Configuration
+# ==============================
+
+[query]
+# Default number of days to look back for queries
+default_days = 30
+# Maximum number of sessions to return
+max_sessions = 1000
+# Default filters to apply to all queries
+default_filters = []
+
+# ==============================
+# Comparison Configuration
+# ==============================
+
+[comparison]
+# Minimum difference to consider significant (percentage)
+significance_threshold = 5.0
+# Include only tests that changed status
+only_status_changes = false
+# Metrics to include in comparisons
+metrics = [
+    "duration",
+    "outcome",
+    "flaky_rate"
+]
+
+# ==============================
+# Analysis Configuration
+# ==============================
+
+[analysis]
+# Default number of days to analyze
+default_days = 30
+# Minimum occurrences to identify a pattern
+min_pattern_occurrences = 2
+# Threshold for flaky test detection (percentage)
+flaky_threshold = 5.0
+# Threshold for slow test detection (seconds)
+slow_test_threshold = 1.0
+# Minimum correlation to consider tests related
+min_correlation = 0.7
+
+# Analysis methods to enable
+methods = [
+    "health_report",
+    "stability_report",
+    "performance_report",
+    "failure_patterns",
+    "flaky_tests",
+    "slow_tests"
+]
+
+# ==============================
+# Insights Configuration
+# ==============================
+
+[insights]
+# Default insight types to generate
+default_types = [
+    "summary",
+    "stability",
+    "performance",
+    "patterns",
+    "trends",
+    "dependencies"
+]
+
+# ==============================
+# Report Configurations
+# ==============================
+
 [reports.summary]
 enabled = true
 # Metrics to include in summary reports
@@ -43,3 +126,50 @@ window_size = 7
 enabled = true
 # Minimum correlation to consider a dependency
 min_correlation = 0.5
+
+# ==============================
+# Test Insights Configuration
+# ==============================
+
+[test_insights]
+enabled = true
+# Methods to enable for test insights
+methods = [
+    "outcome_distribution",
+    "flaky_tests",
+    "slowest_tests",
+    "test_patterns",
+    "stability_timeline",
+    "error_patterns",
+    "dependency_graph",
+    "test_health_score",
+    "correlation_analysis",
+    "seasonal_patterns"
+]
+
+# ==============================
+# Session Insights Configuration
+# ==============================
+[session_insights]
+enabled = true
+# Methods to enable for session insights
+methods = [
+    "session_health",
+    "failure_rate_trend",
+    "duration_trend",
+    "environment_impact"
+]
+
+# ==============================
+# Output Configuration
+# ==============================
+
+[output]
+# Output format (text, json, html)
+format = "text"
+# Color output in terminal
+color = true
+# Verbosity level (0-3)
+verbosity = 1
+# Output file (leave empty for stdout)
+file = ""
