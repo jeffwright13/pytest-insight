@@ -16,12 +16,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from pytest_insight.core.models import (
-    TestOutcome,
-    TestResult,
-    TestSession,
-)
-from pytest_insight.core.storage import get_storage_instance
+from pytest_insight.core.models import TestOutcome, TestResult, TestSession
 from pytest_insight.utils.db_generator import PracticeDataGenerator
 
 
@@ -101,6 +96,33 @@ class TrendDataGenerator(PracticeDataGenerator):
 
         # Create cyclic patterns (e.g., day of week effects)
         self.day_of_week_factors = self._create_day_of_week_factors()
+
+        # Error patterns for test failures
+        self.error_patterns = [
+            "AssertionError: Expected {expected}, got {actual}",
+            "ValueError: Invalid value for parameter",
+            "TypeError: Cannot convert type",
+            "IndexError: List index out of range",
+        ]
+
+        # Stack trace patterns
+        self.stack_trace_patterns = [
+            "File 'test_file.py', line {line}, in test_function\n    assert result == expected",
+            "File 'module.py', line {line}, in function\n    return process(value)",
+        ]
+
+        # Warning patterns
+        self.warning_patterns = [
+            "DeprecationWarning: This function is deprecated",
+            "UserWarning: This feature will change in the future",
+            "ResourceWarning: Resource not properly closed",
+        ]
+
+        # Default duration degradation factor
+        self.duration_degradation_factor = 1.2  # 20% slower over time
+
+        # Dictionary to store test durations for consistency
+        self.test_durations = {}
 
     def _create_correlated_groups(self) -> Dict[str, List[List[str]]]:
         """Create groups of tests that will fail together to show correlation patterns."""
@@ -280,185 +302,280 @@ class TrendDataGenerator(PracticeDataGenerator):
     def _generate_test_result(
         self,
         nodeid: str,
-        start_time: datetime,
         outcome: TestOutcome,
         duration: float,
-        has_warning: bool = False,
-        sut: str = "",
+        start_time: datetime,
+        is_flaky: bool = False,
     ) -> TestResult:
-        """Generate a test result with realistic output and error patterns."""
-        # Use the parent class implementation as a starting point
-        result = super()._generate_test_result(
+        """Generate a test result with realistic attributes.
+
+        Args:
+            nodeid: Test node ID
+            outcome: Test outcome
+            duration: Test duration in seconds
+            start_time: Test start time
+            is_flaky: Whether the test is flaky
+
+        Returns:
+            TestResult object
+        """
+        # Generate a realistic test result
+        result = TestResult(
             nodeid=nodeid,
-            start_time=start_time,
             outcome=outcome,
             duration=duration,
-            has_warning=has_warning,
+            start_time=start_time,
         )
 
-        # For failed tests, generate more realistic error messages
-        if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]:
-            error_message = self._generate_error_message(sut, nodeid)
-            result.error_message = error_message
+        # Add realistic attributes based on outcome
+        if outcome == TestOutcome.FAILED:
+            # Select an error pattern
+            error_pattern = random.choice(self.error_patterns)
 
-            # Simplified stack trace
-            result.stack_trace = (
-                "Traceback (most recent call last):\n"
-                f'  File "{nodeid.split("::")[0]}.py", line {random.randint(10, 500)}, in {nodeid.split("::")[-1]}\n'
-                f"    {self.text_gen.word()}({self.text_gen.word()}, {self.text_gen.word()})\n"
-                f"{outcome.name}Error: {error_message}"
+            # Format the error message with random values
+            error_message = error_pattern.format(
+                expected=random.choice(["True", "False", "42", "'expected'", "None"]),
+                actual=random.choice(["True", "False", "24", "'actual'", "None"]),
+                line=random.randint(10, 500),
             )
+
+            # Select a stack trace pattern
+            stack_trace_pattern = random.choice(self.stack_trace_patterns)
+
+            # Format the stack trace with random values
+            stack_trace = stack_trace_pattern.format(
+                line=random.randint(10, 500),
+            )
+
+            # Add error message and stack trace
+            result.longrepr = f"{error_message}\n\n{stack_trace}"
+
+            # Add crash attributes
+            if random.random() < 0.3:  # 30% of failures are crashes
+                result.crash = {
+                    "type": random.choice(["segfault", "timeout", "oom"]),
+                    "message": f"Test crashed with {random.choice(['segmentation fault', 'timeout', 'out of memory'])}",
+                }
+
+        # Add warnings
+        if random.random() < self.warning_rate:
+            # Select 1-3 warning patterns
+            num_warnings = random.randint(1, min(3, len(self.warning_patterns)))
+            warning_patterns = random.sample(self.warning_patterns, num_warnings)
+
+            # Format warnings
+            warnings = []
+            for warning_pattern in warning_patterns:
+                warnings.append(
+                    {
+                        "message": warning_pattern,
+                        "category": warning_pattern.split(":")[0],
+                        "filename": f"{random.choice(['test_', 'core/', 'api/'])}{random.choice(['module', 'utils', 'client'])}.py",
+                        "lineno": random.randint(10, 500),
+                    }
+                )
+
+            result.warnings = warnings
+
+        # Add flaky attributes if the test is flaky
+        if is_flaky:
+            result.flaky = True
+
+            # Add rerun information
+            if random.random() < 0.7:  # 70% of flaky tests have reruns
+                result.reruns = random.randint(1, 3)
+                result.rerun_outcomes = [
+                    random.choice([TestOutcome.PASSED, TestOutcome.FAILED]) for _ in range(result.reruns)
+                ]
 
         return result
 
-    def _create_session(
-        self,
-        sut_name: str,
-        session_time: datetime,
-        is_base: bool = False,
-    ) -> TestSession:
-        """Create a test session with realistic test results and trends."""
-        # Generate session ID
-        session_id = self._generate_session_id(sut_name, is_base)
+    def _generate_nodeid(self, sut_name: str) -> str:
+        """Generate a realistic test nodeid.
 
-        # Calculate degradation factor for this session time
-        degradation = self._get_degradation_factor(session_time)
+        Args:
+            sut_name: Name of the system under test
 
-        # Adjust pass/fail rates based on degradation
-        adjusted_pass_rate = max(0.2, self.pass_rate / degradation)
-        adjusted_flaky_rate = min(0.5, self.flaky_rate * degradation)
-        adjusted_warning_rate = min(0.3, self.warning_rate * degradation)
+        Returns:
+            A realistic test nodeid
+        """
+        # Create module path
+        sut_type = sut_name.split("-")[0] if "-" in sut_name else sut_name
+        module_options = [
+            f"tests/test_{sut_type}.py",
+            f"tests/unit/test_{sut_type}.py",
+            f"tests/integration/test_{sut_type}_integration.py",
+            f"tests/functional/test_{sut_type}_functional.py",
+        ]
+        module = random.choice(module_options)
 
-        # Check if this is an anomaly session
-        is_anomaly = random.random() < self.anomaly_rate
-        if is_anomaly:
-            # Anomaly sessions have much worse pass rates
-            adjusted_pass_rate = max(0.1, adjusted_pass_rate * 0.5)
-            adjusted_flaky_rate = min(0.7, adjusted_flaky_rate * 2.0)
+        # Create test name
+        test_categories = ["create", "read", "update", "delete", "validate", "process", "calculate", "convert"]
+        test_objects = ["user", "account", "data", "config", "file", "connection", "request", "response"]
+        test_scenarios = ["valid", "invalid", "empty", "large", "edge_case", "normal", "error"]
+
+        # Create a test name with a realistic pattern
+        test_name = f"test_{random.choice(test_categories)}_{random.choice(test_objects)}"
+
+        # Sometimes add a scenario
+        if random.random() < 0.5:
+            test_name += f"_{random.choice(test_scenarios)}"
+
+        # Sometimes add a class name
+        if random.random() < 0.3:
+            class_name = f"Test{sut_type.capitalize()}"
+            return f"{module}::{class_name}::{test_name}"
+
+        return f"{module}::{test_name}"
+
+    def _create_session(self, sut_name: str, session_time: datetime, is_base: bool = False) -> TestSession:
+        """Create a test session with realistic test results and trends.
+
+        Args:
+            sut_name: Name of the system under test
+            session_time: Timestamp for the session
+            is_base: Whether this is a base session
+
+        Returns:
+            TestSession object
+        """
+        # Create a session ID
+        session_id = f"{sut_name}-{session_time.strftime('%Y%m%d%H%M%S')}-{random.randint(1000, 9999)}"
+
+        # Calculate session duration (5-30 minutes)
+        session_duration = random.uniform(300, 1800)
+        session_stop_time = session_time + timedelta(seconds=session_duration)
 
         # Create the session
         session = TestSession(
             sut_name=sut_name,
             session_id=session_id,
             session_start_time=session_time,
-            session_stop_time=session_time + timedelta(minutes=random.randint(5, 30)),
-            session_duration=random.uniform(300, 1800),  # 5-30 minutes
-            test_results=[],
+            session_stop_time=session_stop_time,
+            session_duration=session_duration,
             session_tags={
                 "env": random.choice(["dev", "staging", "prod"]),
                 "region": random.choice(["us-east", "us-west", "eu-central"]),
                 "build": f"{random.randint(1000, 9999)}",
                 "version": f"{random.randint(1, 5)}.{random.randint(0, 9)}.{random.randint(0, 9)}",
-                "is_anomaly": "true" if is_anomaly else "false",
+                "is_anomaly": "true" if random.random() < self.anomaly_rate else "false",
             },
         )
 
-        # Get test patterns for this SUT
-        sut_type = sut_name.split("-")[0]
-        test_patterns = self.test_patterns.get(sut_type, ["test_default"])
+        # Get degradation factor based on time
+        degradation_factor = self._get_degradation_factor(session_time)
 
-        # Generate test results - reduced number for performance
-        num_tests = random.randint(10, 25)
+        # Adjust pass rate based on degradation
+        adjusted_pass_rate = max(0.5, self.pass_rate * degradation_factor)
 
-        # Track which tests are part of correlated groups
-        correlated_tests = set()
-        for group in self.correlated_groups.get(sut_name, []):
-            for test in group:
-                correlated_tests.add(test)
+        # Adjust flaky rate based on degradation (inverse relationship)
+        adjusted_flaky_rate = min(0.2, self.flaky_rate / degradation_factor)
 
-        # Generate the tests
+        # Determine if this is an anomalous session
+        is_anomalous = random.random() < self.anomaly_rate
+        if is_anomalous:
+            # Anomalous sessions have much worse pass rates
+            adjusted_pass_rate *= 0.6
+
+        # Generate test results for this session
+        num_tests = random.randint(20, 50)
+
+        # For each test
         for i in range(num_tests):
-            # Determine test details
-            module = random.choice(test_patterns)
-            test_type = random.choice(self.test_types)
-            test_name = f"test_{test_type}_{self.text_gen.word()}"
-            nodeid = f"{module}::{test_name}"
+            # Generate a realistic nodeid
+            nodeid = self._generate_nodeid(sut_name)
 
-            # Determine test outcome
-            has_warning = random.random() < adjusted_warning_rate
-
-            # Check if this is a correlated failure
-            if nodeid in correlated_tests and self._is_correlated_failure(sut_name, nodeid, session_time):
-                outcome = TestOutcome.FAILED
+            # Determine outcome based on pass rate
+            if random.random() < adjusted_pass_rate:
+                outcome = TestOutcome.PASSED
             else:
-                # Normal outcome determination
-                if random.random() < adjusted_pass_rate:
-                    outcome = TestOutcome.PASSED
-                elif random.random() < adjusted_flaky_rate:
-                    outcome = random.choice([TestOutcome.PASSED, TestOutcome.FAILED])
+                # For failed tests, determine if it's part of a correlated group
+                if sut_name in self.correlated_groups and nodeid in self.correlated_groups[sut_name]:
+                    # This test is part of a correlated group
+                    # If any test in the group has failed, this one is more likely to fail
+                    outcome = TestOutcome.FAILED
                 else:
-                    outcome = random.choice(
-                        [
-                            TestOutcome.FAILED,
-                            TestOutcome.ERROR,
-                            TestOutcome.SKIPPED,
-                        ]
-                    )
+                    outcome = random.choice([TestOutcome.FAILED, TestOutcome.ERROR, TestOutcome.SKIPPED])
 
-            # Generate test duration (failed tests tend to be faster)
+            # Determine duration
             if outcome == TestOutcome.PASSED:
-                duration = random.uniform(0.1, 5.0)
+                # Passed tests have more consistent durations
+                base_duration = self.test_durations.get(nodeid, random.uniform(0.1, 1.0))
+                duration = base_duration * random.uniform(0.9, 1.1)
             else:
                 duration = random.uniform(0.05, 2.0)
+
+            # Apply duration degradation factor
+            duration *= self.duration_degradation_factor
 
             # Create the test result
             test_result = self._generate_test_result(
                 nodeid=nodeid,
-                start_time=session_time + timedelta(seconds=random.randint(0, 300)),
                 outcome=outcome,
                 duration=duration,
-                has_warning=has_warning,
-                sut=sut_name,
+                start_time=session_time,
+                is_flaky=random.random() < adjusted_flaky_rate,
             )
 
             # Add to session
-            session.test_results.append(test_result)
+            session.add_test_result(test_result)
 
         return session
 
     def generate_trend_data(self):
-        """Generate test data with realistic trends and patterns."""
+        """Generate test data with realistic trends and patterns.
+
+        This method creates multiple test sessions over a period of time,
+        with realistic patterns of test failures, performance degradation,
+        and other trends.
+
+        Returns:
+            List of generated TestSession objects
+        """
         console = Console()
 
-        # Determine storage target
+        # Display generation parameters
+        table = Table(title="Trend Generation Parameters")
+        table.add_column("Parameter", style="cyan")
+        table.add_column("Value", style="green")
+        table.add_row("Days", str(self.days))
+        table.add_row("Targets per base", str(self.targets_per_base))
+        table.add_row("Initial pass rate", f"{self.pass_rate*100:.1f}%")
+        table.add_row("Trend strength", f"{self.trend_strength*100:.1f}%")
+        table.add_row("Anomaly rate", f"{self.anomaly_rate*100:.1f}%")
+        table.add_row("Correlation groups", str(self.correlation_groups))
+        console.print(table)
+
+        # Generate the sessions
+        all_sessions = self._generate_sessions()
+
+        # Save to profile if specified
         if self.storage_profile:
-            try:
-                self._ensure_valid_profile(self.storage_profile)
-            except Exception as e:
-                console.print(f"[bold red]Error with profile: {str(e)}[/bold red]")
-                raise
-        else:
-            self.target_path.parent.mkdir(parents=True, exist_ok=True)
+            self._save_to_profile(all_sessions)
 
-        # Show generation parameters
-        if not hasattr(self, "quiet") or not self.quiet:
-            table = Table(title="Trend Generation Parameters")
-            table.add_column("Parameter", style="cyan")
-            table.add_column("Value", style="green")
+        return all_sessions
 
-            table.add_row("Days", str(self.days))
-            table.add_row("Targets per base", str(self.targets_per_base))
-            table.add_row("Initial pass rate", f"{self.pass_rate:.1%}")
-            table.add_row("Trend strength", f"{self.trend_strength:.1%}")
-            table.add_row("Anomaly rate", f"{self.anomaly_rate:.1%}")
-            table.add_row("Correlation groups", str(self.correlation_groups))
+    def _generate_sessions(self) -> List[TestSession]:
+        """Generate test sessions with realistic trends and patterns.
 
-            console.print(table)
+        Returns:
+            List of generated TestSession objects
+        """
+        console = Console()
+        all_sessions = []
 
-        # Generate sessions with trends
+        # Calculate time range
+        if not self.start_date:
+            self.start_date = datetime.now(ZoneInfo("UTC")) - timedelta(days=self.days)
+
+        # Limit SUTs for better performance
+        limited_suts = self.sut_variations[:5]
+
+        # Show progress
         with console.status(
             f"[bold green]Generating trend data for {self.days} days...[/bold green]",
             spinner="dots",
         ):
-            all_sessions = []
-
-            # Calculate time range
-            if not self.start_date:
-                self.start_date = datetime.now(ZoneInfo("UTC")) - timedelta(days=self.days)
-
-            # Limit SUTs for better performance
-            limited_suts = self.sut_variations[:5]
-
             # For each day
             for day in range(self.days):
                 day_time = self.start_date + timedelta(days=day)
@@ -468,7 +585,7 @@ class TrendDataGenerator(PracticeDataGenerator):
                     # Create a base session
                     base_session = self._create_session(
                         sut_name=sut_name,
-                        session_time=day_time + timedelta(hours=random.randint(0, 12)),
+                        session_time=day_time,
                         is_base=True,
                     )
                     all_sessions.append(base_session)
@@ -483,24 +600,225 @@ class TrendDataGenerator(PracticeDataGenerator):
                         )
                         all_sessions.append(target_session)
 
-            # Save the sessions
-            if self.storage_profile:
-                # Save to profile
-                storage = get_storage_instance(profile_name=self.storage_profile)
-                storage.save_sessions(all_sessions)
-            else:
-                # Save to file
-                self._save_to_file(all_sessions)
-
         # Show success message
         console.print(
             Panel(
-                f"[bold green]Generated trend data for {self.days} days[/bold green]\n"
-                f"Saved to: {self.target_path if self.target_path else f'profile {self.storage_profile}'}\n"
-                f"Total sessions: {len(all_sessions)}",
+                f"Generated trend data for {self.days} days\n" f"Total sessions: {len(all_sessions)}",
                 title="Success",
                 border_style="green",
             )
         )
 
         return all_sessions
+
+    def _save_to_profile(self, sessions: List[TestSession]) -> None:
+        """Save generated sessions to the specified storage profile.
+
+        Args:
+            sessions: List of TestSession objects to save
+
+        Returns:
+            None
+        """
+        try:
+            from pytest_insight.core.storage import get_storage_instance
+
+            # Get storage instance for the profile
+            storage = get_storage_instance(profile_name=self.storage_profile)
+
+            # Save each session to storage
+            for session in sessions:
+                storage.save_session(session)
+
+            console = Console()
+            console.print(f"[green]Saved {len(sessions)} sessions to profile: {self.storage_profile}[/green]")
+        except Exception as e:
+            console = Console()
+            console.print(f"[bold red]Error saving to profile: {str(e)}[/bold red]")
+
+    @staticmethod
+    def create_showcase_profile(days: int = 30) -> None:
+        """Create a comprehensive showcase profile demonstrating all dashboard features.
+
+        This method generates a rich dataset that showcases all the capabilities
+        of the pytest-insight dashboard, including:
+        - Long-term trends (30 days by default)
+        - Multiple SUTs with different characteristics
+        - Various test failure patterns
+        - Flaky tests and anomalies
+        - Correlated test failures
+        - Performance degradation patterns
+        - Warning patterns
+
+        Args:
+            days: Number of days of data to generate
+
+        Returns:
+            None
+        """
+        console = Console()
+
+        # Create the profile if it doesn't exist
+        try:
+            from pytest_insight.core.storage import create_profile, get_profile_manager
+
+            profile_manager = get_profile_manager()
+
+            # Check if profile exists
+            if "showcase" in profile_manager.profiles:
+                console.print("Using existing profile: showcase")
+            else:
+                create_profile("showcase", "json")
+                console.print("Created new profile: showcase")
+        except Exception as e:
+            console.print(f"[bold red]Error creating profile: {str(e)}[/bold red]")
+            return
+
+        # Generate showcase data in multiple batches to create diverse patterns
+
+        # 1. Generate stable baseline data (first third of time period)
+        console.print("\n[bold]Generating baseline data...[/bold]")
+        baseline_generator = TrendDataGenerator(
+            storage_profile="showcase",
+            days=days // 3,
+            targets_per_base=3,
+            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=days),
+            trend_strength=0.2,  # Minimal trend
+            anomaly_rate=0.02,  # Few anomalies
+            correlation_groups=2,
+        )
+        # Ensure we have a high pass rate but with some consistent failures
+        baseline_generator.pass_rate = 0.95  # Start with high pass rate
+        baseline_generator.flaky_rate = 0.03  # Low flakiness
+
+        # Add specific error patterns for the error message analysis
+        baseline_generator.error_patterns = [
+            "AssertionError: Expected value",
+            "TypeError: Cannot convert",
+            "ValueError: Invalid parameter",
+            "IndexError: List index out of range",
+            "KeyError: 'missing_key'",
+        ]
+
+        # Add stack trace patterns for stack trace analysis
+        baseline_generator.stack_trace_patterns = [
+            "File 'test_module.py', line 42, in test_function\n    assert value == expected",
+            "File 'core/utils.py', line 123, in function\n    return process(value)",
+            "File 'api/client.py', line 56, in fetch_resource\n    response = requests.get(url)",
+        ]
+
+        # Ensure we have some tests with warnings
+        baseline_generator.warning_rate = 0.15  # 15% of tests have warnings
+        baseline_generator.warning_patterns = [
+            "DeprecationWarning: This function is deprecated",
+            "ResourceWarning: Unclosed file",
+            "UserWarning: This feature will be removed",
+            "PendingDeprecationWarning: This will be deprecated soon",
+        ]
+
+        baseline_generator.generate_trend_data()
+
+        # 2. Generate degradation period (middle third)
+        console.print("\n[bold]Generating degradation period...[/bold]")
+        degradation_generator = TrendDataGenerator(
+            storage_profile="showcase",
+            days=days // 3,
+            targets_per_base=3,
+            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=days - (days // 3)),
+            trend_strength=0.7,  # Strong degradation trend
+            anomaly_rate=0.1,  # More anomalies
+            correlation_groups=4,
+        )
+        degradation_generator.pass_rate = 0.85  # Lower pass rate
+        degradation_generator.flaky_rate = 0.08  # Higher flakiness
+
+        # Add performance degradation patterns
+        degradation_generator.duration_degradation_factor = 1.5  # Tests get 50% slower
+
+        # Add more error patterns for the error message analysis
+        degradation_generator.error_patterns = [
+            "TimeoutError: Operation timed out",
+            "ConnectionError: Failed to connect",
+            "PermissionError: Access denied",
+            "RuntimeError: Unexpected condition",
+            "OSError: Resource temporarily unavailable",
+        ]
+
+        # Add more stack trace patterns
+        degradation_generator.stack_trace_patterns = [
+            "File 'database/connection.py', line 78, in connect\n    conn = driver.connect(url, timeout=30)",
+            "File 'network/client.py', line 142, in send_request\n    response = await self.session.post(endpoint, data=payload)",
+            "File 'async/worker.py', line 213, in process_task\n    result = await self.executor.run(task)",
+        ]
+
+        # Increase warning rate
+        degradation_generator.warning_rate = 0.25  # 25% of tests have warnings
+
+        degradation_generator.generate_trend_data()
+
+        # 3. Generate recovery period (final third)
+        console.print("\n[bold]Generating recovery period...[/bold]")
+        recovery_generator = TrendDataGenerator(
+            storage_profile="showcase",
+            days=days // 3,
+            targets_per_base=3,
+            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=days - 2 * (days // 3)),
+            trend_strength=0.5,  # Moderate trend (improvement)
+            anomaly_rate=0.05,  # Fewer anomalies
+            correlation_groups=3,
+        )
+        recovery_generator.pass_rate = 0.75  # Starting from lower point
+        recovery_generator.flaky_rate = 0.12  # Still dealing with flakiness
+
+        # Add performance improvement patterns
+        recovery_generator.duration_degradation_factor = 0.8  # Tests get 20% faster
+
+        # Add error patterns that are being fixed
+        recovery_generator.error_patterns = [
+            "AssertionError: Expected value",  # Consistent with baseline
+            "ValueError: Invalid parameter",  # Consistent with baseline
+            "BugFixedError: This error is being fixed",
+            "ImprovementError: This is getting better",
+        ]
+
+        # Add stack trace patterns showing fixes
+        recovery_generator.stack_trace_patterns = [
+            "File 'test_module.py', line 42, in test_function\n    assert value == expected",
+            "File 'fixed_module.py', line 87, in improved_function\n    return process_safely(data)",
+            "File 'refactored_code.py', line 156, in optimized_method\n    result = fast_algorithm(input)",
+        ]
+
+        # Decrease warning rate
+        recovery_generator.warning_rate = 0.10  # 10% of tests have warnings
+
+        # Invert the trend to show improvement
+        recovery_generator._get_degradation_factor = lambda session_time: max(
+            0.5,
+            1.0
+            - recovery_generator.trend_strength
+            * ((session_time - recovery_generator.start_date) / timedelta(days=recovery_generator.days)),
+        )
+        recovery_generator.generate_trend_data()
+
+        # Show success message
+        console.print(
+            Panel(
+                f"Generated showcase data for {days} days\n"
+                f"The showcase dataset demonstrates:\n"
+                f"- Initial stability period\n"
+                f"- Degradation period with increasing failures\n"
+                f"- Recovery period showing improvement\n"
+                f"- Various test failure patterns and anomalies\n"
+                f"- Correlated test failures and performance trends\n"
+                f"- Error message patterns and stack trace analysis\n"
+                f"- Warning patterns and test criticality scoring",
+                title="Showcase Profile Created",
+                border_style="green",
+            )
+        )
+
+        # Provide instructions for viewing
+        console.print("\n[bold]To view the showcase data:[/bold]")
+        console.print("insight dashboard launch --profile showcase")
+
+        return

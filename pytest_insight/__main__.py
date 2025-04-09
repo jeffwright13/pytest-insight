@@ -505,16 +505,10 @@ def merge_profiles(
 @generate_app.command("practice")
 def generate_practice_data(
     storage_profile: Optional[str] = typer.Option(
-        None,
-        "--profile",
-        "-p",
-        help="Storage profile to use for data generation (preferred over output path)",
+        None, "--profile", "-p", help="Storage profile to use for data generation (preferred over output path)"
     ),
     output_path: Optional[str] = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output path for generated data (only used if profile not specified)",
+        None, "--output", "-o", help="Output path for generated data (only used if profile not specified)"
     ),
     days: int = typer.Option(
         7,
@@ -769,7 +763,7 @@ def generate_trend_data(
     anomaly_rate: float = typer.Option(
         0.05,
         "--anomaly-rate",
-        help="Rate of anomalous test sessions (0.0-1.0)",
+        help="Rate of anomalous test sessions (0.0-0.2)",
     ),
     correlation_groups: int = typer.Option(
         5,
@@ -854,6 +848,25 @@ def generate_trend_data(
         console = Console()
         console.print(f"[bold red]Error: {str(e)}[/bold red]")
         raise typer.Exit(code=1)
+
+
+@app.command("showcase")
+def create_showcase_profile(
+    days: int = typer.Option(30, help="Number of days of data to generate"),
+):
+    """Create a comprehensive showcase profile demonstrating all dashboard features.
+
+    This generates a rich dataset with realistic patterns including:
+    - Initial stability period
+    - Degradation period with increasing failures
+    - Recovery period showing improvement
+    - Various test failure patterns and anomalies
+    - Correlated test failures and performance trends
+
+    After generation, you can view the showcase with:
+    insight dashboard launch --profile showcase
+    """
+    TrendDataGenerator.create_showcase_profile(days=days)
 
 
 # Make analyze a direct command on the main app
