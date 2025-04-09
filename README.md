@@ -9,7 +9,7 @@ A pytest plugin for analyzing test health, performance, and patterns across test
 - **Cross-Version Comparison**: Compare test behavior across Python versions
 - **Performance Analysis**: Identify slow tests and track runtime trends
 - **Session Context**: Preserve test relationships and session metadata
-- **Metrics Visualization**: Expose metrics via REST API and visualize in Grafana
+- **Metrics Visualization**: Expose metrics via REST API and visualize in the built-in dashboard
 - **Storage Profiles**: Manage multiple storage configurations for different environments
 - **Interactive CLI**: Explore the API through a guided, interactive command-line interface
 - **Predictive Analytics**: Forecast test failures, detect anomalies, and predict stability trends
@@ -17,9 +17,18 @@ A pytest plugin for analyzing test health, performance, and patterns across test
 
 ## Installation
 
-### Basic Installation
+### Recommended Installation
 
-For the core plugin functionality:
+We recommend using [uv](https://github.com/astral-sh/uv) for faster and more reliable package installation:
+
+```bash
+# Install with uv
+uv pip install pytest-insight
+```
+
+### Traditional Installation
+
+If you prefer using pip directly:
 
 ```bash
 pip install pytest-insight
@@ -31,28 +40,25 @@ pytest-insight is organized with optional dependencies for different use cases:
 
 ```bash
 # Basic plugin only
-pip install pytest-insight
+uv pip install pytest-insight
 
-# With metrics server for Grafana integration
-pip install pytest-insight[metrics]
+# With metrics server for API integration
+uv pip install pytest-insight[metrics]
 
 # With dashboard for visual exploration
-pip install pytest-insight[dashboard]
+uv pip install pytest-insight[dashboard]
 
 # With predictive analytics capabilities
-pip install pytest-insight[dashboard]  # includes scikit-learn and other ML dependencies
+uv pip install pytest-insight[predictive]  # includes scikit-learn and other ML dependencies
 
 # For development
-pip install pytest-insight[dev]
+uv pip install pytest-insight[dev]
 
-# For demo notebooks
-pip install pytest-insight[demo]
-
-# For Jupyter notebook integration
-pip install pytest-insight[jupyter]
+# For demo data generation
+uv pip install pytest-insight[demo]
 
 # For all features
-pip install pytest-insight[all]
+uv pip install pytest-insight[all]
 ```
 
 ## Quick Start
@@ -134,12 +140,12 @@ insight compare --base-sut service-v1 --target-sut service-v2
 # Query for specific test patterns
 insight query --pattern "test_api*" --days 7
 
-# NEW: Generate predictive analytics
+# Generate predictive analytics
 insight predict failures --sut my-service --days-ahead 7
 insight predict anomalies --sut my-service
 insight predict stability --profile production
 
-# NEW: Launch the interactive dashboard
+# Launch the interactive dashboard
 insight dashboard launch
 ```
 
@@ -176,7 +182,7 @@ insight-metrics
 insight-metrics --host 0.0.0.0 --port 8000 --profile my_profile
 ```
 
-The metrics server provides a REST API with Swagger documentation at `/docs` and can be integrated with Grafana for visualization.
+The metrics server provides a REST API with Swagger documentation at `/docs` and can be integrated with the built-in dashboard for visualization.
 
 ### Interactive CLI
 
@@ -198,30 +204,23 @@ This interactive shell allows you to:
 
 The CLI retains context between steps and provides progressive disclosure of features, making it ideal for both learning the API and for daily test analysis tasks.
 
-### API Servers
+### Generating Trend Data
 
-pytest-insight provides two API interfaces:
-
-1. **High-Level API** - A structured REST API with predefined endpoints
-2. **Introspected API** - A dynamic API that directly exposes the fluent interface methods
-
-You can run both APIs simultaneously with a single command:
+You can generate realistic trend data to explore the dashboard features:
 
 ```bash
-# Start both API servers (High-Level on port 8000, Introspected on port 8001)
-insight-api
+# Generate trend data with default settings
+insight generate trends --profile demo
 
-# Run only the High-Level API
-insight-api --high-level-only
-
-# Run only the Introspected API
-insight-api --introspected-only
-
-# Customize ports and profile
-insight-api --high-level-port 9000 --introspected-port 9001 --profile my_profile
+# Customize trend generation
+insight generate trends --profile demo --days 14 --trend-strength 0.8 --anomaly-rate 0.1
 ```
 
-Both APIs provide Swagger documentation at `/docs` for exploring available endpoints.
+This creates test data with realistic patterns including:
+- Gradual degradation in test stability
+- Cyclic patterns in test failures
+- Correlated test failures
+- Anomaly patterns for detection
 
 ## Documentation
 
