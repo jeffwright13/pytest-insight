@@ -9,31 +9,22 @@ from typing import Any, Callable, Dict, List, Optional
 import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit.history import FileHistory, InMemoryHistory
-from prompt_toolkit.styles import Style
+from prompt_toolkit.history import FileHistory
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from pytest_insight.core.analysis import Analysis
-from pytest_insight.core.comparison import Comparison
+from pytest_insight.core.config import load_config
 from pytest_insight.core.core_api import (
     InsightAPI,
-)
-from pytest_insight.core.core_api import (
+    Query,
     analyze as core_analyze,
-)
-from pytest_insight.core.core_api import (
     compare as core_compare,
-)
-from pytest_insight.core.core_api import (
     get_insights as core_get_insights,
-)
-from pytest_insight.core.core_api import (
+    get_predictive as core_get_predictive,
     query as core_query,
 )
-from pytest_insight.core.insights import Insights
-from pytest_insight.core.query import Query
+from pytest_insight.core.query import Query as QueryClass
 from pytest_insight.core.storage import get_active_profile, get_profile_manager
 
 # Create CLI app
@@ -52,10 +43,11 @@ class OutputFormat(str, Enum):
 
 # API classes to expose
 API_CLASSES = {
-    "query": Query,
-    "analysis": Analysis,
-    "comparison": Comparison,
-    "insights": Insights,
+    "query": QueryClass,
+    "analysis": core_analyze,
+    "comparison": core_compare,
+    "insights": core_get_insights,
+    "predictive": core_get_predictive,
 }
 
 
@@ -278,7 +270,7 @@ def _start_interactive_shell():
 
     # Set up the prompt session with history
     history_file = os.path.expanduser("~/.insight_history")
-    history = FileHistory(history_file) if os.path.exists(os.path.dirname(history_file)) else InMemoryHistory()
+    history = FileHistory(history_file) if os.path.exists(os.path.dirname(history_file)) else FileHistory()
     session = PromptSession(history=history)
 
     # Set up console for rich output
@@ -297,14 +289,16 @@ def _start_interactive_shell():
         "debug_mode": False,  # Flag to enable/disable debug mode
         # Make core classes available to the shell
         "Query": Query,
-        "Analysis": Analysis,
-        "Comparison": Comparison,
-        "Insights": Insights,
+        "Analysis": core_analyze,
+        "Comparison": core_compare,
+        "Insights": core_get_insights,
+        "PredictiveAnalytics": core_get_predictive,
         # Make core API functions available
         "query": core_query,
         "compare": core_compare,
         "analyze": core_analyze,
         "get_insights": core_get_insights,
+        "get_predictive": core_get_predictive,
     }
 
     # Define available commands and completions
@@ -327,6 +321,7 @@ def _start_interactive_shell():
         "api compare",
         "api analyze",
         "api insights",
+        "api predictive",
         "api exec",
         "query new",
         "query list",
@@ -353,11 +348,7 @@ def _start_interactive_shell():
     # Create prompt session with history and auto-completion
     completer = WordCompleter(commands, ignore_case=True)
 
-    style = Style.from_dict(
-        {
-            "prompt": "ansicyan bold",
-        }
-    )
+    style = {"prompt": "ansicyan bold"}
 
     prompt_session = PromptSession(history=history, completer=completer, style=style)
 
@@ -396,6 +387,7 @@ def _start_interactive_shell():
                 console.print("    api compare           - Create a new Comparison instance using the core API")
                 console.print("    api analyze           - Create a new Analysis instance using the core API")
                 console.print("    api insights          - Create a new Insights instance using the core API")
+                console.print("    api predictive        - Create a new PredictiveAnalytics instance using the core API")
                 console.print("    api exec              - Execute a method on a core API object")
 
                 console.print("\n  [bold cyan]Profile Management:[/bold cyan]")
@@ -540,7 +532,7 @@ def _start_interactive_shell():
 
                 # Show more detailed information in debug mode
                 if context["debug_mode"]:
-                    console.print("\n[bold blue]DEBUG: Query Object Details:[/bold blue]")
+                    console.print("[bold blue]DEBUG: Query Object Details:[/bold blue]")
 
                     # Show all attributes of the query object
                     for attr_name in dir(query_obj):
@@ -1627,6 +1619,7 @@ def _start_interactive_shell():
                     console.print("  Analysis    - Analyze test results")
                     console.print("  Comparison  - Compare test results")
                     console.print("  Insights    - Generate comprehensive insights")
+                    console.print("  PredictiveAnalytics - Generate predictive analytics")
                     console.print("  InsightAPI  - Unified API for all components")
 
                     console.print("\n[bold cyan]Using Core Classes with Python Commands:[/bold cyan]")
@@ -1639,6 +1632,7 @@ def _start_interactive_shell():
                     console.print("  python compare()    - Create a new Comparison instance")
                     console.print("  python analyze()    - Create a new Analysis instance")
                     console.print("  python get_insights() - Create a new Insights instance")
+                    console.print("  python get_predictive() - Create a new PredictiveAnalytics instance")
 
                     console.print("\n[bold cyan]Direct Method Execution:[/bold cyan]")
                     console.print("  api exec query in_last_days 7    - Execute method on current query object")
@@ -1719,6 +1713,25 @@ def _start_interactive_shell():
 
                     context["history"][history_index]["result"] = {
                         "action": "created Insights instance",
+                        "profile": profile_name,
+                    }
+
+                elif subcommand == "predictive":
+                    # Create a new PredictiveAnalytics instance using the core API
+                    profile_name = context["active_profile"]
+                    if len(parts) > 2:
+                        profile_name = parts[2]
+
+                    result = core_get_predictive(profile_name)
+                    context["current_predictive"] = result
+
+                    console.print(
+                        f"[bold green]Created new PredictiveAnalytics instance with profile '{profile_name}'[/bold green]"
+                    )
+                    console.print("Use 'python' commands to work with the predictive analytics directly")
+
+                    context["history"][history_index]["result"] = {
+                        "action": "created PredictiveAnalytics instance",
                         "profile": profile_name,
                     }
 
@@ -1810,9 +1823,16 @@ def _start_interactive_shell():
                             console.print("Create one first with 'api insights'")
                             context["history"][history_index]["result"] = {"error": "No active Insights object"}
                             continue
+                    elif obj_name == "predictive":
+                        target_obj = context.get("current_predictive")
+                        if target_obj is None:
+                            console.print("[bold red]Error:[/bold red] No active PredictiveAnalytics object")
+                            console.print("Create one first with 'api predictive'")
+                            context["history"][history_index]["result"] = {"error": "No active PredictiveAnalytics object"}
+                            continue
                     else:
                         console.print(f"[bold red]Error:[/bold red] Unknown object type: {obj_name}")
-                        console.print("Available objects: query, analysis, comparison, insights")
+                        console.print("Available objects: query, analysis, comparison, insights, predictive")
                         context["history"][history_index]["result"] = {"error": f"Unknown object type: {obj_name}"}
                         continue
 
@@ -1857,15 +1877,18 @@ def _start_interactive_shell():
                         if isinstance(result, Query):
                             context["current_query"] = result
                             console.print("Updated current query with the result")
-                        elif isinstance(result, Analysis):
+                        elif isinstance(result, core_analyze):
                             context["current_analysis"] = result
                             console.print("Updated current analysis with the result")
-                        elif isinstance(result, Comparison):
+                        elif isinstance(result, core_compare):
                             context["current_comparison"] = result
                             console.print("Updated current comparison with the result")
-                        elif isinstance(result, Insights):
+                        elif isinstance(result, core_get_insights):
                             context["current_insights"] = result
                             console.print("Updated current insights with the result")
+                        elif isinstance(result, core_get_predictive):
+                            context["current_predictive"] = result
+                            console.print("Updated current predictive analytics with the result")
 
                         # Display the result
                         if result is not None:
@@ -1886,7 +1909,7 @@ def _start_interactive_shell():
 
                 else:
                     console.print(f"[bold red]Error:[/bold red] Unknown API subcommand: {subcommand}")
-                    console.print("Available subcommands: help, query, compare, analyze, insights, exec")
+                    console.print("Available subcommands: help, query, compare, analyze, insights, predictive, exec")
                     context["history"][history_index]["result"] = {"error": f"Unknown API subcommand: {subcommand}"}
 
                 continue
@@ -2095,12 +2118,12 @@ def cli_compare(
                 console.print("\n[bold green]Suggested Next Steps:[/bold green]")
                 if result.new_failures:
                     console.print(
-                        "  - Investigate new failures with: insight analyze --sut",
+                        "  - [yellow]High flakiness detected.[/yellow] Run 'insight analyze --sut",
                         target_sut,
                     )
                 if result.flaky_tests:
                     console.print(
-                        "  - Analyze flaky tests with: insight analyze --flaky-only --sut",
+                        "  - [red]High failure rate detected.[/red] Run 'insight analyze --flaky-only --sut",
                         target_sut,
                     )
             else:
@@ -2338,6 +2361,10 @@ def cli_analyze(
                         "  - [magenta]Slow tests detected.[/magenta] Run 'insight analyze --report-type performance' for performance analysis."
                     )
 
+                # Predictive analytics
+                console.print("\n[bold]Predictive Analytics:[/bold]")
+                console.print("  - Run 'insight predict' to generate predictive analytics for this SUT.")
+
         elif report_type == "stability":
             # Get consistently failing and flaky tests
             failing_tests = analyzer.identify_consistently_failing_tests()
@@ -2516,7 +2543,9 @@ def cli_generate_insights(
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
     insight_type: str = typer.Option("summary", help="Type of insights (summary, patterns, trends, dependencies)"),
     format: OutputFormat = typer.Option(OutputFormat.TEXT, help="Output format (text or json)"),
-    config_file: Optional[str] = typer.Option(None, help="Path to configuration file"),
+    config_file: Optional[str] = typer.Option(
+        None, help="Path to configuration file"
+    ),
     include_metrics: Optional[str] = typer.Option(
         None, help="Comma-separated list of metrics to include (e.g., 'pass_rate,flaky_rate')"
     ),
@@ -2535,6 +2564,11 @@ def cli_generate_insights(
     console = Console()
 
     try:
+        # Load configuration
+        from pytest_insight.core.config import load_config
+
+        config = load_config(config_file)
+
         # Create API instance
         api = InsightAPI()
         if profile:
@@ -2550,13 +2584,6 @@ def cli_generate_insights(
 
         # Create insights instance with the query
         insight_api = api.insights().with_query(query)
-
-        # Load configuration
-        from pytest_insight.core.config import load_config
-
-        config = {}
-        if config_file:
-            config = load_config(config_file)
 
         # Apply command-line overrides for metrics and sections
         if include_metrics or exclude_metrics or include_sections or exclude_sections:
@@ -2831,8 +2858,14 @@ def cli_generate_insights(
                     for node in high_impact[:5]:
                         console.print(f"  - {node.id} ({node.type})")
 
-                    # Recommendations
-                    console.print("\n[bold]Dependency Analysis Recommendations:[/bold]")
+                    # Show contributing factors
+                    if result.contributing_factors:
+                        console.print("\n[bold]Contributing Factors:[/bold]")
+                        for factor in result.contributing_factors:
+                            console.print(f"  • {factor}")
+
+                    # Add recommendations based on trend
+                    console.print("\n[bold]Recommendations:[/bold]")
                     console.print("  - Consider refactoring highly connected components to reduce coupling")
                     console.print("  - Look for opportunities to parallelize isolated test clusters")
                 else:
@@ -2846,6 +2879,239 @@ def cli_generate_insights(
         if format == OutputFormat.JSON:
             import json
 
+            print(json.dumps({"error": str(e)}))
+        else:
+            console.print(f"[bold red]Error:[/bold red] {str(e)}")
+            console.print(traceback.format_exc(), style="red")
+
+
+@app.command("predict")
+def cli_predict(
+    prediction_type: str = typer.Argument(
+        "failures",
+        help="Type of prediction to generate (failures, anomalies, stability)",
+    ),
+    sut: Optional[str] = typer.Option(None, help="System Under Test (SUT) to analyze"),
+    days: int = typer.Option(30, help="Number of days to include in analysis"),
+    days_ahead: int = typer.Option(7, help="Number of days to predict ahead"),
+    profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
+    format: OutputFormat = typer.Option(
+        OutputFormat.TEXT, help="Output format (text or json)"
+    ),
+    config_file: Optional[str] = typer.Option(
+        None, help="Path to configuration file"
+    ),
+):
+    """Generate predictive analytics from test data.
+
+    This command uses machine learning and statistical analysis to predict future test behavior,
+    detect anomalies, and forecast stability trends.
+
+    Examples:
+        insight predict failures --sut my-service
+        insight predict anomalies --days 60
+        insight predict stability --profile production
+    """
+    console = Console()
+    
+    try:
+        # Load configuration if provided
+        if config_file:
+            load_config(config_file)
+            
+        # Create API instance
+        predictive_api = core_get_predictive(
+            core_analyze(profile_name=profile)
+        )
+        
+        # Apply SUT filter if specified
+        if sut and hasattr(predictive_api.analysis, "_sessions"):
+            filtered_sessions = []
+            for session in predictive_api.analysis._sessions:
+                if hasattr(session, "sut") and session.sut == sut:
+                    filtered_sessions.append(session)
+            predictive_api.analysis._sessions = filtered_sessions
+        
+        # Generate the requested prediction
+        if prediction_type == "failures":
+            result = predictive_api.failure_prediction(days_ahead=days_ahead)
+            
+            if format == OutputFormat.JSON:
+                import json
+                print(json.dumps(result, indent=2))
+            else:
+                # Rich text output for failure prediction
+                title_parts = ["\n[bold blue]Test Failure Predictions"]
+                if sut:
+                    title_parts.append(f" for [yellow]{sut}[/yellow]")
+                title_parts.append(f" (Next {days_ahead} days)\n")
+                console.print("".join(title_parts))
+                
+                if "error" in result:
+                    console.print(f"[bold red]Error:[/bold red] {result['error']}")
+                    return
+                
+                # Display high risk tests
+                if result["high_risk_tests"]:
+                    console.print("[bold]High Risk Tests:[/bold] (Failure Probability > 70%)")
+                    table = Table(show_header=True, header_style="bold magenta")
+                    table.add_column("Test", style="cyan")
+                    table.add_column("Failure Probability", style="red")
+                    table.add_column("Recent Failures", style="yellow")
+                    
+                    for test in result["high_risk_tests"][:10]:  # Show top 10
+                        table.add_row(
+                            test["nodeid"],
+                            f"{test['probability'] * 100:.1f}%",
+                            str(test["recent_failures"])
+                        )
+                    
+                    console.print(table)
+                    
+                    # Show prediction confidence
+                    confidence = result["confidence"] * 100
+                    confidence_color = "green" if confidence > 70 else "yellow" if confidence > 40 else "red"
+                    console.print(f"\nPrediction Confidence: [bold {confidence_color}]{confidence:.1f}%[/bold {confidence_color}]")
+                    
+                    # Add recommendations
+                    console.print("\n[bold]Recommendations:[/bold]")
+                    console.print("  • Prioritize fixing high-risk tests to prevent future failures")
+                    console.print("  • Consider adding more test coverage for unstable components")
+                    if confidence < 70:
+                        console.print("  • Collect more test data to improve prediction accuracy")
+                else:
+                    console.print("[green]No high-risk tests identified for the upcoming period.[/green]")
+                    console.print("\nAll tests are predicted to be stable.")
+        
+        elif prediction_type == "anomalies":
+            result = predictive_api.anomaly_detection()
+            
+            if format == OutputFormat.JSON:
+                import json
+                print(json.dumps(result, indent=2))
+            else:
+                # Rich text output for anomaly detection
+                title_parts = ["\n[bold blue]Test Anomaly Detection"]
+                if sut:
+                    title_parts.append(f" for [yellow]{sut}[/yellow]")
+                title_parts.append("\n")
+                console.print("".join(title_parts))
+                
+                if "error" in result:
+                    console.print(f"[bold red]Error:[/bold red] {result['error']}")
+                    return
+                
+                # Display anomalous tests
+                if result["anomalies"]:
+                    console.print("[bold]Anomalous Tests:[/bold] (Anomaly Score > 70%)")
+                    table = Table(show_header=True, header_style="bold magenta")
+                    table.add_column("Test", style="cyan")
+                    table.add_column("Anomaly Score", style="red")
+                    table.add_column("Mean Duration", style="yellow")
+                    table.add_column("Failure Rate", style="yellow")
+                    
+                    for test in result["anomalies"][:10]:  # Show top 10
+                        table.add_row(
+                            test["nodeid"],
+                            f"{test['score'] * 100:.1f}%",
+                            f"{test['features']['mean_duration']:.3f}s",
+                            f"{test['features']['failure_rate'] * 100:.1f}%"
+                        )
+                    
+                    console.print(table)
+                    
+                    # Show detection confidence
+                    confidence = result["detection_confidence"] * 100
+                    confidence_color = "green" if confidence > 70 else "yellow" if confidence > 40 else "red"
+                    console.print(f"\nDetection Confidence: [bold {confidence_color}]{confidence:.1f}%[/bold {confidence_color}]")
+                    
+                    # Add recommendations
+                    console.print("\n[bold]Recommendations:[/bold]")
+                    console.print("  • Investigate anomalous tests for potential issues")
+                    console.print("  • Check for environmental factors affecting these tests")
+                    console.print("  • Consider refactoring tests with unusual behavior patterns")
+                else:
+                    console.print("[green]No anomalous tests detected in the current dataset.[/green]")
+                    console.print("\nAll tests are behaving within expected parameters.")
+        
+        elif prediction_type == "stability":
+            result = predictive_api.stability_forecast()
+            
+            if format == OutputFormat.JSON:
+                import json
+                print(json.dumps(result, indent=2))
+            else:
+                # Rich text output for stability forecast
+                title_parts = ["\n[bold blue]Test Stability Forecast"]
+                if sut:
+                    title_parts.append(f" for [yellow]{sut}[/yellow]")
+                title_parts.append("\n")
+                console.print("".join(title_parts))
+                
+                if "error" in result:
+                    console.print(f"[bold red]Error:[/bold red] {result['error']}")
+                    return
+                
+                # Display stability forecast
+                current = result.get("current_stability")
+                forecast = result.get("forecasted_stability")
+                
+                if current is not None and forecast is not None:
+                    # Create a table for stability scores
+                    table = Table(show_header=True, header_style="bold magenta")
+                    table.add_column("Metric", style="cyan")
+                    table.add_column("Score", style="green")
+                    
+                    # Determine color for current stability
+                    current_color = "green" if current > 80 else "yellow" if current > 60 else "red"
+                    table.add_row("Current Stability", f"[bold {current_color}]{current:.1f}%[/bold {current_color}]")
+                    
+                    # Determine color for forecasted stability
+                    forecast_color = "green" if forecast > 80 else "yellow" if forecast > 60 else "red"
+                    table.add_row("Forecasted Stability", f"[bold {forecast_color}]{forecast:.1f}%[/bold {forecast_color}]")
+                    
+                    # Calculate change
+                    change = forecast - current
+                    change_sign = "+" if change > 0 else ""
+                    change_color = "green" if change > 0 else "red" if change < 0 else "blue"
+                    table.add_row("Projected Change", f"[bold {change_color}]{change_sign}{change:.1f}%[/bold {change_color}]")
+                    
+                    console.print(table)
+                    
+                    # Show trend direction
+                    trend = result["trend_direction"]
+                    trend_color = "green" if trend == "improving" else "red" if trend == "declining" else "blue"
+                    console.print(f"\nTrend Direction: [bold {trend_color}]{trend.capitalize()}[/bold {trend_color}]")
+                    
+                    # Show contributing factors
+                    if result["contributing_factors"]:
+                        console.print("\n[bold]Contributing Factors:[/bold]")
+                        for factor in result["contributing_factors"]:
+                            console.print(f"  • {factor}")
+                    
+                    # Add recommendations based on trend
+                    console.print("\n[bold]Recommendations:[/bold]")
+                    if trend == "declining":
+                        console.print("  - Investigate factors causing stability decline")
+                        console.print("  - Focus on improving test reliability and reducing flakiness")
+                        console.print("  - Consider implementing more robust test infrastructure")
+                    elif trend == "improving":
+                        console.print("  - Continue current testing practices that are improving stability")
+                        console.print("  - Document successful strategies for future reference")
+                        console.print("  - Consider applying similar approaches to other test suites")
+                    else:
+                        console.print("  - Monitor stability metrics to detect any future changes")
+                        console.print("  - Implement proactive measures to improve test reliability")
+                else:
+                    console.print("[yellow]Insufficient data for stability forecast.[/yellow]")
+        
+        else:
+            console.print(f"[bold red]Error:[/bold red] Unknown prediction type: {prediction_type}")
+            console.print("Available prediction types: failures, anomalies, stability")
+    
+    except Exception as e:
+        if format == OutputFormat.JSON:
+            import json
             print(json.dumps({"error": str(e)}))
         else:
             console.print(f"[bold red]Error:[/bold red] {str(e)}")

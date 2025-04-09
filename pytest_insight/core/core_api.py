@@ -32,6 +32,7 @@ from pytest_insight.core.comparison import (
     comparison_with_profiles,
 )
 from pytest_insight.core.insights import Insights, insights, insights_with_profile
+from pytest_insight.core.predictive import PredictiveAnalytics, predictive_analytics
 from pytest_insight.core.query import Query
 from pytest_insight.core.storage import (
     create_profile,
@@ -118,6 +119,16 @@ class InsightAPI:
         if self._profile_name:
             return insights_with_profile(self._profile_name)
         return get_insights()
+        
+    def predictive(self) -> PredictiveAnalytics:
+        """
+        Create a new PredictiveAnalytics instance for forecasting and anomaly detection.
+        
+        Returns:
+            A new PredictiveAnalytics instance configured with the current profile
+        """
+        analysis_instance = self.analyze()
+        return predictive_analytics(analysis_instance)
 
 
 # Re-export the factory functions with consistent naming
@@ -136,6 +147,7 @@ def query(profile_name: Optional[str] = None):
 compare = comparison
 analyze = analysis
 get_insights = insights
+get_predictive = predictive_analytics
 
 __all__ = [
     # Main entry points
@@ -143,11 +155,13 @@ __all__ = [
     "compare",
     "analyze",
     "get_insights",
+    "get_predictive",
     # Classes for advanced usage
     "Query",
     "Comparison",
     "Analysis",
     "Insights",
+    "PredictiveAnalytics",
     "InsightAPI",
     # Profile-specific variants
     "comparison_with_profiles",

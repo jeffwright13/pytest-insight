@@ -12,6 +12,8 @@ A pytest plugin for analyzing test health, performance, and patterns across test
 - **Metrics Visualization**: Expose metrics via REST API and visualize in Grafana
 - **Storage Profiles**: Manage multiple storage configurations for different environments
 - **Interactive CLI**: Explore the API through a guided, interactive command-line interface
+- **Predictive Analytics**: Forecast test failures, detect anomalies, and predict stability trends
+- **Visual Dashboard**: Explore insights through an interactive web dashboard
 
 ## Installation
 
@@ -33,6 +35,12 @@ pip install pytest-insight
 
 # With metrics server for Grafana integration
 pip install pytest-insight[metrics]
+
+# With dashboard for visual exploration
+pip install pytest-insight[dashboard]
+
+# With predictive analytics capabilities
+pip install pytest-insight[dashboard]  # includes scikit-learn and other ML dependencies
 
 # For development
 pip install pytest-insight[dev]
@@ -91,6 +99,58 @@ regex_tests = (q
     .with_pattern(r"test_\w{3}$", use_regex=True)
     .apply()
     .execute())
+
+# NEW: Predictive Analytics
+# Predict test failures for the next 7 days
+predictions = (api.predictive()
+    .failure_prediction(days_ahead=7))
+
+# Get high-risk tests
+high_risk_tests = predictions["high_risk_tests"]
+for test in high_risk_tests[:5]:  # Show top 5
+    print(f"Test: {test['nodeid']}, Probability: {test['probability']:.1%}")
+
+# Detect anomalous test behavior
+anomalies = api.predictive().anomaly_detection()
+for test in anomalies["anomalies"][:3]:  # Show top 3
+    print(f"Anomalous test: {test['nodeid']}, Score: {test['score']:.1%}")
+
+# Forecast test stability trends
+stability = api.predictive().stability_forecast()
+print(f"Current stability: {stability['current_stability']:.1f}%")
+print(f"Forecasted stability: {stability['forecasted_stability']:.1f}%")
+print(f"Trend: {stability['trend_direction']}")
+```
+
+### Using the Command Line Interface
+
+```bash
+# Generate insights report
+insight analyze --sut my-service --days 30
+
+# Compare test runs between versions
+insight compare --base-sut service-v1 --target-sut service-v2
+
+# Query for specific test patterns
+insight query --pattern "test_api*" --days 7
+
+# NEW: Generate predictive analytics
+insight predict failures --sut my-service --days-ahead 7
+insight predict anomalies --sut my-service
+insight predict stability --profile production
+
+# NEW: Launch the interactive dashboard
+insight dashboard launch
+```
+
+### Using the Dashboard
+
+```bash
+# Launch the dashboard with default settings
+insight dashboard launch
+
+# Specify a port and profile
+insight dashboard launch --port 8502 --profile production
 ```
 
 ### Environment Variables

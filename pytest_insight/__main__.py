@@ -16,6 +16,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from pytest_insight.cli.cli_dev import app as dev_cli
+from pytest_insight.cli.cli_dashboard import app as dashboard_app
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.insights import Insights
 from pytest_insight.core.storage import (
@@ -51,6 +52,7 @@ generate_app = typer.Typer(
 # Add subcommands to main app
 app.add_typer(profile_app, name="profile")
 app.add_typer(generate_app, name="generate")
+app.add_typer(dashboard_app, name="dashboard")
 
 
 # Profile management commands
@@ -255,10 +257,7 @@ def clean_profiles(
         False, "--force", "-f", help="Force deletion without confirmation"
     ),
     dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        "-d",
-        help="Show which profiles would be deleted without actually deleting them",
+        False, "--dry-run", "-d", help="Show which profiles would be deleted without actually deleting them"
     ),
 ):
     """Bulk delete profiles by type and/or pattern."""
