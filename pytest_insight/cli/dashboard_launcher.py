@@ -6,10 +6,11 @@ depending on the full CLI infrastructure.
 """
 
 import os
-import sys
 import subprocess
-import typer
+import sys
 from typing import Optional
+
+import typer
 
 app = typer.Typer(help="Launch the pytest-insight dashboard")
 
@@ -60,7 +61,7 @@ def launch(
         print(f"Launching pytest-insight dashboard on port {port}...")
         print(f"Dashboard URL: http://localhost:{port}")
         print("Press Ctrl+C to stop the dashboard")
-        
+
         subprocess.run(cmd)
 
     except Exception as e:

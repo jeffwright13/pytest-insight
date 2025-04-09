@@ -119,11 +119,11 @@ class InsightAPI:
         if self._profile_name:
             return insights_with_profile(self._profile_name)
         return get_insights()
-        
+
     def predictive(self) -> PredictiveAnalytics:
         """
         Create a new PredictiveAnalytics instance for forecasting and anomaly detection.
-        
+
         Returns:
             A new PredictiveAnalytics instance configured with the current profile
         """

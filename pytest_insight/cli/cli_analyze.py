@@ -4,8 +4,9 @@ This module provides a command-line interface for analyzing test data
 and generating insights.
 """
 
+from typing import Optional
+
 import typer
-from typing import Optional, List
 
 app = typer.Typer(help="Analyze test data and generate insights")
 
@@ -27,6 +28,7 @@ def analyze_health(
         insight analyze health --profile production
     """
     from pytest_insight.cli.cli_dev import cli_analyze
+
     cli_analyze(sut=sut, days=days, profile=profile)
 
 
@@ -47,6 +49,7 @@ def analyze_patterns(
         insight analyze patterns --profile production
     """
     from pytest_insight.cli.cli_dev import cli_analyze_patterns
+
     cli_analyze_patterns(sut=sut, days=days, profile=profile)
 
 

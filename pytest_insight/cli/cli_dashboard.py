@@ -5,10 +5,11 @@ web dashboard for visualizing test insights and predictive analytics.
 """
 
 import os
-import sys
 import subprocess
-import typer
+import sys
 from typing import Optional
+
+import typer
 
 app = typer.Typer(help="Launch the pytest-insight web dashboard")
 
@@ -17,18 +18,51 @@ app = typer.Typer(help="Launch the pytest-insight web dashboard")
 def launch_dashboard(
     port: int = typer.Option(8501, help="Port to run the dashboard on"),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
-    browser: bool = typer.Option(True, help="Open dashboard in browser automatically"),
+    browser: bool = typer.Option(True, "--browser/--no-browser", help="Open dashboard in browser automatically"),
 ):
-    """Launch the pytest-insight web dashboard.
+    """Launch the pytest-insight web dashboard and open it in a browser.
 
     This command starts a Streamlit server to host the pytest-insight dashboard,
     which provides visualizations of test insights and predictive analytics.
+    By default, it will open the dashboard in your default web browser.
 
     Examples:
         insight dashboard launch
         insight dashboard launch --port 8502
         insight dashboard launch --profile production
         insight dashboard launch --no-browser
+    """
+    _run_dashboard(port, profile, browser)
+
+
+@app.command("create")
+def create_dashboard(
+    port: int = typer.Option(8501, help="Port to run the dashboard on"),
+    profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
+    browser: bool = typer.Option(False, "--browser/--no-browser", help="Open dashboard in browser automatically"),
+):
+    """Create the pytest-insight web dashboard without opening a browser.
+
+    This command starts a Streamlit server to host the pytest-insight dashboard,
+    which provides visualizations of test insights and predictive analytics.
+    Unlike 'launch', this command will NOT open the dashboard in a browser by default.
+
+    Examples:
+        insight dashboard create
+        insight dashboard create --port 8502
+        insight dashboard create --profile production
+        insight dashboard create --browser
+    """
+    _run_dashboard(port, profile, browser)
+
+
+def _run_dashboard(port: int, profile: Optional[str], browser: bool):
+    """Internal function to run the dashboard with the specified options.
+
+    Args:
+        port: Port to run the dashboard on
+        profile: Storage profile to use
+        browser: Whether to open the dashboard in a browser
     """
     try:
         # Get the path to the dashboard.py file
@@ -56,14 +90,14 @@ def launch_dashboard(
             cmd.extend(["--server.headless", "true"])
 
         # Launch the dashboard
-        print(f"Launching pytest-insight dashboard on port {port}...")
+        print(f"{'Launching' if browser else 'Creating'} pytest-insight dashboard on port {port}...")
         print(f"Dashboard URL: http://localhost:{port}")
         print("Press Ctrl+C to stop the dashboard")
-        
+
         subprocess.run(cmd)
 
     except Exception as e:
-        print(f"Error launching dashboard: {str(e)}")
+        print(f"Error {'launching' if browser else 'creating'} dashboard: {str(e)}")
         sys.exit(1)
 
 

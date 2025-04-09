@@ -4,8 +4,9 @@ This module provides a command-line interface for comparing test sessions
 and identifying differences between them.
 """
 
+from typing import Optional
+
 import typer
-from typing import Optional, List
 
 app = typer.Typer(help="Compare test sessions")
 
@@ -28,6 +29,7 @@ def compare_suts(
         insight compare suts --base-sut service-v1 --target-sut service-v2 --profile production
     """
     from pytest_insight.cli.cli_dev import cli_compare
+
     cli_compare(base_sut=base_sut, target_sut=target_sut, days=days, profile=profile)
 
 
@@ -47,6 +49,7 @@ def compare_sessions(
         insight compare sessions --base-session session-123 --target-session session-456 --profile production
     """
     from pytest_insight.cli.cli_dev import cli_compare_sessions
+
     cli_compare_sessions(base_session=base_session, target_session=target_session, profile=profile)
 
 

@@ -4,8 +4,9 @@ This module provides a command-line interface for querying test data
 and filtering test sessions.
 """
 
+from typing import Optional
+
 import typer
-from typing import Optional, List
 
 app = typer.Typer(help="Query test data")
 
@@ -29,6 +30,7 @@ def query_sessions(
         insight query sessions --profile production
     """
     from pytest_insight.cli.cli_dev import cli_query
+
     cli_query(sut=sut, days=days, pattern=pattern, profile=profile)
 
 
@@ -54,14 +56,15 @@ def query_tests(
         insight query tests --pattern "test_api*" --outcome FAILED
     """
     from pytest_insight.cli.cli_dev import cli_query_tests
+
     cli_query_tests(
-        sut=sut, 
-        days=days, 
-        pattern=pattern, 
+        sut=sut,
+        days=days,
+        pattern=pattern,
         outcome=outcome,
         min_duration=min_duration,
         max_duration=max_duration,
-        profile=profile
+        profile=profile,
     )
 
 

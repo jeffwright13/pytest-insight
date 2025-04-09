@@ -15,6 +15,7 @@ from sklearn.linear_model import LinearRegression
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.models import TestOutcome
 
+
 class PredictiveAnalytics:
     """Predictive analytics for test data.
 
@@ -67,7 +68,7 @@ class PredictiveAnalytics:
             for test in session.test_results:
                 if test.nodeid not in test_time_series:
                     test_time_series[test.nodeid] = []
-                
+
                 # 1 for failure, 0 for pass
                 outcome_value = 1 if test.outcome == TestOutcome.FAILED else 0
                 test_time_series[test.nodeid].append((session_date, outcome_value))
@@ -75,49 +76,51 @@ class PredictiveAnalytics:
         # Only analyze tests with sufficient history
         predictions = {}
         high_risk_tests = []
-        
+
         for nodeid, time_series in test_time_series.items():
             if len(time_series) < 5:
                 continue
-                
+
             # Extract dates and outcomes
             dates = [ts[0] for ts in time_series]
             outcomes = [ts[1] for ts in time_series]
-            
+
             # Simple linear trend for demonstration
             # In a real implementation, use more sophisticated time series models
             x = np.array([(d - dates[0]).total_seconds() / 86400 for d in dates]).reshape(-1, 1)
             y = np.array(outcomes)
-            
+
             model = LinearRegression()
             model.fit(x, y)
-            
+
             # Predict for future days
             future_days = np.array([len(dates) + i for i in range(1, days_ahead + 1)]).reshape(-1, 1)
             predicted_values = model.predict(future_days)
-            
+
             # Calculate average failure probability over the prediction period
             avg_probability = float(np.mean(predicted_values))
-            
+
             # Clip to valid probability range
             avg_probability = max(0, min(1, avg_probability))
-            
+
             predictions[nodeid] = avg_probability
-            
+
             # High risk if probability > 0.7
             if avg_probability > 0.7:
-                high_risk_tests.append({
-                    "nodeid": nodeid,
-                    "probability": avg_probability,
-                    "recent_failures": sum(outcomes[-3:]),  # Count of failures in last 3 runs
-                })
-        
+                high_risk_tests.append(
+                    {
+                        "nodeid": nodeid,
+                        "probability": avg_probability,
+                        "recent_failures": sum(outcomes[-3:]),  # Count of failures in last 3 runs
+                    }
+                )
+
         # Sort high risk tests by probability
         high_risk_tests = sorted(high_risk_tests, key=lambda x: x["probability"], reverse=True)
-        
+
         # Calculate overall confidence based on data quantity and quality
         confidence = min(1.0, len(sorted_sessions) / 20)  # More sessions = higher confidence
-        
+
         return {
             "predictions": predictions,
             "confidence": confidence,
@@ -143,7 +146,7 @@ class PredictiveAnalytics:
                 "detection_confidence": 0,
                 "error": "Insufficient data for anomaly detection (need at least 10 sessions)",
             }
-            
+
         # Extract features for each test
         test_features = {}
         for session in self._sessions:
@@ -154,13 +157,11 @@ class PredictiveAnalytics:
                         "outcomes": [],
                         "reruns": [],
                     }
-                
+
                 # Add test features
                 test_features[test.nodeid]["durations"].append(test.duration)
-                test_features[test.nodeid]["outcomes"].append(
-                    1 if test.outcome == TestOutcome.FAILED else 0
-                )
-                
+                test_features[test.nodeid]["outcomes"].append(1 if test.outcome == TestOutcome.FAILED else 0)
+
                 # Count reruns if available
                 rerun_count = 0
                 if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
@@ -168,17 +169,17 @@ class PredictiveAnalytics:
                         if rerun_group.nodeid == test.nodeid:
                             rerun_count = len(rerun_group.tests) - 1
                             break
-                
+
                 test_features[test.nodeid]["reruns"].append(rerun_count)
-        
+
         # Prepare feature matrix for anomaly detection
         feature_matrix = []
         test_nodeids = []
-        
+
         for nodeid, features in test_features.items():
             if len(features["durations"]) < 5:
                 continue
-                
+
             # Calculate statistical features
             feature_vector = [
                 np.mean(features["durations"]),
@@ -187,10 +188,10 @@ class PredictiveAnalytics:
                 np.mean(features["reruns"]),
                 np.max(features["durations"]) / (np.mean(features["durations"]) or 1),
             ]
-            
+
             feature_matrix.append(feature_vector)
             test_nodeids.append(nodeid)
-        
+
         if not feature_matrix:
             return {
                 "anomalies": [],
@@ -198,19 +199,17 @@ class PredictiveAnalytics:
                 "detection_confidence": 0,
                 "error": "No tests with sufficient data for anomaly detection",
             }
-            
+
         # Use Isolation Forest for anomaly detection
         model = IsolationForest(contamination=0.1, random_state=42)
         model.fit(feature_matrix)
-        
+
         # Get anomaly scores (-1 for anomalies, 1 for normal)
         scores = model.decision_function(feature_matrix)
-        
+
         # Convert to anomaly score (0-1, higher = more anomalous)
-        anomaly_scores = {
-            nodeid: 1 - (score + 1) / 2 for nodeid, score in zip(test_nodeids, scores)
-        }
-        
+        anomaly_scores = {nodeid: 1 - (score + 1) / 2 for nodeid, score in zip(test_nodeids, scores)}
+
         # Identify anomalies (tests with negative scores in isolation forest)
         anomalies = [
             {
@@ -220,18 +219,18 @@ class PredictiveAnalytics:
                     "mean_duration": np.mean(test_features[nodeid]["durations"]),
                     "failure_rate": np.mean(test_features[nodeid]["outcomes"]),
                     "rerun_rate": np.mean(test_features[nodeid]["reruns"]),
-                }
+                },
             }
             for nodeid, score in anomaly_scores.items()
             if score > 0.7  # High anomaly score threshold
         ]
-        
+
         # Sort anomalies by score
         anomalies = sorted(anomalies, key=lambda x: x["score"], reverse=True)
-        
+
         # Calculate detection confidence based on data quantity
         detection_confidence = min(1.0, len(self._sessions) / 30)
-        
+
         return {
             "anomalies": anomalies,
             "anomaly_scores": anomaly_scores,
@@ -259,78 +258,77 @@ class PredictiveAnalytics:
                 "contributing_factors": [],
                 "error": "Insufficient data for stability forecast (need at least 7 sessions)",
             }
-            
+
         # Calculate stability scores for each day
         daily_stability = {}
-        
+
         for session in self._sessions:
             session_date = getattr(session, "session_start_time", datetime.now())
             date_key = session_date.date().isoformat()
-            
+
             if date_key not in daily_stability:
                 daily_stability[date_key] = {
                     "total_tests": 0,
                     "passed_tests": 0,
                     "flaky_tests": 0,
                 }
-            
+
             # Count tests
             daily_stability[date_key]["total_tests"] += len(session.test_results)
             daily_stability[date_key]["passed_tests"] += sum(
                 1 for t in session.test_results if t.outcome == TestOutcome.PASSED
             )
-            
+
             # Count flaky tests
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
                 daily_stability[date_key]["flaky_tests"] += sum(
-                    1 for g in session.rerun_test_groups 
-                    if g.final_outcome == TestOutcome.PASSED and len(g.tests) > 1
+                    1 for g in session.rerun_test_groups if g.final_outcome == TestOutcome.PASSED and len(g.tests) > 1
                 )
-        
+
         # Calculate daily stability scores
         dates = []
         stability_scores = []
-        
+
         for date_key, metrics in sorted(daily_stability.items()):
             if metrics["total_tests"] == 0:
                 continue
-                
+
             # Calculate stability score (0-100)
             pass_rate = metrics["passed_tests"] / metrics["total_tests"]
             flaky_rate = metrics["flaky_tests"] / metrics["total_tests"] if metrics["total_tests"] > 0 else 0
-            
+
             # Weighted score: 70% pass rate, 30% non-flakiness
             stability_score = (pass_rate * 70) + ((1 - flaky_rate) * 30)
-            
+
             dates.append(datetime.fromisoformat(date_key))
             stability_scores.append(stability_score)
-        
+
         if len(stability_scores) < 5:
             return {
-                "current_stability": np.mean(stability_scores) if stability_scores else None,
+                "current_stability": (np.mean(stability_scores) if stability_scores else None),
                 "forecasted_stability": None,
                 "trend_direction": "unknown",
                 "contributing_factors": [],
                 "error": "Insufficient daily data for stability forecast",
             }
-        
+
         # Current stability is the average of the last 3 days
         current_stability = np.mean(stability_scores[-3:])
-        
+
         # Fit linear regression to predict trend
         x = np.array([(d - dates[0]).total_seconds() / 86400 for d in dates]).reshape(-1, 1)
         y = np.array(stability_scores)
-        
+
         model = LinearRegression()
         model.fit(x, y)
-        
+
         # Predict stability for next 7 days
         future_days = np.array([len(dates) + i for i in range(1, 8)]).reshape(-1, 1)
         predicted_values = model.predict(future_days)
-        
+
         # Forecasted stability is the average of the predicted values
         forecasted_stability = float(np.mean(predicted_values))
-        
+
         # Determine trend direction
         if forecasted_stability > current_stability + 5:
             trend_direction = "improving"
@@ -338,36 +336,36 @@ class PredictiveAnalytics:
             trend_direction = "declining"
         else:
             trend_direction = "stable"
-        
+
         # Identify contributing factors
         contributing_factors = []
-        
+
         # Check pass rate trend
         pass_rates = [
             metrics["passed_tests"] / metrics["total_tests"]
             for _, metrics in sorted(daily_stability.items())
             if metrics["total_tests"] > 0
         ]
-        
+
         if len(pass_rates) >= 5:
             pass_rate_slope, _, _, _, _ = stats.linregress(range(len(pass_rates)), pass_rates)
             if abs(pass_rate_slope) > 0.01:
                 direction = "increasing" if pass_rate_slope > 0 else "decreasing"
                 contributing_factors.append(f"Pass rate is {direction}")
-        
+
         # Check flakiness trend
         flaky_rates = [
             metrics["flaky_tests"] / metrics["total_tests"]
             for _, metrics in sorted(daily_stability.items())
             if metrics["total_tests"] > 0
         ]
-        
+
         if len(flaky_rates) >= 5:
             flaky_rate_slope, _, _, _, _ = stats.linregress(range(len(flaky_rates)), flaky_rates)
             if abs(flaky_rate_slope) > 0.01:
                 direction = "increasing" if flaky_rate_slope > 0 else "decreasing"
                 contributing_factors.append(f"Test flakiness is {direction}")
-        
+
         return {
             "current_stability": current_stability,
             "forecasted_stability": forecasted_stability,
@@ -388,6 +386,7 @@ def predictive_analytics(analysis: Optional[Analysis] = None) -> PredictiveAnaly
     """
     if analysis is None:
         from pytest_insight.core.analysis import analysis as create_analysis
+
         analysis = create_analysis()
-    
+
     return PredictiveAnalytics(analysis)

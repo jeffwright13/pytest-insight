@@ -69,9 +69,7 @@ def _get_method_info(method) -> Dict[str, Any]:
 
         param_info = {
             "name": name,
-            "default": (
-                None if param.default is inspect.Parameter.empty else param.default
-            ),
+            "default": (None if param.default is inspect.Parameter.empty else param.default),
             "required": param.default is inspect.Parameter.empty,
             "type": type_hints.get(name, Any),
             "kind": str(param.kind),
@@ -97,9 +95,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
     insights = Insights()
 
     # TestInsights methods
-    for method_name, method in inspect.getmembers(
-        insights.tests, predicate=inspect.ismethod
-    ):
+    for method_name, method in inspect.getmembers(insights.tests, predicate=inspect.ismethod):
         if method_name.startswith("_"):
             continue
 
@@ -112,9 +108,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
         }
 
     # SessionInsights methods
-    for method_name, method in inspect.getmembers(
-        insights.sessions, predicate=inspect.ismethod
-    ):
+    for method_name, method in inspect.getmembers(insights.sessions, predicate=inspect.ismethod):
         if method_name.startswith("_"):
             continue
 
@@ -127,9 +121,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
         }
 
     # TrendInsights methods
-    for method_name, method in inspect.getmembers(
-        insights.trends, predicate=inspect.ismethod
-    ):
+    for method_name, method in inspect.getmembers(insights.trends, predicate=inspect.ismethod):
         if method_name.startswith("_"):
             continue
 
@@ -228,9 +220,7 @@ def _format_rich_output(data: Dict[str, Any], title: str = None) -> None:
                         else:
                             console.print(f"  {item}")
                     if len(value) > 10:
-                        console.print(
-                            f"  [dim]...and {len(value) - 10} more items[/dim]"
-                        )
+                        console.print(f"  [dim]...and {len(value) - 10} more items[/dim]")
                 else:
                     console.print(f"[bold]{key}:[/bold] {value}")
     elif isinstance(data, list):
@@ -253,9 +243,7 @@ def _format_patterns_table(data: Dict[str, Any], title: str) -> None:
     """Format patterns data as a table."""
     patterns = data.get("patterns", [])
     if not patterns:
-        console.print(
-            "[yellow]No significant patterns identified in the dataset.[/yellow]"
-        )
+        console.print("[yellow]No significant patterns identified in the dataset.[/yellow]")
         return
 
     if "error_patterns" in title.lower():
@@ -295,10 +283,7 @@ def _format_patterns_table(data: Dict[str, Any], title: str) -> None:
             hour_pattern = ""
             if pattern.get("peak_hours"):
                 hour_pattern = ", ".join(
-                    [
-                        f"{hour}:00 ({int(pct*100)}%)"
-                        for hour, count, pct in pattern.get("peak_hours", [])
-                    ]
+                    [f"{hour}:00 ({int(pct*100)}%)" for hour, count, pct in pattern.get("peak_hours", [])]
                 )
             else:
                 hour_pattern = "No significant pattern"
@@ -307,10 +292,7 @@ def _format_patterns_table(data: Dict[str, Any], title: str) -> None:
             day_pattern = ""
             if pattern.get("peak_days"):
                 day_pattern = ", ".join(
-                    [
-                        f"{day_names[day]} ({int(pct*100)}%)"
-                        for day, count, pct in pattern.get("peak_days", [])
-                    ]
+                    [f"{day_names[day]} ({int(pct*100)}%)" for day, count, pct in pattern.get("peak_days", [])]
                 )
             else:
                 day_pattern = "No significant pattern"
@@ -329,9 +311,7 @@ def _format_dependencies_table(data: Dict[str, Any]) -> None:
     """Format dependency graph data as a table."""
     dependencies = data.get("dependencies", [])
     if not dependencies:
-        console.print(
-            "[yellow]No significant dependencies identified in the dataset.[/yellow]"
-        )
+        console.print("[yellow]No significant dependencies identified in the dataset.[/yellow]")
         return
 
     table = Table(title="Test Dependency Analysis", box=SIMPLE)
@@ -366,9 +346,7 @@ def _format_correlations_table(data: Dict[str, Any]) -> None:
     """Format correlation analysis data as a table."""
     correlations = data.get("correlations", [])
     if not correlations:
-        console.print(
-            "[yellow]No significant correlations identified in the dataset.[/yellow]"
-        )
+        console.print("[yellow]No significant correlations identified in the dataset.[/yellow]")
         return
 
     table = Table(title="Test Correlation Analysis", box=SIMPLE)
@@ -403,9 +381,7 @@ def _format_health_score(data: Dict[str, Any]) -> None:
     else:
         health_color = "red"
 
-    console.print(
-        f"[bold]Test Health Score:[/bold] [{health_color}]{health_score:.1f}/100[/{health_color}]"
-    )
+    console.print(f"[bold]Test Health Score:[/bold] [{health_color}]{health_score:.1f}/100[/{health_color}]")
 
     # Display brittle tests
     brittle_tests = data.get("brittle_tests", [])
@@ -447,9 +423,7 @@ def _format_environment_impact(data: Dict[str, Any]) -> None:
         test_count = env_data.get("test_count", 0)
         avg_duration = env_data.get("avg_duration", 0)
 
-        table.add_row(
-            env_name, f"{pass_rate:.2%}", str(test_count), f"{avg_duration:.2f}s"
-        )
+        table.add_row(env_name, f"{pass_rate:.2%}", str(test_count), f"{avg_duration:.2f}s")
 
     console.print(table)
 
@@ -533,21 +507,11 @@ def _create_dynamic_command(method_info: Dict[str, Any]):
 
     # Create command function
     def command_func(
-        data_path: Optional[str] = typer.Option(
-            None, "--data-path", "-d", help="Path to test data"
-        ),
-        sut_filter: Optional[str] = typer.Option(
-            None, "--sut", "-s", help="Filter by system under test"
-        ),
-        days: Optional[int] = typer.Option(
-            None, "--days", help="Filter by number of days"
-        ),
-        test_pattern: Optional[str] = typer.Option(
-            None, "--test", "-t", help="Filter by test name pattern"
-        ),
-        profile: Optional[str] = typer.Option(
-            None, "--profile", "-p", help="Storage profile to use"
-        ),
+        data_path: Optional[str] = typer.Option(None, "--data-path", "-d", help="Path to test data"),
+        sut_filter: Optional[str] = typer.Option(None, "--sut", "-s", help="Filter by system under test"),
+        days: Optional[int] = typer.Option(None, "--days", help="Filter by number of days"),
+        test_pattern: Optional[str] = typer.Option(None, "--test", "-t", help="Filter by test name pattern"),
+        profile: Optional[str] = typer.Option(None, "--profile", "-p", help="Storage profile to use"),
         output_format: OutputFormat = typer.Option(
             OutputFormat.TEXT, "--format", "-f", help="Output format (text or json)"
         ),
@@ -566,15 +530,9 @@ def _create_dynamic_command(method_info: Dict[str, Any]):
 
         # Apply filters if provided
         if any([sut_filter, days, test_pattern]):
-            insights = insights.with_query(
-                lambda q: q.filter_by_sut(sut_filter) if sut_filter else q
-            )
-            insights = insights.with_query(
-                lambda q: q.in_last_days(days) if days else q
-            )
-            insights = insights.with_query(
-                lambda q: q.filter_by_test_name(test_pattern) if test_pattern else q
-            )
+            insights = insights.with_query(lambda q: q.filter_by_sut(sut_filter) if sut_filter else q)
+            insights = insights.with_query(lambda q: q.in_last_days(days) if days else q)
+            insights = insights.with_query(lambda q: q.filter_by_test_name(test_pattern) if test_pattern else q)
 
         # Get the component
         if class_instance == "insights":
@@ -639,19 +597,11 @@ for method_key, method_info in api_methods.items():
 
 @app.command()
 def summary(
-    data_path: Optional[str] = typer.Option(
-        None, "--data-path", "-d", help="Path to test data"
-    ),
-    sut_filter: Optional[str] = typer.Option(
-        None, "--sut", "-s", help="Filter by system under test"
-    ),
+    data_path: Optional[str] = typer.Option(None, "--data-path", "-d", help="Path to test data"),
+    sut_filter: Optional[str] = typer.Option(None, "--sut", "-s", help="Filter by system under test"),
     days: Optional[int] = typer.Option(None, "--days", help="Filter by number of days"),
-    test_pattern: Optional[str] = typer.Option(
-        None, "--test", "-t", help="Filter by test name pattern"
-    ),
-    profile: Optional[str] = typer.Option(
-        None, "--profile", "-p", help="Storage profile to use"
-    ),
+    test_pattern: Optional[str] = typer.Option(None, "--test", "-t", help="Filter by test name pattern"),
+    profile: Optional[str] = typer.Option(None, "--profile", "-p", help="Storage profile to use"),
     output_format: OutputFormat = typer.Option(
         OutputFormat.TEXT, "--format", "-f", help="Output format (text or json)"
     ),
@@ -671,22 +621,16 @@ def summary(
             # Execute the query to get sessions
             query_result = query.execute()
             # Create an Analysis with the sessions
-            analysis_instance = Analysis(
-                sessions=query_result.sessions, profile_name=profile
-            )
+            analysis_instance = Analysis(sessions=query_result.sessions, profile_name=profile)
             insights = Insights(analysis=analysis_instance)
         else:
             insights = Insights(profile_name=profile)
 
     # Apply filters if provided
     if any([sut_filter, days, test_pattern]):
-        insights = insights.with_query(
-            lambda q: q.filter_by_sut(sut_filter) if sut_filter else q
-        )
+        insights = insights.with_query(lambda q: q.filter_by_sut(sut_filter) if sut_filter else q)
         insights = insights.with_query(lambda q: q.in_last_days(days) if days else q)
-        insights = insights.with_query(
-            lambda q: q.filter_by_test_name(test_pattern) if test_pattern else q
-        )
+        insights = insights.with_query(lambda q: q.filter_by_test_name(test_pattern) if test_pattern else q)
 
     # Generate summary report
     result = insights.summary_report()
@@ -711,9 +655,7 @@ def summary(
             else:
                 health_color = "red"
 
-            console.print(
-                f"Health Score: [{health_color}]{health_score:.1f}/100[/{health_color}]"
-            )
+            console.print(f"Health Score: [{health_color}]{health_score:.1f}/100[/{health_color}]")
             console.print(f"Pass Rate: {health.get('pass_rate', 0):.2%}")
             console.print(f"Flaky Tests: {health.get('flaky_test_count', 0)}")
             console.print(f"Slow Tests: {health.get('slow_test_count', 0)}")
@@ -728,9 +670,7 @@ def summary(
             if error_patterns:
                 console.print("\n[bold]Top Error Patterns:[/bold]")
                 for i, pattern in enumerate(error_patterns[:3]):
-                    console.print(
-                        f"{i+1}. {pattern.get('pattern', 'Unknown')} ({pattern.get('count', 0)} occurrences)"
-                    )
+                    console.print(f"{i+1}. {pattern.get('pattern', 'Unknown')} ({pattern.get('count', 0)} occurrences)")
 
             # Display test dependencies
             dependencies = test_insights.get("dependencies", [])
@@ -739,9 +679,7 @@ def summary(
                 for i, dep in enumerate(dependencies[:3]):
                     test1 = dep.get("test1", "").split("::")[-1]
                     test2 = dep.get("test2", "").split("::")[-1]
-                    console.print(
-                        f"{i+1}. {test1} → {test2} (strength: {dep.get('strength', 0):.2f})"
-                    )
+                    console.print(f"{i+1}. {test1} → {test2} (strength: {dep.get('strength', 0):.2f})")
 
         # Display session insights
         session_insights = result.get("session_insights", {})
@@ -754,9 +692,7 @@ def summary(
                 console.print("\n[bold]Environment Impact:[/bold]")
                 environments = env_impact.get("environments", {})
                 for env_name, env_data in list(environments.items())[:3]:
-                    console.print(
-                        f"{env_name}: {env_data.get('pass_rate', 0):.2%} pass rate"
-                    )
+                    console.print(f"{env_name}: {env_data.get('pass_rate', 0):.2%} pass rate")
 
         # Display trend insights
         trend_insights = result.get("trend_insights", {})
@@ -770,13 +706,9 @@ def summary(
                 improving = failure_trends.get("improving", False)
 
                 if improving:
-                    console.print(
-                        f"Failure rate is [green]improving by {abs(trend_pct):.1f}%[/green]"
-                    )
+                    console.print(f"Failure rate is [green]improving by {abs(trend_pct):.1f}%[/green]")
                 else:
-                    console.print(
-                        f"Failure rate is [red]worsening by {abs(trend_pct):.1f}%[/red]"
-                    )
+                    console.print(f"Failure rate is [red]worsening by {abs(trend_pct):.1f}%[/red]")
 
 
 @app.command()
@@ -806,12 +738,8 @@ def list_commands():
 
     # Display built-in commands
     console.print("\n[bold]Built-in Commands[/bold]")
-    console.print(
-        "  [cyan]summary[/cyan]: Generate a comprehensive summary report of all insights"
-    )
-    console.print(
-        "  [cyan]list-commands[/cyan]: List all available commands with descriptions"
-    )
+    console.print("  [cyan]summary[/cyan]: Generate a comprehensive summary report of all insights")
+    console.print("  [cyan]list-commands[/cyan]: List all available commands with descriptions")
 
 
 if __name__ == "__main__":
