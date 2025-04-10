@@ -123,7 +123,7 @@ def list_all_profiles(
     console.print(table)
 
 
-def format_file_size(size_bytes):
+def format_file_size(size_bytes: int) -> str:
     """Format bytes to human readable size."""
     if size_bytes == 0:
         return "0 B"
@@ -505,10 +505,16 @@ def merge_profiles(
 @generate_app.command("practice")
 def generate_practice_data(
     storage_profile: Optional[str] = typer.Option(
-        None, "--profile", "-p", help="Storage profile to use for data generation (preferred over output path)"
+        None,
+        "--profile",
+        "-p",
+        help="Storage profile to use for data generation (preferred over output path)",
     ),
     output_path: Optional[str] = typer.Option(
-        None, "--output", "-o", help="Output path for generated data (only used if profile not specified)"
+        None,
+        "--output",
+        "-o",
+        help="Output path for generated data (only used if profile not specified)",
     ),
     days: int = typer.Option(
         7,

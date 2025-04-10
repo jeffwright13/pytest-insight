@@ -10,6 +10,7 @@ import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -271,7 +272,16 @@ def _start_interactive_shell():
     # Set up the prompt session with history
     history_file = os.path.expanduser("~/.insight_history")
     history = FileHistory(history_file) if os.path.exists(os.path.dirname(history_file)) else FileHistory()
-    session = PromptSession(history=history)
+
+    # Create a prompt session with minimal styling to avoid compatibility issues
+    style = Style.from_dict(
+        {
+            # You can add minimal styling here if needed
+            "prompt": "#00aa00",
+        }
+    )
+
+    prompt_session = PromptSession(history=history, style=style)
 
     # Set up console for rich output
     console = Console()
@@ -347,8 +357,6 @@ def _start_interactive_shell():
 
     # Create prompt session with history and auto-completion
     completer = WordCompleter(commands, ignore_case=True)
-
-    style = {"prompt": "ansicyan bold"}
 
     prompt_session = PromptSession(history=history, completer=completer, style=style)
 
@@ -3041,7 +3049,6 @@ def cli_predict(
                     console.print("  • Consider refactoring tests with unusual behavior patterns")
                 else:
                     console.print("[green]No anomalous tests detected in the current dataset.[/green]")
-                    console.print("\nAll tests are behaving within expected parameters.")
 
         elif prediction_type == "stability":
             result = predictive_api.stability_forecast()

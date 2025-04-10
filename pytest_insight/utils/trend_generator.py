@@ -410,9 +410,35 @@ class TrendDataGenerator(PracticeDataGenerator):
         module = random.choice(module_options)
 
         # Create test name
-        test_categories = ["create", "read", "update", "delete", "validate", "process", "calculate", "convert"]
-        test_objects = ["user", "account", "data", "config", "file", "connection", "request", "response"]
-        test_scenarios = ["valid", "invalid", "empty", "large", "edge_case", "normal", "error"]
+        test_categories = [
+            "create",
+            "read",
+            "update",
+            "delete",
+            "validate",
+            "process",
+            "calculate",
+            "convert",
+        ]
+        test_objects = [
+            "user",
+            "account",
+            "data",
+            "config",
+            "file",
+            "connection",
+            "request",
+            "response",
+        ]
+        test_scenarios = [
+            "valid",
+            "invalid",
+            "empty",
+            "large",
+            "edge_case",
+            "normal",
+            "error",
+        ]
 
         # Create a test name with a realistic pattern
         test_name = f"test_{random.choice(test_categories)}_{random.choice(test_objects)}"
@@ -458,7 +484,7 @@ class TrendDataGenerator(PracticeDataGenerator):
                 "region": random.choice(["us-east", "us-west", "eu-central"]),
                 "build": f"{random.randint(1000, 9999)}",
                 "version": f"{random.randint(1, 5)}.{random.randint(0, 9)}.{random.randint(0, 9)}",
-                "is_anomaly": "true" if random.random() < self.anomaly_rate else "false",
+                "is_anomaly": ("true" if random.random() < self.anomaly_rate else "false"),
             },
         )
 

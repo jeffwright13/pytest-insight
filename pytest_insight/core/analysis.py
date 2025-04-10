@@ -99,6 +99,19 @@ class AnalysisBase:
 
         return filtered_sessions
 
+    def _get_all_test_results(self):
+        """
+        Get all test results from all sessions.
+
+        Returns:
+            List of all test results across all sessions
+        """
+        all_tests = []
+        for session in getattr(self, "_sessions", []):
+            if hasattr(session, "tests") and session.tests:
+                all_tests.extend(session.tests)
+        return all_tests
+
 
 class SessionAnalysis(AnalysisBase):
     """Session-level analytics.
