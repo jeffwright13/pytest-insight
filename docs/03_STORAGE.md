@@ -251,13 +251,31 @@ for session_id, session in source2_sessions.items():
 
 The Simple File Exchange functionality allows importing and exporting test session data between different storage instances or applications.
 
+### Overview
+
+The Simple File Exchange (SFE) feature in pytest-insight allows users to easily share test session data between different machines. This is particularly useful for teams working on the same project but using different development environments.
+
+SFE provides a straightforward way to:
+- Export test sessions to a file
+- Import test sessions from a file
+- Selectively clear test sessions
+
 ### Export Operations
 
 ```python
 # Export all sessions to a file
 storage.export_sessions("/path/to/export.json")
 
-# Export with filtering
+# Export with filtering by days
+storage.export_sessions("/path/to/export.json", days=7)
+
+# Export with filtering by SUT name
+storage.export_sessions("/path/to/export.json", sut_name="my-service")
+
+# Export with combined filters
+storage.export_sessions("/path/to/export.json", days=7, sut_name="my-service")
+
+# Export with custom filter function
 storage.export_sessions(
     "/path/to/export.json",
     filter_func=lambda session: session.sut_name == "my-service"
@@ -275,6 +293,10 @@ storage.import_sessions("/path/to/import.json")
 
 # Import with custom merge strategy
 storage.import_sessions("/path/to/import.json", merge_strategy="replace_existing")
+
+# Import with keep_both strategy
+stats = storage.import_sessions("/path/to/import.json", merge_strategy="keep_both")
+print(f"Imported {stats['imported']} sessions, keeping both versions of duplicates")
 ```
 
 Available merge strategies:
@@ -282,13 +304,63 @@ Available merge strategies:
 - **replace_existing**: Replace existing sessions with imported ones
 - **keep_both**: Keep both versions, appending a suffix to imported IDs
 
-## Storage Profiles and SFE Integration
+### Clearing Sessions
+
+```python
+# Clear all sessions
+count = storage.clear_sessions()
+print(f"Cleared {count} sessions")
+
+# Selectively clear sessions using Query
+from pytest_insight.core.query import Query
+query = Query(storage)
+sessions_to_clear = query.for_sut("my-service").in_last_days(30).execute()
+count = storage.clear_sessions(sessions_to_clear)
+```
+
+### Integration with Query System
+
+The SFE functionality integrates seamlessly with pytest-insight's query system. This allows you to:
+
+1. Use queries to filter sessions for export:
+   ```python
+   from pytest_insight.core.storage import get_storage_instance
+   from pytest_insight.core.query import Query
+
+   storage = get_storage_instance()
+   query = Query(storage)
+
+   # Find sessions with failing tests
+   failing_sessions = query.filter_by_test().with_outcome("failed").apply().execute()
+
+   # You can then use the SUT names from these sessions to export
+   sut_names = {session.sut_name for session in failing_sessions}
+   for sut_name in sut_names:
+       storage.export_sessions(f"{sut_name}_failing.json", sut_name=sut_name)
+   ```
+
+2. Use queries to select specific sessions for clearing:
+   ```python
+   # Select old sessions from a specific SUT
+   old_sessions = query.for_sut("legacy-service").before_date("2025-01-01").execute()
+
+   # Clear only those sessions
+   storage.clear_sessions(old_sessions)
+   ```
+
+### Common Use Cases
+
+1. **Environment Isolation**: Keep production, testing, and demo data separate
+2. **Data Migration**: Move data between different storage locations
+3. **Controlled Data Sharing**: Export specific subsets of data from one profile to another
+4. **Environment Bootstrapping**: Quickly set up new environments with initial data
+5. **Backup and Restore**: Create backups of specific profiles before making changes
+6. **Collaboration**: Share specific test results with team members
+7. **CI/CD Integration**: Use different profiles for different Jenkins jobs or environments
+
+### Storage Profiles and SFE Integration
 
 Storage profiles integrate seamlessly with the Simple File Exchange functionality, enabling powerful data management workflows:
-
-### Profile-Specific Import/Export
-
-Each storage profile can have its own import/export settings and data:
 
 ```python
 # Export from production profile
@@ -301,16 +373,6 @@ switch_profile("demo")
 storage = get_storage_instance()
 storage.import_sessions("/tmp/export.json")
 ```
-
-### Use Cases
-
-1. **Environment Isolation**: Keep production, testing, and demo data separate
-2. **Data Migration**: Move data between different storage locations
-3. **Controlled Data Sharing**: Export specific subsets of data from one profile to another
-4. **Environment Bootstrapping**: Quickly set up new environments with initial data
-5. **Backup and Restore**: Create backups of specific profiles before making changes
-6. **Collaboration**: Share specific test results with team members
-7. **CI/CD Integration**: Use different profiles for different Jenkins jobs or environments
 
 ## Configuration
 

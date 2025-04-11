@@ -11,38 +11,31 @@ pytest-insight provides two distinct API interfaces:
 
 ### Project Structure
 
-The pytest-insight project is organized into logical directories:
+The pytest-insight project is organized into logical directories that reflect the two-tier API architecture:
 
 ```
 pytest_insight/
-├── __init__.py
-├── clients/               # Client implementations
-│   ├── __init__.py
-│   ├── cli/               # Command-line interface
-│   ├── grafana/           # Grafana integration
-│   └── web/               # Web client components
-├── core/                  # Core API components
-│   ├── __init__.py
-│   ├── analysis.py        # Test analysis functionality
-│   ├── comparison.py      # Test comparison functionality
-│   ├── core_api.py        # Unified API entry point
-│   ├── insights.py        # Insights generation
-│   ├── models.py          # Data models
+├── __main__.py            # CLI entry point
+├── core/                  # Core Python API (Layer 1)
 │   ├── query.py           # Query functionality
-│   └── storage.py         # Data storage and retrieval
-├── plugin.py              # Pytest plugin implementation
-├── rest_api/              # REST API implementation
-│   ├── __init__.py
-│   ├── high_level_api.py  # Structured API endpoints
-│   ├── introspective_api.py # Dynamic fluent interface API
-│   └── templates/         # Web UI templates
-├── utils/                 # Utility functions and scripts
-    ├── __init__.py
-    ├── analyze_test_data.py # Test data analysis script
-    ├── constants.py       # Shared constants
-    ├── db_generator.py    # Database generation utilities
-    └── server_launcher.py # Combined API server launcher (runs both APIs)
+│   ├── comparison.py      # Comparison functionality
+│   ├── analysis.py        # Analysis functionality
+│   ├── insights.py        # Insights functionality
+│   ├── storage.py         # Storage system
+│   └── core_api.py        # Unified API entry point
+├── cli/                   # Command-line interface
+│   ├── cli_dashboard.py   # Streamlit dashboard CLI
+│   ├── cli_api_explorer.py # API Explorer CLI
+│   └── cli_query.py       # Query CLI
+├── rest_api/              # REST API implementation (Layer 2)
+│   ├── introspective_api.py # Lower-tier API
+│   ├── templates/         # UI templates
+│   └── static/            # Static assets
+└── web/                   # Web UI components
+    └── dashboard.py       # Streamlit dashboard
 ```
+
+This structure reflects the layered architecture described in [02_ARCHITECTURE_OVERVIEW.md](./02_ARCHITECTURE_OVERVIEW.md), with clear separation between the core API components and the higher-level interfaces.
 
 ## Core API
 

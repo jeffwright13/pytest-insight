@@ -2,7 +2,13 @@
 
 This document explains the layered architecture of pytest-insight, built around four fundamental components that work together to provide a comprehensive test analysis solution.
 
-For a practical guide on using the pytest-insight interactive shell, please refer to [INTERACTIVE_SHELL_TUTORIAL.md](./INTERACTIVE_SHELL_TUTORIAL.md).
+For a conceptual understanding of the four layers, please refer to [01_CONCEPTUAL_FRAMEWORK.md](./01_CONCEPTUAL_FRAMEWORK.md).
+
+For details on how pytest-insight stores and manages test data, see [03_STORAGE.md](./03_STORAGE.md).
+
+For a practical guide on using the pytest-insight interactive shell, please refer to [05_INTERACTIVE_SHELL_TUTORIAL.md](./05_INTERACTIVE_SHELL_TUTORIAL.md).
+
+For exploring and documenting the REST API, you can use the API Explorer. See [07_API_EXPLORER.md](./07_API_EXPLORER.md) for details.
 
 ## The Layered Architecture
 
@@ -185,6 +191,79 @@ patterns = insights.test_insights().error_patterns()
 3. **Actionable Recommendations**: Provide clear next steps
 4. **Human-Readable Output**: Format results for easy consumption
 
+## API Architecture: Two-Tier Approach
+
+pytest-insight implements a two-tier API architecture that provides both flexibility for power users and convenience for common use cases.
+
+### Key Concepts
+
+- **Lower Tier**: Core introspective API providing direct access to all functionality
+- **Higher Tier**: Specialized endpoints and UI components for common workflows
+- **Separation of Concerns**: Clear boundaries between tiers while maintaining cohesion
+- **Multiple Entry Points**: Different interfaces for different user needs
+
+### Architecture Tiers
+
+1. **Core Python API**
+   - The foundation: Query-Compare-Analyze-Insight (Q-C-A-I)
+   - Well-tested, feature-complete Python methods
+   - Provides the full Query/Filter system with fluent interface
+   - Used directly by Python developers for maximum flexibility
+
+2. **Introspective REST API**
+   - A thin REST wrapper around the core Python API
+   - Automatically generated from the Python API via introspection
+   - Exposes all methods and parameters from the core API
+   - Provides a stable foundation for building higher-level functionality
+   - Accessed via FastAPI endpoints
+   - Explored through the API Explorer (see [07_API_EXPLORER.md](./07_API_EXPLORER.md))
+
+3. **Higher-Level API**
+   - Built on top of the introspective API
+   - Provides "canned" reports and specialized endpoints for common use cases
+   - Offers pre-built insights, metrics, and visualizations
+   - Handles common workflows like comparing SUTs or analyzing trends
+
+4. **User Interfaces**
+   - Various interfaces built on top of either API tier:
+     - CLI tools for command-line usage (see [04_CLI_GUIDE.md](./04_CLI_GUIDE.md))
+     - Interactive shell for building queries (see [05_INTERACTIVE_SHELL_TUTORIAL.md](./05_INTERACTIVE_SHELL_TUTORIAL.md))
+     - Web dashboards for browser-based visualization (see [06_DASHBOARD_GUIDE.md](./06_DASHBOARD_GUIDE.md))
+
+### Implementation Structure
+
+The API implementation follows this structure:
+
+```
+pytest_insight/
+├── core/                      # Core Python API
+│   ├── query.py
+│   ├── comparison.py
+│   ├── analysis.py
+│   └── insights.py
+├── rest_api/                  # REST API implementation
+│   ├── introspective_api.py   # Lower-tier API
+│   ├── high_level_api.py      # Higher-tier API
+│   └── templates/             # UI templates
+└── web/                       # Web UI components
+    └── dashboard.py           # Streamlit dashboard
+```
+
+### Benefits of Two-Tier Architecture
+
+This multi-tiered approach gives users the flexibility to work at whatever level of abstraction makes sense for their needs:
+
+- **Power users** can use the core Python API directly
+- **Developers** can use the introspective API for custom integrations
+- **Most users** can rely on the higher-level API for day-to-day needs
+- **Everyone** can benefit from the reference UI implementations
+
+The separation between tiers ensures that:
+1. The core functionality remains clean and focused
+2. Higher-level components can evolve independently
+3. Users can choose the appropriate level of abstraction
+4. New interfaces can be built on a stable foundation
+
 ## Component Dependencies and Data Flow
 
 The pytest-insight architecture follows a clear dependency chain:
@@ -279,3 +358,5 @@ This simplifies usage, especially in CI/CD environments where you can set the `P
 The layered architecture of pytest-insight provides a clean separation of concerns while maintaining a cohesive API. Each component has a specific focus and responsibility, building upon the previous layer to provide a comprehensive test analysis solution.
 
 By understanding this architecture, you can effectively leverage pytest-insight to gain valuable insights into your test data and improve the quality of your testing process.
+
+For more information on how to use pytest-insight in your testing workflow, please refer to [04_USING_PYTEST_INSIGHT.md](./04_USING_PYTEST_INSIGHT.md). For details on the pytest-insight REST API, see [06_REST_API.md](./06_REST_API.md).

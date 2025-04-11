@@ -1,6 +1,8 @@
 # pytest-insight Interactive Shell Tutorial
 
-This document provides a practical guide to using the pytest-insight interactive shell for querying and analyzing test results. For a comprehensive overview of the pytest-insight architecture, please refer to [QUERY_COMPARE_ANALYZE.md](./QUERY_COMPARE_ANALYZE.md).
+This document provides a practical guide to using the pytest-insight interactive shell for querying and analyzing test results. For a comprehensive overview of the pytest-insight architecture, please refer to [02_ARCHITECTURE_OVERVIEW.md](./02_ARCHITECTURE_OVERVIEW.md).
+
+For a conceptual understanding of the four layers, see [01_CONCEPTUAL_FRAMEWORK.md](./01_CONCEPTUAL_FRAMEWORK.md).
 
 ## 1. Building Basic Queries
 
