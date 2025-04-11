@@ -35,6 +35,7 @@ from pytest_insight.utils.trend_generator import TrendDataGenerator
 app = typer.Typer(
     help="Command-line interface for pytest-insight",
     context_settings={"help_option_names": ["--help", "-h"]},
+    no_args_is_help=True,
 )
 
 # Add the developer CLI as a subcommand
