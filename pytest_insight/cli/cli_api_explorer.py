@@ -18,7 +18,11 @@ app = typer.Typer(help="Launch the pytest-insight API Explorer dashboard")
 def launch_api_explorer(
     port: int = typer.Option(8000, help="Port to run the API Explorer on"),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
-    browser: bool = typer.Option(True, "--browser/--no-browser", help="Open API Explorer in browser automatically"),
+    browser: bool = typer.Option(
+        True,
+        "--browser/--no-browser",
+        help="Open API Explorer in browser automatically",
+    ),
 ):
     """Launch the pytest-insight API Explorer dashboard and open it in a browser.
 
@@ -39,7 +43,11 @@ def launch_api_explorer(
 def create_api_explorer(
     port: int = typer.Option(8000, help="Port to run the API Explorer on"),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
-    browser: bool = typer.Option(False, "--browser/--no-browser", help="Open API Explorer in browser automatically"),
+    browser: bool = typer.Option(
+        False,
+        "--browser/--no-browser",
+        help="Open API Explorer in browser automatically",
+    ),
 ):
     """Create the pytest-insight API Explorer dashboard without opening a browser.
 

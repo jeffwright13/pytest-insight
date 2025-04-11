@@ -6,6 +6,7 @@ Tests for the unified CLI interface located at pytest_insight/__main__.py
 import tempfile
 from pathlib import Path
 from unittest import mock
+from unittest.mock import patch
 
 # Third-party imports
 import pytest
@@ -59,8 +60,7 @@ def mock_profile_manager(temp_dir):
     mock_pm.get_profile.side_effect = lambda name=None: (
         test_profiles["test1"]
         if name is None
-        else test_profiles.get(name)
-        or (lambda: ValueError(f"Profile '{name}' not found"))()
+        else test_profiles.get(name) or (lambda: ValueError(f"Profile '{name}' not found"))()
     )
 
     # Set up the _create_profile method
@@ -97,9 +97,7 @@ def mock_profile_manager(temp_dir):
 @pytest.fixture
 def mock_get_profile_manager(mock_profile_manager):
     """Mock the get_profile_manager function to return our test profile manager."""
-    with mock.patch(
-        "pytest_insight.__main__.get_profile_manager", return_value=mock_profile_manager
-    ):
+    with mock.patch("pytest_insight.__main__.get_profile_manager", return_value=mock_profile_manager):
         yield
 
 
@@ -173,9 +171,7 @@ class TestProfileCommands:
     def test_profile_create(self, runner, mock_create_profile):
         """Test the 'profile create' command."""
         # Test creating a JSON profile
-        result = runner.invoke(
-            app, ["profile", "create", "test-profile", "--type", "json"]
-        )
+        result = runner.invoke(app, ["profile", "create", "test-profile", "--type", "json"])
         assert result.exit_code == 0
         assert "Created profile" in result.stdout
         mock_create_profile.assert_called_once_with("test-profile", "json", None)
@@ -188,9 +184,7 @@ class TestProfileCommands:
         result = runner.invoke(app, ["profile", "delete", "test-profile", "--force"])
         assert result.exit_code == 0
         assert "Deleted profile" in result.stdout
-        get_profile_manager.return_value.delete_profile.assert_called_once_with(
-            "test-profile"
-        )
+        get_profile_manager.return_value.delete_profile.assert_called_once_with("test-profile")
 
     def test_profile_switch(self, runner, mock_switch_profile):
         """Test the 'profile switch' command."""
@@ -233,9 +227,7 @@ class TestProfileCommands:
             assert result.exit_code == 0
             mock_list_profiles.assert_called_once()
 
-    def test_list_profiles_with_type_filter(
-        self, runner, mock_list_profiles, mock_get_active_profile
-    ):
+    def test_list_profiles_with_type_filter(self, runner, mock_list_profiles, mock_get_active_profile):
         """Test the 'profile list' command with type filter."""
         from pytest_insight.core.storage import StorageProfile
 
@@ -281,9 +273,7 @@ class TestProfileCommands:
             assert result.exit_code == 0
             mock_list_profiles.assert_called_once()
 
-    def test_list_profiles_with_pattern_filter(
-        self, runner, mock_list_profiles, mock_get_active_profile
-    ):
+    def test_list_profiles_with_pattern_filter(self, runner, mock_list_profiles, mock_get_active_profile):
         """Test the 'profile list' command with pattern filter."""
         from pytest_insight.core.storage import StorageProfile
 
@@ -401,9 +391,7 @@ class TestProfileCommands:
         # Test with type filter
         with mock.patch("typer.confirm", return_value=True):
             deleted_profiles.clear()
-            result = runner.invoke(
-                app, ["profile", "clean", "--type", "json", "--force"]
-            )
+            result = runner.invoke(app, ["profile", "clean", "--type", "json", "--force"])
             assert result.exit_code == 0
             mock_list_profiles.assert_called_once()
             # Check that the json profile was deleted, but not the active profile
@@ -416,9 +404,7 @@ class TestProfileCommands:
         # Test with pattern filter
         with mock.patch("typer.confirm", return_value=True):
             deleted_profiles.clear()
-            result = runner.invoke(
-                app, ["profile", "clean", "--pattern", "mem-*", "--force"]
-            )
+            result = runner.invoke(app, ["profile", "clean", "--pattern", "mem-*", "--force"])
             assert result.exit_code == 0
             mock_list_profiles.assert_called_once()
             # Check that the memory profiles were deleted
@@ -436,11 +422,8 @@ class TestProfileCommands:
             # Check that no profiles were actually deleted
             assert not deleted_profiles
 
-    def test_profile_merge(
-        self, runner, mock_list_profiles, mock_get_profile_manager, mock_create_profile
-    ):
+    def test_profile_merge(self, runner, mock_list_profiles, mock_get_profile_manager, mock_create_profile):
         """Test the 'profile merge' command."""
-        import uuid
 
         from pytest_insight.core.models import TestSession
         from pytest_insight.core.storage import StorageProfile
@@ -502,9 +485,7 @@ class TestProfileCommands:
         profile_manager.save_session = mock.MagicMock()
 
         # Test 1: Merging with skip_existing strategy
-        with mock.patch(
-            "pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions
-        ):
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
             with mock.patch(
                 "pytest_insight.__main__.get_profile_manager",
                 return_value=profile_manager,
@@ -542,9 +523,7 @@ class TestProfileCommands:
 
         # Test 2: Merging with replace_existing strategy
         profile_manager.save_session.reset_mock()
-        with mock.patch(
-            "pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions
-        ):
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
             with mock.patch(
                 "pytest_insight.__main__.get_profile_manager",
                 return_value=profile_manager,
@@ -582,9 +561,7 @@ class TestProfileCommands:
 
         # Test 3: Merging with keep_both strategy
         profile_manager.save_session.reset_mock()
-        with mock.patch(
-            "pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions
-        ):
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
             with mock.patch(
                 "pytest_insight.__main__.get_profile_manager",
                 return_value=profile_manager,
@@ -619,18 +596,14 @@ class TestProfileCommands:
 
                         # Original session1 should not be in saved_sessions, but a renamed version should be
                         assert "session1" not in saved_sessions
-                        assert any(
-                            s.startswith("session1_source1_") for s in saved_sessions
-                        )
+                        assert any(s.startswith("session1_source1_") for s in saved_sessions)
                         assert "session2" in saved_sessions
                         assert "session3" in saved_sessions
                         assert "session4" in saved_sessions
 
         # Test 4: Test with filter pattern
         profile_manager.save_session.reset_mock()
-        with mock.patch(
-            "pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions
-        ):
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
             with mock.patch(
                 "pytest_insight.__main__.get_profile_manager",
                 return_value=profile_manager,
@@ -668,9 +641,7 @@ class TestProfileCommands:
 
         # Test 5: Test with create target option
         profile_manager.save_session.reset_mock()
-        with mock.patch(
-            "pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions
-        ):
+        with mock.patch("pytest_insight.__main__.load_sessions", side_effect=mock_load_sessions):
             with mock.patch(
                 "pytest_insight.__main__.get_profile_manager",
                 return_value=profile_manager,
@@ -708,13 +679,9 @@ class TestProfileCommands:
 class TestGenerateCommands:
     """Tests for the data generation commands."""
 
-    def test_generate_practice_data(
-        self, runner, mock_get_profile_manager, mock_practice_data_generator
-    ):
+    def test_generate_practice_data(self, runner, mock_get_profile_manager, mock_practice_data_generator):
         """Test the 'generate practice' command."""
-        result = runner.invoke(
-            app, ["generate", "practice", "--days", "3", "--targets", "2"]
-        )
+        result = runner.invoke(app, ["generate", "practice", "--days", "3", "--targets", "2"])
         assert result.exit_code == 0
         assert "Generated practice data" in result.stdout
 
@@ -724,13 +691,9 @@ class TestGenerateCommands:
         assert kwargs["days"] == 3
         assert kwargs["targets_per_base"] == 2
 
-    def test_generate_practice_data_with_profile(
-        self, runner, mock_get_profile_manager, mock_practice_data_generator
-    ):
+    def test_generate_practice_data_with_profile(self, runner, mock_get_profile_manager, mock_practice_data_generator):
         """Test generating practice data with a specific profile."""
-        result = runner.invoke(
-            app, ["generate", "practice", "--profile", "test1", "--days", "5"]
-        )
+        result = runner.invoke(app, ["generate", "practice", "--profile", "test1", "--days", "5"])
         assert result.exit_code == 0
 
         # Verify the generator was called with correct parameters
@@ -743,17 +706,13 @@ class TestGenerateCommands:
 class TestAnalyzeCommands:
     """Tests for the analysis commands."""
 
-    def test_analyze_insights(
-        self, runner, mock_get_profile_manager, mock_get_storage_instance
-    ):
+    def test_analyze_insights(self, runner, mock_get_profile_manager, mock_get_storage_instance):
         """Test the 'analyze insights' command."""
         result = runner.invoke(app, ["analyze"])
         assert result.exit_code == 0
         assert "Using profile: default" in result.stdout
 
-    def test_analyze_insights_with_profile(
-        self, runner, mock_get_profile_manager, mock_get_storage_instance
-    ):
+    def test_analyze_insights_with_profile(self, runner, mock_get_profile_manager, mock_get_storage_instance):
         """Test analyzing insights with a specific profile."""
         result = runner.invoke(app, ["analyze", "--profile", "test1"])
         assert result.exit_code == 0
@@ -771,6 +730,18 @@ class TestMainCommand:
         assert "profile" in result.stdout
         assert "generate" in result.stdout
         assert "analyze" in result.stdout
+
+    def test_no_args_shows_help(self, runner):
+        """Test that running the CLI without arguments shows help."""
+        result = runner.invoke(app)
+        assert result.exit_code == 0
+        # Verify the output contains the same content as the help command
+        assert "pytest-insight" in result.stdout
+        assert "profile" in result.stdout
+        assert "generate" in result.stdout
+        assert "analyze" in result.stdout
+        assert "dashboard" in result.stdout
+        assert "api-explorer" in result.stdout
 
     def test_profile_help(self, runner):
         """Test the profile help command."""
@@ -795,3 +766,99 @@ class TestMainCommand:
         result = runner.invoke(app, ["analyze", "--help"])
         assert result.exit_code == 0
         assert "Analyze test sessions" in result.stdout
+
+    def test_dashboard_help(self, runner):
+        """Test the dashboard help command."""
+        result = runner.invoke(app, ["dashboard", "--help"])
+        assert result.exit_code == 0
+        assert "dashboard" in result.stdout
+        assert "launch" in result.stdout
+
+    def test_api_explorer_help(self, runner):
+        """Test the api-explorer help command."""
+        result = runner.invoke(app, ["api-explorer", "--help"])
+        assert result.exit_code == 0
+        assert "api-explorer" in result.stdout
+        assert "launch" in result.stdout
+
+
+class TestDashboardCommands:
+    """Tests for the dashboard commands."""
+
+    @patch("pytest_insight.cli.cli_dashboard.subprocess.run")
+    @patch("pytest_insight.cli.cli_dashboard._run_dashboard")
+    def test_dashboard_launch(self, mock_run_dashboard, mock_subprocess_run, runner, mock_get_profile_manager):
+        """Test the 'dashboard launch' command."""
+        result = runner.invoke(app, ["dashboard", "launch"])
+        assert result.exit_code == 0
+        mock_run_dashboard.assert_called_once_with(8501, None, True)
+        mock_subprocess_run.assert_not_called()  # Ensure subprocess.run is not called
+
+    @patch("pytest_insight.cli.cli_dashboard.subprocess.run")
+    @patch("pytest_insight.cli.cli_dashboard._run_dashboard")
+    def test_dashboard_launch_with_profile(
+        self, mock_run_dashboard, mock_subprocess_run, runner, mock_get_profile_manager
+    ):
+        """Test the 'dashboard launch' command with a profile."""
+        result = runner.invoke(app, ["dashboard", "launch", "--profile", "test1"])
+        assert result.exit_code == 0
+        mock_run_dashboard.assert_called_once_with(8501, "test1", True)
+        mock_subprocess_run.assert_not_called()  # Ensure subprocess.run is not called
+
+
+class TestAPIExplorerCommands:
+    """Tests for the API Explorer commands."""
+
+    @patch("webbrowser.open")
+    @patch("uvicorn.run")
+    @patch("pytest_insight.cli.cli_api_explorer._run_api_explorer")
+    def test_api_explorer_launch(
+        self,
+        mock_run_api_explorer,
+        mock_uvicorn_run,
+        mock_webbrowser_open,
+        runner,
+        mock_get_profile_manager,
+    ):
+        """Test the 'api-explorer launch' command."""
+        result = runner.invoke(app, ["api-explorer", "launch"])
+        assert result.exit_code == 0
+        mock_run_api_explorer.assert_called_once_with(8000, None, True)
+        mock_uvicorn_run.assert_not_called()  # Ensure uvicorn.run is not called
+        mock_webbrowser_open.assert_not_called()  # Ensure webbrowser.open is not called
+
+    @patch("webbrowser.open")
+    @patch("uvicorn.run")
+    @patch("pytest_insight.cli.cli_api_explorer._run_api_explorer")
+    def test_api_explorer_launch_with_profile(
+        self,
+        mock_run_api_explorer,
+        mock_uvicorn_run,
+        mock_webbrowser_open,
+        runner,
+        mock_get_profile_manager,
+    ):
+        """Test the 'api-explorer launch' command with a profile."""
+        result = runner.invoke(app, ["api-explorer", "launch", "--profile", "test1"])
+        assert result.exit_code == 0
+        mock_run_api_explorer.assert_called_once_with(8000, "test1", True)
+        mock_uvicorn_run.assert_not_called()  # Ensure uvicorn.run is not called
+        mock_webbrowser_open.assert_not_called()  # Ensure webbrowser.open is not called
+
+    @patch("webbrowser.open")
+    @patch("uvicorn.run")
+    @patch("pytest_insight.cli.cli_api_explorer._run_api_explorer")
+    def test_api_explorer_launch_with_port(
+        self,
+        mock_run_api_explorer,
+        mock_uvicorn_run,
+        mock_webbrowser_open,
+        runner,
+        mock_get_profile_manager,
+    ):
+        """Test the 'api-explorer launch' command with a custom port."""
+        result = runner.invoke(app, ["api-explorer", "launch", "--port", "8080"])
+        assert result.exit_code == 0
+        mock_run_api_explorer.assert_called_once_with(8080, None, True)
+        mock_uvicorn_run.assert_not_called()  # Ensure uvicorn.run is not called
+        mock_webbrowser_open.assert_not_called()  # Ensure webbrowser.open is not called

@@ -24,7 +24,3 @@ For the best understanding of pytest-insight, we recommend reading the documenta
 8. [API Reference](./08_API.md) - Detailed API documentation
 9. [Session Matching](./09_SESSION_MATCHING.md) - How pytest-insight matches test sessions
 10. [Metric Style Guide](./10_METRIC_STYLE_GUIDE.md) - Guidelines for metric design
-
-### Implementation Details
-
-For developers interested in the implementation details, see the [implementation_details](./implementation_details/) directory.
