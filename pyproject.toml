@@ -18,8 +18,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Dependencies for running the metrics server
-metrics = [
+# Dependencies for running the API Explorer
+api-explorer = [
     "fastapi>=0.95.0",
     "uvicorn>=0.20.0",
     "requests>=2.28.0",
@@ -55,7 +55,7 @@ dev = [
 
 # All dependencies combined
 all = [
-    "pytest-insight[metrics,dashboard,dev]",
+    "pytest-insight[api-explorer,dashboard,dev]",
 ]
 
 [project.entry-points.pytest11]
