@@ -2,6 +2,8 @@
 
 This document explains the layered architecture of pytest-insight, built around four fundamental components that work together to provide a comprehensive test analysis solution.
 
+For a practical guide on using the pytest-insight interactive shell, please refer to [INTERACTIVE_SHELL_TUTORIAL.md](./INTERACTIVE_SHELL_TUTORIAL.md).
+
 ## The Layered Architecture
 
 pytest-insight is designed with a layered architecture where each layer builds upon the previous one:

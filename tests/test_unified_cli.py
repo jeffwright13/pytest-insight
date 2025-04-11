@@ -1,5 +1,5 @@
 """
-Tests for the unified CLI interface.
+Tests for the unified CLI interface located at pytest_insight/__main__.py
 """
 
 # Standard library imports
@@ -9,11 +9,11 @@ from unittest import mock
 
 # Third-party imports
 import pytest
-from typer.testing import CliRunner
 
 # Local imports
 from pytest_insight.__main__ import app
 from pytest_insight.core.storage import ProfileManager, StorageProfile
+from typer.testing import CliRunner
 
 
 @pytest.fixture

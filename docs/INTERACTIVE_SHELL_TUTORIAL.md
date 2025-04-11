@@ -1,7 +1,12 @@
-debug status Basic Query Building
+# pytest-insight Interactive Shell Tutorial
+
+This document provides a practical guide to using the pytest-insight interactive shell for querying and analyzing test results. For a comprehensive overview of the pytest-insight architecture, please refer to [QUERY_COMPARE_ANALYZE.md](./QUERY_COMPARE_ANALYZE.md).
+
+## 1. Building Basic Queries
+
 In the shell, you can build queries incrementally. Each command maintains the state from previous commands:
 
-CopyInsert
+```bash
 # Start with a basic query
 query.with_profile default
 
@@ -13,10 +18,13 @@ query.for_sut my-service
 
 # Execute the query to get results
 query.execute
-2. Test-Level Filtering
+```
+
+## 2. Test-Level Filtering
+
 You can switch to test-level filtering and back:
 
-CopyInsert
+```bash
 # Start with a session-level query
 query.with_profile default
 
@@ -31,10 +39,13 @@ query.apply
 
 # Execute the query
 query.execute
-3. Examining Results
+```
+
+## 3. Examining Results
+
 After executing a query, you can examine the results:
 
-CopyInsert
+```bash
 # Execute a query
 query.with_profile default.in_last_days 7.execute
 
@@ -46,10 +57,13 @@ session.show SESSION_ID
 
 # View failures in a session
 session.failures SESSION_ID
-4. Combining Multiple Filters
+```
+
+## 4. Combining Multiple Filters
+
 You can build complex queries by chaining multiple filters:
 
-CopyInsert
+```bash
 # Start with a basic query
 query.with_profile default
 
@@ -73,10 +87,13 @@ query.apply
 
 # Execute the query
 query.execute
-5. Using Help and History
+```
+
+## 5. Using Help and History
+
 The shell provides help and history features:
 
-CopyInsert
+```bash
 # Get general help
 help
 
@@ -86,10 +103,13 @@ history
 # Get help on specific commands
 help query
 help session
-6. Saving and Loading Queries
+```
+
+## 6. Saving and Loading Queries
+
 You can save queries for later use:
 
-CopyInsert
+```bash
 # Build and execute a query
 query.with_profile default.in_last_days 7.execute
 
@@ -98,10 +118,13 @@ save my_query
 
 # Load a saved query
 load my_query
-7. Comparing Results
+```
+
+## 7. Comparing Results
+
 You can set up comparisons between different queries:
 
-CopyInsert
+```bash
 # Set up a base query
 query.with_profile default.in_last_days 30.for_sut service-v1
 
