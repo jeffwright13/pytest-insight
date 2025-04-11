@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -119,14 +119,10 @@ class TestResult:
     def from_dict(cls, data: Dict) -> "TestResult":
         """Create a TestResult from a dictionary."""
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Invalid data for TestResult. Expected dict, got {type(data)}"
-            )
+            raise ValueError(f"Invalid data for TestResult. Expected dict, got {type(data)}")
 
         start_time = datetime.fromisoformat(data["start_time"])
-        stop_time = (
-            datetime.fromisoformat(data["stop_time"]) if data.get("stop_time") else None
-        )
+        stop_time = datetime.fromisoformat(data["stop_time"]) if data.get("stop_time") else None
         duration = data.get("duration")
 
         return cls(
@@ -182,9 +178,7 @@ class RerunTestGroup:
     def from_dict(cls, data: Dict) -> "RerunTestGroup":
         """Create RerunTestGroup from dictionary."""
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Invalid data for RerunTestGroup. Expected dict, got {type(data)}"
-            )
+            raise ValueError(f"Invalid data for RerunTestGroup. Expected dict, got {type(data)}")
 
         group = cls(nodeid=data["nodeid"])
         group.tests = [TestResult.from_dict(t) for t in data["tests"]]
@@ -197,30 +191,25 @@ class TestSession:
 
     __test__ = False  # Tell Pytest this is NOT a test class
 
-    sut_name: str
-    session_id: str
-    session_start_time: datetime
+    sut_name: str = ""
+    testing_system: Dict[str, Any] = field(default_factory=dict)
+    session_id: str = ""
+    session_start_time: datetime = None
     session_stop_time: Optional[datetime] = None
     session_duration: Optional[float] = None
-    test_results: List[TestResult] = field(default_factory=list)
-    rerun_test_groups: List[RerunTestGroup] = field(default_factory=list)
     session_tags: Dict[str, str] = field(default_factory=dict)
+    rerun_test_groups: List[RerunTestGroup] = field(default_factory=list)
+    test_results: List[TestResult] = field(default_factory=list)
 
     def __post_init__(self):
         """Calculate timing information once at initialization."""
         if self.session_stop_time is None and self.session_duration is None:
-            raise ValueError(
-                "Either session_stop_time or session_duration must be provided"
-            )
+            raise ValueError("Either session_stop_time or session_duration must be provided")
 
         if self.session_stop_time is None:
-            self.session_stop_time = self.session_start_time + timedelta(
-                seconds=self.session_duration
-            )
+            self.session_stop_time = self.session_start_time + timedelta(seconds=self.session_duration)
         elif self.session_duration is None:
-            self.session_duration = (
-                self.session_stop_time - self.session_start_time
-            ).total_seconds()
+            self.session_duration = (self.session_stop_time - self.session_start_time).total_seconds()
 
     def to_dict(self) -> Dict:
         """Convert TestSession to a dictionary for JSON serialization."""
@@ -236,15 +225,14 @@ class TestSession:
                 for group in self.rerun_test_groups
             ],
             "session_tags": self.session_tags or {},
+            "testing_system": self.testing_system or {},
         }
 
     @classmethod
     def from_dict(cls, data: Dict) -> "TestSession":
         """Create a TestSession from a dictionary."""
         if not isinstance(data, dict):
-            raise ValueError(
-                f"Invalid data for TestSession. Expected dict, got {type(data)}"
-            )
+            raise ValueError(f"Invalid data for TestSession. Expected dict, got {type(data)}")
 
         session = cls(
             sut_name=data["sut_name"],
@@ -263,6 +251,7 @@ class TestSession:
             session.add_rerun_group(group)
 
         session.session_tags = data.get("session_tags", {})
+        session.testing_system = data.get("testing_system", {})
         return session
 
     def add_test_result(self, result: TestResult) -> None:

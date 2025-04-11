@@ -15,6 +15,25 @@ pytest-insight is built on four foundational layers, each with a specific focus 
 
 Each layer builds upon the previous one, creating a progression from raw data to actionable intelligence.
 
+## Key Concepts
+
+### System Under Test (SUT) vs Testing System
+
+pytest-insight makes an important distinction between:
+
+- **System Under Test (SUT)**: The software being tested. This is the target of your test suite and the primary subject of analysis.
+- **Testing System**: The environment running the tests. This includes the machine, CI system, or container that executes the test suite.
+
+This distinction allows for:
+- Identifying environment-specific test failures
+- Comparing test results across different testing environments
+- Detecting issues that only appear on specific testing systems
+- Distinguishing between actual product bugs and testing infrastructure problems
+
+### Test Sessions and Results
+
+Test sessions represent a single execution of a test suite against a specific SUT, run on a specific testing system. Each session contains:
+
 ## Layer 1: Query - "Where" and "Which"
 
 **Query** is about finding and filtering the right data. It answers questions like:
@@ -37,6 +56,9 @@ sessions = api.query().with_sut("api-service").in_last_days(7).execute()
 
 # Find failed tests matching a specific pattern
 sessions = api.query().filter_by_test().with_pattern("test_api*").with_outcome("failed").apply().execute()
+
+# Find tests that fail on a specific testing system
+sessions = api.query().with_testing_system("ci-runner-1").with_outcome("failed").execute()
 ```
 
 ## Layer 2: Compare - "What Changed" and "How Different"
@@ -63,6 +85,10 @@ results = comparison.execute()
 # Access specific comparison metrics
 new_failures = results.new_failures
 fixed_tests = results.new_passes
+
+# Compare test results between different testing systems
+comparison = api.compare().between_testing_systems("ci-runner-1", "ci-runner-2")
+results = comparison.execute()
 ```
 
 ## Layer 3: Analysis - "What" and "How"
@@ -88,6 +114,9 @@ analysis = api.analyze()
 flaky_tests = analysis.identify_flaky_tests()
 slowest_tests = analysis.get_slowest_tests(limit=10)
 failure_rate = analysis.calculate_failure_rate()
+
+# Analyze system-specific failures
+system_specific_failures = analysis.identify_system_specific_failures()
 ```
 
 ## Layer 4: Insights - "Why" and "What Next"
@@ -113,6 +142,9 @@ insights = api.insights()
 recommendations = insights.test_insights().maintenance_recommendations()
 stability_forecast = insights.test_insights().stability_forecast(days=30)
 error_patterns = insights.test_insights().error_patterns()
+
+# Get testing system-specific insights
+system_insights = insights.test_insights().testing_system_insights()
 ```
 
 ## The Progressive Nature of the Layers
@@ -182,6 +214,10 @@ print(f"Found {len(flaky_tests)} flaky tests")
 insights = api.insights()
 recommendations = insights.test_insights().maintenance_recommendations()
 print(f"Top priority: {recommendations[0].test_id} - {recommendations[0].reason}")
+
+# Analyze testing system-specific issues
+system_specific_issues = analysis.identify_system_specific_failures()
+print(f"Found {len(system_specific_issues)} testing system-specific issues")
 ```
 
 ## Conclusion
