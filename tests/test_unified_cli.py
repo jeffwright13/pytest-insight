@@ -16,6 +16,9 @@ from pytest_insight.__main__ import app
 from pytest_insight.core.storage import ProfileManager, StorageProfile
 from typer.testing import CliRunner
 
+# List to track any profile files created during testing
+TEST_PROFILE_FILES = []
+
 
 @pytest.fixture
 def runner():
@@ -28,6 +31,20 @@ def temp_dir():
     """Create a temporary directory for test files."""
     with tempfile.TemporaryDirectory() as temp_dir:
         yield Path(temp_dir)
+
+
+@pytest.fixture(autouse=True)
+def cleanup_test_profiles():
+    """Clean up any test profile files that might have been created."""
+    yield
+    # After each test, clean up any test profile files
+    for file_path in TEST_PROFILE_FILES:
+        try:
+            if Path(file_path).exists():
+                Path(file_path).unlink()
+        except Exception:
+            pass
+    TEST_PROFILE_FILES.clear()
 
 
 @pytest.fixture
@@ -69,6 +86,8 @@ def mock_profile_manager(temp_dir):
         profile.name = name
         profile.storage_type = storage_type
         profile.file_path = file_path or str(temp_dir / f"{name}.json")
+        # Track the file path for cleanup
+        TEST_PROFILE_FILES.append(profile.file_path)
         return profile
 
     mock_pm._create_profile.side_effect = mock_create_profile

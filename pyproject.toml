@@ -1,6 +1,6 @@
 [project]
 name = "pytest-insight"
-version = "0.5.0"
+version = "0.6.0"
 description = "A pytest plugin for collecting, analyzing, and visualizing test and test-session metrics"
 readme = "README.md"
 authors = [
