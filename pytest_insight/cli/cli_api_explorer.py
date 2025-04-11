@@ -65,7 +65,7 @@ def _run_api_explorer(port: int, profile: Optional[str], browser: bool):
         browser: Whether to open the API Explorer in a browser
     """
     console = Console()
-    
+
     try:
         # Check if uvicorn is installed
         try:
@@ -74,7 +74,7 @@ def _run_api_explorer(port: int, profile: Optional[str], browser: bool):
             console.print("[bold red]Error:[/bold red] uvicorn is not installed.")
             console.print("Please install it with: [bold]pip install uvicorn[/bold]")
             sys.exit(1)
-            
+
         # Set profile if specified
         if profile:
             os.environ["PYTEST_INSIGHT_PROFILE"] = profile
@@ -86,9 +86,11 @@ def _run_api_explorer(port: int, profile: Optional[str], browser: bool):
         url = f"http://localhost:{port}"
         dashboard_url = f"{url}/dashboard"
         docs_url = f"{url}/docs"
-        
+
         # Print startup message
-        console.print(f"[bold green]{'Launching' if browser else 'Creating'} pytest-insight API Explorer on port {port}...[/bold green]")
+        console.print(
+            f"[bold green]{'Launching' if browser else 'Creating'} pytest-insight API Explorer on port {port}...[/bold green]"
+        )
         console.print(f"[bold]API Explorer URL:[/bold] {url}")
         console.print(f"[bold]API Dashboard:[/bold] {dashboard_url}")
         console.print(f"[bold]API Documentation:[/bold] {docs_url}")
@@ -97,6 +99,7 @@ def _run_api_explorer(port: int, profile: Optional[str], browser: bool):
         # Open browser if requested
         if browser:
             import webbrowser
+
             webbrowser.open(dashboard_url)
 
         # Create and run the FastAPI app
@@ -106,6 +109,7 @@ def _run_api_explorer(port: int, profile: Optional[str], browser: bool):
     except Exception as e:
         console.print(f"[bold red]Error {'launching' if browser else 'creating'} API Explorer: {str(e)}[/bold red]")
         import traceback
+
         console.print(traceback.format_exc(), style="red")
         sys.exit(1)
 
