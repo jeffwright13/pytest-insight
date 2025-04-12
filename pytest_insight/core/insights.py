@@ -977,7 +977,23 @@ class SessionInsights:
             - pass_rate: Overall pass rate
             - avg_tests_per_session: Average number of tests per session
         """
-        return self.analysis.session_analysis.test_metrics(days=days)
+        try:
+            # Try the new sessions attribute first
+            return self.analysis.sessions.test_metrics(days=days)
+        except AttributeError:
+            # Fall back to the old session_analysis attribute for backward compatibility
+            try:
+                return self.analysis.session_analysis.test_metrics(days=days)
+            except AttributeError:
+                # If neither works, return a default structure
+                return {
+                    "total_sessions": len(self.analysis._sessions) if self.analysis._sessions else 0,
+                    "pass_rate": 0.0,
+                    "avg_tests_per_session": 0.0,
+                    "failure_rate": 0.0,
+                    "warning_rate": 0.0,
+                    "avg_duration": 0.0,
+                }
 
     def health_metrics(self, days: Optional[int] = None) -> Dict[str, Any]:
         """Calculate comprehensive test health metrics.
@@ -1434,6 +1450,44 @@ class Insights:
         slow_tests = self.tests.slowest_tests(limit=3)
         slowest_tests = slow_tests.get("slowest_tests", [])
 
+        # Get top failing tests (new)
+        try:
+            top_failing = self.analysis.sessions.top_failing_tests(limit=3)
+            top_failing_tests = top_failing.get("top_failing", [])
+        except (AttributeError, Exception):
+            # Fallback to empty list if the method is not available
+            top_failing_tests = []
+
+        # Get regression rate (new)
+        try:
+            regression_data = self.analysis.sessions.regression_rate()
+            regression_rate = regression_data.get("regression_rate", 0) * 100
+            regressed_tests = regression_data.get("regressed_tests", [])[:3]  # Top 3 regressed tests
+        except (AttributeError, Exception):
+            # Fallback to defaults if the method is not available
+            regression_rate = 0
+            regressed_tests = []
+
+        # Get longest running tests (new)
+        try:
+            longest_tests_data = self.analysis.sessions.longest_running_tests(limit=3)
+            longest_tests = longest_tests_data.get("longest_tests", [])
+        except (AttributeError, Exception):
+            # Fallback to empty list if the method is not available
+            longest_tests = []
+
+        # Get duration trend (new)
+        try:
+            duration_trend_data = self.analysis.sessions.test_suite_duration_trend()
+            duration_trend = {
+                "direction": duration_trend_data.get("trend", {}).get("direction", "stable"),
+                "change": duration_trend_data.get("trend", {}).get("change", 0),
+                "significant": duration_trend_data.get("significant", False),
+            }
+        except (AttributeError, Exception):
+            # Fallback to defaults if the method is not available
+            duration_trend = {"direction": "stable", "change": 0, "significant": False}
+
         # Get failure trends if we have multiple sessions
         failure_trend = {"change": 0, "improving": False}
         if self.analysis._sessions and len(self.analysis._sessions) > 1:
@@ -1484,6 +1538,12 @@ class Insights:
             "slowest_tests": slowest_tests,
             "failure_trend": failure_trend,
             "recommendations": (recommendations[:3] if recommendations else []),  # Show top 3 recommendations
+            # New health metrics
+            "top_failing_tests": top_failing_tests,
+            "regression_rate": regression_rate,
+            "regressed_tests": regressed_tests,
+            "longest_tests": longest_tests,
+            "duration_trend": duration_trend,
         }
 
     def format_console_output(self, session_id: str, sut_name: str, profile_name: str = None) -> str:
@@ -1663,6 +1723,31 @@ class Insights:
                         f"    {nodeid}: {colorize(str(reruns), CYAN)} reruns (Pass rate: {colorize(pass_rate_text, YELLOW)})"  # noqa: E501
                     )
 
+        # Top Failing Tests (new)
+        if "top_failing_tests" in summary and summary["top_failing_tests"]:
+            output.append(section_header("Top Failing Tests"))
+            for test in summary["top_failing_tests"][:3]:  # Show top 3
+                nodeid = test.get("nodeid", "Unknown")
+                failures = test.get("failures", 0)
+                total_runs = test.get("total_runs", 0)
+                failure_rate = test.get("failure_rate", 0) * 100
+                failure_text = f"{failures}/{total_runs} ({failure_rate:.1f}%)"
+                output.append(f"    {nodeid}: {colorize(failure_text, RED)}")
+
+            # Add regression rate if available
+            if "regression_rate" in summary:
+                regression_rate = summary["regression_rate"]
+                regression_color = GREEN if regression_rate < 5 else (YELLOW if regression_rate < 10 else RED)
+                regression_text = f"{regression_rate:.1f}%"
+                output.append(f"    Regression Rate: {colorize(regression_text, regression_color)}")
+
+                # Show regressed tests if available
+                if "regressed_tests" in summary and summary["regressed_tests"]:
+                    output.append("    Recently Regressed Tests:")
+                    for test in summary["regressed_tests"][:3]:  # Show top 3
+                        nodeid = test.get("nodeid", "Unknown")
+                        output.append(f"      - {nodeid}")
+
         # Slowest Tests
         if summary["slowest_tests"]:
             output.append(section_header("Longest Running Tests"))
@@ -1684,6 +1769,47 @@ class Insights:
 
                 duration_text = f"{duration:.2f}s"
                 output.append(f"    {nodeid}: {colorize(duration_text, color)} ({outcome.capitalize()})")
+
+        # Longest Tests (new - using the new API)
+        if "longest_tests" in summary and summary["longest_tests"]:
+            output.append(section_header("Longest Running Tests (Detailed)"))
+            for test in summary["longest_tests"][:3]:  # Show top 3
+                nodeid = test.get("nodeid", "Unknown")
+                avg_duration = test.get("avg_duration", 0)
+                max_duration = test.get("max_duration", 0)
+                min_duration = test.get("min_duration", 0)
+                runs = test.get("runs", 0)
+
+                # Choose color based on duration
+                color = GREEN if avg_duration < 1.0 else (YELLOW if avg_duration < 3.0 else RED)
+
+                avg_text = f"{avg_duration:.2f}s"
+                range_text = f"(min: {min_duration:.2f}s, max: {max_duration:.2f}s)"
+                output.append(f"    {nodeid}: {colorize(avg_text, color)} {range_text} [{runs} runs]")
+
+        # Duration Trend (new)
+        if "duration_trend" in summary:
+            trend = summary["duration_trend"]
+            if trend.get("change", 0) != 0:
+                output.append(section_header("Test Suite Duration Trend"))
+                direction = trend.get("direction", "stable")
+                change = trend.get("change", 0)
+                significant = trend.get("significant", False)
+
+                # Choose color based on trend direction
+                if direction == "stable":
+                    color = GREEN
+                    trend_text = f"Stable ({change:.1f}%)"
+                elif direction == "increasing":
+                    color = RED
+                    trend_text = f"Increasing (+{change:.1f}%)"
+                else:  # decreasing
+                    color = GREEN
+                    trend_text = f"Decreasing ({change:.1f}%)"
+
+                output.append(f"    Trend: {colorize(trend_text, color)}")
+                if significant:
+                    output.append(f"    {colorize('Significant change detected!', YELLOW)}")
 
         # Failure Trend (only if we have multiple sessions)
         if summary["failure_trend"]["change"] != 0:

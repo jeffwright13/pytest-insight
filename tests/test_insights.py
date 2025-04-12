@@ -170,15 +170,15 @@ class TestInsightsModuleTests:
                 self._sessions = sample_sessions
                 # Add the sessions attribute to match the new structure
                 self.sessions = type(
-                    "SessionAnalysisMock",
+                    "MockSessionAnalysis",
                     (),
                     {
-                        "test_metrics": lambda self, days=None: {
-                            "total_tests": 5,
-                            "passed_tests": 3,
-                            "failed_tests": 2,
-                            "avg_tests_per_session": 2.5,
-                        }
+                        "test_metrics": self.mock_session_metrics,
+                        # Add new health metrics methods
+                        "top_failing_tests": self.mock_top_failing_tests,
+                        "regression_rate": self.mock_regression_rate,
+                        "longest_running_tests": self.mock_longest_running_tests,
+                        "test_suite_duration_trend": self.mock_test_suite_duration_trend,
                     },
                 )()
                 # Add session_analysis attribute for backward compatibility
@@ -186,11 +186,58 @@ class TestInsightsModuleTests:
 
             def compare_health(self, base_sessions, target_sessions):
                 return {
-                    "base_health": {"health_score": {"overall_score": 80}},
-                    "target_health": {"health_score": {"overall_score": 85}},
-                    "health_difference": 5,
-                    "improved": True,
+                    "total_tests": 5,
+                    "failed_tests": 2,
+                    "avg_tests_per_session": 2.5,
                 }
+
+            def mock_top_failing_tests(self, days=None, limit=10):
+                return {
+                    "top_failing": [
+                        {"nodeid": "test_module.py::test_two", "failure_count": 3, "failure_rate": 0.75},
+                        {"nodeid": "test_module.py::test_three", "failure_count": 2, "failure_rate": 0.5},
+                    ],
+                    "total_failures": 5,
+                }
+
+            def mock_regression_rate(self, days=None):
+                return {
+                    "regression_rate": 0.15,
+                    "regressed_tests": [
+                        {"nodeid": "test_module.py::test_one", "previous": "passed", "current": "failed"},
+                        {"nodeid": "test_module.py::test_four", "previous": "passed", "current": "failed"},
+                    ],
+                }
+
+            def mock_longest_running_tests(self, days=None, limit=10):
+                return {
+                    "longest_tests": [
+                        {
+                            "nodeid": "test_module.py::test_two",
+                            "avg_duration": 2.5,
+                            "max_duration": 3.0,
+                            "min_duration": 2.0,
+                            "runs": 4,
+                        },
+                        {
+                            "nodeid": "test_module.py::test_one",
+                            "avg_duration": 1.5,
+                            "max_duration": 2.0,
+                            "min_duration": 1.0,
+                            "runs": 4,
+                        },
+                    ]
+                }
+
+            def mock_test_suite_duration_trend(self, days=None, window_size=5):
+                return {
+                    "trend": {"direction": "increasing", "change": 0.15},
+                    "significant": True,
+                    "durations": [5.0, 5.5, 6.0, 6.5],
+                }
+
+            def mock_session_metrics(self, days=None):
+                return {"total_sessions": 2, "pass_rate": 0.8, "avg_tests_per_session": 3.0}
 
         monkeypatch.setattr("pytest_insight.core.insights.Analysis", MockAnalysis)
 
@@ -256,6 +303,57 @@ class TestInsightsModuleTests:
             "recommendations": ["Fix flaky tests", "Improve test performance"],
         }
 
+        # Mock the sessions attribute for new health metrics
+        mock_sessions_analysis = mocker.MagicMock()
+
+        # Mock top_failing_tests method
+        mock_sessions_analysis.top_failing_tests.return_value = {
+            "top_failing": [
+                {"nodeid": "test_module.py::test_two", "failure_count": 3, "failure_rate": 0.75},
+                {"nodeid": "test_module.py::test_three", "failure_count": 2, "failure_rate": 0.5},
+            ],
+            "total_failures": 5,
+        }
+
+        # Mock regression_rate method
+        mock_sessions_analysis.regression_rate.return_value = {
+            "regression_rate": 0.15,
+            "regressed_tests": [
+                {"nodeid": "test_module.py::test_one", "previous": "passed", "current": "failed"},
+                {"nodeid": "test_module.py::test_four", "previous": "passed", "current": "failed"},
+            ],
+        }
+
+        # Mock longest_running_tests method
+        mock_sessions_analysis.longest_running_tests.return_value = {
+            "longest_tests": [
+                {
+                    "nodeid": "test_module.py::test_two",
+                    "avg_duration": 2.5,
+                    "max_duration": 3.0,
+                    "min_duration": 2.0,
+                    "runs": 4,
+                },
+                {
+                    "nodeid": "test_module.py::test_one",
+                    "avg_duration": 1.5,
+                    "max_duration": 2.0,
+                    "min_duration": 1.0,
+                    "runs": 4,
+                },
+            ]
+        }
+
+        # Mock test_suite_duration_trend method
+        mock_sessions_analysis.test_suite_duration_trend.return_value = {
+            "trend": {"direction": "increasing", "change": 0.15},
+            "significant": True,
+            "durations": [5.0, 5.5, 6.0, 6.5],
+        }
+
+        # Add the sessions attribute to the mock_analysis
+        mock_analysis.sessions = mock_sessions_analysis
+
         # Create insights with our mock analysis
         insights = Insights(analysis=mock_analysis)
 
@@ -312,6 +410,27 @@ class TestInsightsModuleTests:
         assert "outcome_distribution" in summary
         assert "slowest_tests" in summary
         assert "failure_trend" in summary
+
+        # Verify the new health metrics are in the summary
+        assert "top_failing_tests" in summary
+        assert len(summary["top_failing_tests"]) == 2
+        assert summary["top_failing_tests"][0]["nodeid"] == "test_module.py::test_two"
+        assert summary["top_failing_tests"][0]["failure_count"] == 3
+
+        assert "regression_rate" in summary
+        assert summary["regression_rate"] == 15.0  # 0.15 * 100
+        assert "regressed_tests" in summary
+        assert len(summary["regressed_tests"]) == 2
+
+        assert "longest_tests" in summary
+        assert len(summary["longest_tests"]) == 2
+        assert summary["longest_tests"][0]["nodeid"] == "test_module.py::test_two"
+        assert summary["longest_tests"][0]["avg_duration"] == 2.5
+
+        assert "duration_trend" in summary
+        assert summary["duration_trend"]["direction"] == "increasing"
+        assert summary["duration_trend"]["change"] == 0.15
+        assert summary["duration_trend"]["significant"] is True
 
     def test_insights_with_profiles(self, monkeypatch, mocker):
         """Test insights initialization with profiles."""
