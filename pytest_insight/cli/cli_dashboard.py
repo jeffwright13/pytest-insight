@@ -4,6 +4,7 @@ This module provides a command-line interface for launching the pytest-insight
 web dashboard for visualizing test insights and predictive analytics.
 """
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -65,6 +66,18 @@ def _run_dashboard(port: int, profile: Optional[str], browser: bool):
         browser: Whether to open the dashboard in a browser
     """
     try:
+        # Check for required dashboard dependencies
+        missing_deps = []
+        for package in ["streamlit", "pandas", "plotly", "sklearn"]:
+            if importlib.util.find_spec(package) is None:
+                missing_deps.append(package)
+        
+        if missing_deps:
+            print(f"Error: Missing required dependencies: {', '.join(missing_deps)}")
+            print("Dashboard functionality requires additional dependencies.")
+            print("Install them with: uv pip install 'pytest-insight[visualize]'")
+            sys.exit(1)
+
         # Get the path to the dashboard.py file
         dashboard_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

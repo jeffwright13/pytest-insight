@@ -4,6 +4,7 @@ This module provides a command-line interface for launching the pytest-insight
 REST API Explorer dashboard for exploring and documenting the API.
 """
 
+import importlib.util
 import os
 import sys
 from typing import Optional
@@ -75,12 +76,16 @@ def _run_api_explorer(port: int, profile: Optional[str], browser: bool):
     console = Console()
 
     try:
-        # Check if uvicorn is installed
-        try:
-            import uvicorn
-        except ImportError:
-            console.print("[bold red]Error:[/bold red] uvicorn is not installed.")
-            console.print("Please install it with: [bold]pip install uvicorn[/bold]")
+        # Check for required API Explorer dependencies
+        missing_deps = []
+        for package in ["fastapi", "uvicorn"]:
+            if importlib.util.find_spec(package) is None:
+                missing_deps.append(package)
+        
+        if missing_deps:
+            console.print(f"[bold red]Error: Missing required dependencies: {', '.join(missing_deps)}[/bold red]")
+            console.print("API Explorer functionality requires additional dependencies.")
+            console.print("Install them with: [bold]uv pip install 'pytest-insight[visualize]'[/bold]")
             sys.exit(1)
 
         # Set profile if specified
@@ -112,6 +117,7 @@ def _run_api_explorer(port: int, profile: Optional[str], browser: bool):
 
         # Create and run the FastAPI app
         app = create_introspected_api()
+        import uvicorn
         uvicorn.run(app, host="0.0.0.0", port=port)
 
     except Exception as e:

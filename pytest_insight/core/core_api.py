@@ -23,7 +23,7 @@ Example usage:
 """
 
 import importlib.metadata
-from typing import Optional
+from typing import Any, Optional
 
 from pytest_insight.core.analysis import Analysis, analysis, analysis_with_profile
 from pytest_insight.core.comparison import (
@@ -32,7 +32,6 @@ from pytest_insight.core.comparison import (
     comparison_with_profiles,
 )
 from pytest_insight.core.insights import Insights, insights, insights_with_profile
-from pytest_insight.core.predictive import PredictiveAnalytics, predictive_analytics
 from pytest_insight.core.query import Query
 from pytest_insight.core.storage import (
     create_profile,
@@ -120,15 +119,23 @@ class InsightAPI:
             return insights_with_profile(self._profile_name)
         return get_insights()
 
-    def predictive(self) -> PredictiveAnalytics:
+    def predictive(self) -> Any:
         """
         Create a new PredictiveAnalytics instance for forecasting and anomaly detection.
 
         Returns:
             A new PredictiveAnalytics instance configured with the current profile
         """
-        analysis_instance = self.analyze()
-        return predictive_analytics(analysis_instance)
+        # Lazy import to avoid requiring scikit-learn for basic functionality
+        try:
+            from pytest_insight.core.predictive import predictive_analytics
+            analysis_instance = self.analyze()
+            return predictive_analytics(analysis_instance)
+        except ImportError:
+            raise ImportError(
+                "Predictive analytics functionality requires additional dependencies. "
+                "Install them with: uv pip install 'pytest-insight[visualize]'"
+            )
 
 
 # Re-export the factory functions with consistent naming
@@ -147,7 +154,25 @@ def query(profile_name: Optional[str] = None):
 compare = comparison
 analyze = analysis
 get_insights = insights
-get_predictive = predictive_analytics
+
+# Lazy loading for predictive analytics
+def get_predictive(analysis=None):
+    """Create a new PredictiveAnalytics instance for forecasting and anomaly detection.
+
+    Args:
+        analysis: Optional Analysis instance to use
+
+    Returns:
+        PredictiveAnalytics instance
+    """
+    try:
+        from pytest_insight.core.predictive import predictive_analytics
+        return predictive_analytics(analysis)
+    except ImportError:
+        raise ImportError(
+            "Predictive analytics functionality requires additional dependencies. "
+            "Install them with: uv pip install 'pytest-insight[visualize]'"
+        )
 
 __all__ = [
     # Main entry points
@@ -161,7 +186,6 @@ __all__ = [
     "Comparison",
     "Analysis",
     "Insights",
-    "PredictiveAnalytics",
     "InsightAPI",
     # Profile-specific variants
     "comparison_with_profiles",
