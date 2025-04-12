@@ -963,108 +963,57 @@ class SessionInsights:
             analysis: Analysis instance to use for insights
         """
         self.analysis = analysis
-        self._sessions = analysis._sessions if analysis._sessions is not None else []
+        self._sessions = analysis._sessions
 
-    def sut_comparison(self) -> Dict[str, Any]:
-        """Compare metrics between different SUTs.
+    def session_metrics(self, days: Optional[int] = None) -> Dict[str, Any]:
+        """Calculate key session metrics.
 
-        Returns:
-            Dict containing:
-            - suts: List of available SUTs
-            - comparisons: Dict mapping SUT pairs to comparison results
-            - best_sut: SUT with highest health score
-        """
-        # Get available SUTs
-        suts = set(session.sut_name for session in self._sessions)
-        if len(suts) < 2:
-            return {
-                "suts": list(suts),
-                "comparisons": {},
-                "best_sut": next(iter(suts)) if suts else None,
-            }
-
-        # Group sessions by SUT
-        sut_sessions = defaultdict(list)
-        for session in self._sessions:
-            sut_sessions[session.sut_name].append(session)
-
-        # Compare each pair of SUTs
-        comparisons = {}
-        sut_health_scores = {}
-
-        for sut1 in suts:
-            for sut2 in suts:
-                if sut1 >= sut2:  # Skip self-comparisons and duplicates
-                    continue
-
-                comparison_key = f"{sut1}_vs_{sut2}"
-                comparison = self.analysis.compare_health(
-                    base_sessions=sut_sessions[sut1], target_sessions=sut_sessions[sut2]
-                )
-
-                # Store health scores for determining best SUT
-                if sut1 not in sut_health_scores:
-                    sut_health_scores[sut1] = comparison["base_health"]["health_score"]["overall_score"]
-                if sut2 not in sut_health_scores:
-                    sut_health_scores[sut2] = comparison["target_health"]["health_score"]["overall_score"]
-
-                # Store comparison results
-                comparisons[comparison_key] = {
-                    "base_sut": sut1,
-                    "target_sut": sut2,
-                    "base_health": comparison["base_health"]["health_score"]["overall_score"],
-                    "target_health": comparison["target_health"]["health_score"]["overall_score"],
-                    "health_difference": comparison["health_difference"],
-                    "improved": comparison["improved"],
-                }
-
-        # Determine best SUT by health score
-        best_sut = max(sut_health_scores.items(), key=lambda x: x[1])[0] if sut_health_scores else None
-
-        return {"suts": list(suts), "comparisons": comparisons, "best_sut": best_sut}
-
-    def session_metrics(self) -> Dict[str, Any]:
-        """Calculate comprehensive session metrics.
+        Args:
+            days: Optional number of days to look back
 
         Returns:
             Dict containing:
             - total_sessions: Total number of sessions
-            - avg_duration: Average session duration
+            - pass_rate: Overall pass rate
             - avg_tests_per_session: Average number of tests per session
-            - failure_rate: Overall failure rate
-            - warning_rate: Overall warning rate
         """
-        total_sessions = len(self._sessions)
-        total_duration = 0
-        total_tests = 0
-        total_failures = 0
-        total_warnings = 0
+        return self.analysis.session_analysis.test_metrics(days=days)
 
-        for session in self._sessions:
-            total_duration += session.session_duration
-            session_tests = len(session.test_results)
-            total_tests += session_tests
+    def health_metrics(self, days: Optional[int] = None) -> Dict[str, Any]:
+        """Calculate comprehensive test health metrics.
 
-            # Count failures and warnings
-            for test in session.test_results:
-                if test.outcome == TestOutcome.FAILED:
-                    total_failures += 1
-                if test.has_warning:
-                    total_warnings += 1
+        Provides a holistic view of test suite health by combining multiple metrics:
+        - Top failing tests (failure clustering)
+        - Regression rate
+        - Longest running tests
+        - Test suite duration trends
 
-        # Calculate averages and rates
-        avg_duration = total_duration / total_sessions if total_sessions > 0 else 0
-        avg_tests = total_tests / total_sessions if total_sessions > 0 else 0
-        failure_rate = total_failures / total_tests if total_tests > 0 else 0
-        warning_rate = total_warnings / total_tests if total_tests > 0 else 0
+        Args:
+            days: Optional number of days to look back
 
-        return {
-            "total_sessions": total_sessions,
-            "avg_duration": avg_duration,
-            "avg_tests_per_session": avg_tests,
-            "failure_rate": failure_rate,
-            "warning_rate": warning_rate,
-        }
+        Returns:
+            Dict containing all health metrics
+        """
+        # Get base metrics
+        metrics = self.session_metrics(days=days)
+
+        # Add top failing tests
+        top_failing = self.analysis.session_analysis.top_failing_tests(days=days)
+        metrics["top_failing_tests"] = top_failing
+
+        # Add regression rate
+        regression = self.analysis.session_analysis.regression_rate(days=days)
+        metrics["regression"] = regression
+
+        # Add longest running tests
+        longest_tests = self.analysis.session_analysis.longest_running_tests(days=days)
+        metrics["longest_tests"] = longest_tests
+
+        # Add test suite duration trend
+        duration_trend = self.analysis.session_analysis.test_suite_duration_trend(days=days)
+        metrics["duration_trend"] = duration_trend
+
+        return metrics
 
     def environment_impact(self) -> Dict[str, Any]:
         """Analyze how different environments affect test results.

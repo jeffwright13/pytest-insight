@@ -884,6 +884,302 @@ class SessionAnalysis(AnalysisBase):
             "recently_passing": recently_passing,
         }
 
+    def top_failing_tests(self, days: Optional[int] = None, limit: int = 10) -> Dict[str, Any]:
+        """Identify tests that fail most frequently across sessions.
+
+        This metric helps identify systemic issues or brittle tests by clustering
+        failures and ranking tests by their failure frequency.
+
+        Args:
+            days: Optional number of days to look back
+            limit: Maximum number of tests to return
+
+        Returns:
+            Dict containing:
+            - top_failing: List of dicts with test nodeids and their failure metrics
+            - failure_distribution: Distribution of failures across tests
+            - total_failures: Total number of test failures
+        """
+        sessions = self._get_sessions(days)
+
+        # Track failures by test
+        failure_counts = defaultdict(int)
+        total_runs = defaultdict(int)
+
+        # Collect failure data from all sessions
+        for session in sessions:
+            if hasattr(session, "test_results") and session.test_results:
+                for test in session.test_results:
+                    nodeid = test.nodeid
+                    total_runs[nodeid] += 1
+                    if test.outcome == TestOutcome.FAILED:
+                        failure_counts[nodeid] += 1
+
+        # Calculate failure rates and sort
+        failing_tests = []
+        for nodeid, failures in failure_counts.items():
+            runs = total_runs[nodeid]
+            failure_rate = failures / runs if runs > 0 else 0
+
+            if failures > 0:  # Only include tests that have failed at least once
+                failing_tests.append(
+                    {
+                        "nodeid": nodeid,
+                        "failures": failures,
+                        "total_runs": runs,
+                        "failure_rate": failure_rate,
+                    }
+                )
+
+        # Sort by number of failures (descending)
+        top_failing = sorted(failing_tests, key=lambda x: (x["failures"], x["failure_rate"]), reverse=True)[:limit]
+
+        # Calculate failure distribution
+        total_failures = sum(test["failures"] for test in failing_tests)
+        failure_distribution = {}
+
+        if total_failures > 0:
+            for test in top_failing:
+                failure_distribution[test["nodeid"]] = test["failures"] / total_failures
+
+        return {
+            "top_failing": top_failing,
+            "failure_distribution": failure_distribution,
+            "total_failures": total_failures,
+        }
+
+    def regression_rate(self, days: Optional[int] = None) -> Dict[str, Any]:
+        """Calculate the regression rate of tests.
+
+        Regression rate is the percentage of tests that were passing in previous sessions
+        but failed in the most recent session. This metric helps identify newly introduced
+        instability.
+
+        Args:
+            days: Optional number of days to look back
+
+        Returns:
+            Dict containing:
+            - regression_rate: Percentage of tests that regressed
+            - regressed_tests: List of tests that regressed
+            - total_regressions: Number of tests that regressed
+        """
+        sessions = self._get_sessions(days)
+
+        if len(sessions) < 2:
+            return {
+                "regression_rate": 0.0,
+                "regressed_tests": [],
+                "total_regressions": 0,
+            }
+
+        # Sort sessions by timestamp
+        sorted_sessions = sorted(
+            sessions,
+            key=lambda s: s.session_start_time if hasattr(s, "session_start_time") else datetime.min,
+        )
+
+        # Get the most recent session
+        latest_session = sorted_sessions[-1]
+
+        # Track test outcomes across sessions
+        test_history = defaultdict(list)
+
+        # Process all sessions except the latest
+        for session in sorted_sessions[:-1]:
+            if hasattr(session, "test_results") and session.test_results:
+                for test in session.test_results:
+                    nodeid = test.nodeid
+                    test_history[nodeid].append(test.outcome)
+
+        # Identify tests that regressed in the latest session
+        regressed_tests = []
+
+        if hasattr(latest_session, "test_results") and latest_session.test_results:
+            for test in latest_session.test_results:
+                nodeid = test.nodeid
+
+                # Check if test failed in the latest session
+                if test.outcome == TestOutcome.FAILED:
+                    # Check if test was previously passing
+                    if nodeid in test_history and TestOutcome.PASSED in test_history[nodeid]:
+                        regressed_tests.append(
+                            {
+                                "nodeid": nodeid,
+                                "previous_outcomes": test_history[nodeid],
+                                "latest_outcome": test.outcome,
+                            }
+                        )
+
+        # Calculate regression rate
+        total_tests = len(set(nodeid for session in sessions for test in session.test_results))
+        regression_rate = len(regressed_tests) / total_tests if total_tests > 0 else 0.0
+
+        return {
+            "regression_rate": regression_rate,
+            "regressed_tests": regressed_tests,
+            "total_regressions": len(regressed_tests),
+        }
+
+    def longest_running_tests(self, days: Optional[int] = None, limit: int = 10) -> Dict[str, Any]:
+        """Identify the longest running tests across sessions.
+
+        This metric helps guide optimization efforts by identifying tests that
+        consume the most execution time.
+
+        Args:
+            days: Optional number of days to look back
+            limit: Maximum number of tests to return
+
+        Returns:
+            Dict containing:
+            - longest_tests: List of dicts with test nodeids and their duration metrics
+            - total_duration: Total test execution time
+            - avg_duration: Average test duration
+        """
+        sessions = self._get_sessions(days)
+
+        # Track durations by test
+        test_durations = defaultdict(list)
+
+        # Collect duration data from all sessions
+        for session in sessions:
+            if hasattr(session, "test_results") and session.test_results:
+                for test in session.test_results:
+                    if hasattr(test, "duration") and test.duration is not None:
+                        nodeid = test.nodeid
+                        test_durations[nodeid].append(test.duration)
+
+        # Calculate average durations and sort
+        avg_durations = []
+        for nodeid, durations in test_durations.items():
+            avg_duration = sum(durations) / len(durations)
+            max_duration = max(durations)
+            min_duration = min(durations)
+
+            avg_durations.append(
+                {
+                    "nodeid": nodeid,
+                    "avg_duration": avg_duration,
+                    "max_duration": max_duration,
+                    "min_duration": min_duration,
+                    "variability": max_duration - min_duration,
+                    "runs": len(durations),
+                }
+            )
+
+        # Sort by average duration (descending)
+        longest_tests = sorted(avg_durations, key=lambda x: x["avg_duration"], reverse=True)[:limit]
+
+        # Calculate overall metrics
+        all_durations = [d for durations in test_durations.values() for d in durations]
+        total_duration = sum(all_durations)
+        avg_duration = total_duration / len(all_durations) if all_durations else 0
+
+        return {
+            "longest_tests": longest_tests,
+            "total_duration": total_duration,
+            "avg_duration": avg_duration,
+        }
+
+    def test_suite_duration_trend(self, days: Optional[int] = None, window_size: int = 7) -> Dict[str, Any]:
+        """Analyze the trend in test suite duration over time.
+
+        This metric helps detect slow creep in runtime cost by tracking how the
+        total execution time changes over time.
+
+        Args:
+            days: Optional number of days to look back
+            window_size: Size of the window for trend analysis
+
+        Returns:
+            Dict containing:
+            - trend: Dict with trend metrics
+            - durations: List of session durations over time
+            - significant: Boolean indicating if the trend is statistically significant
+        """
+        sessions = self._get_sessions(days)
+
+        if len(sessions) < 2:
+            return {
+                "trend": {"change": 0, "direction": "stable"},
+                "durations": [],
+                "significant": False,
+            }
+
+        # Sort sessions by timestamp
+        sorted_sessions = sorted(
+            sessions,
+            key=lambda s: s.session_start_time if hasattr(s, "session_start_time") else datetime.min,
+        )
+
+        # Calculate session durations
+        session_durations = []
+        for session in sorted_sessions:
+            if (
+                hasattr(session, "session_start_time")
+                and hasattr(session, "session_stop_time")
+                and session.session_start_time
+                and session.session_stop_time
+            ):
+                duration = (session.session_stop_time - session.session_start_time).total_seconds()
+                timestamp = session.session_start_time
+
+                session_durations.append(
+                    {
+                        "session_id": session.session_id,
+                        "timestamp": timestamp,
+                        "duration": duration,
+                    }
+                )
+
+        if not session_durations:
+            return {
+                "trend": {"change": 0, "direction": "stable"},
+                "durations": [],
+                "significant": False,
+            }
+
+        # Analyze trend
+        if len(session_durations) >= window_size:
+            # Compare recent window to previous window
+            recent_window = session_durations[-window_size:]
+            previous_window = session_durations[-2 * window_size : -window_size]
+
+            if previous_window:  # Ensure we have enough data for comparison
+                recent_avg = sum(d["duration"] for d in recent_window) / len(recent_window)
+                previous_avg = sum(d["duration"] for d in previous_window) / len(previous_window)
+
+                # Calculate percent change
+                if previous_avg > 0:
+                    percent_change = ((recent_avg - previous_avg) / previous_avg) * 100
+                else:
+                    percent_change = 0
+
+                # Determine if change is significant (> 10%)
+                significant = abs(percent_change) > 10
+
+                trend = {
+                    "change": percent_change,
+                    "direction": "increasing"
+                    if percent_change > 0
+                    else "decreasing"
+                    if percent_change < 0
+                    else "stable",
+                }
+            else:
+                trend = {"change": 0, "direction": "stable"}
+                significant = False
+        else:
+            trend = {"change": 0, "direction": "stable"}
+            significant = False
+
+        return {
+            "trend": trend,
+            "durations": session_durations,
+            "significant": significant,
+        }
+
 
 class TestAnalysis(AnalysisBase):
     """Test-level analytics.

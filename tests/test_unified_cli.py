@@ -729,17 +729,156 @@ class TestGenerateCommands:
 class TestAnalyzeCommands:
     """Tests for the analysis commands."""
 
-    def test_analyze_insights(self, runner, mock_get_profile_manager, mock_get_storage_instance):
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    def test_analyze_insights(self, mock_insight_api, runner, mock_get_profile_manager, mock_get_storage_instance):
         """Test the 'analyze insights' command."""
-        result = runner.invoke(app, ["analyze"])
-        assert result.exit_code == 0
-        assert "Using profile:" in result.stdout
+        # Setup mock for the InsightAPI
+        mock_api_instance = mock.MagicMock()
+        mock_insight_api.return_value = mock_api_instance
 
-    def test_analyze_insights_with_profile(self, runner, mock_get_profile_manager, mock_get_storage_instance):
-        """Test analyzing insights with a specific profile."""
-        result = runner.invoke(app, ["analyze", "--profile", "test1"])
+        # Mock the analyze method and its return values
+        mock_analyze = mock.MagicMock()
+        mock_api_instance.analyze.return_value = mock_analyze
+
+        # Run the command
+        result = runner.invoke(app, ["analyze", "health"])
         assert result.exit_code == 0
-        assert "Using profile:" in result.stdout
+
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    def test_analyze_insights_with_profile(
+        self, mock_insight_api, runner, mock_get_profile_manager, mock_get_storage_instance
+    ):
+        """Test analyzing insights with a specific profile."""
+        # Setup mock for the InsightAPI
+        mock_api_instance = mock.MagicMock()
+        mock_insight_api.return_value = mock_api_instance
+
+        # Mock the analyze method and its return values
+        mock_analyze = mock.MagicMock()
+        mock_api_instance.analyze.return_value = mock_analyze
+
+        # Run the command
+        result = runner.invoke(app, ["analyze", "health", "--profile", "test1"])
+        assert result.exit_code == 0
+
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    def test_analyze_top_failing(self, mock_insight_api, runner, mock_get_profile_manager, mock_get_storage_instance):
+        """Test the 'analyze top-failing' command."""
+        # Setup mock for the InsightAPI
+        mock_api_instance = mock.MagicMock()
+        mock_insight_api.return_value = mock_api_instance
+
+        # Mock the analyze method and its return values
+        mock_analyze = mock.MagicMock()
+        mock_api_instance.analyze.return_value = mock_analyze
+
+        # Mock the sessions attribute and top_failing_tests method
+        mock_sessions = mock.MagicMock()
+        mock_analyze.sessions = mock_sessions
+        mock_sessions.top_failing_tests.return_value = {
+            "top_failing": [
+                {"nodeid": "test_file.py::test_func", "failures": 5, "total_runs": 10, "failure_rate": 0.5}
+            ],
+            "total_failures": 5,
+        }
+
+        # Run the command
+        result = runner.invoke(app, ["analyze", "top-failing"])
+        assert result.exit_code == 0
+        assert "Top" in result.stdout
+
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    def test_analyze_regression_rate(
+        self, mock_insight_api, runner, mock_get_profile_manager, mock_get_storage_instance
+    ):
+        """Test the 'analyze regression-rate' command."""
+        # Setup mock for the InsightAPI
+        mock_api_instance = mock.MagicMock()
+        mock_insight_api.return_value = mock_api_instance
+
+        # Mock the analyze method and its return values
+        mock_analyze = mock.MagicMock()
+        mock_api_instance.analyze.return_value = mock_analyze
+
+        # Mock the sessions attribute and regression_rate method
+        mock_sessions = mock.MagicMock()
+        mock_analyze.sessions = mock_sessions
+        mock_sessions.regression_rate.return_value = {
+            "regression_rate": 0.1,
+            "regressed_tests": [],
+            "total_regressions": 0,
+        }
+
+        # Run the command
+        result = runner.invoke(app, ["analyze", "regression-rate"])
+        assert result.exit_code == 0
+        assert "Regression Rate" in result.stdout
+
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    def test_analyze_longest_tests(self, mock_insight_api, runner, mock_get_profile_manager, mock_get_storage_instance):
+        """Test the 'analyze longest-tests' command."""
+        # Setup mock for the InsightAPI
+        mock_api_instance = mock.MagicMock()
+        mock_insight_api.return_value = mock_api_instance
+
+        # Mock the analyze method and its return values
+        mock_analyze = mock.MagicMock()
+        mock_api_instance.analyze.return_value = mock_analyze
+
+        # Mock the sessions attribute and longest_running_tests method
+        mock_sessions = mock.MagicMock()
+        mock_analyze.sessions = mock_sessions
+        mock_sessions.longest_running_tests.return_value = {
+            "longest_tests": [
+                {
+                    "nodeid": "test_file.py::test_func",
+                    "avg_duration": 5.0,
+                    "max_duration": 6.0,
+                    "min_duration": 4.0,
+                    "runs": 10,
+                }
+            ],
+            "total_duration": 50.0,
+            "avg_duration": 5.0,
+        }
+
+        # Run the command
+        result = runner.invoke(app, ["analyze", "longest-tests"])
+        assert result.exit_code == 0
+        assert "Longest Running Tests" in result.stdout
+
+    @patch("pytest_insight.core.core_api.InsightAPI")
+    def test_analyze_duration_trend(
+        self, mock_insight_api, runner, mock_get_profile_manager, mock_get_storage_instance
+    ):
+        """Test the 'analyze duration-trend' command."""
+        # Setup mock for the InsightAPI
+        mock_api_instance = mock.MagicMock()
+        mock_insight_api.return_value = mock_api_instance
+
+        # Mock the analyze method and its return values
+        mock_analyze = mock.MagicMock()
+        mock_api_instance.analyze.return_value = mock_analyze
+
+        # Mock the sessions attribute and test_suite_duration_trend method
+        mock_sessions = mock.MagicMock()
+        mock_analyze.sessions = mock_sessions
+
+        # Create a datetime object for the mock
+        from datetime import datetime
+
+        test_time = datetime.now()
+
+        mock_sessions.test_suite_duration_trend.return_value = {
+            "durations": [{"session_id": "test-session", "timestamp": test_time, "duration": 100.0}],
+            "trend": {"direction": "stable", "change": 0.0},
+            "significant": False,
+        }
+
+        # Run the command
+        result = runner.invoke(app, ["analyze", "duration-trend"])
+        assert result.exit_code == 0
+        assert "Test Suite Duration Trend" in result.stdout
 
 
 class TestMainCommand:
@@ -788,7 +927,12 @@ class TestMainCommand:
         """Test the analyze help command."""
         result = runner.invoke(app, ["analyze", "--help"])
         assert result.exit_code == 0
-        assert "Analyze test sessions" in result.stdout
+        # Updated to match the new CLI structure with subcommands
+        assert "Analyze test data and generate insights" in result.stdout
+        assert "top-failing" in result.stdout
+        assert "regression-rate" in result.stdout
+        assert "longest-tests" in result.stdout
+        assert "duration-trend" in result.stdout
 
     def test_dashboard_help(self, runner):
         """Test the dashboard help command."""

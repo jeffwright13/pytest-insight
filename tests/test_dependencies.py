@@ -1,13 +1,14 @@
 """Tests for dependency structure and CLI behavior with different dependency sets."""
 
 import importlib.util
+
 import pytest
 
 # Core dependencies (should always be available)
-CORE_DEPS = ["pytest", "typer", "colorama", "ijson", "prompt_toolkit", "rich"]
+CORE_DEPS = ["colorama", "ijson", "prompt_toolkit", "pytest", "rich", "typer"]
 
 # Visualization dependencies (only available with [visualize])
-VISUALIZE_DEPS = ["streamlit", "pandas", "plotly", "sklearn", "fastapi", "uvicorn"]
+VISUALIZE_DEPS = ["fastapi", "pandas", "plotly", "sklearn", "streamlit", "uvicorn"]
 
 
 def is_module_available(module_name):
@@ -27,13 +28,13 @@ def test_visualization_dependencies():
     """Test visualization dependencies availability based on installation type."""
     # Check if we're in a visualization-enabled environment
     missing_deps = [dep for dep in VISUALIZE_DEPS if not is_module_available(dep)]
-    
+
     if missing_deps:
         pytest.skip(
             f"Not in visualize environment (missing: {', '.join(missing_deps)}). "
             "Skip this test when running with basic installation."
         )
-    
+
     # If we're here, all visualization dependencies should be available
     for dep in VISUALIZE_DEPS:
         assert is_module_available(dep), f"Visualization dependency {dep} not available"
@@ -42,7 +43,8 @@ def test_visualization_dependencies():
 def test_cli_core_functionality(tester):
     """Test that core CLI functionality works in any environment."""
     # Create a simple test script that uses the core CLI
-    tester.makepyfile(test_cli_core="""
+    tester.makepyfile(
+        test_cli_core="""
         import subprocess
         import sys
         
@@ -57,11 +59,12 @@ def test_cli_core_functionality(tester):
             assert result.returncode == 0
             # Output should contain expected text
             assert "Available storage profiles" in result.stdout
-    """)
-    
+    """
+    )
+
     # Run the test
     result = tester.runpytest("-v", "test_cli_core.py")
-    
+
     # Check that the test passed
     result.stdout.fnmatch_lines(["*test_profile_command PASSED*"])
     assert result.ret == 0
@@ -70,7 +73,8 @@ def test_cli_core_functionality(tester):
 def test_cli_dashboard_behavior(tester):
     """Test dashboard CLI behavior based on installation environment."""
     # Create a test script that tries to use the dashboard
-    tester.makepyfile(test_cli_dashboard="""
+    tester.makepyfile(
+        test_cli_dashboard="""
         import subprocess
         import sys
         import importlib.util
@@ -97,11 +101,12 @@ def test_cli_dashboard_behavior(tester):
                 # The command might still return 0 with --help, so we check the output
                 assert "Missing required dependencies" in combined_output or result.returncode != 0
                 assert "pytest-insight[visualize]" in combined_output
-    """)
-    
+    """
+    )
+
     # Run the test
     result = tester.runpytest("-v", "test_cli_dashboard.py")
-    
+
     # Check that the test ran (it should pass in either environment)
     result.stdout.fnmatch_lines(["*test_dashboard_command PASSED*"])
     assert result.ret == 0
@@ -110,7 +115,8 @@ def test_cli_dashboard_behavior(tester):
 def test_cli_api_explorer_behavior(tester):
     """Test API Explorer CLI behavior based on installation environment."""
     # Create a test script that tries to use the API Explorer
-    tester.makepyfile(test_cli_api_explorer="""
+    tester.makepyfile(
+        test_cli_api_explorer="""
         import subprocess
         import sys
         import importlib.util
@@ -137,11 +143,12 @@ def test_cli_api_explorer_behavior(tester):
                 # The command might still return 0 with --help, so we check the output
                 assert "Missing required dependencies" in combined_output or result.returncode != 0
                 assert "pytest-insight[visualize]" in combined_output
-    """)
-    
+    """
+    )
+
     # Run the test
     result = tester.runpytest("-v", "test_cli_api_explorer.py")
-    
+
     # Check that the test ran (it should pass in either environment)
     result.stdout.fnmatch_lines(["*test_api_explorer_command PASSED*"])
     assert result.ret == 0
@@ -150,7 +157,8 @@ def test_cli_api_explorer_behavior(tester):
 def test_predictive_analytics_behavior(tester):
     """Test predictive analytics behavior based on installation environment."""
     # Create a test script that tries to use predictive analytics
-    tester.makepyfile(test_predictive="""
+    tester.makepyfile(
+        test_predictive="""
         import importlib.util
         import pytest
         
@@ -173,11 +181,12 @@ def test_predictive_analytics_behavior(tester):
                     pytest.fail(f"Predictive analytics failed despite sklearn being available: {e}")
                 else:
                     assert "pytest-insight[visualize]" in str(e)
-    """)
-    
+    """
+    )
+
     # Run the test
     result = tester.runpytest("-v", "test_predictive.py")
-    
+
     # Check that the test ran (it should pass in either environment)
     result.stdout.fnmatch_lines(["*test_predictive_analytics PASSED*"])
     assert result.ret == 0

@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from pytest_insight.cli.cli_analyze import app as analyze_app
 from pytest_insight.cli.cli_api_explorer import app as api_explorer_app
 from pytest_insight.cli.cli_dashboard import app as dashboard_app
 from pytest_insight.cli.cli_dev import app as dev_cli
@@ -57,6 +58,7 @@ app.add_typer(profile_app, name="profile")
 app.add_typer(generate_app, name="generate")
 app.add_typer(dashboard_app, name="dashboard")
 app.add_typer(api_explorer_app, name="api-explorer")
+app.add_typer(analyze_app, name="analyze")
 
 
 # Profile management commands
