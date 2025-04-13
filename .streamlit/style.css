@@ -1,0 +1,176 @@
+/* Main dashboard styling */
+.main {
+    background-color: #0e1117;
+    color: #f0f2f6;
+}
+
+/* Custom card styling */
+.css-1r6slb0 {
+    border-radius: 10px;
+    border: 1px solid rgba(49, 51, 63, 0.2);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    background-color: #1a1c24;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.css-1r6slb0:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Metric styling */
+div[data-testid="stMetric"] {
+    background-color: #252a33;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+div[data-testid="stMetric"] > div:first-child {
+    color: #7792E3;
+}
+
+div[data-testid="stMetricValue"] {
+    font-size: 2.2rem !important;
+    font-weight: 700 !important;
+}
+
+div[data-testid="stMetricDelta"] {
+    font-size: 1rem !important;
+}
+
+/* Header styling */
+h1, h2, h3 {
+    color: #7792E3;
+    font-weight: 600;
+}
+
+h1 {
+    border-bottom: 2px solid #7792E3;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Tab styling */
+button[data-baseweb="tab"] {
+    font-weight: 600;
+    border-radius: 4px 4px 0 0;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: #7792E3 !important;
+    color: white !important;
+}
+
+/* Button styling */
+button[kind="primary"] {
+    background-color: #7792E3;
+    border-radius: 6px;
+    border: none;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+button[kind="primary"]:hover {
+    background-color: #5a78d6;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Chart styling */
+div[data-testid="stPlotlyChart"] > div {
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Table styling */
+div[data-testid="stTable"] {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+div[data-testid="stTable"] th {
+    background-color: #252a33;
+    color: #7792E3;
+    font-weight: 600;
+}
+
+div[data-testid="stTable"] tr:nth-child(even) {
+    background-color: #1e222a;
+}
+
+/* Sidebar styling */
+section[data-testid="stSidebar"] {
+    background-color: #1a1c24;
+    border-right: 1px solid rgba(49, 51, 63, 0.2);
+}
+
+section[data-testid="stSidebar"] h2 {
+    color: #7792E3;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(49, 51, 63, 0.2);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Selectbox styling */
+div[data-baseweb="select"] {
+    border-radius: 6px;
+    border: 1px solid rgba(49, 51, 63, 0.2);
+}
+
+/* Slider styling */
+div[data-testid="stSlider"] div[role="slider"] {
+    background-color: #7792E3;
+}
+
+/* Progress bar styling */
+div[role="progressbar"] > div {
+    background-color: #7792E3;
+}
+
+/* Warning and error messages */
+div[data-testid="stAlert"] {
+    border-radius: 8px;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Code blocks */
+pre {
+    border-radius: 8px;
+    padding: 1rem;
+    background-color: #252a33 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Expander styling */
+details {
+    border-radius: 8px;
+    border: 1px solid rgba(49, 51, 63, 0.2);
+    background-color: #1a1c24;
+    margin-bottom: 1rem;
+}
+
+details summary {
+    padding: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+details[open] summary {
+    border-bottom: 1px solid rgba(49, 51, 63, 0.2);
+}
+
+/* Animation for page transitions */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.main .block-container {
+    animation: fadeIn 0.5s ease-out;
+}

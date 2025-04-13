@@ -36,7 +36,7 @@ only_status_changes = false
 metrics = [
     "duration",
     "outcome",
-    "flaky_rate"
+    "reliability_index"
 ]
 
 # ==============================
@@ -89,7 +89,9 @@ enabled = true
 # Metrics to include in summary reports
 metrics = [
     "pass_rate",
-    "flaky_rate", 
+    "failure_rate",
+    "reliability_index",
+    "rerun_recovery_rate",
     "test_count", 
     "session_count"
 ]

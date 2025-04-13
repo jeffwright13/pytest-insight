@@ -41,6 +41,7 @@ from statistics import mean, stdev
 from typing import Any, Callable, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
+from pytest_insight.core.insights import TestInsights
 from pytest_insight.core.models import (
     TestOutcome,
     TestSession,
@@ -910,10 +911,9 @@ class SessionAnalysis(AnalysisBase):
         for session in sessions:
             if hasattr(session, "test_results") and session.test_results:
                 for test in session.test_results:
-                    nodeid = test.nodeid
-                    total_runs[nodeid] += 1
+                    total_runs[test.nodeid] += 1
                     if test.outcome == TestOutcome.FAILED:
-                        failure_counts[nodeid] += 1
+                        failure_counts[test.nodeid] += 1
 
         # Calculate failure rates and sort
         failing_tests = []
@@ -1051,25 +1051,10 @@ class SessionAnalysis(AnalysisBase):
                         test_durations[nodeid].append(test.duration)
 
         # Calculate average durations and sort
-        avg_durations = []
-        for nodeid, durations in test_durations.items():
-            avg_duration = sum(durations) / len(durations)
-            max_duration = max(durations)
-            min_duration = min(durations)
+        avg_durations = [(nodeid, sum(durations) / len(durations)) for nodeid, durations in test_durations.items()]
 
-            avg_durations.append(
-                {
-                    "nodeid": nodeid,
-                    "avg_duration": avg_duration,
-                    "max_duration": max_duration,
-                    "min_duration": min_duration,
-                    "variability": max_duration - min_duration,
-                    "runs": len(durations),
-                }
-            )
-
-        # Sort by average duration (descending)
-        longest_tests = sorted(avg_durations, key=lambda x: x["avg_duration"], reverse=True)[:limit]
+        # Sort by duration (descending) and return top N
+        longest_tests = sorted(avg_durations, key=lambda x: x[1], reverse=True)[:limit]
 
         # Calculate overall metrics
         all_durations = [d for durations in test_durations.values() for d in durations]
@@ -2116,11 +2101,16 @@ class Analysis:
         health_score = self.metrics.health_score(days)
         session_metrics = self.sessions.test_metrics(days)
         trends = self.sessions.detect_trends(days)
+        
+        # Get reliability metrics
+        insights = TestInsights(self._sessions)
+        reliability_metrics = insights.test_reliability_metrics()
 
         return {
             "health_score": health_score,
             "session_metrics": session_metrics,
             "trends": trends,
+            "reliability_metrics": reliability_metrics,
             "timestamp": datetime.now(ZoneInfo("UTC")),
         }
 
