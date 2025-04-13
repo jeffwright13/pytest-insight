@@ -1,6 +1,6 @@
 [project]
 name = "pytest-insight"
-version = "0.7.0"
+version = "0.8.0"
 description = "A pytest plugin for collecting, analyzing, and visualizing test and test-session metrics"
 readme = "README.md"
 authors = [
@@ -26,7 +26,7 @@ visualize = [
     "pandas>=1.5.0",
     "plotly>=5.13.0",
     "scikit-learn>=1.2.0",
-    
+
     # API Explorer dependencies
     "fastapi>=0.95.0",
     "uvicorn>=0.20.0",
