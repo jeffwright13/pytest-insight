@@ -66,7 +66,7 @@ class MockCursor:
         return {
             "id": random.randint(1, 10000),
             "name": f"Item-{random.randint(1000, 9999)}",
-            "created_at": datetime.now() - timedelta(days=random.randint(0, 30)),
+            "created": datetime.now() - timedelta(days=random.randint(0, 30)),
             "status": random.choice(["active", "inactive", "pending", "archived"]),
             "value": round(random.uniform(10, 1000), 2),
         }
@@ -262,8 +262,8 @@ def test_query_performance(db_connection):
     JOIN order_items oi ON o.id = oi.order_id
     JOIN products p ON oi.product_id = p.id
     WHERE u.status = 'active'
-    AND o.created_at > '2023-01-01'
-    ORDER BY o.created_at DESC
+    AND o.created > '2023-01-01'
+    ORDER BY o.created DESC
     LIMIT 100
     """
 
@@ -353,7 +353,7 @@ def test_create_table(db_connection):
     CREATE TABLE IF NOT EXISTS test_schema.test_table (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """
     )

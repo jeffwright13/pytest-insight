@@ -35,7 +35,7 @@ def mock_user_data():
         "id": user_id,
         "username": f"testuser_{user_id}",
         "email": f"{user_id}@example.com",
-        "created_at": datetime.now().isoformat(),
+        "created": datetime.now().isoformat(),
         "status": random.choice(["active", "inactive", "pending"]),
     }
 

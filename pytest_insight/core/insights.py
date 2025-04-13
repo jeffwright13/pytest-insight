@@ -1817,7 +1817,15 @@ class Insights:
                 color = CYAN
 
             # Format the outcome and count
-            outcome_text = f"{str(outcome).upper()}: {count}"
+            # Display a user-friendly name instead of the enum value
+            if hasattr(outcome, "name"):
+                # If it's an enum, use the name (e.g., "PASSED" instead of "TESTOUTCOME.PASSED")
+                display_name = outcome.name.capitalize()
+            else:
+                # Otherwise use the string representation but remove any class prefix
+                display_name = str(outcome).split(".")[-1].capitalize()
+
+            outcome_text = f"{display_name}: {count}"
             output.append(f"    {colorize(outcome_text, color)}")
 
         # Flaky Tests Section

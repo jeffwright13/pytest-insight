@@ -194,7 +194,7 @@ class MockOrderService:
             "items": order_items,
             "total": order_total,
             "status": "created",
-            "created_at": datetime.now().isoformat(),
+            "created": datetime.now().isoformat(),
         }
 
         return {"success": True, "order_id": order_id, "total": order_total}
@@ -253,7 +253,7 @@ class MockPaymentService:
             "amount": amount,
             "payment_method": payment_method,
             "status": "completed",
-            "created_at": datetime.now().isoformat(),
+            "created": datetime.now().isoformat(),
         }
 
         return {"success": True, "payment_id": payment_id, "status": "completed"}

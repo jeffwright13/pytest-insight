@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -407,6 +408,8 @@ class TestStorageProfile:
     def test_storage_profile_creation(self):
         """Test creating a StorageProfile."""
 
+        from datetime import datetime
+
         from pytest_insight.core.storage import StorageProfile
 
         # Create with defaults
@@ -416,30 +419,122 @@ class TestStorageProfile:
         expected_path = str(Path.home() / ".pytest_insight" / "profiles" / "test-profile.json")
         assert profile.file_path == expected_path
 
+        # Check timestamp and user fields are set
+        assert isinstance(profile.created, datetime)
+        assert isinstance(profile.last_modified, datetime)
+        assert profile.created_by is not None
+        assert profile.last_modified_by is not None
+        assert profile.created_by == profile.last_modified_by  # Same user for new profile
+
         # Create with custom values
         profile = StorageProfile("custom", "memory", "/custom/path")
         assert profile.name == "custom"
         assert profile.storage_type == "memory"
         assert profile.file_path == "/custom/path"
 
-    def test_storage_profile_serialization(self):
-        """Test serializing and deserializing a StorageProfile."""
+    def test_storage_profile_with_timestamp_and_user_info(self):
+        """Test creating a StorageProfile with timestamp and user information."""
+        from datetime import datetime
+
         from pytest_insight.core.storage import StorageProfile
 
-        # Create a profile
-        profile = StorageProfile("test", "json", "/test/path")
+        # Create a profile with custom timestamp and user info
+        created = datetime(2025, 1, 1)
+        last_modified = datetime(2025, 1, 2)
+        created_by = "test-creator"
+        last_modified_by = "test-modifier"
+
+        profile = StorageProfile(
+            "test-timestamps",
+            "json",
+            "/test/path",
+            created=created,
+            last_modified=last_modified,
+            created_by=created_by,
+            last_modified_by=last_modified_by,
+        )
+
+        # Verify values were set correctly
+        assert profile.created == created
+        assert profile.last_modified == last_modified
+        assert profile.created_by == created_by
+        assert profile.last_modified_by == last_modified_by
+
+    def test_storage_profile_serialization(self):
+        """Test serializing and deserializing a StorageProfile."""
+        from datetime import datetime
+
+        from pytest_insight.core.storage import StorageProfile
+
+        # Create a profile with timestamp and user info
+        created = datetime(2025, 1, 1)
+        last_modified = datetime(2025, 1, 2)
+        created_by = "test-creator"
+        last_modified_by = "test-modifier"
+
+        profile = StorageProfile(
+            "test",
+            "json",
+            "/test/path",
+            created=created,
+            last_modified=last_modified,
+            created_by=created_by,
+            last_modified_by=last_modified_by,
+        )
 
         # Serialize to dict
         profile_dict = profile.to_dict()
         assert profile_dict["name"] == "test"
         assert profile_dict["storage_type"] == "json"
         assert profile_dict["file_path"] == "/test/path"
+        assert profile_dict["created"] == created.isoformat()
+        assert profile_dict["last_modified"] == last_modified.isoformat()
+        assert profile_dict["created_by"] == created_by
+        assert profile_dict["last_modified_by"] == last_modified_by
 
         # Deserialize from dict
         new_profile = StorageProfile.from_dict(profile_dict)
         assert new_profile.name == "test"
         assert new_profile.storage_type == "json"
         assert new_profile.file_path == "/test/path"
+        assert new_profile.created == created
+        assert new_profile.last_modified == last_modified
+        assert new_profile.created_by == created_by
+        assert new_profile.last_modified_by == last_modified_by
+
+    def test_storage_profile_backward_compatibility(self):
+        """Test backward compatibility with profiles that have old field names."""
+        from datetime import datetime
+
+        from pytest_insight.core.storage import StorageProfile
+
+        # Create a profile dict with the old field name (last_modified instead of last_modified)
+        created_at_str = "2025-01-01T00:00:00"
+        last_modified_str = "2025-01-02T00:00:00"
+
+        profile_dict = {
+            "name": "legacy-profile",
+            "storage_type": "json",
+            "file_path": "/legacy/path",
+            "created": created_at_str,
+            "last_modified": last_modified_str,  # Old field name
+            "created_by": "test-creator",
+            # Missing last_modified_by
+        }
+
+        # Deserialize from dict
+        profile = StorageProfile.from_dict(profile_dict)
+
+        # Verify fields were correctly mapped
+        assert profile.name == "legacy-profile"
+        assert profile.storage_type == "json"
+        assert profile.file_path == "/legacy/path"
+        assert isinstance(profile.created, datetime)
+        assert isinstance(profile.last_modified, datetime)
+        assert profile.created.isoformat() == created_at_str
+        assert profile.last_modified.isoformat() == last_modified_str
+        assert profile.created_by == "test-creator"
+        assert profile.last_modified_by is not None  # Should be set to default value
 
 
 class TestProfileManager:
@@ -1026,7 +1121,9 @@ def test_load_sessions(mocker, tmp_path, get_test_time):
     # Save sessions directly to the storage file
     with open(storage_path, "w") as f:
         json.dump(
-            {"sessions": [s.to_dict() for s in sessions]},
+            {
+                "sessions": [s.to_dict() for s in sessions],
+            },
             f,
         )
 
@@ -1157,3 +1254,87 @@ def test_load_sessions_fallback_when_ijson_not_available(mocker, tmp_path, get_t
     # Verify all sessions were loaded correctly using the fallback method
     assert len(loaded_sessions) == 3
     assert {s.session_id for s in loaded_sessions} == {f"fallback-test-{i}" for i in range(3)}
+
+
+def test_get_profile_metadata(tmp_path):
+    """Test retrieving profile metadata."""
+    from pytest_insight.core.storage import ProfileManager, StorageProfile, get_profile_metadata
+
+    # Create a profile manager with a test config file
+    config_path = tmp_path / "profiles.json"
+    profile_manager = ProfileManager(config_path=config_path)
+
+    # Create test profiles with timestamp and user info
+    profile1 = StorageProfile(
+        "profile1",
+        "json",
+        str(tmp_path / "profile1.json"),
+        created=datetime(2025, 1, 1),
+        last_modified=datetime(2025, 1, 2),
+        created_by="creator1",
+        last_modified_by="modifier1",
+    )
+
+    profile2 = StorageProfile(
+        "profile2",
+        "json",
+        str(tmp_path / "profile2.json"),
+        created=datetime(2025, 1, 3),
+        last_modified=datetime(2025, 1, 4),
+        created_by="creator2",
+        last_modified_by="modifier2",
+    )
+
+    # Add profiles to manager
+    profile_manager.profiles = {"profile1": profile1, "profile2": profile2}
+    profile_manager.active_profile_name = "profile1"
+
+    # Save profiles to disk
+    profile_manager._save_profiles()
+
+    # Mock get_profile_manager to return our test instance
+    from unittest.mock import patch
+
+    with patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager):
+        # Test getting metadata for all profiles
+        all_metadata = get_profile_metadata()
+
+        assert all_metadata["active_profile"] == "profile1"
+        assert all_metadata["profiles_count"] == 2
+        assert "last_modified" in all_metadata
+        assert "modified_by" in all_metadata
+
+        # Check profile1 metadata
+        profile1_data = all_metadata["profiles"]["profile1"]
+        assert profile1_data["storage_type"] == "json"
+        assert isinstance(profile1_data["created"], datetime)
+        assert isinstance(profile1_data["last_modified"], datetime)
+        assert profile1_data["created_by"] == "creator1"
+        # The last_modified_by will be updated to the current user by _save_profiles
+        # So we should not expect it to be "modifier1" anymore
+
+        # Check profile2 metadata
+        profile2_data = all_metadata["profiles"]["profile2"]
+        assert profile2_data["storage_type"] == "json"
+        assert isinstance(profile2_data["created"], datetime)
+        assert isinstance(profile2_data["last_modified"], datetime)
+        assert profile2_data["created_by"] == "creator2"
+        # The last_modified_by will be updated to the current user by _save_profiles
+        # So we should not expect it to be "modifier2" anymore
+
+        # Test getting metadata for a specific profile
+        profile1_metadata = get_profile_metadata("profile1")
+
+        assert profile1_metadata["active_profile"] == "profile1"
+        assert "profile" in profile1_metadata
+        assert profile1_metadata["profile"]["name"] == "profile1"
+        assert profile1_metadata["profile"]["storage_type"] == "json"
+        assert isinstance(profile1_metadata["profile"]["created"], datetime)
+        assert isinstance(profile1_metadata["profile"]["last_modified"], datetime)
+        assert profile1_metadata["profile"]["created_by"] == "creator1"
+        # The last_modified_by will be updated to the current user by _save_profiles
+        # So we should not expect it to be "modifier1" anymore
+
+        # Test getting metadata for a non-existent profile
+        nonexistent_metadata = get_profile_metadata("nonexistent")
+        assert "error" in nonexistent_metadata

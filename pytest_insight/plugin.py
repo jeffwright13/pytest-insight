@@ -43,7 +43,8 @@ def insight_enabled(config: Optional[Config] = None) -> bool:
     global _INSIGHT_INITIALIZED, _INSIGHT_ENABLED
 
     if config is not None and not _INSIGHT_INITIALIZED:
-        _INSIGHT_ENABLED = bool(getattr(config.option, "insight_enabled", False))
+        # Check for the new --insight option instead of insight_enabled
+        _INSIGHT_ENABLED = bool(getattr(config.option, "insight", False))
         _INSIGHT_INITIALIZED = True
     return _INSIGHT_ENABLED
 

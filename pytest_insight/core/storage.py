@@ -1,3 +1,4 @@
+import getpass
 import json
 import os
 import shutil
@@ -16,16 +17,38 @@ from pytest_insight.utils.constants import DEFAULT_STORAGE_PATH
 class StorageProfile:
     """Represents a storage configuration profile, which is a named storage configuration used to differentiate between different storage backends, different file paths, different SUTs/setups/environments, etc."""
 
-    def __init__(self, name: str, storage_type: str = "json", file_path: Optional[str] = None):
+    def __init__(
+        self,
+        name: str,
+        storage_type: str = "json",
+        file_path: Optional[str] = None,
+        created: Optional[datetime] = None,
+        last_modified: Optional[datetime] = None,
+        created_by: Optional[str] = None,
+        last_modified_by: Optional[str] = None,
+    ):
         """Initialize a storage profile.
 
         Args:
             name: Unique name for the profile
             storage_type: Type of storage (json, memory, etc.)
             file_path: Optional custom path for storage. If None, a default path will be generated based on the profile name.
+            created: Timestamp when the profile was created
+            last_modified: Timestamp when the profile was last modified
+            created_by: Username of the person who created the profile
+            last_modified_by: Username of the person who last modified the profile
         """
         self.name = name
         self.storage_type = storage_type
+
+        # Set timestamps and user info
+        current_time = datetime.now()
+        current_user = getpass.getuser() if hasattr(getpass, "getuser") else "unknown"
+
+        self.created = created or current_time
+        self.last_modified = last_modified or current_time
+        self.created_by = created_by or current_user
+        self.last_modified_by = last_modified_by or current_user
 
         # Generate default file path based on profile name if none provided
         if file_path is None:
@@ -41,15 +64,46 @@ class StorageProfile:
             "name": self.name,
             "storage_type": self.storage_type,
             "file_path": self.file_path,
+            "created": self.created.isoformat() if self.created else None,
+            "last_modified": self.last_modified.isoformat() if self.last_modified else None,
+            "created_by": self.created_by,
+            "last_modified_by": self.last_modified_by,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StorageProfile":
         """Create profile from dictionary."""
+        # Handle backward compatibility for profiles with old field names
+        created_str = data.get("created") or data.get("created_at")
+        last_modified_str = data.get("last_modified") or data.get("last_modified_at")
+
+        # Convert string timestamps to datetime objects if they exist
+        created = None
+        if created_str:
+            try:
+                created = datetime.fromisoformat(created_str)
+            except (ValueError, TypeError):
+                # If conversion fails, use the string as-is for logging but set to current time
+                print(f"Warning: Invalid created format: {created_str}. Using current time.")
+                created = datetime.now()
+
+        last_modified = None
+        if last_modified_str:
+            try:
+                last_modified = datetime.fromisoformat(last_modified_str)
+            except (ValueError, TypeError):
+                # If conversion fails, use the string as-is for logging but set to current time
+                print(f"Warning: Invalid last_modified format: {last_modified_str}. Using current time.")
+                last_modified = datetime.now()
+
         return cls(
             name=data["name"],
             storage_type=data.get("storage_type", "json"),
             file_path=data.get("file_path"),
+            created=created,
+            last_modified=last_modified,
+            created_by=data.get("created_by"),
+            last_modified_by=data.get("last_modified_by"),
         )
 
 
@@ -102,6 +156,11 @@ class ProfileManager:
             # Ensure active profile exists
             if self.active_profile_name not in self.profiles:
                 self.active_profile_name = "default"
+
+            # Log metadata if available
+            if "last_modified" in data and "modified_by" in data:
+                print(f"Profiles last modified at {data['last_modified']} by {data['modified_by']}")
+
         except Exception as e:
             print(f"Warning: Failed to load profiles from {self.config_path}: {e}")
             # Create default profile
@@ -110,38 +169,46 @@ class ProfileManager:
             self._save_profiles()
 
     def _save_profiles(self) -> None:
-        """Save profiles to configuration file."""
+        """Save profiles to disk."""
+        # Don't save if we're in memory-only mode
+        if hasattr(self, "memory_only") and self.memory_only:
+            return
+
         # Create a backup before saving
         if self.config_path.exists():
             self.backup_profiles()
 
+        # Create parent directory if it doesn't exist
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Update last_modified timestamp for all profiles
+        current_time = datetime.now()
+        current_user = getpass.getuser() if hasattr(getpass, "getuser") else "unknown"
+
+        for profile in self.profiles.values():
+            profile.last_modified = current_time
+            profile.last_modified_by = current_user
+
         # Only include non-memory profiles for persistence
         persistent_profiles = {
-            name: profile for name, profile in self.profiles.items() if profile.storage_type != "memory"
+            name: profile.to_dict() for name, profile in self.profiles.items() if profile.storage_type != "memory"
         }
 
-        data = {
-            "profiles": {name: profile.to_dict() for name, profile in persistent_profiles.items()},
-            "active_profile": self.active_profile_name,
-        }
+        # Write to a temporary file first to avoid corruption
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, dir=str(self.config_path.parent)) as tmp:
+            json.dump(
+                {
+                    "active_profile": self.active_profile_name,
+                    "profiles": persistent_profiles,
+                    "last_modified": current_time.isoformat(),
+                    "modified_by": current_user,
+                },
+                tmp,
+                indent=2,
+            )
 
-        # Create a temporary file in the same directory
-        temp_dir = self.config_path.parent
-        temp_dir.mkdir(parents=True, exist_ok=True)
-
-        with tempfile.NamedTemporaryFile(mode="w", dir=temp_dir, delete=False) as temp_file:
-            # Write data to the temporary file
-            json.dump(data, temp_file, indent=2)
-            temp_path = Path(temp_file.name)
-
-        try:
-            # Rename is atomic on POSIX systems
-            temp_path.replace(self.config_path)
-        except Exception as e:
-            print(f"Warning: Failed to save profiles to {self.config_path}: {e}")
-            if temp_path.exists():
-                temp_path.unlink()  # Clean up temp file
-            raise
+        # Use atomic replace to avoid corruption
+        shutil.move(tmp.name, str(self.config_path))
 
     def _create_profile(self, name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
         """Create a new storage profile.
@@ -1002,10 +1069,21 @@ def create_profile(name: str, storage_type: str = "json", file_path: Optional[st
 
     Returns:
         The created profile
+
+    Raises:
+        ValueError: If profile already exists
     """
-    # For backward compatibility, we still accept storage_type and file_path
-    # but in the future, we'll encourage users to just use profiles
-    return get_profile_manager()._create_profile(name, storage_type, file_path)
+    profile_manager = get_profile_manager()
+
+    # Create timestamp information
+    current_time = datetime.now()
+    creator = getpass.getuser() if hasattr(getpass, "getuser") else "unknown"
+
+    # Print creation information
+    print(f"Creating profile '{name}' at {current_time.isoformat()} by {creator}")
+
+    profile = profile_manager._create_profile(name, storage_type, file_path)
+    return profile
 
 
 def switch_profile(name: str) -> StorageProfile:
@@ -1040,6 +1118,74 @@ def get_active_profile() -> StorageProfile:
         The active profile
     """
     return get_profile_manager().get_active_profile()
+
+
+def get_profile_metadata(name: Optional[str] = None) -> Dict[str, Any]:
+    """Get metadata about a profile or all profiles.
+
+    Args:
+        name: Optional name of the profile to get metadata for. If None, returns metadata for all profiles.
+
+    Returns:
+        Dictionary containing metadata about the profile(s)
+    """
+    profile_manager = get_profile_manager()
+
+    # Load the profiles.json file directly to get the metadata
+    if not profile_manager.config_path.exists():
+        return {"error": "No profiles configuration found"}
+
+    try:
+        data = json.loads(profile_manager.config_path.read_text())
+
+        # Extract global metadata
+        metadata = {
+            "last_modified": data.get("last_modified", "unknown"),
+            "modified_by": data.get("modified_by", "unknown"),
+            "active_profile": data.get("active_profile", "default"),
+            "profiles_count": len(data.get("profiles", {})),
+        }
+
+        # Helper function to safely convert timestamp strings to datetime
+        def safe_parse_datetime(dt_str):
+            if not dt_str or dt_str == "unknown":
+                return "unknown"
+            try:
+                return datetime.fromisoformat(dt_str)
+            except (ValueError, TypeError):
+                return "unknown"
+
+        # If a specific profile is requested, add its metadata
+        if name:
+            if name in data.get("profiles", {}):
+                profile_data = data["profiles"][name]
+                metadata["profile"] = {
+                    "name": name,
+                    "storage_type": profile_data.get("storage_type", "unknown"),
+                    "file_path": profile_data.get("file_path", "unknown"),
+                    "created": safe_parse_datetime(profile_data.get("created")),
+                    "last_modified": safe_parse_datetime(profile_data.get("last_modified")),
+                    "created_by": profile_data.get("created_by", "unknown"),
+                    "last_modified_by": profile_data.get("last_modified_by", "unknown"),
+                }
+            else:
+                metadata["error"] = f"Profile '{name}' not found"
+        else:
+            # Add summary of all profiles
+            metadata["profiles"] = {
+                name: {
+                    "storage_type": profile_data.get("storage_type", "unknown"),
+                    "created": safe_parse_datetime(profile_data.get("created")),
+                    "last_modified": safe_parse_datetime(profile_data.get("last_modified")),
+                    "created_by": profile_data.get("created_by", "unknown"),
+                    "last_modified_by": profile_data.get("last_modified_by", "unknown"),
+                }
+                for name, profile_data in data.get("profiles", {}).items()
+            }
+
+        return metadata
+    except Exception as e:
+        return {"error": f"Failed to load profile metadata: {str(e)}"}
 
 
 # Main entry point for loading sessions
