@@ -47,6 +47,36 @@ Most commands support the following options:
 - `--test, -t`: Filter by test name pattern
 - `--profile, -p`: Storage profile to use
 - `--format, -f`: Output format (text or json)
+- `--insight`: Enable pytest-insight
+- `--insight-sut, --is`: Specify the system under test name
+- `--insight-test-system-name, --itsn`: Specify the testing system name
+
+### System Under Test (SUT) vs Testing System
+
+pytest-insight makes an important distinction between:
+
+- **System Under Test (SUT)**: The application, component, or service being tested (e.g., "auth-service", "payment-api")
+- **Testing System**: Information about the environment where tests are running (hostname, OS, etc.)
+
+When running pytest with pytest-insight enabled:
+
+```bash
+# Using long options
+pytest --insight --insight-sut="my-application" --insight-test-system-name="ci-runner-1"
+
+# Using short options
+pytest --insight --is="my-application" --itsn="ci-runner-1"
+```
+
+By default, the SUT name is derived from your current directory name. The testing system information (including hostname) is automatically collected and stored with each test session.
+
+When analyzing test data, you can filter by SUT name:
+
+```bash
+insight analyze --sut="my-application"
+```
+
+This allows you to compare the same application's test results across different testing environments, which is particularly useful for identifying environment-specific issues.
 
 ### Available Subcommands
 

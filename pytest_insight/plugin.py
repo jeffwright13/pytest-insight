@@ -1,5 +1,6 @@
 import os
 import platform
+import re
 import socket
 import sys
 import uuid
@@ -42,26 +43,40 @@ def insight_enabled(config: Optional[Config] = None) -> bool:
     global _INSIGHT_INITIALIZED, _INSIGHT_ENABLED
 
     if config is not None and not _INSIGHT_INITIALIZED:
-        _INSIGHT_ENABLED = bool(getattr(config.option, "insight", False))
+        _INSIGHT_ENABLED = bool(getattr(config.option, "insight_enabled", False))
         _INSIGHT_INITIALIZED = True
     return _INSIGHT_ENABLED
 
 
 def pytest_addoption(parser):
     """Add pytest-insight specific command line options."""
-    group = parser.getgroup("pytest-insight")  # Use same name as header
-    group.addoption("--insight", action="store_true", help="Enable pytest-insight")
+    group = parser.getgroup("insight", "pytest-insight: test insights and analytics")
+    group.addoption(
+        "--insight",
+        action="store_true",
+        default=False,
+        help="Enable pytest-insight plugin",
+    )
     group.addoption(
         "--insight-sut",
+        "--is",
         action="store",
         default=None,
-        help="Name of the system under test (defaults to hostname if not specified)",
+        help="Specify the System Under Test (SUT) name",
+    )
+    group.addoption(
+        "--insight-test-system-name",
+        "--itsn",
+        action="store",
+        default=None,
+        help="Specify the testing system name (overrides hostname)",
     )
     group.addoption(
         "--insight-profile",
+        "--ip",
         action="store",
-        default="default",
-        help="Name of the storage profile to use (defaults to 'default')",
+        default=None,
+        help="Specify the storage profile to use",
     )
 
 
@@ -112,8 +127,25 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     if not storage:  # Ensure storage is initialized
         return
 
-    # Get SUT name from pytest option '--insight-sut'; use hostname as default if not specified
-    sut_name = config.getoption("insight_sut") or socket.gethostname()
+    # Get hostname for the testing system information
+    hostname = socket.gethostname()
+
+    # Get SUT name from pytest option '--insight-sut'
+    # Use a more appropriate default if not specified (project name or 'unknown-sut')
+    sut_name = config.getoption("insight_sut")
+    if not sut_name:
+        # Try to determine project name from current directory
+        try:
+            sut_name = os.path.basename(os.getcwd())
+            # Clean up the name (remove special characters, etc.)
+            sut_name = re.sub(r"[^a-zA-Z0-9_-]", "-", sut_name).lower()
+        except OSError:  # Use specific exception type
+            sut_name = "unknown-sut"
+
+    # Get testing system name from pytest option '--insight-test-system-name'
+    testing_system_name = config.getoption("insight_test_system_name") or os.environ.get(
+        "PYTEST_INSIGHT_SYSTEM_NAME", hostname
+    )
 
     stats = terminalreporter.stats
     test_results = []
@@ -192,7 +224,8 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
             "environment": config.getoption("environment", "test"),
         },
         testing_system={
-            "name": os.environ.get("PYTEST_INSIGHT_SYSTEM_NAME", socket.gethostname()),
+            "hostname": hostname,  # Use hostname here instead of as SUT name
+            "name": testing_system_name,
             "type": os.environ.get("PYTEST_INSIGHT_SYSTEM_TYPE", "local"),
             "platform": platform.platform(),
             "python_version": platform.python_version(),

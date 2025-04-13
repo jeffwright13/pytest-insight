@@ -238,3 +238,46 @@ Contributions welcome! Please read our [Contributing Guide](CONTRIBUTING.md).
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
+
+## Usage
+
+### Basic Usage
+
+To enable pytest-insight, use the `--insight` flag:
+
+```bash
+pytest --insight
+```
+
+### Configuration Options
+
+pytest-insight provides several configuration options:
+
+- `--insight`: Enable the pytest-insight plugin
+- `--insight-sut`, `--is`: Specify the System Under Test (SUT) name (defaults to current directory name)
+- `--insight-test-system-name`, `--itsn`: Specify the testing system name (overrides hostname)
+- `--insight-profile`, `--ip`: Specify the storage profile to use (defaults to "default")
+
+### System Under Test (SUT) vs Testing System
+
+pytest-insight makes an important distinction between:
+
+- **System Under Test (SUT)**: The application, component, or service being tested (e.g., "auth-service", "payment-api")
+- **Testing System**: Information about the environment where tests are running (hostname, OS, etc.)
+
+By default, the SUT name is derived from your current directory name. You can specify a custom SUT name:
+
+```bash
+pytest --insight --insight-sut="my-application"
+```
+
+The testing system information (including hostname) is automatically collected and stored with each test session. You can also specify a custom testing system name:
+
+```bash
+pytest --insight --insight-test-system-name="ci-runner-1"
+```
+
+Using short options:
+
+```bash
+pytest --insight --is="my-application" --itsn="ci-runner-1"
