@@ -864,6 +864,7 @@ def generate_trend_data(
 @app.command("showcase")
 def create_showcase_profile(
     days: int = typer.Option(30, help="Number of days of data to generate"),
+    lightweight: bool = typer.Option(False, help="Generate a smaller, more efficient dataset"),
 ):
     """Create a comprehensive showcase profile demonstrating all dashboard features.
 
@@ -877,7 +878,7 @@ def create_showcase_profile(
     After generation, you can view the showcase with:
     insight dashboard launch --profile showcase
     """
-    TrendDataGenerator.create_showcase_profile(days=days)
+    TrendDataGenerator.create_showcase_profile(days=days, lightweight=lightweight)
 
 
 # Make analyze a direct command on the main app

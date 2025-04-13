@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import filelock
+
 from pytest_insight.core.models import TestSession
 from pytest_insight.utils.constants import DEFAULT_STORAGE_PATH
 
@@ -868,25 +870,32 @@ class JSONStorage(BaseStorage):
     def _write_json_safely(self, sessions_data: List[Dict]) -> None:
         """Write JSON data safely to avoid corruption.
 
+        Uses file locking to prevent concurrent writes from multiple processes.
+
         Args:
             sessions_data: List of session data dictionaries
         """
-        # Create a temporary file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json")
-        try:
-            # Write data to temp file
-            json.dump({"sessions": sessions_data}, temp_file, indent=2)
-            temp_file.close()
+        # Create a lock file path
+        lock_file = f"{self.file_path}.lock"
 
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+        # Acquire a lock before writing
+        with filelock.FileLock(lock_file, timeout=30):
+            # Create a temporary file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json")
+            try:
+                # Write data to temp file
+                json.dump({"sessions": sessions_data}, temp_file, indent=2)
+                temp_file.close()
 
-            # Move temp file to target location
-            shutil.move(temp_file.name, self.file_path)
-        except Exception as e:
-            # Clean up temp file on error
-            os.unlink(temp_file.name)
-            raise e
+                # Ensure directory exists
+                os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+
+                # Move temp file to target location
+                shutil.move(temp_file.name, self.file_path)
+            except Exception as e:
+                # Clean up temp file on error
+                os.unlink(temp_file.name)
+                raise e
 
     def _read_json_safely(self) -> Any:
         """Read JSON data from storage file. Creates a backup if the file is corrupted, then returns empty list. Also returns empty list if file doesn't exist or is invalid.

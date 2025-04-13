@@ -663,7 +663,7 @@ class TrendDataGenerator(PracticeDataGenerator):
             console.print(f"[bold red]Error saving to profile: {str(e)}[/bold red]")
 
     @staticmethod
-    def create_showcase_profile(days: int = 30) -> None:
+    def create_showcase_profile(days: int = 30, lightweight: bool = False) -> None:
         """Create a comprehensive showcase profile demonstrating all dashboard features.
 
         This method generates a rich dataset that showcases all the capabilities
@@ -678,6 +678,7 @@ class TrendDataGenerator(PracticeDataGenerator):
 
         Args:
             days: Number of days of data to generate
+            lightweight: If True, generate a smaller, more efficient dataset
 
         Returns:
             None
@@ -700,19 +701,34 @@ class TrendDataGenerator(PracticeDataGenerator):
             console.print(f"[bold red]Error creating profile: {str(e)}[/bold red]")
             return
 
+        # Adjust parameters for lightweight mode
+        if lightweight:
+            # Reduce days if in lightweight mode
+            actual_days = min(days, 15)
+            targets_per_base = 2
+            suts_to_use = 3
+            console.print("[bold yellow]Using lightweight mode with reduced data volume[/bold yellow]")
+        else:
+            actual_days = days
+            targets_per_base = 3
+            suts_to_use = 5
+
         # Generate showcase data in multiple batches to create diverse patterns
 
         # 1. Generate stable baseline data (first third of time period)
         console.print("\n[bold]Generating baseline data...[/bold]")
         baseline_generator = TrendDataGenerator(
             storage_profile="showcase",
-            days=days // 3,
-            targets_per_base=3,
-            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=days),
+            days=actual_days // 3,
+            targets_per_base=targets_per_base,
+            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=actual_days),
             trend_strength=0.2,  # Minimal trend
             anomaly_rate=0.02,  # Few anomalies
             correlation_groups=2,
         )
+        # Limit the number of SUTs for better performance
+        baseline_generator.sut_variations = baseline_generator.sut_variations[:suts_to_use]
+
         # Ensure we have a high pass rate but with some consistent failures
         baseline_generator.pass_rate = 0.95  # Start with high pass rate
         baseline_generator.flaky_rate = 0.03  # Low flakiness
@@ -722,15 +738,12 @@ class TrendDataGenerator(PracticeDataGenerator):
             "AssertionError: Expected value",
             "TypeError: Cannot convert",
             "ValueError: Invalid parameter",
-            "IndexError: List index out of range",
-            "KeyError: 'missing_key'",
         ]
 
         # Add stack trace patterns for stack trace analysis
         baseline_generator.stack_trace_patterns = [
             "File 'test_module.py', line 42, in test_function\n    assert value == expected",
             "File 'core/utils.py', line 123, in function\n    return process(value)",
-            "File 'api/client.py', line 56, in fetch_resource\n    response = requests.get(url)",
         ]
 
         # Ensure we have some tests with warnings
@@ -738,8 +751,6 @@ class TrendDataGenerator(PracticeDataGenerator):
         baseline_generator.warning_patterns = [
             "DeprecationWarning: This function is deprecated",
             "ResourceWarning: Unclosed file",
-            "UserWarning: This feature will be removed",
-            "PendingDeprecationWarning: This will be deprecated soon",
         ]
 
         baseline_generator.generate_trend_data()
@@ -748,13 +759,16 @@ class TrendDataGenerator(PracticeDataGenerator):
         console.print("\n[bold]Generating degradation period...[/bold]")
         degradation_generator = TrendDataGenerator(
             storage_profile="showcase",
-            days=days // 3,
-            targets_per_base=3,
-            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=days - (days // 3)),
+            days=actual_days // 3,
+            targets_per_base=targets_per_base,
+            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=actual_days - (actual_days // 3)),
             trend_strength=0.7,  # Strong degradation trend
             anomaly_rate=0.1,  # More anomalies
-            correlation_groups=4,
+            correlation_groups=3,
         )
+        # Limit the number of SUTs for better performance
+        degradation_generator.sut_variations = degradation_generator.sut_variations[:suts_to_use]
+
         degradation_generator.pass_rate = 0.85  # Lower pass rate
         degradation_generator.flaky_rate = 0.08  # Higher flakiness
 
@@ -765,16 +779,13 @@ class TrendDataGenerator(PracticeDataGenerator):
         degradation_generator.error_patterns = [
             "TimeoutError: Operation timed out",
             "ConnectionError: Failed to connect",
-            "PermissionError: Access denied",
             "RuntimeError: Unexpected condition",
-            "OSError: Resource temporarily unavailable",
         ]
 
         # Add more stack trace patterns
         degradation_generator.stack_trace_patterns = [
             "File 'database/connection.py', line 78, in connect\n    conn = driver.connect(url, timeout=30)",
             "File 'network/client.py', line 142, in send_request\n    response = await self.session.post(endpoint, data=payload)",
-            "File 'async/worker.py', line 213, in process_task\n    result = await self.executor.run(task)",
         ]
 
         # Increase warning rate
@@ -786,13 +797,16 @@ class TrendDataGenerator(PracticeDataGenerator):
         console.print("\n[bold]Generating recovery period...[/bold]")
         recovery_generator = TrendDataGenerator(
             storage_profile="showcase",
-            days=days // 3,
-            targets_per_base=3,
-            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=days - 2 * (days // 3)),
+            days=actual_days // 3,
+            targets_per_base=targets_per_base,
+            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=actual_days - 2 * (actual_days // 3)),
             trend_strength=0.5,  # Moderate trend (improvement)
             anomaly_rate=0.05,  # Fewer anomalies
-            correlation_groups=3,
+            correlation_groups=2,
         )
+        # Limit the number of SUTs for better performance
+        recovery_generator.sut_variations = recovery_generator.sut_variations[:suts_to_use]
+
         recovery_generator.pass_rate = 0.75  # Starting from lower point
         recovery_generator.flaky_rate = 0.12  # Still dealing with flakiness
 
@@ -804,14 +818,12 @@ class TrendDataGenerator(PracticeDataGenerator):
             "AssertionError: Expected value",  # Consistent with baseline
             "ValueError: Invalid parameter",  # Consistent with baseline
             "BugFixedError: This error is being fixed",
-            "ImprovementError: This is getting better",
         ]
 
         # Add stack trace patterns showing fixes
         recovery_generator.stack_trace_patterns = [
             "File 'test_module.py', line 42, in test_function\n    assert value == expected",
             "File 'fixed_module.py', line 87, in improved_function\n    return process_safely(data)",
-            "File 'refactored_code.py', line 156, in optimized_method\n    result = fast_algorithm(input)",
         ]
 
         # Decrease warning rate
@@ -829,15 +841,13 @@ class TrendDataGenerator(PracticeDataGenerator):
         # Show success message
         console.print(
             Panel(
-                f"Generated showcase data for {days} days\n"
+                f"Generated showcase data for {actual_days} days\n"
                 f"The showcase dataset demonstrates:\n"
                 f"- Initial stability period\n"
                 f"- Degradation period with increasing failures\n"
                 f"- Recovery period showing improvement\n"
                 f"- Various test failure patterns and anomalies\n"
-                f"- Correlated test failures and performance trends\n"
-                f"- Error message patterns and stack trace analysis\n"
-                f"- Warning patterns and test criticality scoring",
+                f"- Correlated test failures and performance trends",
                 title="Showcase Profile Created",
                 border_style="green",
             )
