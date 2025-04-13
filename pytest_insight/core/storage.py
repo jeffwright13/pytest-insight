@@ -946,23 +946,33 @@ class JSONStorage(BaseStorage):
         lock_file = f"{self.file_path}.lock"
 
         # Acquire a lock before writing
-        with filelock.FileLock(lock_file, timeout=30):
-            # Create a temporary file
-            temp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json")
+        lock = filelock.FileLock(lock_file, timeout=30)
+        try:
+            with lock:
+                # Create a temporary file
+                temp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json")
+                try:
+                    # Write data to temp file
+                    json.dump({"sessions": sessions_data}, temp_file, indent=2)
+                    temp_file.close()
+
+                    # Ensure directory exists
+                    os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+
+                    # Move temp file to target location
+                    shutil.move(temp_file.name, self.file_path)
+                except Exception as e:
+                    # Clean up temp file on error
+                    os.unlink(temp_file.name)
+                    raise e
+        finally:
+            # Clean up the lock file after use
             try:
-                # Write data to temp file
-                json.dump({"sessions": sessions_data}, temp_file, indent=2)
-                temp_file.close()
-
-                # Ensure directory exists
-                os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
-
-                # Move temp file to target location
-                shutil.move(temp_file.name, self.file_path)
-            except Exception as e:
-                # Clean up temp file on error
-                os.unlink(temp_file.name)
-                raise e
+                if os.path.exists(lock_file):
+                    os.unlink(lock_file)
+            except OSError:
+                # If we can't delete the lock file, log a warning but don't fail
+                print(f"Warning: Could not delete lock file {lock_file}")
 
     def _read_json_safely(self) -> Any:
         """Read JSON data from storage file. Creates a backup if the file is corrupted, then returns empty list. Also returns empty list if file doesn't exist or is invalid.
