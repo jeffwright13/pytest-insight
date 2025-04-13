@@ -2101,7 +2101,7 @@ class Analysis:
         health_score = self.metrics.health_score(days)
         session_metrics = self.sessions.test_metrics(days)
         trends = self.sessions.detect_trends(days)
-        
+
         # Get reliability metrics
         insights = TestInsights(self._sessions)
         reliability_metrics = insights.test_reliability_metrics()

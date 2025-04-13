@@ -582,7 +582,7 @@ def generate_practice_data(
                 profile = profile_manager._create_profile(
                     name=storage_profile,
                     storage_type="json",
-                    file_path=str(Path.home() / ".pytest_insight" / f"{storage_profile}.json"),
+                    file_path=str(Path.home() / ".pytest_insight" / "profiles" / f"{storage_profile}.json"),
                 )
 
             target = f"profile '[cyan]{profile.name}[/cyan]'"
@@ -626,7 +626,7 @@ def generate_practice_data(
         # Ensure we have a valid output path if not using a profile
         if not storage_profile and not output_path:
             # Create a default output path
-            output_path = str(Path.home() / ".pytest_insight" / "practice_data.json")
+            output_path = str(Path.home() / ".pytest_insight" / "history" / "practice_data.json")
             target = f"file '[cyan]{output_path}[/cyan]'"
             output_type = "file"
             console.print(f"[yellow]No profile or output path specified. Using default: {output_path}[/yellow]")
@@ -646,7 +646,7 @@ def generate_practice_data(
                 target_path = None
             elif not storage_profile and not output_path:
                 # Fallback to a default path
-                target_path = Path.home() / ".pytest_insight" / "practice_data.json"
+                target_path = Path.home() / ".pytest_insight" / "history" / "practice_data.json"
 
             generator = PracticeDataGenerator(
                 storage_profile=storage_profile if output_type == "profile" else None,

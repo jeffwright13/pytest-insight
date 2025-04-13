@@ -10,10 +10,13 @@ allowing for intuitive method chaining while preserving session context.
 """
 
 from collections import Counter, defaultdict
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
     from pytest_insight.core.analysis import Analysis
+else:
+    # This allows tests to mock Analysis directly
+    Analysis = None  # type: ignore
 
 from pytest_insight.core.models import TestOutcome
 from pytest_insight.core.storage import get_storage_instance
@@ -114,7 +117,7 @@ class TestInsights:
 
     def test_reliability_metrics(self) -> Dict[str, Any]:
         """Calculate test reliability metrics across all sessions.
-        
+
         Returns:
             Dict containing:
             - reliability_index: Percentage of tests with consistent outcomes (higher is better)
@@ -126,57 +129,58 @@ class TestInsights:
         unstable_tests = {}
         recovered_tests = 0
         total_reruns = 0
-        
+
         for session in self._sessions:
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
                 for rerun_group in session.rerun_test_groups:
                     total_reruns += 1
                     nodeid = rerun_group.nodeid
-                    
+
                     if rerun_group.final_outcome == TestOutcome.PASSED:
                         recovered_tests += 1
-                    
+
                     if nodeid not in unstable_tests:
                         unstable_tests[nodeid] = {
                             "reruns": 0,
                             "sessions": set(),
                             "final_outcomes": {},
                         }
-                    
-                    unstable_tests[nodeid]["reruns"] += (len(rerun_group.tests) - 1)
+
+                    unstable_tests[nodeid]["reruns"] += len(rerun_group.tests) - 1
                     unstable_tests[nodeid]["sessions"].add(session.session_id)
-                    
+
                     # Track final outcomes
                     outcome = rerun_group.final_outcome.value
-                    unstable_tests[nodeid]["final_outcomes"][outcome] = \
+                    unstable_tests[nodeid]["final_outcomes"][outcome] = (
                         unstable_tests[nodeid]["final_outcomes"].get(outcome, 0) + 1
-        
+                    )
+
         # Calculate total tests
         total_tests = 0
         for session in self._sessions:
             if hasattr(session, "test_results"):
                 total_tests += len(session.test_results)
-        
+
         # Calculate recovery rate
         rerun_recovery_rate = (recovered_tests / total_reruns * 100) if total_reruns > 0 else 100
-        
+
         # Calculate reliability index (100% minus percentage of unstable tests)
         reliability_index = 100 - (len(unstable_tests) / total_tests * 100) if total_tests > 0 else 100
-        
+
         # Calculate health score penalty (1 point for each percent of tests that required reruns)
         health_score_penalty = (len(unstable_tests) / total_tests * 100) if total_tests > 0 else 0
-        
+
         # Convert sets to lists for serialization
         for nodeid, data in unstable_tests.items():
             data["sessions"] = list(data["sessions"])
-        
+
         # Sort by number of reruns
         most_unstable = sorted(
             [(nodeid, data) for nodeid, data in unstable_tests.items()],
             key=lambda x: x[1]["reruns"],
             reverse=True,
         )
-        
+
         return {
             "reliability_index": reliability_index,
             "unstable_tests": unstable_tests,
@@ -1396,21 +1400,17 @@ class Insights:
 
         Args:
             analysis: Optional Analysis instance to use. If None, creates a new one.
-            profile_name: Optional profile name to use for storage configuration.
-                         Takes precedence over analysis parameter if both are provided.
+            profile_name: Optional profile name to use for storage configuration
         """
-        # Store the profile name
+        # Store the profile name for later use
         self._profile_name = profile_name
 
-        # Create or use the analysis instance
+        # Import Analysis here to avoid circular imports
         if analysis is None:
-            # Create a new Analysis instance
             from pytest_insight.core.analysis import Analysis
-            if profile_name is not None:
-                storage = get_storage_instance(profile_name=profile_name)
-                self.analysis = Analysis(storage=storage)
-            else:
-                self.analysis = Analysis()
+
+            storage = get_storage_instance(profile_name=profile_name)
+            self.analysis = Analysis(storage=storage)
         else:
             self.analysis = analysis
 
@@ -1456,6 +1456,9 @@ class Insights:
         storage = get_storage_instance(profile_name=profile_name)
 
         # Update the analysis with the new storage
+        # Import Analysis here to avoid circular imports
+        from pytest_insight.core.analysis import Analysis
+
         self.analysis = Analysis(storage=storage)
 
         # Reinitialize insight components with the updated analysis
@@ -1475,6 +1478,7 @@ class Insights:
             New Insights instance with the specified profile
         """
         from pytest_insight.core.analysis import Analysis
+
         storage = get_storage_instance(profile_name=profile_name)
         self.analysis = Analysis(storage=storage)
 
@@ -1595,25 +1599,27 @@ class Insights:
                 rerun_count = len(session.rerun_test_groups)
                 # Get top 5 rerun groups with most attempts
                 sorted_groups = sorted(
-                    session.rerun_test_groups, 
-                    key=lambda g: len(g.tests) if hasattr(g, "tests") else 0, 
-                    reverse=True
+                    session.rerun_test_groups, key=lambda g: len(g.tests) if hasattr(g, "tests") else 0, reverse=True
                 )
                 for group in sorted_groups[:5]:  # Top 5 rerun groups
                     if hasattr(group, "tests") and group.tests:
-                        rerun_groups.append({
-                            "nodeid": group.nodeid,
-                            "attempts": len(group.tests),
-                            "final_outcome": group.final_outcome.value if hasattr(group, "final_outcome") else "UNKNOWN",
-                            "tests": [
-                                {
-                                    "outcome": test.outcome.value if hasattr(test, "outcome") else "UNKNOWN",
-                                    "duration": test.duration if hasattr(test, "duration") else 0,
-                                    "start_time": test.start_time if hasattr(test, "start_time") else None
-                                }
-                                for test in group.tests
-                            ]
-                        })
+                        rerun_groups.append(
+                            {
+                                "nodeid": group.nodeid,
+                                "attempts": len(group.tests),
+                                "final_outcome": group.final_outcome.value
+                                if hasattr(group, "final_outcome")
+                                else "UNKNOWN",
+                                "tests": [
+                                    {
+                                        "outcome": test.outcome.value if hasattr(test, "outcome") else "UNKNOWN",
+                                        "duration": test.duration if hasattr(test, "duration") else 0,
+                                        "start_time": test.start_time if hasattr(test, "start_time") else None,
+                                    }
+                                    for test in group.tests
+                                ],
+                            }
+                        )
 
         # Get failure trends if we have multiple sessions
         failure_trend = {"change": 0, "improving": False}
@@ -1799,8 +1805,8 @@ class Insights:
         output.append(section_header("Test Outcome Distribution"))
         for outcome, count in summary["outcome_distribution"]:
             # Choose color based on outcome
-            outcome_str = outcome.value.lower() if hasattr(outcome, 'value') else str(outcome).lower()
-            
+            outcome_str = outcome.value.lower() if hasattr(outcome, "value") else str(outcome).lower()
+
             if outcome_str == "passed":
                 color = GREEN
             elif outcome_str in ["failed", "error"]:
@@ -1819,11 +1825,11 @@ class Insights:
         if flaky_count > 0:
             output.append(section_header("Flaky Tests"))
             output.append(f"    Total Flaky Tests: {colorize(str(flaky_count), YELLOW)}")
-            
+
             most_flaky = summary.get("most_flaky", [])
             if most_flaky:
                 output.append("\n    Most Flaky Tests:")
-                
+
                 for i, flaky in enumerate(most_flaky):
                     if isinstance(flaky, tuple) and len(flaky) >= 2:
                         # Handle tuple format (nodeid, data)
@@ -1833,63 +1839,72 @@ class Insights:
                         # Handle dictionary format
                         nodeid = flaky.get("nodeid", "Unknown")
                         flake_rate = flaky.get("flake_rate", 0) * 100
-                    
+
                     output.append(f"    {i+1}. {nodeid} - Flake Rate: {colorize(f'{flake_rate:.1f}%', YELLOW)}")
-        
+
         # Rerun Test Groups Section
         rerun_groups = summary.get("rerun_test_groups", [])
         rerun_count = len(rerun_groups) if rerun_groups else summary.get("rerun_count", 0)
-        
+
         if rerun_count > 0:
             output.append(section_header("Test Reruns"))
             output.append(f"    Total Rerun Groups: {colorize(str(rerun_count), MAGENTA)}")
-            
+
             # Calculate and display rerun success rate
-            success_count = sum(1 for group in rerun_groups 
-                               if isinstance(group.get("final_outcome", ""), str) and 
-                               group.get("final_outcome", "").lower() == "passed" or
-                               hasattr(group.get("final_outcome", ""), "value") and 
-                               str(group.get("final_outcome", "").value).lower() == "passed")
-            
+            success_count = sum(
+                1
+                for group in rerun_groups
+                if isinstance(group.get("final_outcome", ""), str)
+                and group.get("final_outcome", "").lower() == "passed"
+                or hasattr(group.get("final_outcome", ""), "value")
+                and str(group.get("final_outcome", "").value).lower() == "passed"
+            )
+
             if rerun_groups:
                 success_rate = (success_count / len(rerun_groups)) * 100
                 output.append(f"    Rerun Success Rate: {colorize(f'{success_rate:.1f}%', CYAN)}")
                 total_attempts = sum(group.get("attempts", 0) for group in rerun_groups)
                 avg_attempts = total_attempts / len(rerun_groups)
                 output.append(f"    Average Attempts Per Rerun: {colorize(f'{avg_attempts:.1f}', CYAN)}")
-            
+
             output.append("\n    Top Rerun Tests:")
-            
+
             # Sort rerun groups by number of attempts (descending)
             sorted_groups = sorted(rerun_groups, key=lambda g: g.get("attempts", 0), reverse=True)
-            
+
             for i, group in enumerate(sorted_groups):
                 # Choose color based on final outcome
                 final_outcome = group.get("final_outcome", "UNKNOWN")
-                final_outcome_str = final_outcome.lower() if isinstance(final_outcome, str) else str(final_outcome).lower()
-                
+                final_outcome_str = (
+                    final_outcome.lower() if isinstance(final_outcome, str) else str(final_outcome).lower()
+                )
+
                 if final_outcome_str == "passed":
                     outcome_color = GREEN
                 elif final_outcome_str in ["failed", "error"]:
                     outcome_color = RED
                 else:
                     outcome_color = YELLOW
-                
+
                 # Format the group header
                 nodeid = group.get("nodeid", "Unknown")
                 attempts = group.get("attempts", 0)
                 output.append(f"\n    {i+1}. {nodeid}")
-                output.append(f"       Attempts: {colorize(str(attempts), MAGENTA)}, Final Outcome: {colorize(str(final_outcome), outcome_color)}")
-                
+                output.append(
+                    f"       Attempts: {colorize(str(attempts), MAGENTA)}, Final Outcome: {colorize(str(final_outcome), outcome_color)}"
+                )
+
                 # Show individual test attempts
                 tests = group.get("tests", [])
                 if tests:
                     output.append("       Attempt History:")
-                    
+
                     for j, test in enumerate(tests):
                         test_outcome = test.get("outcome", "UNKNOWN")
-                        test_outcome_str = test_outcome.lower() if isinstance(test_outcome, str) else str(test_outcome).lower()
-                        
+                        test_outcome_str = (
+                            test_outcome.lower() if isinstance(test_outcome, str) else str(test_outcome).lower()
+                        )
+
                         # Choose color based on test outcome
                         if test_outcome_str == "passed":
                             test_color = GREEN
@@ -1899,13 +1914,15 @@ class Insights:
                             test_color = MAGENTA
                         else:
                             test_color = YELLOW
-                        
+
                         duration = test.get("duration", 0)
                         timestamp = test.get("start_time", "")
                         timestamp_str = f" at {timestamp}" if timestamp else ""
-                        
-                        output.append(f"       - Attempt {j+1}: {colorize(str(test_outcome), test_color)} ({duration:.4f}s){timestamp_str}")
-        
+
+                        output.append(
+                            f"       - Attempt {j+1}: {colorize(str(test_outcome), test_color)} ({duration:.4f}s){timestamp_str}"
+                        )
+
         # Join all lines and return
         return "\n".join(output)
 

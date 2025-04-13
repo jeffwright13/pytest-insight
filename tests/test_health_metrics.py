@@ -298,9 +298,9 @@ class Test_HealthMetrics:
         assert len(longest_tests) > 0
 
         # The update_user test should be among the slowest
-        update_user_test = next((t for t in longest_tests if t["nodeid"] == "test_api.py::test_update_user"), None)
+        update_user_test = next((t for t in longest_tests if t[0] == "test_api.py::test_update_user"), None)
         assert update_user_test is not None
-        assert update_user_test["avg_duration"] >= 7.0  # Should be the slowest test
+        assert update_user_test[1] >= 7.0  # Should be the slowest test
 
         # Test with limit parameter
         limited_results = session_analysis.longest_running_tests(limit=3)

@@ -124,10 +124,11 @@ class TestInsightsModuleTests:
 
         # Mock the Analysis class to avoid storage dependencies
         class MockAnalysis:
-            def __init__(self):
+            def __init__(self, storage=None):
                 self._sessions = sample_sessions
 
-        monkeypatch.setattr("pytest_insight.core.insights.Analysis", MockAnalysis)
+        # Mock the import inside the __init__ method
+        monkeypatch.setattr("pytest_insight.core.analysis.Analysis", MockAnalysis)
 
         insights = Insights()
         assert insights.tests is not None
@@ -140,10 +141,11 @@ class TestInsightsModuleTests:
 
         # Mock the Analysis class
         class MockAnalysis:
-            def __init__(self):
+            def __init__(self, storage=None):
                 self._sessions = sample_sessions
 
-        monkeypatch.setattr("pytest_insight.core.insights.Analysis", MockAnalysis)
+        # Mock the import inside the __init__ method
+        monkeypatch.setattr("pytest_insight.core.analysis.Analysis", MockAnalysis)
 
         insights = Insights()
 
@@ -166,7 +168,7 @@ class TestInsightsModuleTests:
 
         # Mock the Analysis class
         class MockAnalysis:
-            def __init__(self):
+            def __init__(self, storage=None):
                 self._sessions = sample_sessions
                 # Add the sessions attribute to match the new structure
                 self.sessions = type(
@@ -239,7 +241,7 @@ class TestInsightsModuleTests:
             def mock_session_metrics(self, days=None):
                 return {"total_sessions": 2, "pass_rate": 0.8, "avg_tests_per_session": 3.0}
 
-        monkeypatch.setattr("pytest_insight.core.insights.Analysis", MockAnalysis)
+        monkeypatch.setattr("pytest_insight.core.analysis.Analysis", MockAnalysis)
 
         # Mock the session_metrics method to return the expected data
         def mock_session_metrics(self, days=None):
@@ -260,8 +262,18 @@ class TestInsightsModuleTests:
 
         # Mock the Analysis class
         class MockAnalysis:
-            def __init__(self):
+            def __init__(self, storage=None):
                 self._sessions = sample_sessions
+                # Add the sessions attribute to match the new structure
+                self.sessions = type(
+                    "MockSessionAnalysis",
+                    (),
+                    {
+                        "detect_trends": self.mock_detect_trends,
+                    },
+                )()
+                # Add session_analysis attribute for backward compatibility
+                self.session_analysis = self.sessions
 
             def compare_health(self, base_sessions, target_sessions):
                 return {
@@ -271,7 +283,23 @@ class TestInsightsModuleTests:
                     "improved": True,
                 }
 
-        monkeypatch.setattr("pytest_insight.core.insights.Analysis", MockAnalysis)
+            def mock_detect_trends(self, days=None):
+                return {
+                    "pass_rate": {
+                        "trend": "improving",
+                        "change": 0.05,
+                        "current": 0.85,
+                        "previous": 0.80,
+                    },
+                    "test_count": {
+                        "trend": "stable",
+                        "change": 0,
+                        "current": 100,
+                        "previous": 100,
+                    },
+                }
+
+        monkeypatch.setattr("pytest_insight.core.analysis.Analysis", MockAnalysis)
 
         insights = Insights()
 
@@ -443,7 +471,7 @@ class TestInsightsModuleTests:
 
         # Mock the Analysis class
         mock_analysis = mocker.MagicMock()
-        monkeypatch.setattr("pytest_insight.core.insights.Analysis", mock_analysis)
+        monkeypatch.setattr("pytest_insight.core.analysis.Analysis", mock_analysis)
 
         # Initialize insights with profile
         insights = Insights(profile_name="test_profile")
@@ -462,18 +490,19 @@ class TestInsightsModuleTests:
         # Create a mock storage
         mock_storage = mocker.MagicMock()
 
-        # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch("pytest_insight.core.insights.get_storage_instance")
-        mock_get_storage.return_value = mock_storage
-
-        # Mock the Analysis class
+        # Mock the Analysis class first
         mock_analysis = mocker.MagicMock()
         mock_analysis_instance = mocker.MagicMock()
         mock_analysis.return_value = mock_analysis_instance
-        monkeypatch.setattr("pytest_insight.core.insights.Analysis", mock_analysis)
+        monkeypatch.setattr("pytest_insight.core.analysis.Analysis", mock_analysis)
 
-        # Create insights and call with_profile
-        insights = Insights()
+        # Mock the get_storage_instance function to return our mock storage directly
+        # Do this after mocking Analysis to avoid the initial call during Insights initialization
+        mock_get_storage = mocker.patch("pytest_insight.core.insights.get_storage_instance")
+        mock_get_storage.return_value = mock_storage
+
+        # Create insights directly with the mocked analysis to avoid calling get_storage_instance
+        insights = Insights(analysis=mock_analysis_instance)
         result = insights.with_profile("test_profile")
 
         # Verify get_storage_instance was called with correct profile
@@ -508,7 +537,7 @@ class TestInsightsModuleTests:
         mock_analysis_instance.with_query.return_value = filtered_analysis
 
         mock_analysis.return_value = mock_analysis_instance
-        monkeypatch.setattr("pytest_insight.core.insights.Analysis", mock_analysis)
+        monkeypatch.setattr("pytest_insight.core.analysis.Analysis", mock_analysis)
 
         # Create insights with profile and call with_query
         insights = Insights(profile_name="test_profile")
