@@ -38,14 +38,14 @@ def select_profile() -> str:
         Name of the selected profile
     """
     # Initialize session state for profile tracking if it doesn't exist
-    if 'last_profile_check' not in st.session_state:
+    if "last_profile_check" not in st.session_state:
         st.session_state.last_profile_check = datetime.now()
         st.session_state.cached_profiles = None
-    
+
     # Get available profiles - refresh every 5 seconds
     current_time = datetime.now()
     time_diff = (current_time - st.session_state.last_profile_check).total_seconds()
-    
+
     # Always refresh profiles on first load or if it's been more than 5 seconds
     if st.session_state.cached_profiles is None or time_diff > 5:
         profiles = list_profiles()
@@ -53,7 +53,7 @@ def select_profile() -> str:
         st.session_state.last_profile_check = current_time
     else:
         profiles = st.session_state.cached_profiles
-    
+
     active_profile = get_active_profile()
 
     # Check if profiles is a dict (old format) or list (new format)
@@ -77,14 +77,14 @@ def select_profile() -> str:
 
     # Let user select profile
     col1, col2 = st.sidebar.columns([3, 1])
-    
+
     profile_name = col1.selectbox(
         "Storage Profile",
         options=profile_options,
         index=default_index,
         help="Select a storage profile to use",
     )
-    
+
     # Add refresh button
     if col2.button("🔄", help="Refresh profile list"):
         # Force refresh profiles
@@ -190,7 +190,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
             reliability_index = reliability_metrics.get("reliability_index", 100)
             rerun_recovery_rate = reliability_metrics.get("rerun_recovery_rate", 100)
             health_score_penalty = reliability_metrics.get("health_score_penalty", 0)
-            
+
             # For trends, we don't have historical data yet, so use default of 0
             reliability_index_trend = 0
             rerun_recovery_trend = 0
@@ -223,12 +223,12 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
             if health_score_penalty > 0:
                 # Convert health score to 0-100 scale if needed
                 health_score_100 = health_score * 10 if health_score <= 10 else health_score
-                
+
                 # Apply penalty (capped at 50% of the score to avoid excessive penalties)
                 max_penalty = health_score_100 * 0.5
                 actual_penalty = min(health_score_penalty, max_penalty)
                 health_score_100 = max(health_score_100 - actual_penalty, 0)
-                
+
                 # Convert back to original scale if needed
                 health_score = health_score_100 / 10 if health_score_100 <= 100 else health_score_100
         except Exception as e:
@@ -256,7 +256,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                     f"{float(pass_rate):.1f}%",
                     delta=f"{float(pass_rate_trend):.1f}%",
                     delta_color="normal",
-                    help="Percentage of tests that passed on the first attempt. Calculated as: (Number of Passed Tests / Total Tests) * 100%. Higher is better."
+                    help="Percentage of tests that passed on the first attempt. Calculated as: (Number of Passed Tests / Total Tests) * 100%. Higher is better.",
                 )
             except Exception as e:
                 st.metric("Pass Rate", "N/A")
@@ -269,7 +269,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                     f"{float(reliability_index):.1f}%",
                     delta=f"{float(reliability_index_trend):.1f}%",
                     delta_color="normal",
-                    help="Percentage of tests with consistent outcomes. Higher values indicate more reliable tests. Calculated as: 100% - (Unstable Tests / Total Tests) * 100%."
+                    help="Percentage of tests with consistent outcomes. Higher values indicate more reliable tests. Calculated as: 100% - (Unstable Tests / Total Tests) * 100%.",
                 )
             except Exception as e:
                 st.metric("Reliability Index", "N/A")
@@ -282,7 +282,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                     f"{float(avg_duration):.2f}s",
                     delta=f"{-float(duration_change):.2f}s",
                     delta_color="inverse",
-                    help="Average time taken to execute a test. Lower durations indicate more efficient tests. Sudden increases may indicate performance regressions."
+                    help="Average time taken to execute a test. Lower durations indicate more efficient tests. Sudden increases may indicate performance regressions.",
                 )
             except Exception as e:
                 st.metric("Avg Duration", "N/A")
@@ -294,7 +294,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                     "Health Score",
                     f"{float(health_score):.1f}/10",
                     delta=None,
-                    help="A composite score (0-10) that measures the overall health of your test suite. Based on a weighted formula considering pass rate (50%), reliability (20%), duration stability (15%), and failure patterns (15%). Higher scores indicate healthier test suites."
+                    help="A composite score (0-10) that measures the overall health of your test suite. Based on a weighted formula considering pass rate (50%), reliability (20%), duration stability (15%), and failure patterns (15%). Higher scores indicate healthier test suites.",
                 )
             except Exception as e:
                 st.metric("Health Score", "N/A")
@@ -307,7 +307,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                     f"{float(rerun_recovery_rate):.1f}%",
                     delta=f"{float(rerun_recovery_trend):.1f}%",
                     delta_color="normal",
-                    help="Percentage of tests that passed after being rerun. Higher values indicate tests that are flaky but recoverable. Calculated as: (Tests That Passed After Rerun / Total Rerun Tests) * 100%."
+                    help="Percentage of tests that passed after being rerun. Higher values indicate tests that are flaky but recoverable. Calculated as: (Tests That Passed After Rerun / Total Rerun Tests) * 100%.",
                 )
             except Exception as e:
                 st.metric("Rerun Recovery Rate", "N/A")
@@ -315,29 +315,31 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
 
         # Display recommendations based on metrics
         st.subheader("Recommendations")
-        
+
         # Create recommendations based on metrics
         recommendations = []
-        
+
         # Test stability recommendations
         if reliability_index < 95:
-            recommendations.append("📊 **Low reliability index detected.** Consider investigating test stability issues.")
+            recommendations.append(
+                "📊 **Low reliability index detected.** Consider investigating test stability issues."
+            )
             if rerun_recovery_rate > 70:
                 recommendations.append("✅ Good rerun recovery rate. Focus on tests that fail consistently.")
             else:
                 recommendations.append("❌ Low rerun recovery rate. Tests may have genuine failures.")
-        
+
         # Pass rate recommendations
         if pass_rate < 90:
             recommendations.append("🔴 **Low pass rate detected.** Consider investigating test failures.")
-        
+
         # Display recommendations or a healthy message
         if recommendations:
             for rec in recommendations:
                 st.markdown(rec)
         else:
             st.success("✨ No issues detected. Test suite is healthy!")
-            
+
         # Add a divider
         st.markdown("---")
 
@@ -1480,7 +1482,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                     with st.expander(
                         f"Group {i+1}: {len(group['tests'])} tests, failed together {group['count']} times"
                     ):
-                        st.markdown(f"**Tests in this group:**")
+                        st.markdown("**Tests in this group:**")
                         for test_name in group["test_names"]:
                             st.markdown(f"- `{test_name}`")
 
@@ -1621,7 +1623,8 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
         if not failed_tests:
             with tab1:
                 st.info("No failed tests found for the selected filters.")
-                st.markdown("""
+                st.markdown(
+                    """
                 ### Why am I not seeing any data?
                 
                 The Failure Pattern Analysis requires tests with failure information. Here are some possible reasons you're not seeing data:
@@ -1634,34 +1637,35 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                 - Increase the time range in the sidebar
                 - Select a different System Under Test
                 - Run some tests with failures to generate data
-                """)
-                
+                """
+                )
+
                 # Add option to show sample data
                 if st.button("Show Sample Data", key="sample_failure_data"):
                     st.markdown("### Sample Error Message Patterns")
-                    
+
                     # Create sample error patterns
                     sample_patterns = {
                         "AssertionError: assert 10 == 20": {
                             "count": 15,
                             "tests": ["test_calculation", "test_math_functions", "test_validation"],
                             "first_seen": "2 days ago",
-                            "last_seen": "2 hours ago"
+                            "last_seen": "2 hours ago",
                         },
                         "ImportError: No module named 'missing_dependency'": {
                             "count": 8,
                             "tests": ["test_imports", "test_dependencies"],
                             "first_seen": "5 days ago",
-                            "last_seen": "1 day ago"
+                            "last_seen": "1 day ago",
                         },
                         "TypeError: cannot convert 'NoneType' object to int": {
                             "count": 12,
                             "tests": ["test_conversion", "test_data_processing"],
                             "first_seen": "3 days ago",
-                            "last_seen": "6 hours ago"
-                        }
+                            "last_seen": "6 hours ago",
+                        },
                     }
-                    
+
                     # Display sample data
                     for pattern, details in sample_patterns.items():
                         with st.expander(f"{pattern} ({details['count']} occurrences)"):
@@ -1678,13 +1682,13 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                             elif "TypeError" in pattern:
                                 st.markdown("- Null value handling issue")
                                 st.markdown("- Data validation missing")
-            
+
             with tab2:
                 st.info("No stack trace data available for analysis.")
-                
+
             with tab3:
                 st.info("No temporal failure data available for analysis.")
-            
+
             return
         else:
             with tab1:
@@ -1760,12 +1764,8 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                     st.write("Common error messages across test failures")
 
                     for i, pattern in enumerate(pattern_list[:10]):  # Show top 10 patterns
-                        with st.expander(
-                            f"Pattern {i+1}: {pattern['count']} occurrences across {pattern['test_count']} tests"
-                        ):
-                            st.markdown("**Pattern:**")
-                            st.code(pattern["pattern"])
-
+                        with st.expander(f"{pattern['pattern']} ({pattern['count']} occurrences)"):
+                            st.markdown(f"**Affected Tests:** {', '.join(pattern['tests'])}")
                             st.markdown("**Example Errors:**")
                             for example in pattern["examples"]:
                                 st.markdown(f"- In test `{example['test_name']}`:")
@@ -1776,33 +1776,35 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
 
                             # Look for common keywords in the error pattern
                             if "AssertionError" in pattern["pattern"]:
-                                st.markdown("- **Assertion Failure**: Expected values don't match actual values")
+                                st.markdown("- Calculation logic error")
+                                st.markdown("- Test expectations need updating")
                             elif "ImportError" in pattern["pattern"] or "ModuleNotFoundError" in pattern["pattern"]:
-                                st.markdown("- **Missing Dependency**: Required module is not installed or not in path")
+                                st.markdown("- Missing dependency")
+                                st.markdown("- Environment configuration issue")
                             elif "AttributeError" in pattern["pattern"]:
                                 st.markdown(
-                                    "- **Missing Attribute**: Attempting to access a property or method that doesn't exist"
+                                    "- Missing Attribute: Attempting to access a property or method that doesn't exist"
                                 )
                             elif "TypeError" in pattern["pattern"]:
-                                st.markdown("- **Type Mismatch**: Function received an incompatible argument type")
+                                st.markdown("- Type Mismatch: Function received an incompatible argument type")
                             elif "ValueError" in pattern["pattern"]:
                                 st.markdown(
-                                    "- **Invalid Value**: Function received a value that is the right type but inappropriate"
+                                    "- Invalid Value: Function received a value that is the right type but inappropriate"
                                 )
                             elif "KeyError" in pattern["pattern"]:
                                 st.markdown(
-                                    "- **Missing Key**: Attempted to access a dictionary with a key that doesn't exist"
+                                    "- Missing Key: Attempted to access a dictionary with a key that doesn't exist"
                                 )
                             elif "IndexError" in pattern["pattern"]:
                                 st.markdown(
-                                    "- **Index Out of Range**: Attempted to access a list element that doesn't exist"
+                                    "- Index Out of Range: Attempted to access a list element that doesn't exist"
                                 )
                             elif "FileNotFoundError" in pattern["pattern"]:
-                                st.markdown("- **Missing File**: Required file doesn't exist at the expected location")
+                                st.markdown("- Missing File: Required file doesn't exist at the expected location")
                             elif "PermissionError" in pattern["pattern"]:
-                                st.markdown("- **Permission Issue**: Insufficient permissions to access a resource")
+                                st.markdown("- Permission Issue: Insufficient permissions to access a resource")
                             elif "TimeoutError" in pattern["pattern"] or "timeout" in pattern["pattern"].lower():
-                                st.markdown("- **Timeout**: Operation took too long to complete")
+                                st.markdown("- Timeout: Operation took too long to complete")
                             else:
                                 st.markdown("- Examine the error message and stack trace for more specific information")
                 else:
@@ -2028,7 +2030,9 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
 
                         if abs(trend_percentage) >= 10:  # 10% change threshold
                             if trend_percentage > 0:
-                                st.warning(f"⚠️ Failures are increasing over time (up {trend_percentage:.1f}% on average)")
+                                st.warning(
+                                    f"⚠️ Failures are increasing over time (up {trend_percentage:.1f}% on average)"
+                                )
                             else:
                                 st.success(
                                     f"✅ Failures are decreasing over time (down {abs(trend_percentage):.1f}% on average)"
@@ -2079,9 +2083,11 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                             period = "evening"
 
                         st.markdown(
-                            f"""
+                            """
                         **Potential causes for time-of-day patterns:**
-                        - Scheduled jobs or maintenance during {period} hours
+                        - Scheduled jobs or maintenance during """
+                            + period
+                            + """ hours
                         - Resource contention with other processes
                         - Time-dependent test data or configurations
                         - Database or service maintenance windows
@@ -2163,6 +2169,97 @@ def main():
             step=1,
             help="Number of days to include in the analysis",
         )
+
+        # HTML Report Generation Section
+        st.sidebar.header("Export & Reports")
+
+        # Add HTML report generation section
+        with st.sidebar.expander("Generate HTML Report", expanded=False):
+            st.markdown("Generate a standalone HTML report with all test results and visualizations.")
+
+            report_title = st.text_input(
+                "Report Title",
+                value="Test Report - " + selected_sut + " - " + datetime.now().strftime("%Y-%m-%d"),
+                help="Custom title for the HTML report",
+            )
+
+            # Create command string for the user to run
+            report_cmd = "insight report generate"
+            if profile_name:
+                report_cmd += ' --profile "' + profile_name + '"'
+            if days:
+                report_cmd += " --days " + str(days)
+            if selected_sut != "All SUTs":
+                report_cmd += ' --title "' + report_title + '"'
+
+            st.code(report_cmd, language="bash")
+
+            if st.button("Generate Report", key="generate_report"):
+                try:
+                    import subprocess
+                    import tempfile
+
+                    # Create a temporary file for the report
+                    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
+                        report_path = tmp.name
+
+                    # Build the command
+                    cmd = ["insight", "report", "generate", "--output", report_path]
+                    if profile_name:
+                        cmd.extend(["--profile", profile_name])
+                    if days:
+                        cmd.extend(["--days", str(days)])
+                    if report_title:
+                        cmd.extend(["--title", report_title])
+
+                    # Run the command
+                    process = subprocess.run(cmd, capture_output=True, text=True)
+
+                    if process.returncode == 0:
+                        # Success - provide download link
+                        with open(report_path, "r") as f:
+                            report_content = f.read()
+
+                        st.download_button(
+                            label="Download HTML Report",
+                            data=report_content,
+                            file_name="pytest_insight_report_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".html",
+                            mime="text/html",
+                        )
+                        st.success("Report generated successfully! Click the button above to download.")
+                    else:
+                        # Error
+                        st.error("Error generating report: " + process.stderr)
+
+                except Exception as e:
+                    st.error("Error generating report: " + str(e))
+                    st.code(traceback.format_exc())
+
+        # Add dashboard control section
+        st.sidebar.header("Dashboard Controls")
+
+        # Add shutdown button
+        if st.sidebar.button("Shutdown Dashboard", type="primary", use_container_width=True):
+            st.sidebar.warning("Shutting down dashboard server...")
+            # Create a flag file that will be checked by the dashboard launcher
+            shutdown_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "shutdown_dashboard.flag")
+            with open(shutdown_file, "w") as f:
+                f.write(str(datetime.now()))
+
+            # Show a message to the user
+            st.sidebar.success("Shutdown signal sent. You can close this browser tab.")
+
+            # Use JavaScript to close the browser tab after a short delay
+            st.sidebar.markdown(
+                """
+            <script>
+                setTimeout(function() {
+                    window.close();
+                }, 3000);
+            </script>
+            """,
+                unsafe_allow_html=True,
+            )
 
         # Display tabs for different dashboards
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(

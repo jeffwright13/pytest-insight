@@ -10,6 +10,7 @@ A pytest plugin for analyzing test health, performance, and patterns across test
 - **Performance Analysis**: Identify slow tests and track runtime trends
 - **Session Context**: Preserve test relationships and session metadata
 - **Metrics Visualization**: Expose metrics via REST API and visualize in the built-in dashboard
+- **HTML Reports**: Generate standalone, interactive HTML reports with detailed test results and visualizations
 - **Storage Profiles**: Manage multiple storage configurations for different environments
 - **Interactive CLI**: Explore the API through a guided, interactive command-line interface
 - **Predictive Analytics**: Forecast test failures, detect anomalies, and predict stability trends
@@ -134,8 +135,11 @@ print(f"Trend: {stability['trend_direction']}")
 # Generate insights report
 insight analyze --sut my-service --days 30
 
-# Compare test runs between versions
+# Compare test results across different SUTs
 insight compare --base-sut service-v1 --target-sut service-v2
+
+# Generate HTML report with test results and visualizations
+insight report generate --profile production --days 30 --title "Weekly Test Report"
 
 # Query for specific test patterns
 insight query --pattern "test_api*" --days 7
@@ -158,6 +162,37 @@ insight dashboard launch
 # Specify a port and profile
 insight dashboard launch --port 8502 --profile production
 ```
+
+The dashboard provides:
+- Interactive visualizations of test metrics and trends
+- Filtering by System Under Test (SUT) and time range
+- Detailed test result exploration
+- HTML report generation via the "Export & Reports" section
+- Dashboard shutdown button for gracefully terminating the server
+
+### HTML Reports
+
+Generate standalone HTML reports that can be shared with team members:
+
+```bash
+# Generate a basic HTML report
+insight report generate
+
+# Customize the report
+insight report generate --profile production --days 30 --title "Weekly Test Report" --output "my-report.html"
+
+# Generate and automatically open in browser
+insight report generate --open
+```
+
+HTML reports include:
+- Comprehensive test session information
+- Interactive charts and visualizations
+- Detailed test result exploration
+- Failure pattern analysis
+- Test health metrics
+
+These reports are self-contained HTML files that can be shared via email or file sharing and viewed in any modern browser without additional dependencies.
 
 ### Environment Variables
 

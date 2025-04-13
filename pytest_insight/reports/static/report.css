@@ -1,0 +1,99 @@
+/* Custom styles for pytest-insight HTML reports */
+
+:root {
+  --primary-color: #0d6efd;
+  --success-color: #28a745;
+  --danger-color: #dc3545;
+  --warning-color: #ffc107;
+  --info-color: #17a2b8;
+  --secondary-color: #6c757d;
+  --light-color: #f8f9fa;
+  --dark-color: #343a40;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--light-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--secondary-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-color);
+}
+
+/* Animations */
+.dashboard-card {
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Test details styling */
+.code-block {
+  font-family: 'Courier New', Courier, monospace;
+  white-space: pre-wrap;
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 0.25rem;
+  border-left: 4px solid var(--primary-color);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.error-block {
+  border-left-color: var(--danger-color);
+}
+
+.log-block {
+  border-left-color: var(--info-color);
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    padding-top: 0;
+  }
+  
+  .card {
+    break-inside: avoid;
+  }
+  
+  .code-block {
+    white-space: pre-wrap;
+    overflow: visible;
+    max-height: none;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .chart-container {
+    height: 200px;
+  }
+  
+  .btn-group {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  
+  .btn-group .btn {
+    flex: 1 0 auto;
+    margin-bottom: 5px;
+  }
+}

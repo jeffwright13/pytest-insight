@@ -20,6 +20,16 @@ The pytest-insight dashboard provides a visual interface for exploring test insi
 - **Anomaly Detection**: Find tests with unusual behavior patterns
 - **Stability Forecast**: Predict how test stability will evolve
 
+### HTML Report Generation
+- Generate standalone HTML reports directly from the dashboard
+- Include all visualizations and test results in a shareable format
+- Customize report titles and content based on current filters
+
+### Dashboard Controls
+- Gracefully shut down the dashboard server from the UI
+- Configure dashboard settings through the sidebar
+- Filter and customize the dashboard view
+
 ## Installation
 
 The dashboard requires additional dependencies beyond the core pytest-insight package. Install them with:
@@ -71,6 +81,15 @@ insight dashboard launch --no-browser
    - Explore failure predictions for high-risk tests
    - Investigate anomalous test behavior
    - View stability forecasts and contributing factors
+
+5. **Export & Reports**
+   - Generate HTML reports with current filters and settings
+   - Customize report titles
+   - Download reports for sharing with team members
+
+6. **Dashboard Controls**
+   - Shut down the dashboard server gracefully
+   - Close the dashboard without using terminal commands
 
 ## Integration with Core API
 

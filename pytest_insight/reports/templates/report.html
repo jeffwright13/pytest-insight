@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-5">{{ title }}</h1>
+        <p class="lead">Test report generated on {{ generated_at|format_datetime }}</p>
+    </div>
+</div>
+
+<!-- Summary Section -->
+<section id="summary" class="mb-5">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h4 mb-0">Summary</h2>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <div class="card dashboard-card h-100 border-primary">
+                        <div class="card-body text-center">
+                            <div class="summary-icon text-primary mb-2">
+                                <i class="bi bi-layers"></i>
+                            </div>
+                            <h5 class="card-title">Sessions</h5>
+                            <p class="card-text display-6">{{ summary.total_sessions }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card dashboard-card h-100 border-primary">
+                        <div class="card-body text-center">
+                            <div class="summary-icon text-primary mb-2">
+                                <i class="bi bi-list-check"></i>
+                            </div>
+                            <h5 class="card-title">Total Tests</h5>
+                            <p class="card-text display-6">{{ summary.total_tests }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card dashboard-card h-100 border-success">
+                        <div class="card-body text-center">
+                            <div class="summary-icon text-success mb-2">
+                                <i class="bi bi-check-circle"></i>
+                            </div>
+                            <h5 class="card-title">Passed</h5>
+                            <p class="card-text display-6">{{ summary.passed_tests }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card dashboard-card h-100 border-danger">
+                        <div class="card-body text-center">
+                            <div class="summary-icon text-danger mb-2">
+                                <i class="bi bi-x-circle"></i>
+                            </div>
+                            <h5 class="card-title">Failed</h5>
+                            <p class="card-text display-6">{{ summary.failed_tests }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="progress" style="height: 30px;">
+                        {% if summary.pass_rate > 0 %}
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ summary.pass_rate }}%;" 
+                             aria-valuenow="{{ summary.pass_rate }}" aria-valuemin="0" aria-valuemax="100">
+                            {{ summary.pass_rate|round(1) }}% Passed
+                        </div>
+                        {% endif %}
+                        {% if summary.pass_rate < 100 %}
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: {{ 100 - summary.pass_rate }}%;" 
+                             aria-valuenow="{{ 100 - summary.pass_rate }}" aria-valuemin="0" aria-valuemax="100">
+                            {{ (100 - summary.pass_rate)|round(1) }}% Failed
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-around">
+                        <div class="text-center">
+                            <span class="badge bg-success">Passed: {{ summary.passed_tests }}</span>
+                        </div>
+                        <div class="text-center">
+                            <span class="badge bg-danger">Failed: {{ summary.failed_tests }}</span>
+                        </div>
+                        <div class="text-center">
+                            <span class="badge bg-warning text-dark">Skipped: {{ summary.skipped_tests }}</span>
+                        </div>
+                        <div class="text-center">
+                            <span class="badge bg-danger">Errors: {{ summary.error_tests }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Charts Section -->
+<section id="charts" class="mb-5">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h4 mb-0">Visualizations</h2>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            Test Outcomes
+                        </div>
+                        <div class="card-body">
+                            <div id="outcome-chart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            Test Duration Distribution
+                        </div>
+                        <div class="card-body">
+                            <div id="duration-chart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-12 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            Test Results Timeline
+                        </div>
+                        <div class="card-body">
+                            <div id="timeline-chart" class="chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Sessions Section -->
+<section id="sessions" class="mb-5">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h4 mb-0">Test Sessions</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Session ID</th>
+                            <th>SUT Name</th>
+                            <th>Start Time</th>
+                            <th>Duration</th>
+                            <th>Tests</th>
+                            <th>Passed</th>
+                            <th>Failed</th>
+                            <th>Skipped</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for session in session_data %}
+                        <tr class="session-row" data-bs-toggle="collapse" data-bs-target="#session-{{ loop.index }}" aria-expanded="false">
+                            <td><code>{{ session.id[:8] }}</code></td>
+                            <td>{{ session.sut_name }}</td>
+                            <td>{{ session.start_time|format_datetime }}</td>
+                            <td>{{ session.duration|format_duration }}</td>
+                            <td>{{ session.test_count }}</td>
+                            <td><span class="badge bg-success">{{ session.passed }}</span></td>
+                            <td><span class="badge bg-danger">{{ session.failed }}</span></td>
+                            <td><span class="badge bg-warning text-dark">{{ session.skipped }}</span></td>
+                        </tr>
+                        <tr class="collapse" id="session-{{ loop.index }}">
+                            <td colspan="8">
+                                <div class="card card-body">
+                                    <h5>Session Details</h5>
+                                    <p><strong>Full Session ID:</strong> {{ session.id }}</p>
+                                    <p><strong>SUT Name:</strong> {{ session.sut_name }}</p>
+                                    <p><strong>Start Time:</strong> {{ session.start_time|format_datetime }}</p>
+                                    <p><strong>Duration:</strong> {{ session.duration|format_duration }}</p>
+                                    <p><strong>Test Results:</strong> {{ session.passed }} passed, {{ session.failed }} failed, {{ session.skipped }} skipped, {{ session.error }} errors</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Tests Section -->
+<section id="tests" class="mb-5">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h4 mb-0">Test Results</h2>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <input type="text" id="test-search" class="form-control" placeholder="Search tests..." onkeyup="searchTests()">
+                        <button class="btn btn-outline-secondary" type="button" onclick="searchTests()">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary active" onclick="filterTestsByOutcome('all')">All</button>
+                        <button type="button" class="btn btn-outline-success" onclick="filterTestsByOutcome('PASSED')">Passed</button>
+                        <button type="button" class="btn btn-outline-danger" onclick="filterTestsByOutcome('FAILED')">Failed</button>
+                        <button type="button" class="btn btn-outline-warning" onclick="filterTestsByOutcome('SKIPPED')">Skipped</button>
+                        <button type="button" class="btn btn-outline-danger" onclick="filterTestsByOutcome('ERROR')">Error</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Test ID</th>
+                            <th>Outcome</th>
+                            <th>Duration</th>
+                            <th>Session</th>
+                            <th>Start Time</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for test in test_data %}
+                        <tr class="test-row" data-outcome="{{ test.outcome }}" data-name="{{ test.nodeid }}">
+                            <td>{{ test.nodeid }}</td>
+                            <td>{{ test.outcome|outcome_icon|safe }} {{ test.outcome }}</td>
+                            <td>{{ test.duration|format_duration }}</td>
+                            <td><code>{{ test.session_id[:8] }}</code></td>
+                            <td>{{ test.start_time|format_datetime }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="toggleTestDetails('{{ loop.index }}')">
+                                    <i class="bi bi-info-circle"></i> Details
+                                </button>
+                            </td>
+                        </tr>
+                        <tr id="details-{{ loop.index }}" class="test-details">
+                            <td colspan="6">
+                                <div class="card card-body">
+                                    <h5>Test Details</h5>
+                                    <p><strong>Full Test ID:</strong> {{ test.nodeid }}</p>
+                                    <p><strong>Session ID:</strong> {{ test.session_id }}</p>
+                                    <p><strong>SUT Name:</strong> {{ test.sut_name }}</p>
+                                    <p><strong>Start Time:</strong> {{ test.start_time|format_datetime }}</p>
+                                    <p><strong>Duration:</strong> {{ test.duration|format_duration }}</p>
+                                    <p><strong>Outcome:</strong> {{ test.outcome }}</p>
+                                    
+                                    {% if test.error %}
+                                    <div class="mt-3">
+                                        <h6 class="text-danger">Error Message:</h6>
+                                        <div class="code-block">{{ test.error }}</div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if test.stdout %}
+                                    <div class="mt-3">
+                                        <h6>Standard Output:</h6>
+                                        <div class="code-block">{{ test.stdout }}</div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if test.stderr %}
+                                    <div class="mt-3">
+                                        <h6 class="text-danger">Standard Error:</h6>
+                                        <div class="code-block">{{ test.stderr }}</div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if test.logs %}
+                                    <div class="mt-3">
+                                        <h6>Log Output:</h6>
+                                        <div class="code-block">{{ test.logs }}</div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Create the outcome pie chart
+    const outcomeData = [
+        {
+            values: [{{ summary.passed_tests }}, {{ summary.failed_tests }}, {{ summary.skipped_tests }}, {{ summary.error_tests }}],
+            labels: ['Passed', 'Failed', 'Skipped', 'Error'],
+            type: 'pie',
+            marker: {
+                colors: ['#28a745', '#dc3545', '#ffc107', '#dc3545']
+            },
+            textinfo: 'value+percent',
+            hole: 0.4
+        }
+    ];
+    
+    const outcomeLayout = {
+        margin: { t: 0, b: 0, l: 0, r: 0 },
+        showlegend: true,
+        legend: { orientation: 'h' }
+    };
+    
+    Plotly.newPlot('outcome-chart', outcomeData, outcomeLayout);
+    
+    // Create the duration histogram
+    const durations = {{ test_data|map(attribute='duration')|list|tojson }};
+    
+    const durationData = [
+        {
+            x: durations,
+            type: 'histogram',
+            marker: {
+                color: '#007bff'
+            },
+            nbinsx: 20
+        }
+    ];
+    
+    const durationLayout = {
+        margin: { t: 0, b: 40, l: 40, r: 0 },
+        xaxis: { title: 'Duration (s)' },
+        yaxis: { title: 'Count' }
+    };
+    
+    Plotly.newPlot('duration-chart', durationData, durationLayout);
+    
+    // Create the timeline chart
+    const startTimes = {{ test_data|map(attribute='start_time')|list|tojson }};
+    const outcomes = {{ test_data|map(attribute='outcome')|list|tojson }};
+    
+    // Map outcomes to colors
+    const outcomeColors = outcomes.map(outcome => {
+        if (outcome === 'PASSED') return '#28a745';
+        if (outcome === 'FAILED') return '#dc3545';
+        if (outcome === 'SKIPPED') return '#ffc107';
+        if (outcome === 'ERROR') return '#dc3545';
+        return '#6c757d';
+    });
+    
+    const timelineData = [
+        {
+            x: startTimes,
+            y: Array(startTimes.length).fill(1),
+            mode: 'markers',
+            type: 'scatter',
+            marker: {
+                size: 12,
+                color: outcomeColors,
+                symbol: 'circle'
+            },
+            text: outcomes,
+            hovertemplate: '%{text}<extra></extra>'
+        }
+    ];
+    
+    const timelineLayout = {
+        margin: { t: 0, b: 40, l: 0, r: 0 },
+        xaxis: { title: 'Time' },
+        yaxis: { 
+            showticklabels: false,
+            zeroline: false
+        },
+        showlegend: false
+    };
+    
+    Plotly.newPlot('timeline-chart', timelineData, timelineLayout);
+    
+    // Initialize with all test details hidden
+    document.addEventListener('DOMContentLoaded', function() {
+        const detailsElements = document.querySelectorAll('.test-details');
+        detailsElements.forEach(element => {
+            element.style.display = 'none';
+        });
+    });
+</script>
+{% endblock %}

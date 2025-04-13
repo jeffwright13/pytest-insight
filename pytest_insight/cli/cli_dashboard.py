@@ -8,6 +8,8 @@ import importlib.util
 import os
 import subprocess
 import sys
+import threading
+import time
 from typing import Optional
 
 import typer
@@ -71,7 +73,7 @@ def _run_dashboard(port: int, profile: Optional[str], browser: bool):
         for package in ["streamlit", "pandas", "plotly", "sklearn"]:
             if importlib.util.find_spec(package) is None:
                 missing_deps.append(package)
-        
+
         if missing_deps:
             print(f"Error: Missing required dependencies: {', '.join(missing_deps)}")
             print("Dashboard functionality requires additional dependencies.")
@@ -84,6 +86,15 @@ def _run_dashboard(port: int, profile: Optional[str], browser: bool):
             "web",
             "dashboard.py",
         )
+
+        # Define the shutdown flag file path
+        shutdown_flag_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shutdown_dashboard.flag"
+        )
+
+        # Remove any existing shutdown flag file
+        if os.path.exists(shutdown_flag_path):
+            os.remove(shutdown_flag_path)
 
         # Build the command
         cmd = [
@@ -107,8 +118,30 @@ def _run_dashboard(port: int, profile: Optional[str], browser: bool):
         print(f"Dashboard URL: http://localhost:{port}")
         print("Press Ctrl+C to stop the dashboard")
 
-        subprocess.run(cmd)
+        # Start the dashboard process
+        process = subprocess.Popen(cmd)
 
+        # Start a thread to monitor for the shutdown flag
+        def check_shutdown_flag():
+            while True:
+                if os.path.exists(shutdown_flag_path):
+                    print("Shutdown signal detected. Stopping dashboard...")
+                    process.terminate()
+                    # Remove the flag file
+                    os.remove(shutdown_flag_path)
+                    print("Dashboard stopped.")
+                    sys.exit(0)
+                time.sleep(1)
+
+        # Start the monitoring thread
+        monitor_thread = threading.Thread(target=check_shutdown_flag, daemon=True)
+        monitor_thread.start()
+
+        # Wait for the process to complete
+        process.wait()
+
+    except KeyboardInterrupt:
+        print("\nDashboard stopped.")
     except Exception as e:
         print(f"Error {'launching' if browser else 'creating'} dashboard: {str(e)}")
         sys.exit(1)
