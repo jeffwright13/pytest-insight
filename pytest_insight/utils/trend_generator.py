@@ -579,6 +579,15 @@ class TrendDataGenerator(PracticeDataGenerator):
         if self.storage_profile:
             self._save_to_profile(all_sessions)
 
+        # Show success message only after all operations are complete
+        console.print(
+            Panel(
+                f"Generated trend data for {self.days} days\n" f"Total sessions: {len(all_sessions)}",
+                title="Success",
+                border_style="green",
+            )
+        )
+
         return all_sessions
 
     def _generate_sessions(self) -> List[TestSession]:
@@ -625,15 +634,6 @@ class TrendDataGenerator(PracticeDataGenerator):
                             session_time=target_time,
                         )
                         all_sessions.append(target_session)
-
-        # Show success message
-        console.print(
-            Panel(
-                f"Generated trend data for {self.days} days\n" f"Total sessions: {len(all_sessions)}",
-                title="Success",
-                border_style="green",
-            )
-        )
 
         return all_sessions
 

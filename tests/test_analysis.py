@@ -1,10 +1,10 @@
 from datetime import timedelta
 
 import pytest
-
 from pytest_insight.core.analysis import Analysis
 from pytest_insight.core.models import TestOutcome, TestResult, TestSession
 from pytest_insight.core.query import Query
+from pytest_insight.core.storage import StorageProfile
 
 
 @pytest.fixture
@@ -150,9 +150,7 @@ class Test_Analysis:
         assert len(filtered_analysis._sessions) == 2  # Only the api-service sessions
 
         # Test more complex query with test-level filtering
-        complex_filtered = analysis.with_query(
-            lambda q: q.filter_by_test().with_outcome(TestOutcome.FAILED).apply()
-        )
+        complex_filtered = analysis.with_query(lambda q: q.filter_by_test().with_outcome(TestOutcome.FAILED).apply())
 
         # Verify test-level filtering worked while preserving session context
         assert len(complex_filtered._sessions) == 2  # Sessions with failed tests
@@ -183,9 +181,7 @@ class Test_Analysis:
         db_sessions = analysis.with_query(lambda q: q.for_sut("db-service"))._sessions
 
         # Compare health between different SUTs
-        comparison = analysis.compare_health(
-            base_sessions=api_sessions, target_sessions=db_sessions
-        )
+        comparison = analysis.compare_health(base_sessions=api_sessions, target_sessions=db_sessions)
 
         # Verify comparison structure
         assert "base_health" in comparison
@@ -214,16 +210,12 @@ class Test_Analysis:
         """
         # Create a query and use its results with Analysis
         profile_name = "test_integration_profile"
-        json_storage.profile_name = (
-            profile_name  # Add profile_name to storage for reference
-        )
+        json_storage.profile_name = profile_name  # Add profile_name to storage for reference
         query = Query(profile_name=profile_name)
 
         # Mock the execute method to return our test sessions
         original_execute = query.execute
-        query.execute = lambda sessions=None: original_execute(
-            sessions=analysis_sessions
-        )
+        query.execute = lambda sessions=None: original_execute(sessions=analysis_sessions)
 
         # Use query results with Analysis
         query_result = query.for_sut("api-service").execute()
@@ -235,9 +227,7 @@ class Test_Analysis:
         # Test chaining query with analysis
         health_report = (
             Analysis(profile_name=profile_name)
-            .with_query(
-                lambda q: q.for_sut("api-service").with_outcome(TestOutcome.FAILED)
-            )
+            .with_query(lambda q: q.for_sut("api-service").with_outcome(TestOutcome.FAILED))
             .health_report()
         )
 
@@ -271,9 +261,7 @@ class Test_Analysis:
         mock_storage = mocker.MagicMock()
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch(
-            "pytest_insight.core.analysis.get_storage_instance"
-        )
+        mock_get_storage = mocker.patch("pytest_insight.core.analysis.get_storage_instance")
         mock_get_storage.return_value = mock_storage
 
         # Initialize analysis with profile
@@ -290,12 +278,32 @@ class Test_Analysis:
         """Test the with_profile method."""
         # Mock the storage to control its behavior
         mock_storage = mocker.MagicMock()
+        # Set a string value for profile_name to avoid serialization issues
+        mock_storage.profile_name = "mock_profile"
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch(
-            "pytest_insight.core.analysis.get_storage_instance"
-        )
+        mock_get_storage = mocker.patch("pytest_insight.core.analysis.get_storage_instance")
         mock_get_storage.return_value = mock_storage
+
+        # Create a mock profile with all required attributes
+        mock_profile = mocker.MagicMock(spec=StorageProfile)
+        mock_profile.name = "test_profile"
+        mock_profile.storage_type = "json"
+        mock_profile.file_path = "/tmp/test_profile.json"
+
+        # Mock profile creation to avoid JSON serialization issues
+        mocker.patch("pytest_insight.core.storage.ProfileManager._create_profile", return_value=mock_profile)
+
+        # Mock ProfileManager.get_profile to raise ValueError to trigger profile creation
+        mocker.patch(
+            "pytest_insight.core.storage.ProfileManager.get_profile", side_effect=ValueError("Profile does not exist")
+        )
+
+        # Mock _save_profiles to prevent actual file operations
+        mocker.patch("pytest_insight.core.storage.ProfileManager._save_profiles")
+
+        # Mock JSONStorage initialization to return our mock_storage
+        mocker.patch("pytest_insight.core.storage.JSONStorage", return_value=mock_storage)
 
         # Create analysis and call with_profile
         analysis = Analysis()
@@ -320,9 +328,7 @@ class Test_Analysis:
         mock_storage.profile_name = "test_profile"  # Add profile_name to mock storage
 
         # Mock the get_storage_instance function to return our mock storage directly
-        mock_get_storage = mocker.patch(
-            "pytest_insight.core.analysis.get_storage_instance"
-        )
+        mock_get_storage = mocker.patch("pytest_insight.core.analysis.get_storage_instance")
         mock_get_storage.return_value = mock_storage
 
         # Mock the Query class to verify profile parameters are passed

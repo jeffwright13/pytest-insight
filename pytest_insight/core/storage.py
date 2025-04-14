@@ -1022,10 +1022,21 @@ def get_storage_instance(
                 return InMemoryStorage()
             else:
                 raise ValueError(f"Unsupported storage type in profile '{profile_name}': {profile.storage_type}")
-        except ValueError as e:
-            print(f"Warning: Profile '{profile_name}' not found: {e}")
-            print("Falling back to environment or active profile")
+        except ValueError:
+            # Create the profile if it doesn't exist and ensure it's saved
+            print(f"Creating new profile: '{profile_name}'")
+            # Create the profile using the profile manager directly to avoid circular imports
+            new_profile = profile_manager._create_profile(profile_name)
+            profile_manager._save_profiles()  # Explicitly save the profiles to disk
 
+            if new_profile.storage_type.lower() == "json":
+                return JSONStorage(new_profile.file_path)
+            elif new_profile.storage_type.lower() == "memory":
+                return InMemoryStorage()
+            else:
+                raise ValueError(
+                    f"Unsupported storage type in new profile '{profile_name}': {new_profile.storage_type}"
+                )
     # Step 2: Check environment variable for profile
     env_profile = os.environ.get("PYTEST_INSIGHT_PROFILE")
     if env_profile and env_profile != "":

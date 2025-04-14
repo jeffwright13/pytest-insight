@@ -848,7 +848,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
         try:
             sessions = sorted(
                 sessions,
-                key=lambda s: getattr(s, "session_start_time", datetime.now(ZoneInfo("UTC"))),
+                key=lambda s: NormalizedDatetime(getattr(s, "session_start_time", datetime.now(ZoneInfo("UTC")))),
             )
         except Exception as e:
             st.error(f"Error sorting sessions: {e}")
@@ -1092,7 +1092,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
             # Add explanation of flakiness
             st.markdown(
                 """
-            **Flakiness Index**: Percentage of tests that have inconsistent outcomes (both pass and fail) 
+            **Flakiness Index**: Percentage of tests that have inconsistent outcomes (both pass and fail)
             on the same day. High flakiness indicates unstable tests that need attention.
             """
             )
@@ -1301,12 +1301,12 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                     st.markdown(
                         """
                     The **Criticality Score** is a weighted combination of:
-                    
+
                     - **Failure Rate (40%)**: Tests that fail more often have higher impact
                     - **Dependency Score (30%)**: Tests that correlate with many other failures have higher impact
                     - **Execution Frequency (20%)**: Tests that run more often have higher impact
                     - **Duration (10%)**: Longer tests have higher impact (capped at 10 seconds)
-                    
+
                     Higher scores indicate tests that should be prioritized for maintenance and optimization.
                     """
                     )
@@ -1317,8 +1317,8 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
             st.subheader("Failure Correlation Matrix")
             st.markdown(
                 """
-            This matrix shows how often tests fail together. Higher correlation values indicate 
-            tests that tend to fail in the same sessions, suggesting potential dependencies or 
+            This matrix shows how often tests fail together. Higher correlation values indicate
+            tests that tend to fail in the same sessions, suggesting potential dependencies or
             shared failure causes.
             """
             )
@@ -1410,7 +1410,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                       - Share dependencies
                       - Test related functionality
                       - Be affected by the same underlying issues
-                    
+
                     This information can help identify clusters of related tests and potential common failure points.
                     """
                     )
@@ -1421,7 +1421,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
             st.subheader("Co-Failing Test Groups")
             st.markdown(
                 """
-            These are clusters of tests that frequently fail together, suggesting they might 
+            These are clusters of tests that frequently fail together, suggesting they might
             be related or affected by the same underlying issues.
             """
             )
@@ -1626,13 +1626,13 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                 st.markdown(
                     """
                 ### Why am I not seeing any data?
-                
+
                 The Failure Pattern Analysis requires tests with failure information. Here are some possible reasons you're not seeing data:
-                
+
                 1. **No failed tests**: Your test suite might have no failures in the selected time period
                 2. **Missing error information**: The test failures might not include detailed error messages
                 3. **Data format**: The error messages might be in a format that's not being recognized
-                
+
                 Try the following:
                 - Increase the time range in the sidebar
                 - Select a different System Under Test
@@ -1685,9 +1685,43 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
 
             with tab2:
                 st.info("No stack trace data available for analysis.")
+                st.markdown(
+                    """
+                ### Why am I not seeing any data?
+
+                The Stack Trace Analysis requires tests with detailed failure information including stack traces. Here are some possible reasons you're not seeing data:
+
+                1. **No stack traces**: Your test failures might not include stack trace information
+                2. **Parse errors**: The stack traces might be in a format that can't be parsed
+                3. **Missing line information**: The stack traces might not include file and line information
+
+                Try the following:
+                - Increase the time range in the sidebar
+                - Select a different System Under Test
+                - Run tests with assertion failures that generate stack traces
+                - Ensure your test runner is capturing and storing stack traces
+                """
+                )
 
             with tab3:
                 st.info("No temporal failure data available for analysis.")
+                st.markdown(
+                    """
+                ### Why am I not seeing any data?
+
+                The Temporal Patterns analysis requires tests with timestamps to analyze failure patterns over time. Here are some possible reasons you're not seeing data:
+
+                1. **No timestamps**: Your test sessions might not include timestamp information
+                2. **Single session**: You might only have one test session in the selected time range
+                3. **No failures**: There might not be any failures to analyze temporal patterns
+
+                Try the following:
+                - Increase the time range in the sidebar to include more test sessions
+                - Select a different System Under Test
+                - Run tests across multiple days/times to generate temporal data
+                - Ensure your test runner is capturing and storing session timestamps
+                """
+                )
 
             return
         else:

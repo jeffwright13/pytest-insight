@@ -366,35 +366,54 @@ class Test_SUTNameBehavior:
 
     def test_specified_sut_name(self, mock_config, mock_terminalreporter, monkeypatch):
         """Test that when --insight-sut is specified, that value is used as the SUT name."""
-        from unittest.mock import MagicMock
+        from unittest.mock import MagicMock, patch
 
         import pytest_insight.plugin as plugin
+        from pytest_insight.core.storage import StorageProfile
 
         # Set up the mock config with a specified SUT name
         mock_config.set_sut_name("custom-sut-name")
 
         # Mock the storage to capture the session
         mock_storage = MagicMock()
+        # Set a string value for profile_name to avoid serialization issues
+        mock_storage.profile_name = "test_profile"
         plugin.storage = mock_storage
 
         # Mock the insight_enabled function to return True
         monkeypatch.setattr(plugin, "insight_enabled", lambda config: True)
 
-        # Call the terminal summary hook
-        plugin.pytest_terminal_summary(mock_terminalreporter, 0, mock_config)
+        # Mock profile creation and saving to avoid serialization issues
+        with patch("pytest_insight.core.storage.ProfileManager.get_profile") as mock_get_profile, patch(
+            "pytest_insight.core.storage.ProfileManager._create_profile"
+        ) as mock_create_profile, patch("pytest_insight.core.storage.ProfileManager._save_profiles"):
+            # Set up the mock profile
+            mock_profile = MagicMock(spec=StorageProfile)
+            mock_profile.storage_type = "memory"
+            mock_profile.name = "test_profile"
 
-        # Check that the session was created with the specified SUT name
-        args, _ = mock_storage.save_session.call_args
-        session = args[0]
-        assert session.sut_name == "custom-sut-name"
+            # Configure get_profile to raise ValueError to trigger profile creation
+            mock_get_profile.side_effect = ValueError("Profile does not exist")
+
+            # Configure create_profile to return our mock profile
+            mock_create_profile.return_value = mock_profile
+
+            # Call the terminal summary hook
+            plugin.pytest_terminal_summary(mock_terminalreporter, 0, mock_config)
+
+            # Check that the session was created with the specified SUT name
+            args, _ = mock_storage.save_session.call_args
+            session = args[0]
+            assert session.sut_name == "custom-sut-name"
 
     def test_default_sut_name(self, mock_config, mock_terminalreporter, monkeypatch):
         """Test that when --insight-sut is not specified, the directory name is used as the SUT name."""
         import os
         import re
-        from unittest.mock import MagicMock
+        from unittest.mock import MagicMock, patch
 
         import pytest_insight.plugin as plugin
+        from pytest_insight.core.storage import StorageProfile
 
         # Set up the mock config with no SUT name specified
         mock_config.set_sut_name(None)
@@ -405,18 +424,35 @@ class Test_SUTNameBehavior:
 
         # Mock the storage to capture the session
         mock_storage = MagicMock()
+        # Set a string value for profile_name to avoid serialization issues
+        mock_storage.profile_name = "test_profile"
         plugin.storage = mock_storage
 
         # Mock the insight_enabled function to return True
         monkeypatch.setattr(plugin, "insight_enabled", lambda config: True)
 
-        # Call the terminal summary hook
-        plugin.pytest_terminal_summary(mock_terminalreporter, 0, mock_config)
+        # Mock profile creation and saving to avoid serialization issues
+        with patch("pytest_insight.core.storage.ProfileManager.get_profile") as mock_get_profile, patch(
+            "pytest_insight.core.storage.ProfileManager._create_profile"
+        ) as mock_create_profile, patch("pytest_insight.core.storage.ProfileManager._save_profiles"):
+            # Set up the mock profile
+            mock_profile = MagicMock(spec=StorageProfile)
+            mock_profile.storage_type = "memory"
+            mock_profile.name = "test_profile"
 
-        # Check that the session was created with the directory name as the SUT name
-        args, _ = mock_storage.save_session.call_args
-        session = args[0]
-        assert session.sut_name == expected_dir_name
+            # Configure get_profile to raise ValueError to trigger profile creation
+            mock_get_profile.side_effect = ValueError("Profile does not exist")
+
+            # Configure create_profile to return our mock profile
+            mock_create_profile.return_value = mock_profile
+
+            # Call the terminal summary hook
+            plugin.pytest_terminal_summary(mock_terminalreporter, 0, mock_config)
+
+            # Check that the session was created with the directory name as the SUT name
+            args, _ = mock_storage.save_session.call_args
+            session = args[0]
+            assert session.sut_name == expected_dir_name
 
 
 class Test_StorageConfiguration:
@@ -588,8 +624,9 @@ class Test_StorageConfiguration:
         print(
             f"Files in storage directory: {os.listdir(storage_dir) if storage_dir.exists() else 'Directory does not exist'}"
         )
-        print(f"Test directory: {tester.path}")
-        print(f"Files in test directory: {os.listdir(tester.path)}")
+        # Use the correct attribute to access the test directory
+        print(f"Test directory: {tester.tmpdir}")
+        print(f"Files in test directory: {os.listdir(tester.tmpdir)}")
 
         # For this test, we'll consider it a success if the test runs without errors
         # We're not asserting the existence of JSON files since the file creation
