@@ -1,10 +1,12 @@
+import os
 import random
+import shutil
 from importlib.metadata import version
 from pathlib import Path
 
 import pytest
 from pytest_insight.core.models import TestOutcome, TestResult, TestSession
-from pytest_insight.core.storage import JSONStorage, ProfileManager
+from pytest_insight.core.storage import JSONStorage, ProfileManager, get_profile_manager
 from pytest_insight.test_data import (
     NodeId,
     TextGenerator,
@@ -29,6 +31,10 @@ pytest_plugins = ["pytester"]
 
 # List to track any profile files created during testing
 TEST_PROFILE_FILES = []
+TEST_PROFILE_NAMES = []
+
+# Original config path to restore after tests
+ORIGINAL_CONFIG_PATH = None
 
 # Monkey patch the ProfileManager._create_profile method to track test profile files
 original_create_profile = ProfileManager._create_profile
@@ -38,9 +44,10 @@ def patched_create_profile(self, name, storage_type="json", file_path=None):
     """Patched version of ProfileManager._create_profile that tracks test profile files."""
     profile = original_create_profile(self, name, storage_type, file_path)
 
-    # Track the file path for cleanup if it's a test profile
-    if name.startswith("test_") and profile.file_path:
+    # Track the file path and name for cleanup if it's a test profile
+    if (name.startswith("test_") or name.startswith("test-")) and hasattr(profile, "file_path") and profile.file_path:
         TEST_PROFILE_FILES.append(profile.file_path)
+        TEST_PROFILE_NAMES.append(name)
 
     return profile
 
@@ -49,33 +56,67 @@ def patched_create_profile(self, name, storage_type="json", file_path=None):
 ProfileManager._create_profile = patched_create_profile
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def cleanup_test_profiles():
-    """Clean up any test profile files that might have been created.
-
-    This fixture runs automatically after each test to ensure that any test profile
-    files created during testing are properly deleted, preventing filesystem pollution.
-    """
+    """Fixture to clean up test profiles after all tests have run."""
+    # Run the tests
     yield
-    # After each test, clean up any test profile files
 
-    # 1. Clean up tracked files from current test run
+    # Clean up test profiles
+    print(f"\nCleaning up {len(TEST_PROFILE_FILES)} test profile files...")
+    
+    # Get the profile manager
+    profile_manager = get_profile_manager()
+    
+    # Delete test profiles from the profile manager
+    for name in TEST_PROFILE_NAMES:
+        try:
+            if name in profile_manager.profiles:
+                profile_manager.delete_profile(name)
+        except Exception as e:
+            print(f"Error deleting profile {name}: {e}")
+    
+    # Delete any remaining test profile files
     for file_path in TEST_PROFILE_FILES:
         try:
-            if Path(file_path).exists():
-                Path(file_path).unlink()
-        except Exception:
-            pass
-    TEST_PROFILE_FILES.clear()
+            if os.path.exists(file_path):
+                os.unlink(file_path)
+                print(f"Deleted test profile file: {file_path}")
+        except Exception as e:
+            print(f"Error deleting file {file_path}: {e}")
+    
+    # Also clean up any temporary files in the config directory
+    config_dir = Path(profile_manager.config_path).parent
+    for item in config_dir.glob("tmp*"):
+        try:
+            if item.is_file():
+                os.unlink(str(item))
+                print(f"Deleted temporary file: {item}")
+        except Exception as e:
+            print(f"Error deleting temporary file {item}: {e}")
 
-    # 2. Clean up any existing test profile files in the ~/.pytest_insight directory
-    pytest_insight_dir = Path.home() / ".pytest_insight"
-    if pytest_insight_dir.exists():
-        for file_path in pytest_insight_dir.glob("test_*.json"):
-            try:
-                file_path.unlink()
-            except Exception:
-                pass
+
+@pytest.fixture
+def temp_profile_dir(tmp_path):
+    """Fixture to use a temporary directory for profiles during tests."""
+    # Save original config path
+    profile_manager = get_profile_manager()
+    global ORIGINAL_CONFIG_PATH
+    ORIGINAL_CONFIG_PATH = profile_manager.config_path
+    
+    # Create temporary profiles directory
+    temp_dir = tmp_path / "pytest_insight_profiles"
+    temp_dir.mkdir(exist_ok=True)
+    temp_config = temp_dir / "profiles.json"
+    
+    # Set the config path to the temporary directory
+    profile_manager.config_path = temp_config
+    
+    # Run the test
+    yield temp_dir
+    
+    # Restore original config path
+    profile_manager.config_path = ORIGINAL_CONFIG_PATH
 
 
 @pytest.fixture
