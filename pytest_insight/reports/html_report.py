@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from pytest_insight.core.models import TestOutcome, TestSession
 from pytest_insight.core.storage import get_storage_instance
+from pytest_insight.utils.utils import NormalizedDatetime
 
 
 class HTMLReportGenerator:
@@ -69,7 +70,10 @@ class HTMLReportGenerator:
             from datetime import datetime, timedelta
 
             cutoff_date = datetime.now() - timedelta(days=days)
-            sessions = [s for s in storage.load_sessions() if s.session_start_time >= cutoff_date]
+            normalized_cutoff = NormalizedDatetime(cutoff_date)
+            sessions = [
+                s for s in storage.load_sessions() if NormalizedDatetime(s.session_start_time) >= normalized_cutoff
+            ]
         else:
             sessions = storage.load_sessions()
 
@@ -78,7 +82,8 @@ class HTMLReportGenerator:
             sessions = [s for s in sessions if s.session_id in session_ids]
 
         # Sort sessions by start time (newest first)
-        sessions.sort(key=lambda s: s.session_start_time, reverse=True)
+        # Use NormalizedDatetime to handle timezone-aware and timezone-naive datetimes
+        sessions.sort(key=lambda s: NormalizedDatetime(s.session_start_time), reverse=True)
 
         # Prepare report data
         report_data = self._prepare_report_data(sessions, title)

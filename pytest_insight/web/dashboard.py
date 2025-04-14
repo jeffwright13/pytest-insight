@@ -42,6 +42,11 @@ def select_profile() -> str:
         st.session_state.last_profile_check = datetime.now()
         st.session_state.cached_profiles = None
 
+        # Check if a profile was specified via environment variable (from CLI)
+        cli_profile = os.environ.get("PYTEST_INSIGHT_PROFILE")
+        if cli_profile:
+            st.session_state.cli_profile = cli_profile
+
     # Get available profiles - refresh every 5 seconds
     current_time = datetime.now()
     time_diff = (current_time - st.session_state.last_profile_check).total_seconds()
@@ -74,6 +79,12 @@ def select_profile() -> str:
 
         if active_name in profile_options:
             default_index = profile_options.index(active_name)
+
+    # If a profile was specified via CLI, use that as the default
+    if hasattr(st.session_state, "cli_profile") and st.session_state.cli_profile in profile_options:
+        default_index = profile_options.index(st.session_state.cli_profile)
+        # Show a message indicating we're using the CLI-specified profile
+        st.sidebar.success(f"Using profile specified from command line: {st.session_state.cli_profile}")
 
     # Let user select profile
     col1, col2 = st.sidebar.columns([3, 1])
@@ -1423,6 +1434,8 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                 """
             These are clusters of tests that frequently fail together, suggesting they might
             be related or affected by the same underlying issues.
+            
+            Understanding co-failing test patterns can help prioritize fixes and identify root causes.
             """
             )
 
@@ -1434,19 +1447,14 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
 
             # For each session with failures, check if it forms a recurring pattern
             session_failure_patterns = {}
-            for session in sessions:
-                if not hasattr(session, "session_id") or not session.session_id:
-                    continue
-
-                if not hasattr(session, "test_results") or not session.test_results:
-                    continue
-
-                session_id = session.session_id
-                session_failures[session_id] = []
-
-                for test in session.test_results:
-                    if hasattr(test, "nodeid") and hasattr(test, "outcome") and test.outcome == TestOutcome.FAILED:
-                        session_failures[session_id].append(test.nodeid)
+            for session_id, failed_tests in session_failures.items():
+                if len(failed_tests) >= 2:  # Only consider sessions with multiple failures
+                    # Create a frozen set of failed tests to use as a dictionary key
+                    pattern = frozenset(failed_tests)
+                    if pattern not in session_failure_patterns:
+                        session_failure_patterns[pattern] = 1
+                    else:
+                        session_failure_patterns[pattern] += 1
 
             # Find recurring patterns (groups of tests that fail together in multiple sessions)
             recurring_patterns = []
@@ -1476,33 +1484,250 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                     co_failing_groups.append(group)
                     assigned_tests.update(group["tests"])
 
+            # Create a matrix to track co-failures for visualization
+            test_nodeids = list(test_stats.keys())
+            co_failures = {}
+
+            # Initialize the co-failure matrix
+            for test_id in test_nodeids:
+                co_failures[test_id] = {}
+                for other_id in test_nodeids:
+                    if test_id != other_id:
+                        co_failures[test_id][other_id] = 0
+
+            # Fill the co-failure matrix by analyzing session failures
+            for session_id, failed_tests in session_failures.items():
+                if len(failed_tests) > 1:  # Only consider sessions with multiple failures
+                    for i, test1 in enumerate(failed_tests):
+                        for test2 in failed_tests[i + 1 :]:
+                            if test1 in co_failures and test2 in co_failures[test1]:
+                                co_failures[test1][test2] += 1
+                            if test2 in co_failures and test1 in co_failures[test2]:
+                                co_failures[test2][test1] += 1
+
+            # Identify significant co-failure relationships
+            significant_co_failures = []
+            for test1, others in co_failures.items():
+                for test2, count in others.items():
+                    if count > 0:
+                        # Calculate correlation strength as a percentage of failures
+                        test1_failures = test_stats[test1]["failures"]
+                        test2_failures = test_stats[test2]["failures"]
+
+                        if test1_failures > 0 and test2_failures > 0:
+                            correlation_pct1 = (count / test1_failures) * 100
+                            correlation_pct2 = (count / test2_failures) * 100
+                            avg_correlation = (correlation_pct1 + correlation_pct2) / 2
+
+                            significant_co_failures.append(
+                                {
+                                    "test1": test1,
+                                    "test2": test2,
+                                    "co_failures": count,
+                                    "test1_failures": test1_failures,
+                                    "test2_failures": test2_failures,
+                                    "correlation_pct": avg_correlation,
+                                }
+                            )
+
+            # Sort by correlation percentage
+            significant_co_failures.sort(key=lambda x: x["correlation_pct"], reverse=True)
+
             # Display co-failing groups
             if co_failing_groups:
-                for i, group in enumerate(co_failing_groups[:5]):  # Show top 5 groups
-                    with st.expander(
-                        f"Group {i+1}: {len(group['tests'])} tests, failed together {group['count']} times"
-                    ):
-                        st.markdown("**Tests in this group:**")
-                        for test_name in group["test_names"]:
-                            st.markdown(f"- `{test_name}`")
+                # Create tabs for different visualizations
+                subtab1, subtab2, subtab3 = st.tabs(["Group View", "Correlation Table", "Network Graph"])
 
-                        st.markdown(f"**Failure frequency:** {group['count']} sessions")
+                with subtab1:
+                    for i, group in enumerate(co_failing_groups[:5]):  # Show top 5 groups
+                        with st.expander(
+                            f"Group {i+1}: {len(group['tests'])} tests, failed together {group['count']} times"
+                        ):
+                            st.markdown("**Tests in this group:**")
+                            for test_name in group["test_names"]:
+                                st.markdown(f"- `{test_name}`")
 
-                        # Calculate potential root causes based on test names
-                        common_words = set()
-                        for test_name in group["test_names"]:
-                            words = set(re.findall(r"[a-zA-Z]+", test_name.lower()))
-                            if not common_words:
-                                common_words = words
-                            else:
-                                common_words &= words
+                            st.markdown(f"**Failure frequency:** {group['count']} sessions")
 
-                        if common_words:
-                            st.markdown("**Potential common elements:**")
-                            st.markdown(", ".join(f"`{word}`" for word in common_words))
+                            # Calculate potential root causes based on test names
+                            common_words = set()
+                            for test_name in group["test_names"]:
+                                words = set(re.findall(r"[a-zA-Z]+", test_name.lower()))
+                                if not common_words:
+                                    common_words = words
+                                else:
+                                    common_words &= words
+
+                            if common_words:
+                                st.markdown("**Potential common elements:**")
+                                st.markdown(", ".join(f"`{word}`" for word in common_words))
+
+                with subtab2:
+                    # Display co-failing test pairs in a table
+                    if significant_co_failures:
+                        # Create a DataFrame for the table
+                        co_failure_df = pd.DataFrame(significant_co_failures)
+
+                        # Simplify nodeids for display
+                        co_failure_df["test1_short"] = co_failure_df["test1"].apply(
+                            lambda x: x.split("::")[-1] if "::" in x else x
+                        )
+                        co_failure_df["test2_short"] = co_failure_df["test2"].apply(
+                            lambda x: x.split("::")[-1] if "::" in x else x
+                        )
+
+                        # Format the table
+                        display_df = co_failure_df[
+                            ["test1_short", "test2_short", "co_failures", "correlation_pct"]
+                        ].copy()
+                        display_df.columns = ["Test 1", "Test 2", "Co-Failures", "Correlation %"]
+                        display_df["Correlation %"] = display_df["Correlation %"].round(1).astype(str) + "%"
+
+                        # Show the table with the most significant correlations
+                        st.dataframe(display_df.head(20), use_container_width=True)
+                    else:
+                        st.info("No significant co-failing test pairs detected.")
+
+                with subtab3:
+                    # Create a network graph of co-failing tests
+                    st.subheader("Co-Failure Network Graph")
+                    st.markdown(
+                        "This graph shows the relationships between tests that fail together. Larger nodes indicate tests that fail more frequently, and thicker edges indicate stronger co-failure relationships."
+                    )
+
+                    # Prepare data for the network graph
+                    # Only include the top correlations to avoid cluttering the graph
+                    top_correlations = significant_co_failures[: min(30, len(significant_co_failures))]
+
+                    if top_correlations:
+                        # Create nodes and edges for the network graph
+                        nodes = set()
+                        edges = []
+
+                        for corr in top_correlations:
+                            test1_short = corr["test1"].split("::")[-1] if "::" in corr["test1"] else corr["test1"]
+                            test2_short = corr["test2"].split("::")[-1] if "::" in corr["test2"] else corr["test2"]
+
+                            nodes.add(test1_short)
+                            nodes.add(test2_short)
+
+                            edges.append((test1_short, test2_short, corr["correlation_pct"]))
+
+                        # Create node list with failure counts as size
+                        node_sizes = {}
+                        for node in nodes:
+                            # Find the original nodeid
+                            for nodeid in test_nodeids:
+                                if node == nodeid.split("::")[-1]:
+                                    node_sizes[node] = test_stats[nodeid]["failures"]
+                                    break
+
+                        # Create the network graph
+                        if len(nodes) > 1:
+                            try:
+                                # Create node and edge dataframes for plotly
+                                node_df = pd.DataFrame(
+                                    {
+                                        "id": list(nodes),
+                                        "size": [node_sizes.get(node, 1) for node in nodes],
+                                        "failures": [node_sizes.get(node, 1) for node in nodes],
+                                    }
+                                )
+
+                                edge_df = pd.DataFrame(edges, columns=["source", "target", "weight"])
+
+                                # Create the network graph
+                                import networkx as nx
+
+                                # Create a graph
+                                G = nx.Graph()
+
+                                # Add nodes
+                                for _, row in node_df.iterrows():
+                                    G.add_node(row["id"], size=row["size"], failures=row["failures"])
+
+                                # Add edges
+                                for _, row in edge_df.iterrows():
+                                    G.add_edge(row["source"], row["target"], weight=row["weight"])
+
+                                # Use a layout algorithm to position nodes
+                                pos = nx.spring_layout(G, seed=42)
+
+                                # Create the plotly figure
+                                edge_trace = []
+
+                                # Add edges
+                                for edge in G.edges(data=True):
+                                    x0, y0 = pos[edge[0]]
+                                    x1, y1 = pos[edge[1]]
+                                    weight = edge[2]["weight"]
+
+                                    # Scale line width based on correlation strength
+                                    width = 1 + (weight / 20)
+
+                                    edge_trace.append(
+                                        go.Scatter(
+                                            x=[x0, x1, None],
+                                            y=[y0, y1, None],
+                                            line=dict(width=width, color="rgba(150,150,150,0.7)"),
+                                            hoverinfo="none",
+                                            mode="lines",
+                                        )
+                                    )
+
+                                # Create node trace
+                                node_trace = go.Scatter(
+                                    x=[pos[node][0] for node in G.nodes()],
+                                    y=[pos[node][1] for node in G.nodes()],
+                                    mode="markers",
+                                    hoverinfo="text",
+                                    marker=dict(
+                                        showscale=True,
+                                        colorscale="YlOrRd",
+                                        color=[G.nodes[node]["failures"] for node in G.nodes()],
+                                        size=[10 + G.nodes[node]["failures"] * 2 for node in G.nodes()],
+                                        colorbar=dict(
+                                            thickness=15, title="Failures", xanchor="left", titleside="right"
+                                        ),
+                                        line=dict(width=2),
+                                    ),
+                                    text=[f"{node}<br>Failures: {G.nodes[node]['failures']}" for node in G.nodes()],
+                                )
+
+                                # Create the figure
+                                fig = go.Figure(
+                                    data=edge_trace + [node_trace],
+                                    layout=go.Layout(
+                                        showlegend=False,
+                                        hovermode="closest",
+                                        margin=dict(b=20, l=5, r=5, t=40),
+                                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                                        height=600,
+                                        title="Co-Failing Test Network",
+                                    ),
+                                )
+
+                                st.plotly_chart(fig, use_container_width=True)
+
+                                # Add explanation of how to interpret the graph
+                                st.info(
+                                    """
+                                **How to interpret this graph:**
+                                - **Nodes (circles)**: Each node represents a test. Larger and darker nodes indicate tests that fail more frequently.
+                                - **Edges (lines)**: Connections between tests that fail together. Thicker lines indicate stronger correlations.
+                                - **Clusters**: Groups of connected tests often indicate related functionality or shared dependencies.
+                                """
+                                )
+                            except Exception as e:
+                                st.error(f"Error creating network graph: {e}")
+                                st.code(traceback.format_exc())
+                        else:
+                            st.info("Not enough co-failing tests to create a network graph.")
+                    else:
+                        st.info("No significant co-failing test patterns detected in the selected time period.")
             else:
                 st.info("No recurring co-failing test groups identified.")
-
     except Exception as e:
         st.error(f"Error displaying test impact analysis: {e}")
         st.code(traceback.format_exc())

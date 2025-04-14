@@ -86,7 +86,7 @@ class TrendDataGenerator(PracticeDataGenerator):
 
         self.trend_strength = max(0.1, min(1.0, trend_strength))
         self.anomaly_rate = max(0.01, min(0.2, anomaly_rate))
-        self.correlation_groups = min(correlation_groups, 3)  # Limit to 3 for performance
+        self.correlation_groups = min(correlation_groups, 5)  # Limit to 5 for performance
 
         # Create correlated test groups that will fail together
         self.correlated_groups = self._create_correlated_groups()
@@ -729,7 +729,6 @@ class TrendDataGenerator(PracticeDataGenerator):
         # Limit the number of SUTs for better performance
         baseline_generator.sut_variations = baseline_generator.sut_variations[:suts_to_use]
 
-        # Ensure we have a high pass rate but with some consistent failures
         baseline_generator.pass_rate = 0.95  # Start with high pass rate
         baseline_generator.flaky_rate = 0.03  # Low flakiness
 
@@ -764,13 +763,37 @@ class TrendDataGenerator(PracticeDataGenerator):
             start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=actual_days - (actual_days // 3)),
             trend_strength=0.7,  # Strong degradation trend
             anomaly_rate=0.1,  # More anomalies
-            correlation_groups=3,
+            correlation_groups=5,  # Increased from 3 to 5 for more co-failing test groups
         )
         # Limit the number of SUTs for better performance
         degradation_generator.sut_variations = degradation_generator.sut_variations[:suts_to_use]
 
         degradation_generator.pass_rate = 0.85  # Lower pass rate
         degradation_generator.flaky_rate = 0.08  # Higher flakiness
+
+        # Override the _is_correlated_failure method to increase the probability of correlated failures
+        def enhanced_correlated_failure(sut, nodeid, session_time):
+            # Check if this test is part of any correlated group
+            for group in degradation_generator.correlated_groups.get(sut, []):
+                if nodeid in group:
+                    # If it's in a group, determine if this is a "group failure" session
+                    # Use a hash of the session time and group to ensure consistency
+                    session_hash = hash(f"{session_time.isoformat()}_{str(group)}")
+                    random.seed(session_hash)
+
+                    # Increased base probability from 0.2 to 0.4 for more co-failing tests
+                    base_probability = 0.4
+                    degradation_factor = degradation_generator._get_degradation_factor(session_time)
+                    probability = min(0.9, base_probability * degradation_factor)
+
+                    is_group_failure = random.random() < probability
+                    random.seed()  # Reset the seed
+
+                    return is_group_failure
+            return False
+
+        # Apply the enhanced method
+        degradation_generator._is_correlated_failure = enhanced_correlated_failure
 
         # Add performance degradation patterns
         degradation_generator.duration_degradation_factor = 1.5  # Tests get 50% slower
@@ -847,7 +870,8 @@ class TrendDataGenerator(PracticeDataGenerator):
                 f"- Degradation period with increasing failures\n"
                 f"- Recovery period showing improvement\n"
                 f"- Various test failure patterns and anomalies\n"
-                f"- Correlated test failures and performance trends",
+                f"- Correlated test failures and co-failing test groups\n"
+                f"- Performance trends and warning patterns",
                 title="Showcase Profile Created",
                 border_style="green",
             )

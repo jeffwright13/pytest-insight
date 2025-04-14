@@ -625,8 +625,8 @@ class Test_StorageConfiguration:
             f"Files in storage directory: {os.listdir(storage_dir) if storage_dir.exists() else 'Directory does not exist'}"
         )
         # Use the correct attribute to access the test directory
-        print(f"Test directory: {tester.tmpdir}")
-        print(f"Files in test directory: {os.listdir(tester.tmpdir)}")
+        print(f"Test directory: {tester.path}")
+        print(f"Files in test directory: {os.listdir(tester.path)}")
 
         # For this test, we'll consider it a success if the test runs without errors
         # We're not asserting the existence of JSON files since the file creation

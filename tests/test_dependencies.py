@@ -158,7 +158,7 @@ def test_predictive_analytics_behavior(tester):
     """Test predictive analytics behavior based on installation environment."""
     # Create a test script that tries to use predictive analytics
     tester.makepyfile(
-        test_predictive="""
+        test_predictive_env="""
         import importlib.util
         import pytest
         
@@ -185,7 +185,7 @@ def test_predictive_analytics_behavior(tester):
     )
 
     # Run the test
-    result = tester.runpytest("-v", "test_predictive.py")
+    result = tester.runpytest("-v", "test_predictive_env.py")
 
     # Check that the test ran (it should pass in either environment)
     result.stdout.fnmatch_lines(["*test_predictive_analytics PASSED*"])
