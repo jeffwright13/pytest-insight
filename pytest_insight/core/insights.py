@@ -1525,13 +1525,37 @@ class Insights:
             "trend_insights": trend_insights,
         }
 
-    def console_summary(self) -> Dict[str, Any]:
+    def console_summary(self) -> str:
         """Generate a summary of insights for console display.
 
         Returns:
-            Dict containing the most important metrics and insights
+            String containing the most important metrics and insights
             formatted for easy display in a terminal.
         """
+        # Import colorama for terminal colors
+        try:
+            from colorama import Fore, Style
+            # Initialize colorama
+            import colorama
+            colorama.init()
+            
+            # Define color constants
+            GREEN = Fore.GREEN
+            RED = Fore.RED
+            YELLOW = Fore.YELLOW
+            CYAN = Fore.CYAN
+            BLUE = Fore.BLUE
+            MAGENTA = Fore.MAGENTA
+            BRIGHT = Style.BRIGHT
+            RESET = Style.RESET_ALL
+            
+            # Flag that colors are available
+            has_colors = True
+        except ImportError:
+            # Define empty color constants if colorama is not available
+            GREEN = RED = YELLOW = CYAN = BLUE = MAGENTA = BRIGHT = RESET = ""
+            has_colors = False
+        
         # Get health score from metrics
         health_report = self.analysis.health_report()
         health_score = health_report.get("health_score", {}).get("overall_score", 0)
@@ -1539,9 +1563,34 @@ class Insights:
         # Get test outcome distribution
         outcome_dist = self.tests.outcome_distribution()
         outcomes = []
-        for outcome, data in outcome_dist.get("outcomes", {}).items():
-            outcomes.append((outcome, data.get("count", 0)))
-        total_tests = outcome_dist.get("total_tests", 0)
+        
+        # Direct calculation from session data as a fallback
+        if not outcome_dist.get("outcomes") and self.analysis._sessions:
+            # Calculate outcomes directly from the current session's test results
+            session = self.analysis._sessions[0]
+            if hasattr(session, "test_results") and session.test_results:
+                # Count outcomes
+                outcome_counts = {}
+                total = 0
+                
+                for test in session.test_results:
+                    outcome_name = test.outcome.value.lower() if hasattr(test.outcome, "value") else str(test.outcome).lower()
+                    outcome_counts[outcome_name] = outcome_counts.get(outcome_name, 0) + 1
+                    total += 1
+                
+                # Create outcome distribution in the expected format
+                outcomes = [(outcome, count) for outcome, count in outcome_counts.items()]
+                total_tests = total
+            else:
+                # Use the values from outcome_dist
+                for outcome, data in outcome_dist.get("outcomes", {}).items():
+                    outcomes.append((outcome, data.get("count", 0)))
+                total_tests = outcome_dist.get("total_tests", 0)
+        else:
+            # Use the values from outcome_dist
+            for outcome, data in outcome_dist.get("outcomes", {}).items():
+                outcomes.append((outcome, data.get("count", 0)))
+            total_tests = outcome_dist.get("total_tests", 0)
 
         # Get unreliable tests
         unreliable_tests = self.tests.unreliable_tests()
@@ -1563,10 +1612,9 @@ class Insights:
         # Get regression rate (new)
         try:
             regression_data = self.analysis.sessions.regression_rate()
-            regression_rate = regression_data.get("regression_rate", 0) * 100
+            regression_rate = regression_data.get("regression_rate", 0)
             regressed_tests = regression_data.get("regressed_tests", [])[:3]  # Top 3 regressed tests
         except (AttributeError, Exception):
-            # Fallback to defaults if the method is not available
             regression_rate = 0
             regressed_tests = []
 
@@ -1575,71 +1623,47 @@ class Insights:
             longest_tests_data = self.analysis.sessions.longest_running_tests(limit=3)
             longest_tests = longest_tests_data.get("longest_tests", [])
         except (AttributeError, Exception):
-            # Fallback to empty list if the method is not available
             longest_tests = []
 
         # Get duration trend (new)
         try:
             duration_trend_data = self.analysis.sessions.test_suite_duration_trend()
-            duration_trend = {
-                "direction": duration_trend_data.get("trend", {}).get("direction", "stable"),
-                "change": duration_trend_data.get("trend", {}).get("change", 0),
-                "significant": duration_trend_data.get("significant", False),
-            }
+            duration_trend = duration_trend_data.get("trend", {}).get("direction", "stable")
         except (AttributeError, Exception):
-            # Fallback to defaults if the method is not available
-            duration_trend = {"direction": "stable", "change": 0, "significant": False}
+            duration_trend = "stable"
 
-        # Get rerun test groups information
+        # Get rerun test groups
         rerun_groups = []
         rerun_count = 0
+        recovered_count = 0
         if self.analysis._sessions and len(self.analysis._sessions) > 0:
-            session = self.analysis._sessions[0]  # Use the first session
-            if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
+            session = self.analysis._sessions[0]
+            if hasattr(session, "rerun_test_groups"):
                 rerun_count = len(session.rerun_test_groups)
-                # Get top 5 rerun groups with most attempts
-                sorted_groups = sorted(
-                    session.rerun_test_groups, key=lambda g: len(g.tests) if hasattr(g, "tests") else 0, reverse=True
-                )
-                for group in sorted_groups[:5]:  # Top 5 rerun groups
-                    if hasattr(group, "tests") and group.tests:
-                        rerun_groups.append(
-                            {
-                                "nodeid": group.nodeid,
-                                "attempts": len(group.tests),
-                                "final_outcome": group.final_outcome.value
-                                if hasattr(group, "final_outcome")
-                                else "UNKNOWN",
-                                "tests": [
-                                    {
-                                        "outcome": test.outcome.value if hasattr(test, "outcome") else "UNKNOWN",
-                                        "duration": test.duration if hasattr(test, "duration") else 0,
-                                        "start_time": test.start_time if hasattr(test, "start_time") else None,
-                                    }
-                                    for test in group.tests
-                                ],
-                            }
-                        )
+                for group in session.rerun_test_groups:
+                    if hasattr(group, "final_outcome") and group.final_outcome == "passed":
+                        recovered_count += 1
 
-        # Get failure trends if we have multiple sessions
-        failure_trend = {"change": 0, "improving": False}
-        if self.analysis._sessions and len(self.analysis._sessions) > 1:
-            trends = self.trends.failure_trends()
-            failure_trend = {
-                "change": trends.get("trend_percentage", 0),
-                "improving": trends.get("improving", False),
-            }
-
-        # Get health report for more detailed metrics
-        stability_score = health_report.get("health_score", {}).get("stability_score", 0)
-        performance_score = health_report.get("health_score", {}).get("performance_score", 0)
-        warning_score = health_report.get("health_score", {}).get("warning_score", 0)
-
-        # Get recommendations if available
+        # Get stability score
+        stability_score = health_report.get("stability_score", {}).get("overall_score", 0)
+        
+        # Get performance score
+        performance_score = health_report.get("performance_score", {}).get("overall_score", 0)
+        
+        # Get failure trend
+        failure_trend = "stable"
+        if "trends" in health_report and "failure_rate" in health_report["trends"]:
+            trend_direction = health_report["trends"]["failure_rate"].get("direction", "stable")
+            failure_trend = trend_direction
+        
+        # Get warning score
+        warning_score = health_report.get("warning_score", {}).get("overall_score", 0)
+        
+        # Get recommendations
         recommendations = health_report.get("recommendations", [])
-
+        
         # Get session metrics
-        session_metrics = self.sessions.session_metrics()
+        session_metrics = self.sessions.session_metrics() if hasattr(self, "sessions") else {}
         avg_duration = session_metrics.get("avg_duration", 0)
         failure_rate = session_metrics.get("failure_rate", 0) * 100
         warning_rate = session_metrics.get("warning_rate", 0) * 100
@@ -1647,282 +1671,211 @@ class Insights:
         # Get session info
         sut_name = "Unknown"
         session_id = "Unknown"
-        profile_name = None
+        session_date = "Unknown"
+        profile_name = getattr(self, "_profile_name", "default")
+        if profile_name is None:
+            profile_name = "default"
+        
         if self.analysis._sessions and len(self.analysis._sessions) > 0:
             session = self.analysis._sessions[0]  # Use the first session for start/stop times
             sut_name = session.sut_name
             session_id = session.session_id
+            if hasattr(session, "start_time") and session.start_time:
+                from datetime import datetime
+                try:
+                    # Try to parse the timestamp and format it nicely
+                    if isinstance(session.start_time, str):
+                        session_date = datetime.fromisoformat(session.start_time.replace('Z', '+00:00')).strftime("%Y-%m-%d %H:%M")
+                    else:
+                        session_date = datetime.fromtimestamp(session.start_time).strftime("%Y-%m-%d %H:%M")
+                except (ValueError, TypeError, AttributeError):
+                    # Fall back to string representation if parsing fails
+                    session_date = str(session.start_time)
 
-        return {
-            "sut_name": sut_name,
-            "session_id": session_id,
-            "profile_name": profile_name,
-            "health_score": health_score,
-            "stability_score": stability_score,
-            "performance_score": performance_score,
-            "warning_score": warning_score,
-            "failure_rate": failure_rate,
-            "warning_rate": warning_rate,
-            "avg_duration": avg_duration,
-            "outcome_distribution": outcomes,
-            "total_tests": total_tests,
-            "unreliable_test_count": unreliable_test_count,
-            "most_unreliable": most_unreliable,
-            "slowest_tests": slowest_tests,
-            "failure_trend": failure_trend,
-            "recommendations": (recommendations[:3] if recommendations else []),  # Show top 3 recommendations
-            # New health metrics
-            "top_failing_tests": top_failing_tests,
-            "regression_rate": regression_rate,
-            "regressed_tests": regressed_tests,
-            "longest_tests": longest_tests,
-            "duration_trend": duration_trend,
-            # Rerun test groups information
-            "rerun_test_groups": rerun_groups,  # Make sure this key matches what's used in format_console_output
-            "rerun_count": rerun_count,
-        }
+        # Determine health grade based on health score
+        health_grade = "F"
+        health_desc = "Critical issues"
+        if health_score >= 90:
+            health_grade = "A"
+            health_desc = "Excellent"
+        elif health_score >= 80:
+            health_grade = "B+"
+            health_desc = "Very good"
+        elif health_score >= 70:
+            health_grade = "B"
+            health_desc = "Stable, minor flakiness"
+        elif health_score >= 60:
+            health_grade = "C+"
+            health_desc = "Moderate issues"
+        elif health_score >= 50:
+            health_grade = "C"
+            health_desc = "Needs attention"
+        elif health_score >= 40:
+            health_grade = "D"
+            health_desc = "Significant issues"
 
-    def format_console_output(self, session_id: str, sut_name: str, profile_name: str = None) -> str:
-        """Format insights data into a string suitable for console output.
-
-        This method formats the insights from the current session into a
-        human-readable string with ANSI color codes for terminal display.
-
-        Args:
-            session_id: The ID of the current session
-            sut_name: The name of the system under test
-            profile_name: Optional name of the storage profile
-
-        Returns:
-            A formatted string with ANSI color codes ready for terminal display
-        """
-        # Get summary data
-        summary = self.console_summary()
-
-        # ANSI color codes
-        RESET = "\033[0m"
-        YELLOW = "\033[33m"
-        GREEN = "\033[32m"
-        RED = "\033[31m"
-        CYAN = "\033[36m"
-        MAGENTA = "\033[35m"
-        BOLD = "\033[1m"
-
-        def colorize(text, color_code):
-            return f"{color_code}{text}{RESET}"
-
-        def pct(val):
-            return f"{val:.1f}%" if isinstance(val, float) else str(val)
-
-        # Build the summary output as per the requested format
-        output = []
-        output.append(f"{BOLD}{CYAN}{'='*20} Pytest-Insight Summary {'='*20}{RESET}")
-        # Last Session summary
-        session_time = (
-            self.analysis._sessions[0].session_start_time.strftime("%Y-%m-%d %H:%M")
-            if self.analysis._sessions and hasattr(self.analysis._sessions[0], "session_start_time")
-            else "Unknown"
-        )
-        sut = summary.get("sut_name", sut_name)
-        profile = profile_name or summary.get("profile_name", "default")
-        total_tests = summary.get("total_tests", 0)
-        passed = next((c for o, c in summary.get("outcome_distribution", []) if o == "passed"), 0)
-        failed = next((c for o, c in summary.get("outcome_distribution", []) if o == "failed"), 0)
-        xfailed = next((c for o, c in summary.get("outcome_distribution", []) if o == "xfailed"), 0)
-        skipped = next((c for o, c in summary.get("outcome_distribution", []) if o == "skipped"), 0)
-        pass_pct = (passed / total_tests * 100) if total_tests else 0
-        fail_pct = (failed / total_tests * 100) if total_tests else 0
-        rerun_count = summary.get("rerun_count", 0)
-        rerun_groups = summary.get("rerun_test_groups", [])
-        rerun_succeeded = sum(1 for g in rerun_groups if g.get("final_outcome") == "passed")
-        health_score = summary.get("health_score", 0)
-        health_grade = "A" if health_score >= 90 else "B" if health_score >= 80 else "C" if health_score >= 70 else "D"
-        health_label = {
-            "A": "Excellent",
-            "B": "Stable, minor unreliability",
-            "C": "Moderate issues",
-            "D": "Needs attention",
-        }[health_grade]
-        # Actionable (last session)
-        actionable = []
-        if summary.get("top_failing_tests"):
-            for t in summary["top_failing_tests"]:
-                if t.get("failure_count", 0) > 0:
-                    actionable.append(f"- Investigate persistent failure: {colorize(t['nodeid'], RED)}")
-        if summary.get("most_unreliable"):
-            actionable.append(
-                f"- {colorize(str(len(summary['most_unreliable'])), YELLOW)} new unreliable test(s) detected: "
-                + ", ".join(colorize(t[0], YELLOW) for t in summary["most_unreliable"][:2])
-            )
-        if summary.get("regressed_tests"):
-            actionable.append(
-                f"- {colorize(str(len(summary['regressed_tests'])), MAGENTA)} new regressions detected: "
-                + ", ".join(colorize(t["nodeid"], MAGENTA) for t in summary["regressed_tests"][:2])
-            )
-
-        output.append(
-            f"\nLast Session: {colorize(session_time, CYAN)} | SUT: {colorize(sut, CYAN)} | Profile: {colorize(profile, CYAN)} | {colorize(str(total_tests), BOLD)} tests"
-        )
-        output.append(
-            f"  Outcomes:  {colorize(str(passed), GREEN)} passed ({colorize(f'{pass_pct:.1f}%', GREEN)}) | {colorize(str(failed), RED)} failed ({colorize(f'{fail_pct:.1f}%', RED)}) | {colorize(str(xfailed), MAGENTA)} xfailed | {colorize(str(skipped), YELLOW)} skipped"
-        )
-        output.append(
-            f"  Reruns:    {colorize(str(rerun_count), MAGENTA)} tests rerun | {colorize(str(rerun_succeeded), GREEN)} succeeded after rerun"
-        )
-        output.append(
-            f"  Health:    {colorize(health_grade, BOLD + GREEN if health_grade == 'A' else BOLD + YELLOW if health_grade == 'B' else BOLD + RED)} ({health_label})"
-        )
-        if actionable:
-            output.append("  Actionable: ")
-            for act in actionable:
-                output.append(f"    {act}")
-        else:
-            output.append("  Actionable: None")
-        output.append(f"\n{CYAN}{'-'*60}{RESET}")
-        # All Sessions (trend summary)
-        session_metrics = self.sessions.session_metrics() if hasattr(self, "sessions") else {}
-        session_count = session_metrics.get("session_count", 0)
-        all_sut = sut
-        all_passed = session_metrics.get("passed", 0)
-        all_failed = session_metrics.get("failed", 0)
-        all_xfailed = session_metrics.get("xfailed", 0)
-        all_skipped = session_metrics.get("skipped", 0)
-        all_total = session_metrics.get("total_tests", 0)
-        all_pass_pct = (all_passed / all_total * 100) if all_total else 0
-        all_fail_pct = (all_failed / all_total * 100) if all_total else 0
-        all_rerun = session_metrics.get("rerun_count", 0)
-        all_rerun_succeeded = session_metrics.get("rerun_succeeded", 0)
-        all_health = session_metrics.get("health_grade", "B+")
-        all_health_label = session_metrics.get("health_label", "Improving")
-        trends = summary.get("duration_trend", {})
-        fail_trend = summary.get("failure_trend", {})
-        unreliability_trend = colorize("↔", YELLOW)  # Placeholder, can be improved
-        duration_trend = {
-            "increasing": colorize("↑", RED),
-            "decreasing": colorize("↓", GREEN),
-            "stable": colorize("↔", YELLOW),
-        }.get(trends.get("direction", "stable"), colorize("↔", YELLOW))
-        output.append(
-            f"\nAll Sessions (last 30 days): {colorize(str(session_count), BOLD)} sessions | SUT: {colorize(all_sut, CYAN)}"
-        )
-        output.append(
-            f"  Outcomes:  {colorize(str(all_passed), GREEN)} passed ({colorize(f'{all_pass_pct:.1f}%', GREEN)}) | {colorize(str(all_failed), RED)} failed ({colorize(f'{all_fail_pct:.1f}%', RED)}) | {colorize(str(all_xfailed), MAGENTA)} xfailed | {colorize(str(all_skipped), YELLOW)} skipped"
-        )
-        output.append(
-            f"  Reruns:    {colorize(str(all_rerun), MAGENTA)} tests rerun | {colorize(str(all_rerun_succeeded), GREEN)} succeeded after rerun"
-        )
-        output.append(
-            f"  Health:    {colorize(all_health, BOLD + GREEN if all_health == 'A' else BOLD + YELLOW if all_health == 'B' else BOLD + RED)} ({all_health_label})"
-        )
-        output.append(
-            f"  Trends:    Failures {colorize('↓', GREEN) if fail_trend.get('improving') else colorize('↑', RED)} | Unreliability {unreliability_trend} | Duration {duration_trend}"
-        )
-        # Actionable (all sessions)
-        output.append("\n  Actionable:")
-        if summary.get("regressed_tests"):
-            for t in summary["regressed_tests"]:
-                output.append(
-                    f"    - {colorize(t['nodeid'], MAGENTA)} has failed in {colorize(str(len(t.get('sessions', [])), MAGENTA))} sessions"
-                )
-        if summary.get("most_unreliable"):
-            output.append(
-                f"    - {colorize(str(len(summary['most_unreliable'])), YELLOW)} new unreliable tests detected in last 30 days"
-            )
-        if summary.get("top_failing_tests"):
-            for t in summary["top_failing_tests"]:
-                output.append(f"    - {colorize(t['nodeid'], RED)} is a top failure")
-        output.append(f"\n{CYAN}{'='*60}{RESET}")
-        return "\n".join(output)
+        # Format the summary as a string
+        lines = []
+        
+        # Last Session section
+        lines.append(f"{BRIGHT}Last Session: {CYAN}{session_date}{RESET} | {BRIGHT}SUT: {CYAN}{sut_name}{RESET} | {BRIGHT}Profile: {CYAN}{profile_name}{RESET} | {BRIGHT}{total_tests} tests{RESET}")
+        
+        # Outcomes line
+        outcome_parts = []
+        # Sort outcomes by count (descending) and take top 4
+        sorted_outcomes = sorted(outcomes, key=lambda x: x[1], reverse=True)
+        main_outcomes = sorted_outcomes[:4]  # Show top 4 outcomes
+        other_count = sum(count for _, count in sorted_outcomes[4:]) if len(sorted_outcomes) > 4 else 0
+        
+        for outcome_name, count in main_outcomes:
+            # Clean up outcome name (remove TestOutcome. prefix if present)
+            clean_name = str(outcome_name)
+            if "TestOutcome." in clean_name:
+                clean_name = clean_name.replace("TestOutcome.", "").lower()
+            
+            percentage = (count/total_tests*100) if total_tests > 0 else 0
+            
+            # Color code by outcome type
+            outcome_color = RESET
+            if clean_name in ["passed", "xpassed"]:
+                outcome_color = GREEN
+            elif clean_name in ["failed", "error"]:
+                outcome_color = RED
+            elif clean_name in ["skipped", "xfailed"]:
+                outcome_color = YELLOW
+            elif clean_name in ["rerun"]:
+                outcome_color = MAGENTA
+                
+            outcome_parts.append(f"{outcome_color}{count} {clean_name} ({percentage:.1f}%){RESET}")
+            
+        # Add "other" category if needed
+        if other_count > 0:
+            other_percentage = (other_count/total_tests*100) if total_tests > 0 else 0
+            outcome_parts.append(f"{BLUE}{other_count} other ({other_percentage:.1f}%){RESET}")
+            
+        lines.append(f"  {BRIGHT}Outcomes:{RESET}  {' | '.join(outcome_parts)}")
+        
+        # Reruns line
+        lines.append(f"  {BRIGHT}Reruns:{RESET}    {MAGENTA}{rerun_count} tests rerun{RESET} | {GREEN if recovered_count > 0 else RESET}{recovered_count} succeeded after rerun{RESET}")
+        
+        # Health line
+        lines.append(f"  {BRIGHT}Health:{RESET}    {GREEN if health_score >= 80 else YELLOW if health_score >= 50 else RED}{health_grade} ({health_desc}){RESET}")
+        
+        # Actionable items
+        lines.append(f"  {BRIGHT}Actionable:{RESET} ")
+        actionable_items = []
+        
+        # Add top failing tests
+        for test in top_failing_tests[:2]:
+            if isinstance(test, dict):
+                nodeid = test.get('nodeid', '')
+                if nodeid:
+                    actionable_items.append(f"    - {RED}Investigate persistent failure: {nodeid.split('::')[-1]}{RESET}")
+        
+        # Add unreliable tests
+        if unreliable_test_count > 0 and most_unreliable:
+            test = most_unreliable[0]
+            if isinstance(test, dict):
+                nodeid = test.get('nodeid', '')
+                if nodeid:
+                    actionable_items.append(f"    - {YELLOW}{unreliable_test_count} flaky test(s) detected: {nodeid.split('::')[-1]}{RESET}")
+        
+        # Add regressed tests
+        if regressed_tests:
+            test = regressed_tests[0]
+            if isinstance(test, dict):
+                nodeid = test.get('nodeid', '')
+                if nodeid:
+                    actionable_items.append(f"    - {RED}New regression detected: {nodeid.split('::')[-1]}{RESET}")
+        
+        # If no actionable items, add a placeholder
+        if not actionable_items:
+            if recommendations:
+                actionable_items.append(f"    - {recommendations[0]}")
+            else:
+                actionable_items.append("    - No actionable insights available")
+        
+        lines.extend(actionable_items)
+        
+        # Separator
+        lines.append("")
+        lines.append("------------------------------------------------------------")
+        lines.append("")
+        
+        # All Sessions section (if available)
+        session_count = len(self.analysis._sessions) if self.analysis._sessions else 0
+        lines.append(f"{BRIGHT}All Sessions (last 30 days):{RESET} {session_count} sessions | {BRIGHT}SUT: {CYAN}{sut_name}{RESET}")
+        
+        # Overall outcome stats (simplified for now)
+        lines.append(f"  {BRIGHT}Outcomes:{RESET}  {total_tests} total tests | {failure_rate:.1f}% failure rate")
+        lines.append(f"  {BRIGHT}Reruns:{RESET}    {MAGENTA}{rerun_count} tests rerun{RESET} | {GREEN if recovered_count > 0 else RESET}{recovered_count} succeeded after rerun{RESET}")
+        lines.append(f"  {BRIGHT}Health:{RESET}    {GREEN if health_score >= 80 else YELLOW if health_score >= 50 else RED}{health_grade} ({health_desc}){RESET}")
+        
+        # Trends
+        failure_trend_arrow = "↓" if failure_trend == "decreasing" else ("↑" if failure_trend == "increasing" else "↔")
+        flakiness_arrow = "↓" if unreliable_test_count == 0 else ("↑" if unreliable_test_count > 2 else "↔")
+        duration_arrow = "↓" if duration_trend == "decreasing" else ("↑" if duration_trend == "increasing" else "↔")
+        
+        lines.append(f"  {BRIGHT}Trends:{RESET}    Failures {GREEN if failure_trend == 'decreasing' else RED if failure_trend == 'increasing' else YELLOW}{failure_trend_arrow}{RESET} | Flakiness {GREEN if unreliable_test_count == 0 else RED if unreliable_test_count > 2 else YELLOW}{flakiness_arrow}{RESET} | Duration {GREEN if duration_trend == 'decreasing' else YELLOW if duration_trend == 'increasing' else RESET}{duration_arrow}{RESET}")
+        lines.append("")
+        
+        # Actionable insights for all sessions
+        lines.append(f"  {BRIGHT}Actionable:{RESET} ")
+        all_actionable = []
+        
+        # Add failing tests across sessions
+        if top_failing_tests:
+            test = top_failing_tests[0]
+            if isinstance(test, dict):
+                nodeid = test.get('nodeid', '')
+                failure_count = test.get('failure_count', 0)
+                if nodeid and failure_count > 0:
+                    all_actionable.append(f"    - {nodeid.split('::')[-1]} has failed in {failure_count} sessions")
+        
+        # Add regression info
+        if regression_rate > 0:
+            all_actionable.append(f"    - {len(regressed_tests)} new regressions detected this week")
+        
+        # If no actionable items, add a placeholder
+        if not all_actionable:
+            if recommendations and len(recommendations) > 1:
+                all_actionable.append(f"    - {recommendations[1]}")
+            else:
+                all_actionable.append("    - No actionable insights available for all sessions")
+        
+        lines.extend(all_actionable)
+        
+        return "\n".join(lines)
 
 
-def insights(analysis: Optional["Analysis"] = None, profile_name: Optional[str] = None) -> Insights:
-    """Create a new Insights instance.
-
-    Args:
-        analysis: Optional Analysis instance to use
-        profile_name: Optional profile name to use for storage configuration
+def get_insights() -> "Insights":
+    """
+    Factory function to create a new Insights instance with the default or active profile.
 
     Returns:
         Insights instance
-
-    Example:
-        insights(profile_name="production").summary_report()
     """
-    return Insights(analysis=analysis, profile_name=profile_name)
+    return Insights()
 
 
-def insights_with_profile(profile_name: str) -> Insights:
-    """Create a new Insights instance with a specific profile.
+def insights() -> "Insights":
+    """
+    Factory function to create a new Insights instance with the default or active profile.
+
+    Returns:
+        Insights instance
+    """
+    return Insights()
+
+
+def insights_with_profile(profile_name: str) -> "Insights":
+    """
+    Factory function to create a new Insights instance for a specific profile.
 
     Args:
         profile_name: Name of the profile to use
 
     Returns:
-        Insights instance
-
-    Example:
-        insights_with_profile("production").summary_report()
+        Insights instance configured with the specified profile
     """
     return Insights(profile_name=profile_name)
-
-
-class SummaryReport:
-    """Summary report of insights.
-
-    Contains metrics, recommendations, and high-level insights.
-    """
-
-    def __init__(self):
-        """Initialize an empty summary report."""
-        # Initialize with default values
-        self.test_count = 0
-        self.session_count = 0
-        self.pass_rate = 0.0
-        self.reliability_rate = 0.0
-        self.top_failures = []
-        self.top_unreliable = []
-        self.performance_issues = []
-        self.recommendations = []
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert the report to a dictionary for serialization.
-
-        Returns:
-            Dict containing all report data
-        """
-        return {
-            "test_count": self.test_count,
-            "session_count": self.session_count,
-            "pass_rate": self.pass_rate,
-            "reliability_rate": self.reliability_rate,
-            "top_failures": self.top_failures,
-            "top_unreliable": self.top_unreliable,
-            "performance_issues": self.performance_issues,
-            "recommendations": self.recommendations,
-        }
-
-    def add_recommendation(self, recommendation: str) -> None:
-        """Add a recommendation to the report.
-
-        Args:
-            recommendation: Recommendation text
-        """
-        self.recommendations.append(recommendation)
-
-    def generate_recommendations(self) -> None:
-        """Generate recommendations based on the report data."""
-        # Clear existing recommendations
-        self.recommendations = []
-
-        # Add recommendations based on metrics
-        if self.pass_rate < 0.85:
-            self.add_recommendation("Investigate failing tests to improve overall pass rate.")
-
-        if self.reliability_rate > 0.05:
-            self.add_recommendation("Address unreliable tests to improve test reliability.")
-
-        if self.top_failures:
-            self.add_recommendation(f"Focus on fixing the top {len(self.top_failures)} consistently failing tests.")
-
-        if self.performance_issues:
-            self.add_recommendation("Optimize slow tests to improve overall test suite performance.")

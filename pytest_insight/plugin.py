@@ -209,21 +209,12 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     session_id = (f"{sut_name}-{session_start.strftime('%Y%m%d-%H%M%S')}-" f"{str(uuid.uuid4())[:8]}").lower()
 
     # Create/process rerun test groups
-    rerun_test_group_list = group_tests_into_rerun_test_groups(test_results)
+    rerun_test_groups = group_tests_into_rerun_test_groups(test_results)
 
-    # Create and store session with SUT name
+    # Create TestSession instance
     session = TestSession(
-        session_id=session_id,
         sut_name=sut_name,
-        session_start_time=session_start or datetime.now(),
-        session_stop_time=session_end or datetime.now(),
-        test_results=test_results,
-        rerun_test_groups=rerun_test_group_list,
-        session_tags={
-            "platform": sys.platform,
-            "python_version": sys.version.split()[0],
-            "environment": config.getoption("environment", "test"),
-        },
+        session_id=session_id,
         testing_system={
             "hostname": hostname,  # Use hostname here instead of as SUT name
             "name": testing_system_name,
@@ -232,6 +223,15 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
             "python_version": platform.python_version(),
             "pytest_version": pytest.__version__,
             "plugins": [p.name for p in config.pluginmanager.get_plugins() if hasattr(p, "name")],
+        },
+        session_start_time=session_start,
+        session_stop_time=session_end,
+        test_results=test_results,
+        rerun_test_groups=rerun_test_groups,
+        session_tags={
+            "platform": sys.platform,
+            "python_version": sys.version.split()[0],
+            "environment": config.getoption("environment", "test"),
         },
     )
 
@@ -252,22 +252,25 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
 
     # Get formatted console output
     try:
-        # Format the console output with session info
-        output = insights.format_console_output(
-            session_id=session.session_id,
-            sut_name=session.sut_name,
-            profile_name=config.getoption("insight_profile", "default"),
-        )
+        outcome_counts = {}
+        for test in session.test_results:
+            outcome_name = test.outcome.value.lower() if hasattr(test.outcome, "value") else str(test.outcome).lower()
+            outcome_counts[outcome_name] = outcome_counts.get(outcome_name, 0) + 1
 
         # Write the formatted header with terminal-width separators
         terminalreporter.write_line("")
         terminalreporter.write_sep("=", "pytest-insight", cyan=True)
 
-        # Write the formatted insights output
+        # Format and write the console output with session info
+        output = insights.console_summary()
         terminalreporter.write_line(output)
     except Exception as e:
-        terminalreporter.write_line(f"[pytest-insight] Error generating summary: {str(e)}", red=True)
-        return
+        # Only show error message if --insight flag is enabled
+        if config.getoption("insight"):
+            terminalreporter.write_line("")
+            terminalreporter.write_sep("=", "pytest-insight", red=True)
+            terminalreporter.write_line(f"[pytest-insight] Error generating summary: {str(e)}", red=True)
+            terminalreporter.write_line(f"[pytest-insight] Error details: {str(e)}", red=True)
 
 
 def group_tests_into_rerun_test_groups(
