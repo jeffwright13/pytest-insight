@@ -40,7 +40,7 @@ def setup_environment():
             days=30,  # 30 days of history
             targets_per_base=3,  # 3 target sessions per base
             pass_rate=0.75,  # 75% pass rate
-            flaky_rate=0.15,  # 15% flaky tests
+            nonreliability_rate=0.15,  # 15% flaky tests
             warning_rate=0.10,  # 10% warning rate
             test_categories=["api", "integration"],  # Focus on API and integration tests
             sut_filter="api-",  # Only generate API service data

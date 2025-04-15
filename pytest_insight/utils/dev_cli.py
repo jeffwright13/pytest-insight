@@ -63,9 +63,7 @@ def _get_method_info(method) -> Dict[str, Any]:
 
         param_info = {
             "name": name,
-            "default": (
-                None if param.default is inspect.Parameter.empty else param.default
-            ),
+            "default": (None if param.default is inspect.Parameter.empty else param.default),
             "required": param.default is inspect.Parameter.empty,
             "type": type_hints.get(name, Any),
             "kind": str(param.kind),
@@ -91,9 +89,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
     insights = Insights()
 
     # TestInsights methods
-    for method_name, method in inspect.getmembers(
-        insights.tests, predicate=inspect.ismethod
-    ):
+    for method_name, method in inspect.getmembers(insights.tests, predicate=inspect.ismethod):
         if method_name.startswith("_"):
             continue
 
@@ -106,9 +102,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
         }
 
     # SessionInsights methods
-    for method_name, method in inspect.getmembers(
-        insights.sessions, predicate=inspect.ismethod
-    ):
+    for method_name, method in inspect.getmembers(insights.sessions, predicate=inspect.ismethod):
         if method_name.startswith("_"):
             continue
 
@@ -121,9 +115,7 @@ def _discover_api_methods() -> Dict[str, Dict[str, Any]]:
         }
 
     # TrendInsights methods
-    for method_name, method in inspect.getmembers(
-        insights.trends, predicate=inspect.ismethod
-    ):
+    for method_name, method in inspect.getmembers(insights.trends, predicate=inspect.ismethod):
         if method_name.startswith("_"):
             continue
 
@@ -231,21 +223,11 @@ def _create_dynamic_command(method_info: Dict[str, Any]):
 
     # Create command function
     def command_func(
-        data_path: Optional[str] = typer.Option(
-            None, "--data-path", "-d", help="Path to test data"
-        ),
-        sut_filter: Optional[str] = typer.Option(
-            None, "--sut", "-s", help="Filter by system under test"
-        ),
-        days: Optional[int] = typer.Option(
-            None, "--days", help="Filter by number of days"
-        ),
-        test_pattern: Optional[str] = typer.Option(
-            None, "--test", "-t", help="Filter by test name pattern"
-        ),
-        profile: Optional[str] = typer.Option(
-            None, "--profile", "-p", help="Storage profile to use"
-        ),
+        data_path: Optional[str] = typer.Option(None, "--data-path", "-d", help="Path to test data"),
+        sut_filter: Optional[str] = typer.Option(None, "--sut", "-s", help="Filter by system under test"),
+        days: Optional[int] = typer.Option(None, "--days", help="Filter by number of days"),
+        test_pattern: Optional[str] = typer.Option(None, "--test", "-t", help="Filter by test name pattern"),
+        profile: Optional[str] = typer.Option(None, "--profile", "-p", help="Storage profile to use"),
         output_format: OutputFormat = typer.Option(
             OutputFormat.TEXT, "--format", "-f", help="Output format (text or json)"
         ),
@@ -264,15 +246,9 @@ def _create_dynamic_command(method_info: Dict[str, Any]):
 
         # Apply filters if provided
         if any([sut_filter, days, test_pattern]):
-            insights = insights.with_query(
-                lambda q: q.filter_by_sut(sut_filter) if sut_filter else q
-            )
-            insights = insights.with_query(
-                lambda q: q.in_last_days(days) if days else q
-            )
-            insights = insights.with_query(
-                lambda q: q.filter_by_test_name(test_pattern) if test_pattern else q
-            )
+            insights = insights.with_query(lambda q: q.filter_by_sut(sut_filter) if sut_filter else q)
+            insights = insights.with_query(lambda q: q.in_last_days(days) if days else q)
+            insights = insights.with_query(lambda q: q.filter_by_test_name(test_pattern) if test_pattern else q)
 
         # Get the component
         if class_instance == "insights":
@@ -364,9 +340,7 @@ def list_api_methods():
 
 @app.command("show-method")
 def show_method_details(
-    method_path: str = typer.Argument(
-        ..., help="Method path (e.g., insights.tests.flaky_tests)"
-    )
+    method_path: str = typer.Argument(..., help="Method path (e.g., insights.tests.unreliable_tests)"),
 ):
     """Show detailed information about a specific API method."""
     api_methods = _discover_api_methods()
@@ -374,9 +348,7 @@ def show_method_details(
     if method_path not in api_methods:
         console.print(f"[bold red]Method '{method_path}' not found.[/bold red]")
         # Show similar methods as suggestions
-        similar_methods = [
-            m for m in api_methods.keys() if method_path.split(".")[-1] in m
-        ]
+        similar_methods = [m for m in api_methods.keys() if method_path.split(".")[-1] in m]
         if similar_methods:
             console.print("\n[bold]Similar methods:[/bold]")
             for m in similar_methods:
@@ -418,9 +390,7 @@ def show_method_details(
             else:
                 default = param_info["default"]
                 default_str = str(default) if default is not None else "None"
-                panel_content.append(
-                    f"  [cyan]{name}[/cyan]: {type_str} = {default_str}"
-                )
+                panel_content.append(f"  [cyan]{name}[/cyan]: {type_str} = {default_str}")
     else:
         panel_content.append("[bold]Parameters:[/bold] None")
 

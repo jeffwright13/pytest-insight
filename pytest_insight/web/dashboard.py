@@ -318,7 +318,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                     f"{float(rerun_recovery_rate):.1f}%",
                     delta=f"{float(rerun_recovery_trend):.1f}%",
                     delta_color="normal",
-                    help="Percentage of tests that passed after being rerun. Higher values indicate tests that are flaky but recoverable. Calculated as: (Tests That Passed After Rerun / Total Rerun Tests) * 100%.",
+                    help="Percentage of tests that passed after being rerun. Higher values indicate tests that are unreliable but recoverable. Calculated as: (Tests That Passed After Rerun / Total Rerun Tests) * 100%.",
                 )
             except Exception as e:
                 st.metric("Rerun Recovery Rate", "N/A")
@@ -810,7 +810,7 @@ def display_predictive_insights(api: InsightAPI, sut: Optional[str], days: int):
 def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int):
     """Display detailed test execution trends over time.
 
-    Shows historical pass/fail rates, execution time trends, and flakiness metrics.
+    Shows historical pass/fail rates, execution time trends, and reliability-repeatability metrics.
 
     Args:
         api: InsightAPI instance
@@ -881,7 +881,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
         pass_rates = []
         fail_rates = []
         avg_durations = []
-        flaky_rates = []
+        nonreliability_rates = []
         test_counts = []
 
         for date_key, date_sessions in sorted(sessions_by_date.items()):
@@ -903,7 +903,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
             durations = [t.duration for t in all_tests if hasattr(t, "duration") and t.duration is not None]
             avg_duration = sum(durations) / len(durations) if durations else 0
 
-            # Calculate flakiness (tests that have both passed and failed on the same day)
+            # Calculate reliability-repeatability (tests that have both passed and failed on the same day)
             test_outcomes = {}
             for test in all_tests:
                 if hasattr(test, "nodeid") and hasattr(test, "outcome"):
@@ -911,15 +911,15 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
                         test_outcomes[test.nodeid] = set()
                     test_outcomes[test.nodeid].add(test.outcome)
 
-            flaky_tests = sum(1 for outcomes in test_outcomes.values() if len(outcomes) > 1)
-            flaky_rate = flaky_tests / len(test_outcomes) if test_outcomes else 0
+            unreliable_tests = sum(1 for outcomes in test_outcomes.values() if len(outcomes) > 1)
+            nonreliability_rate = unreliable_tests / len(test_outcomes) if test_outcomes else 0
 
             # Store metrics
             dates.append(date_key)
             pass_rates.append(passed_tests / total_tests * 100 if total_tests > 0 else 0)
             fail_rates.append(failed_tests / total_tests * 100 if total_tests > 0 else 0)
             avg_durations.append(avg_duration)
-            flaky_rates.append(flaky_rate * 100)  # Convert to percentage
+            nonreliability_rates.append(nonreliability_rate * 100)  # Convert to percentage
             test_counts.append(total_tests)
 
         if not dates:
@@ -927,7 +927,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
             return
 
         # Create tabs for different trend visualizations
-        tab1, tab2, tab3 = st.tabs(["Pass/Fail Rates", "Execution Times", "Flakiness Index"])
+        tab1, tab2, tab3 = st.tabs(["Pass/Fail Rates", "Execution Times", "reliability-repeatability Index"])
 
         with tab1:
             st.subheader("Pass/Fail Rates Over Time")
@@ -1049,25 +1049,27 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
                     st.info(trend_message)
 
         with tab3:
-            st.subheader("Test Flakiness Index")
+            st.subheader("Test reliability-repeatability Index")
 
             # Create DataFrame for plotting
-            df_flaky = pd.DataFrame({"Date": dates, "Flakiness (%)": flaky_rates, "Test Count": test_counts})
+            df_unreliable = pd.DataFrame(
+                {"Date": dates, "reliability-repeatability (%)": nonreliability_rates, "Test Count": test_counts}
+            )
 
             # Create line chart
             fig = px.line(
-                df_flaky,
+                df_unreliable,
                 x="Date",
-                y="Flakiness (%)",
-                title="Test Flakiness Index",
+                y="reliability-repeatability (%)",
+                title="Test reliability-repeatability Index",
                 markers=True,
             )
 
             # Add test count as a bar chart on secondary y-axis
             fig.add_trace(
                 go.Bar(
-                    x=df_flaky["Date"],
-                    y=df_flaky["Test Count"],
+                    x=df_unreliable["Date"],
+                    y=df_unreliable["Test Count"],
                     name="Test Count",
                     opacity=0.3,
                     yaxis="y2",
@@ -1076,7 +1078,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
 
             # Update layout for dual y-axis
             fig.update_layout(
-                yaxis=dict(title="Flakiness (%)"),
+                yaxis=dict(title="reliability-repeatability (%)"),
                 yaxis2=dict(title="Test Count", overlaying="y", side="right"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 margin=dict(t=50, b=0, l=0, r=0),
@@ -1086,25 +1088,25 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
             st.plotly_chart(fig, use_container_width=True)
 
             # Calculate trend
-            if len(flaky_rates) >= 2:
-                first_flaky = flaky_rates[0]
-                last_flaky = flaky_rates[-1]
-                flaky_change = last_flaky - first_flaky
+            if len(nonreliability_rates) >= 2:
+                first_unreliable = nonreliability_rates[0]
+                last_unreliable = nonreliability_rates[-1]
+                unreliable_change = last_unreliable - first_unreliable
 
-                if abs(flaky_change) < 1:
-                    trend_message = "Test flakiness has remained stable."
-                elif flaky_change > 0:
-                    trend_message = f"Test flakiness has increased by {flaky_change:.1f}%."
+                if abs(unreliable_change) < 1:
+                    trend_message = "Test reliability-repeatability has remained stable."
+                elif unreliable_change > 0:
+                    trend_message = f"Test reliability-repeatability has increased by {unreliable_change:.1f}%."
                 else:
-                    trend_message = f"Test flakiness has decreased by {abs(flaky_change):.1f}%."
+                    trend_message = f"Test reliability-repeatability has decreased by {abs(unreliable_change):.1f}%."
 
                 st.info(trend_message)
 
-            # Add explanation of flakiness
+            # Add explanation of reliability-repeatability
             st.markdown(
                 """
-            **Flakiness Index**: Percentage of tests that have inconsistent outcomes (both pass and fail)
-            on the same day. High flakiness indicates unstable tests that need attention.
+            **reliability-repeatability Index**: Percentage of tests that have inconsistent outcomes (both pass and fail)
+            on the same day. low reliability indicates unstable tests that need attention.
             """
             )
 
@@ -1434,7 +1436,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                 """
             These are clusters of tests that frequently fail together, suggesting they might
             be related or affected by the same underlying issues.
-            
+
             Understanding co-failing test patterns can help prioritize fixes and identify root causes.
             """
             )

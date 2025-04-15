@@ -55,7 +55,7 @@ Next Steps
 Review this roadmap and vision.
 Decide on priorities for Phase 1 (audit, terminology, mapping overlaps).
 Let me know if you want a more detailed breakdown for any phase, or sample UI/UX wireframes for the unified experience!
-Ready to get started?
+Ready to get started!
 
 
 
@@ -74,7 +74,7 @@ Comprehensive CLI
 The unified insight command with subcommands (profile, analyze, generate, etc.) is intuitive and well-documented.
 Typer-based CLI with consistent help/option conventions.
 Advanced Analysis & Insights
-Rich set of metrics and insights (health, stability, flakiness, brittleness, environment impact, etc.).
+Rich set of metrics and insights (health, stability, impact, etc.).
 Predictive analytics and impact analysis features are in place.
 Interactive Dashboard
 Streamlit dashboard provides a user-friendly entry point for non-technical users.
@@ -116,6 +116,30 @@ Distribution: Ensure installability via PyPI or direct source, with clear instru
 Feedback Channels: Set up a way for early users to report issues (GitHub Issues, email, etc.).
 Summary Table
 | Area | Status | Action Needed Before Alpha? | |-----------------------------|------------------|------------------------------------| | Core API & CLI | Strong | Minor polish, doc updates | | Storage Profile System | Robust | Test migration, doc clarity | | Analysis & Insights | Advanced | Doc/test new metrics, polish UX | | Dashboard | Functional | Polish visuals, add help | | Web API | Good, dynamic | Add introspect API tests | | Test Coverage | Good, some gaps | Add missing tests, CI integration | | Docs & Onboarding | Improving | Add quickstart, update all docs | | Security/Privacy | Acceptable | Review cloud/auth handling | | Release Engineering | Prepped | Version, changelog, feedback setup |
+
+### Unreliable Test Terminology Replaced
+
+All references to "flaky", "flakiness", and "flaky_tests" have been replaced with "unreliable", "reliability", and "unreliable_tests" throughout the codebase, documentation, dashboards, and tests. This change improves clarity and consistency in metrics, insights, and user experience.
+
+**Old:**
+  - Flaky, Flakiness, Flaky Tests, Flaky Rate
+**New:**
+  - Unreliable, Reliability, Unreliable Tests, Reliability Rate
+
+#### Impact
+
+* API endpoints, CLI, and dashboards use new terminology
+* Test assertions and recommendations updated
+* Documentation and guides updated
+
+#### Migration Notes
+
+* Users should update any scripts or integrations that reference the old terminology
+
+#### Example CLI Output
+
+Old: `Flaky Rate: 7.5% | Most Flaky: test_module.py::test_flaky`
+New: `Reliability Rate: 92.5% | Most Unreliable: test_module.py::test_unreliable`
 
 Final Thoughts
 You are in a strong position for an Alpha release! The foundation is robust, and the architecture is modern and extensible. The main work before Alpha is:

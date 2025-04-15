@@ -270,7 +270,7 @@ class PredictiveAnalytics:
                 daily_stability[date_key] = {
                     "total_tests": 0,
                     "passed_tests": 0,
-                    "flaky_tests": 0,
+                    "unreliable_tests": 0,
                 }
 
             # Count tests
@@ -279,9 +279,9 @@ class PredictiveAnalytics:
                 1 for t in session.test_results if t.outcome == TestOutcome.PASSED
             )
 
-            # Count flaky tests
+            # Count unreliable tests
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
-                daily_stability[date_key]["flaky_tests"] += sum(
+                daily_stability[date_key]["unreliable_tests"] += sum(
                     1 for g in session.rerun_test_groups if g.final_outcome == TestOutcome.PASSED and len(g.tests) > 1
                 )
 
@@ -295,10 +295,12 @@ class PredictiveAnalytics:
 
             # Calculate stability score (0-100)
             pass_rate = metrics["passed_tests"] / metrics["total_tests"]
-            flaky_rate = metrics["flaky_tests"] / metrics["total_tests"] if metrics["total_tests"] > 0 else 0
+            nonreliability_rate = (
+                metrics["unreliable_tests"] / metrics["total_tests"] if metrics["total_tests"] > 0 else 0
+            )
 
-            # Weighted score: 70% pass rate, 30% non-flakiness
-            stability_score = (pass_rate * 70) + ((1 - flaky_rate) * 30)
+            # Weighted score: 70% pass rate, 30% non-repeatability
+            stability_score = (pass_rate * 70) + ((1 - nonreliability_rate) * 30)
 
             dates.append(datetime.fromisoformat(date_key))
             stability_scores.append(stability_score)
@@ -353,18 +355,20 @@ class PredictiveAnalytics:
                 direction = "increasing" if pass_rate_slope > 0 else "decreasing"
                 contributing_factors.append(f"Pass rate is {direction}")
 
-        # Check flakiness trend
-        flaky_rates = [
-            metrics["flaky_tests"] / metrics["total_tests"]
+        # Check reliability/repeatability trend
+        nonreliability_rates = [
+            metrics["unreliable_tests"] / metrics["total_tests"]
             for _, metrics in sorted(daily_stability.items())
             if metrics["total_tests"] > 0
         ]
 
-        if len(flaky_rates) >= 5:
-            flaky_rate_slope, _, _, _, _ = stats.linregress(range(len(flaky_rates)), flaky_rates)
-            if abs(flaky_rate_slope) > 0.01:
-                direction = "increasing" if flaky_rate_slope > 0 else "decreasing"
-                contributing_factors.append(f"Test flakiness is {direction}")
+        if len(nonreliability_rates) >= 5:
+            nonreliability_rate_slope, _, _, _, _ = stats.linregress(
+                range(len(nonreliability_rates)), nonreliability_rates
+            )
+            if abs(nonreliability_rate_slope) > 0.01:
+                direction = "increasing" if nonreliability_rate_slope > 0 else "decreasing"
+                contributing_factors.append(f"Test reliability/repeatability is {direction}")
 
         return {
             "current_stability": current_stability,

@@ -49,6 +49,8 @@ def analyze_test_data(
     # Flag to determine if we should actually print console output
     json_mode = output_format == "json"
 
+    result = {}
+
     # Use a context manager for the status, but only if not in JSON mode
     with console.status("[bold green]Analyzing test data...") if not json_mode else nullcontext():
         try:
@@ -211,7 +213,7 @@ def analyze_test_data(
             total_tests = analysis.count_total_tests()
             pass_rate = analysis.calculate_pass_rate()
             avg_duration = analysis.calculate_average_duration()
-            flaky_tests = analysis.identify_flaky_tests()
+            unreliable_tests = analysis.identify_unreliable_tests()
             slowest_tests = analysis.identify_slowest_tests(limit=5)
             most_failing = analysis.identify_most_failing_tests(limit=5)
             consistently_failing = analysis.identify_consistently_failing_tests(min_consecutive_failures=2)
@@ -233,7 +235,7 @@ def analyze_test_data(
                 metrics_table.add_row("Total Tests", str(total_tests))
                 metrics_table.add_row("Pass Rate", f"{pass_rate:.2%}")
                 metrics_table.add_row("Avg Test Duration", f"{avg_duration:.3f}s")
-                metrics_table.add_row("Flaky Tests", str(len(flaky_tests)))
+                metrics_table.add_row("Unreliable Tests", str(len(unreliable_tests)))
 
                 console.print(metrics_table)
 
@@ -1065,7 +1067,7 @@ def analyze_test_data(
 
                     console.print(error_table)
 
-                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
                         console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
                         multi_error_table = Table(show_header=True)
@@ -1398,7 +1400,7 @@ def analyze_test_data(
 
                     console.print(error_table)
 
-                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
                         console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
                         multi_error_table = Table(show_header=True)
@@ -1731,7 +1733,7 @@ def analyze_test_data(
 
                     console.print(error_table)
 
-                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
                         console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
                         multi_error_table = Table(show_header=True)
@@ -2064,7 +2066,7 @@ def analyze_test_data(
 
                     console.print(error_table)
 
-                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
                         console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
                         multi_error_table = Table(show_header=True)
@@ -2189,7 +2191,8 @@ def analyze_test_data(
             # 1. Test Health Score - composite score from 0-100
             health_factors = {
                 "pass_rate": pass_rate * 50,  # 50% weight to pass rate
-                "flakiness": (1 - len(flaky_tests) / max(1, total_tests)) * 20,  # 20% weight to lack of flakiness
+                "unreliability": (1 - len(unreliable_tests) / max(1, total_tests))
+                * 20,  # 20% weight to lack of unreliability
                 "duration_stability": 15,  # Default value, will be calculated below
                 "failure_pattern": 15,  # Default value, will be calculated below
             }
@@ -2279,7 +2282,7 @@ def analyze_test_data(
             # Combine factors for reliability index (0-100)
             reliability_index = (
                 pass_rate * 0.4  # 40% weight to pass rate
-                + (1 - len(flaky_tests) / max(1, total_tests)) * 0.3  # 30% weight to lack of flakiness
+                + (1 - len(unreliable_tests) / max(1, total_tests)) * 0.3  # 30% weight to lack of unreliability
                 + environment_consistency * 0.15  # 15% weight to environment consistency
                 + test_consistency * 0.15  # 15% weight to test result consistency
             ) * 100
@@ -2300,7 +2303,7 @@ def analyze_test_data(
                 # Raw scores (before weight multiplication)
                 raw_health_factors = {
                     "pass_rate": pass_rate * 100,
-                    "flakiness": (1 - len(flaky_tests) / max(1, total_tests)) * 100,
+                    "unreliability": (1 - len(unreliable_tests) / max(1, total_tests)) * 100,
                     "duration_stability": min(
                         100, health_factors["duration_stability"] * 100 / 15
                     ),  # Convert back to percentage, max 100%
@@ -2312,7 +2315,7 @@ def analyze_test_data(
                 for component, score in raw_health_factors.items():
                     weight = {
                         "pass_rate": "50%",
-                        "flakiness": "20%",
+                        "unreliability": "20%",
                         "duration_stability": "15%",
                         "failure_pattern": "15%",
                     }
@@ -2342,7 +2345,7 @@ def analyze_test_data(
                 # Raw scores (before weight multiplication)
                 raw_reliability_factors = {
                     "Pass Rate": pass_rate * 100,
-                    "Flakiness Resistance": (1 - len(flaky_tests) / max(1, total_tests)) * 100,
+                    "Unreliability Resistance": (1 - len(unreliable_tests) / max(1, total_tests)) * 100,
                     "Environment Consistency": environment_consistency * 100,
                     "Test Result Consistency": test_consistency * 100,
                 }
@@ -2350,7 +2353,7 @@ def analyze_test_data(
                 for factor, score in raw_reliability_factors.items():
                     weight = {
                         "Pass Rate": "40%",
-                        "Flakiness Resistance": "30%",
+                        "Unreliability Resistance": "30%",
                         "Environment Consistency": "15%",
                         "Test Result Consistency": "15%",
                     }
@@ -2966,7 +2969,7 @@ def analyze_test_data(
 
                     console.print(error_table)
 
-                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
                         console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
                         multi_error_table = Table(show_header=True)
@@ -3299,7 +3302,7 @@ def analyze_test_data(
 
                     console.print(error_table)
 
-                    # Show tests with multiple error patterns (potentially flaky or unstable)
+                    # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
                         console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
                         multi_error_table = Table(show_header=True)

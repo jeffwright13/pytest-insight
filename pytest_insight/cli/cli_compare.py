@@ -21,7 +21,7 @@ def compare_suts(
     """Compare test sessions between two SUTs.
 
     This command compares test sessions between two SUTs and identifies differences
-    such as new failures, new passes, flaky tests, and performance changes.
+    such as new failures, new passes, nonreliability_rate tests, and performance changes.
 
     Examples:
         insight compare suts --base-sut service-v1 --target-sut service-v2

@@ -78,7 +78,7 @@ class TrendDataGenerator(PracticeDataGenerator):
             start_date=start_date,
             # Start with good pass rates that will degrade over time
             pass_rate=0.85,
-            flaky_rate=0.10,
+            reliability_rate=0.90,
             warning_rate=0.05,
             sut_filter=sut_filter,
             test_categories=test_categories,
@@ -305,7 +305,7 @@ class TrendDataGenerator(PracticeDataGenerator):
         outcome: TestOutcome,
         duration: float,
         start_time: datetime,
-        is_flaky: bool = False,
+        is_unreliable: bool = False,
     ) -> TestResult:
         """Generate a test result with realistic attributes.
 
@@ -314,7 +314,7 @@ class TrendDataGenerator(PracticeDataGenerator):
             outcome: Test outcome
             duration: Test duration in seconds
             start_time: Test start time
-            is_flaky: Whether the test is flaky
+            is_unreliable: Whether the test is unreliable
 
         Returns:
             TestResult object
@@ -377,12 +377,12 @@ class TrendDataGenerator(PracticeDataGenerator):
 
             result.warnings = warnings
 
-        # Add flaky attributes if the test is flaky
-        if is_flaky:
-            result.flaky = True
+        # Add unreliable attributes if the test is unreliable
+        if is_unreliable:
+            result.unreliable = True
 
             # Add rerun information
-            if random.random() < 0.7:  # 70% of flaky tests have reruns
+            if random.random() < 0.7:  # 70% of unreliable tests have reruns
                 result.reruns = random.randint(1, 3)
                 result.rerun_outcomes = [
                     random.choice([TestOutcome.PASSED, TestOutcome.FAILED]) for _ in range(result.reruns)
@@ -494,8 +494,8 @@ class TrendDataGenerator(PracticeDataGenerator):
         # Adjust pass rate based on degradation
         adjusted_pass_rate = max(0.5, self.pass_rate * degradation_factor)
 
-        # Adjust flaky rate based on degradation (inverse relationship)
-        adjusted_flaky_rate = min(0.2, self.flaky_rate / degradation_factor)
+        # Adjust reliability rate based on degradation (inverse relationship)
+        adjusted_reliability_rate = max(0.8, self.reliability_rate * degradation_factor)
 
         # Determine if this is an anomalous session
         is_anomalous = random.random() < self.anomaly_rate
@@ -540,7 +540,7 @@ class TrendDataGenerator(PracticeDataGenerator):
                 outcome=outcome,
                 duration=duration,
                 start_time=session_time,
-                is_flaky=random.random() < adjusted_flaky_rate,
+                is_unreliable=random.random() > adjusted_reliability_rate,
             )
 
             # Add to session
@@ -671,7 +671,7 @@ class TrendDataGenerator(PracticeDataGenerator):
         - Long-term trends (30 days by default)
         - Multiple SUTs with different characteristics
         - Various test failure patterns
-        - Flaky tests and anomalies
+        - Unreliable tests and anomalies
         - Correlated test failures
         - Performance degradation patterns
         - Warning patterns
@@ -730,7 +730,7 @@ class TrendDataGenerator(PracticeDataGenerator):
         baseline_generator.sut_variations = baseline_generator.sut_variations[:suts_to_use]
 
         baseline_generator.pass_rate = 0.95  # Start with high pass rate
-        baseline_generator.flaky_rate = 0.03  # Low flakiness
+        baseline_generator.reliability_rate = 0.97  # High reliability
 
         # Add specific error patterns for the error message analysis
         baseline_generator.error_patterns = [
@@ -769,7 +769,7 @@ class TrendDataGenerator(PracticeDataGenerator):
         degradation_generator.sut_variations = degradation_generator.sut_variations[:suts_to_use]
 
         degradation_generator.pass_rate = 0.85  # Lower pass rate
-        degradation_generator.flaky_rate = 0.08  # Higher flakiness
+        degradation_generator.reliability_rate = 0.92  # Lower reliability
 
         # Override the _is_correlated_failure method to increase the probability of correlated failures
         def enhanced_correlated_failure(sut, nodeid, session_time):
@@ -831,7 +831,7 @@ class TrendDataGenerator(PracticeDataGenerator):
         recovery_generator.sut_variations = recovery_generator.sut_variations[:suts_to_use]
 
         recovery_generator.pass_rate = 0.75  # Starting from lower point
-        recovery_generator.flaky_rate = 0.12  # Still dealing with flakiness
+        recovery_generator.reliability_rate = 0.88  # Still dealing with unreliability
 
         # Add performance improvement patterns
         recovery_generator.duration_degradation_factor = 0.8  # Tests get 20% faster

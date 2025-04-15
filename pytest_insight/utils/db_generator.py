@@ -57,7 +57,7 @@ class PracticeDataGenerator:
         targets_per_base (int): Number of targets per base SUT.
         start_date (Optional[datetime]): Start date for the data generation.
         pass_rate (float): Percentage of passing tests.
-        flaky_rate (float): Percentage of flaky tests.
+        nonreliability_rate (float): Percentage of unreliable tests.
         warning_rate (float): Percentage of warning tests.
         sut_filter (Optional[str]): Filter SUTs by prefix.
         test_categories (Optional[list[str]]): List of test categories.
@@ -72,7 +72,7 @@ class PracticeDataGenerator:
         targets_per_base: int = 3,
         start_date: Optional[datetime] = None,
         pass_rate: float = 0.45,
-        flaky_rate: float = 0.17,
+        nonreliability_rate: float = 0.17,
         warning_rate: float = 0.085,
         sut_filter: Optional[str] = None,
         test_categories: Optional[list[str]] = None,
@@ -86,7 +86,7 @@ class PracticeDataGenerator:
         self.targets_per_base = targets_per_base
         self.start_date = start_date
         self.pass_rate = max(0.1, min(0.9, pass_rate))
-        self.flaky_rate = max(0.05, min(0.3, flaky_rate))
+        self.nonreliability_rate = max(0.05, min(0.3, nonreliability_rate))
         self.warning_rate = max(0.01, min(0.2, warning_rate))
         self.text_gen = TextGenerator()
 
@@ -221,10 +221,10 @@ class PracticeDataGenerator:
         current_time = session_time
 
         for test_pattern in test_patterns:
-            # Determine if this test should be flaky
-            is_flaky = random.random() < self.flaky_rate
+            # Determine if this test should be unreliable
+            is_unreliable = random.random() < self.nonreliability_rate
 
-            if is_flaky:
+            if is_unreliable:
                 # Create a rerun group
                 rerun_group = RerunTestGroup(nodeid=test_pattern)
                 num_runs = random.randint(2, 4)
@@ -463,11 +463,11 @@ def main(
         min=0.1,
         max=0.9,
     ),
-    flaky_rate: float = typer.Option(
+    nonreliability_rate: float = typer.Option(
         0.17,
-        "--flaky-rate",
+        "--unreliable-rate",
         "-f",
-        help="Rate of flaky tests (0.05-0.3)",
+        help="Rate of unreliable tests (0.05-0.3)",
         min=0.05,
         max=0.3,
     ),
@@ -509,7 +509,7 @@ def main(
         insight-gen --days 30 --targets 5
 
         # Generate data with custom outcome rates
-        insight-gen --pass-rate 0.6 --flaky-rate 0.1 --warning-rate 0.05
+        insight-gen --pass-rate 0.6 --unreliable-rate 0.1 --warning-rate 0.05
 
         # Generate data for specific SUT type and test categories
         insight-gen --sut-filter api- --categories api,integration
@@ -563,7 +563,7 @@ def main(
             targets_per_base=targets,
             start_date=parsed_start_date,
             pass_rate=pass_rate,
-            flaky_rate=flaky_rate,
+            nonreliability_rate=nonreliability_rate,
             warning_rate=warning_rate,
             sut_filter=sut_filter,
             test_categories=test_categories,

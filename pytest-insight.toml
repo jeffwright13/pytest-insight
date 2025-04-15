@@ -48,8 +48,8 @@ metrics = [
 default_days = 30
 # Minimum occurrences to identify a pattern
 min_pattern_occurrences = 2
-# Threshold for flaky test detection (percentage)
-flaky_threshold = 5.0
+# Threshold for unreliable test detection (percentage)
+unreliable_threshold = 5.0
 # Threshold for slow test detection (seconds)
 slow_test_threshold = 1.0
 # Minimum correlation to consider tests related
@@ -61,7 +61,7 @@ methods = [
     "stability_report",
     "performance_report",
     "failure_patterns",
-    "flaky_tests",
+    "unreliable_tests",
     "slow_tests"
 ]
 
@@ -92,13 +92,13 @@ metrics = [
     "failure_rate",
     "reliability_index",
     "rerun_recovery_rate",
-    "test_count", 
+    "test_count",
     "session_count"
 ]
 # Sections to include in summary reports
 sections = [
     "top_failures",
-    "top_flaky", 
+    "top_unreliable",
     "performance_issues"
 ]
 
@@ -106,8 +106,8 @@ sections = [
 enabled = true
 # Minimum pass rate to be considered stable
 threshold = 0.85
-# Maximum flaky rate to be considered stable
-flaky_threshold = 0.05
+# Maximum nonreliability_rate rate to be considered stable
+unreliable_threshold = 0.05
 
 [reports.performance]
 enabled = true
@@ -138,7 +138,7 @@ enabled = true
 # Methods to enable for test insights
 methods = [
     "outcome_distribution",
-    "flaky_tests",
+    "unreliable_tests",
     "slowest_tests",
     "test_patterns",
     "stability_timeline",

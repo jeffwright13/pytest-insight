@@ -20,7 +20,7 @@ def analyze_health(
     """Analyze test health metrics.
 
     This command generates health metrics for test sessions, including pass rates,
-    flaky rates, and overall health scores.
+    nonreliability_rate rates, and overall health scores.
 
     Examples:
         insight analyze health --sut my-service

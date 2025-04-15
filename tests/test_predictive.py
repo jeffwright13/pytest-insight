@@ -20,7 +20,7 @@ def make_sessions(num_sessions=6, fail_every=2):
                 duration=1.0,
             ),
             TestResult(
-                nodeid="test_predict.py::test_flaky",
+                nodeid="test_predict.py::test_unreliable",
                 outcome=TestOutcome.FAILED if i % 2 == 0 else TestOutcome.PASSED,
                 start_time=base_time + timedelta(days=i, seconds=10),
                 duration=1.5,

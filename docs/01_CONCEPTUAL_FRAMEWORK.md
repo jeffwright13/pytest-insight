@@ -95,7 +95,7 @@ results = comparison.execute()
 
 **Analysis** builds on Query (and sometimes Compare) to calculate metrics and detect patterns. It answers questions like:
 - What is the failure rate?
-- How many tests are flaky?
+- How many tests are unreliable?
 - What's the average duration?
 - Which tests consistently fail together?
 
@@ -111,7 +111,7 @@ Analysis is like lab tests and measurements in healthcare:
 ```python
 # Calculate metrics from test data
 analysis = api.analyze()
-flaky_tests = analysis.identify_flaky_tests()
+unreliable_tests = analysis.identify_unreliable_tests()
 slowest_tests = analysis.get_slowest_tests(limit=10)
 failure_rate = analysis.calculate_failure_rate()
 
@@ -191,7 +191,7 @@ Here's how the four layers might work together in a typical workflow:
 
 1. **Query**: Find all test sessions for the payment service in the last month
 2. **Compare**: Identify differences between the current and previous version
-3. **Analysis**: Calculate stability metrics and identify flaky tests
+3. **Analysis**: Calculate stability metrics and identify unreliable tests
 4. **Insights**: Get recommendations for which tests to fix first and why
 
 ```python
@@ -207,8 +207,8 @@ print(f"New failures: {len(comparison.new_failures)}")
 
 # 3. Analysis - Calculate metrics
 analysis = api.analyze()
-flaky_tests = analysis.identify_flaky_tests()
-print(f"Found {len(flaky_tests)} flaky tests")
+unreliable_tests = analysis.identify_unreliable_tests()
+print(f"Found {len(unreliable_tests)} unreliable tests")
 
 # 4. Insights - Get recommendations
 insights = api.insights()

@@ -23,13 +23,13 @@ DEFAULT_CONFIG = {
     "reports": {
         "summary": {
             "enabled": True,
-            "metrics": ["pass_rate", "flaky_rate", "test_count", "session_count"],
-            "sections": ["top_failures", "top_flaky", "performance_issues"],
+            "metrics": ["pass_rate", "nonreliability_rate", "test_count", "session_count"],
+            "sections": ["top_failures", "top_unreliable", "performance_issues"],
         },
         "stability": {
             "enabled": True,
             "threshold": 0.85,  # Minimum pass rate to be considered stable
-            "flaky_threshold": 0.05,  # Maximum flaky rate to be considered stable
+            "unreliable_threshold": 0.05,  # Maximum unreliable rate to be considered stable
         },
         "performance": {
             "enabled": True,

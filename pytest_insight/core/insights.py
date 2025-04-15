@@ -67,52 +67,52 @@ class TestInsights:
             "most_common": outcome_counts.most_common(),
         }
 
-    def flaky_tests(self) -> Dict[str, Any]:
-        """Identify flaky tests across all sessions.
+    def unreliable_tests(self) -> Dict[str, Any]:
+        """Identify unreliable tests across all sessions.
 
-        A flaky test is one that has been rerun and eventually passed.
+        An unreliable test is one that has been rerun and eventually passed.
 
         Returns:
             Dict containing:
-            - flaky_tests: Dict mapping nodeids to flakiness data
-            - total_flaky: Total number of flaky tests
-            - most_flaky: List of most flaky tests by rerun count
+            - unreliable_tests: Dict mapping nodeids to reliability data
+            - total_unreliable: Total number of unreliable tests
+            - most_unreliable: List of most unreliable tests by rerun count
         """
-        flaky_tests = {}
+        unreliable_tests = {}
 
         for session in self._sessions:
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
                 for rerun_group in session.rerun_test_groups:
                     if rerun_group.final_outcome == TestOutcome.PASSED:
                         nodeid = rerun_group.nodeid
-                        if nodeid not in flaky_tests:
-                            flaky_tests[nodeid] = {
+                        if nodeid not in unreliable_tests:
+                            unreliable_tests[nodeid] = {
                                 "reruns": 0,
                                 "sessions": set(),
                                 "pass_rate": 0.0,
                             }
-                        flaky_tests[nodeid]["reruns"] += (
+                        unreliable_tests[nodeid]["reruns"] += (
                             len(rerun_group.tests) - 1
                         )  # Subtract 1 for the final passing test
-                        flaky_tests[nodeid]["sessions"].add(session.session_id)
+                        unreliable_tests[nodeid]["sessions"].add(session.session_id)
 
         # Calculate pass rates
-        for nodeid, data in flaky_tests.items():
+        for nodeid, data in unreliable_tests.items():
             total_runs = data["reruns"] + len(data["sessions"])  # Total runs = reruns + final passing runs
             data["pass_rate"] = len(data["sessions"]) / total_runs if total_runs > 0 else 0
             data["sessions"] = list(data["sessions"])  # Convert set to list for serialization
 
         # Sort by number of reruns
-        most_flaky = sorted(
-            [(nodeid, data) for nodeid, data in flaky_tests.items()],
+        most_unreliable = sorted(
+            [(nodeid, data) for nodeid, data in unreliable_tests.items()],
             key=lambda x: x[1]["reruns"],
             reverse=True,
         )
 
         return {
-            "flaky_tests": flaky_tests,
-            "total_flaky": len(flaky_tests),
-            "most_flaky": most_flaky,
+            "unreliable_tests": unreliable_tests,
+            "total_unreliable": len(unreliable_tests),
+            "most_unreliable": most_unreliable,
         }
 
     def test_reliability_metrics(self) -> Dict[str, Any]:
@@ -540,7 +540,7 @@ class TestInsights:
             for pattern, count in sorted_patterns
         ]
 
-        # Find tests with multiple error patterns (potentially flaky or unstable)
+        # Find tests with multiple error patterns (potentially unreliable or unstable)
         multi_error_tests = [
             {"test": test, "patterns": patterns, "pattern_count": len(patterns)}
             for test, patterns in test_to_error_map.items()
@@ -669,7 +669,7 @@ class TestInsights:
 
         The health score is a composite metric from 0-100 that takes into account:
         - Pass rate (50% weight)
-        - Flakiness (20% weight)
+        - Reliability (20% weight)
         - Duration stability (15% weight)
         - Failure pattern (15% weight)
 
@@ -700,9 +700,9 @@ class TestInsights:
 
         pass_rate = passed_tests / total_tests if total_tests > 0 else 0
 
-        # Get flaky tests
-        flaky_tests_data = self.flaky_tests()
-        flaky_tests = flaky_tests_data["flaky_tests"]
+        # Get unreliable tests
+        unreliable_tests_data = self.unreliable_tests()
+        unreliable_tests = unreliable_tests_data["unreliable_tests"]
 
         # Get slowest tests for duration stability calculation
         slowest_tests_data = self.slowest_tests()
@@ -730,7 +730,7 @@ class TestInsights:
         # Calculate health factors
         health_factors = {
             "pass_rate": pass_rate * 50,  # 50% weight to pass rate
-            "flakiness": (1 - len(flaky_tests) / max(1, total_tests)) * 20,  # 20% weight to lack of flakiness
+            "reliability": (1 - len(unreliable_tests) / max(1, total_tests)) * 20,  # 20% weight to reliability
             "duration_stability": 15,  # Default value, will be calculated below
             "failure_pattern": 15,  # Default value, will be calculated below
         }
@@ -788,7 +788,7 @@ class TestInsights:
         # Combine factors for reliability index (0-100)
         reliability_index = (
             pass_rate * 0.4  # 40% weight to pass rate
-            + (1 - len(flaky_tests) / max(1, total_tests)) * 0.3  # 30% weight to lack of flakiness
+            + (1 - len(unreliable_tests) / max(1, total_tests)) * 0.3  # 30% weight to reliability
             + environment_consistency * 0.15  # 15% weight to environment consistency
             + test_consistency * 0.15  # 15% weight to test result consistency
         ) * 100
@@ -1380,7 +1380,7 @@ class Insights:
     Example usage:
         # Basic insights
         insights = Insights()
-        flaky_report = insights.tests.flaky_tests()
+        unreliable_report = insights.tests.unreliable_tests()
 
         # With filtering
         filtered_insights = insights.with_query(lambda q: q.in_last_days(30))
@@ -1507,7 +1507,7 @@ class Insights:
         # Get key insights from each component
         test_insights = {
             "outcome_distribution": self.tests.outcome_distribution(),
-            "flaky_tests": self.tests.flaky_tests(),
+            "unreliable_tests": self.tests.unreliable_tests(),
             "slowest_tests": self.tests.slowest_tests(limit=5),
         }
 
@@ -1543,10 +1543,10 @@ class Insights:
             outcomes.append((outcome, data.get("count", 0)))
         total_tests = outcome_dist.get("total_tests", 0)
 
-        # Get flaky tests
-        flaky_tests = self.tests.flaky_tests()
-        flaky_test_count = flaky_tests.get("total_flaky", 0)
-        most_flaky = flaky_tests.get("most_flaky", [])
+        # Get unreliable tests
+        unreliable_tests = self.tests.unreliable_tests()
+        unreliable_test_count = unreliable_tests.get("total_unreliable", 0)
+        most_unreliable = unreliable_tests.get("most_unreliable", [])
 
         # Get slowest tests
         slow_tests = self.tests.slowest_tests(limit=3)
@@ -1666,8 +1666,8 @@ class Insights:
             "avg_duration": avg_duration,
             "outcome_distribution": outcomes,
             "total_tests": total_tests,
-            "flaky_test_count": flaky_test_count,
-            "most_flaky": most_flaky,
+            "unreliable_test_count": unreliable_test_count,
+            "most_unreliable": most_unreliable,
             "slowest_tests": slowest_tests,
             "failure_trend": failure_trend,
             "recommendations": (recommendations[:3] if recommendations else []),  # Show top 3 recommendations
@@ -1828,27 +1828,29 @@ class Insights:
             outcome_text = f"{display_name}: {count}"
             output.append(f"    {colorize(outcome_text, color)}")
 
-        # Flaky Tests Section
-        flaky_count = summary.get("flaky_test_count", 0)
-        if flaky_count > 0:
-            output.append(section_header("Flaky Tests"))
-            output.append(f"    Total Flaky Tests: {colorize(str(flaky_count), YELLOW)}")
+        # Unreliable Tests Section
+        unreliable_count = summary.get("unreliable_test_count", 0)
+        if unreliable_count > 0:
+            output.append(section_header("Unreliable Tests"))
+            output.append(f"    Total Unreliable Tests: {colorize(str(unreliable_count), YELLOW)}")
 
-            most_flaky = summary.get("most_flaky", [])
-            if most_flaky:
-                output.append("\n    Most Flaky Tests:")
+            most_unreliable = summary.get("most_unreliable", [])
+            if most_unreliable:
+                output.append("\n    Most Unreliable Tests:")
 
-                for i, flaky in enumerate(most_flaky):
-                    if isinstance(flaky, tuple) and len(flaky) >= 2:
+                for i, unreliable in enumerate(most_unreliable):
+                    if isinstance(unreliable, tuple) and len(unreliable) >= 2:
                         # Handle tuple format (nodeid, data)
-                        nodeid, data = flaky
-                        flake_rate = data.get("flake_rate", 0) * 100 if isinstance(data, dict) else 0
+                        nodeid, data = unreliable
+                        unreliable_rate = data.get("unreliable_rate", 0) * 100 if isinstance(data, dict) else 0
                     else:
                         # Handle dictionary format
-                        nodeid = flaky.get("nodeid", "Unknown")
-                        flake_rate = flaky.get("flake_rate", 0) * 100
+                        nodeid = unreliable.get("nodeid", "Unknown")
+                        unreliable_rate = unreliable.get("unreliable_rate", 0) * 100
 
-                    output.append(f"    {i+1}. {nodeid} - Flake Rate: {colorize(f'{flake_rate:.1f}%', YELLOW)}")
+                    output.append(
+                        f"    {i+1}. {nodeid} - Unreliable Rate: {colorize(f'{unreliable_rate:.1f}%', YELLOW)}"
+                    )
 
         # Rerun Test Groups Section
         rerun_groups = summary.get("rerun_test_groups", [])
@@ -1978,9 +1980,9 @@ class SummaryReport:
         self.test_count = 0
         self.session_count = 0
         self.pass_rate = 0.0
-        self.flaky_rate = 0.0
+        self.reliability_rate = 0.0
         self.top_failures = []
-        self.top_flaky = []
+        self.top_unreliable = []
         self.performance_issues = []
         self.recommendations = []
 
@@ -1994,9 +1996,9 @@ class SummaryReport:
             "test_count": self.test_count,
             "session_count": self.session_count,
             "pass_rate": self.pass_rate,
-            "flaky_rate": self.flaky_rate,
+            "reliability_rate": self.reliability_rate,
             "top_failures": self.top_failures,
-            "top_flaky": self.top_flaky,
+            "top_unreliable": self.top_unreliable,
             "performance_issues": self.performance_issues,
             "recommendations": self.recommendations,
         }
@@ -2018,8 +2020,8 @@ class SummaryReport:
         if self.pass_rate < 0.85:
             self.add_recommendation("Investigate failing tests to improve overall pass rate.")
 
-        if self.flaky_rate > 0.05:
-            self.add_recommendation("Address flaky tests to improve test reliability.")
+        if self.reliability_rate > 0.05:
+            self.add_recommendation("Address unreliable tests to improve test reliability.")
 
         if self.top_failures:
             self.add_recommendation(f"Focus on fixing the top {len(self.top_failures)} consistently failing tests.")

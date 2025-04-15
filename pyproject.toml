@@ -91,7 +91,7 @@ src = ["src"]
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 fixable = ["E", "F", "I"]
-ignore = ["E501"]
+ignore = ["E501", "E722"]
 
 [tool.ruff.format]
 quote-style = "double"

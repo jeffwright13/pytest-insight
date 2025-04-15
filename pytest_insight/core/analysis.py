@@ -19,7 +19,7 @@ SessionAnalysis Class:
 
 TestAnalysis Class:
 - Focuses on individual test patterns while maintaining session relationships
-- Implements stability metrics with flakiness detection
+- Implements stability metrics with reliability detection
 - Provides performance analysis with outlier detection
 - Analyzes warning patterns and correlations
 
@@ -202,7 +202,7 @@ class SessionAnalysis(AnalysisBase):
         Analyzes test metrics while preserving session context to identify:
         - Overall execution statistics
         - Test uniqueness and repetition
-        - Flaky test detection
+        - Unreliable test detection
 
         Args:
             days: Optional number of days to look back
@@ -714,18 +714,18 @@ class SessionAnalysis(AnalysisBase):
 
         # Get stability metrics
         stability_data = self.stability()
-        flaky_tests = stability_data.get("flaky_tests", [])
+        unreliable_tests = stability_data.get("unreliable_tests", [])
         unstable_tests = stability_data.get("unstable_tests", [])
 
-        # Calculate stability score (100 - percentage of flaky/unstable tests)
+        # Calculate stability score (100 - percentage of unreliable/unstable tests)
         test_results = self._get_all_test_results()
         unique_tests = set(test.nodeid for test in test_results)
         total_unique_tests = len(unique_tests)
 
         if total_unique_tests > 0:
-            flaky_count = len(flaky_tests)
+            unreliable_count = len(unreliable_tests)
             unstable_count = len(unstable_tests)
-            problem_tests_pct = (flaky_count + unstable_count) / total_unique_tests * 100
+            problem_tests_pct = (unreliable_count + unstable_count) / total_unique_tests * 100
             stability_score = max(0, 100 - problem_tests_pct)
 
         # Get session analysis for trends
@@ -1212,15 +1212,15 @@ class TestAnalysis(AnalysisBase):
 
         Returns:
             Dict of stability metrics including:
-            - flaky_tests: List of tests with inconsistent outcomes
+            - unreliable_tests: List of tests with inconsistent outcomes
             - unstable_tests: List of consistently failing tests
         """
         if self._sessions is None:
-            return {"flaky_tests": [], "unstable_tests": []}
+            return {"unreliable_tests": [], "unstable_tests": []}
 
         sessions = self._sessions
         if not sessions:
-            return {"flaky_tests": [], "unstable_tests": []}
+            return {"unreliable_tests": [], "unstable_tests": []}
 
         # Track test outcomes across sessions
         test_history = defaultdict(list)
@@ -1239,13 +1239,13 @@ class TestAnalysis(AnalysisBase):
 
                 session_count += 1
 
-        # Analyze flaky tests
-        flaky_tests = []
+        # Analyze unreliable tests
+        unreliable_tests = []
         for nodeid, outcomes in test_history.items():
-            # A test is flaky if it has different outcomes
+            # A test is unreliable if it has different outcomes
             unique_outcomes = set(outcome for _, outcome in outcomes)
             if len(unique_outcomes) > 1:
-                # Calculate flakiness rate
+                # Calculate unreliability rate
                 outcome_counts = defaultdict(int)
                 for _, outcome in outcomes:
                     outcome_counts[outcome] += 1
@@ -1254,25 +1254,25 @@ class TestAnalysis(AnalysisBase):
                 most_common_outcome = max(outcome_counts.items(), key=lambda x: x[1])[0]
                 most_common_count = outcome_counts[most_common_outcome]
 
-                flakiness_rate = 1.0 - (most_common_count / total_runs)
+                unreliability_rate = 1.0 - (most_common_count / total_runs)
 
-                flaky_tests.append(
+                unreliable_tests.append(
                     {
                         "nodeid": nodeid,
                         "outcomes": [{"outcome": str(o), "count": c} for o, c in outcome_counts.items()],
-                        "flakiness_rate": flakiness_rate,
+                        "unreliability_rate": unreliability_rate,
                         "total_runs": total_runs,
                     }
                 )
 
-        # Sort by flakiness rate (descending)
-        flaky_tests.sort(key=lambda x: x["flakiness_rate"], reverse=True)
+        # Sort by unreliability rate (descending)
+        unreliable_tests.sort(key=lambda x: x["unreliability_rate"], reverse=True)
 
-        # Find consistently failing tests (separate from flaky tests)
+        # Find consistently failing tests (separate from unreliable tests)
         unstable_tests = []
         for nodeid, outcomes in test_history.items():
-            # Skip tests that are already identified as flaky
-            if any(test["nodeid"] == nodeid for test in flaky_tests):
+            # Skip tests that are already identified as unreliable
+            if any(test["nodeid"] == nodeid for test in unreliable_tests):
                 continue
 
             # A test is unstable if it consistently fails
@@ -1290,7 +1290,7 @@ class TestAnalysis(AnalysisBase):
         unstable_tests.sort(key=lambda x: x["failure_count"], reverse=True)
 
         return {
-            "flaky_tests": flaky_tests,
+            "unreliable_tests": unreliable_tests,
             "unstable_tests": unstable_tests,
         }
 
@@ -1480,18 +1480,18 @@ class TestAnalysis(AnalysisBase):
 
         # Get stability metrics
         stability_data = self.stability()
-        flaky_tests = stability_data.get("flaky_tests", [])
+        unreliable_tests = stability_data.get("unreliable_tests", [])
         unstable_tests = stability_data.get("unstable_tests", [])
 
-        # Calculate stability score (100 - percentage of flaky/unstable tests)
+        # Calculate stability score (100 - percentage of unreliable/unstable tests)
         test_results = self._get_all_test_results()
         unique_tests = set(test.nodeid for test in test_results)
         total_unique_tests = len(unique_tests)
 
         if total_unique_tests > 0:
-            flaky_count = len(flaky_tests)
+            unreliable_count = len(unreliable_tests)
             unstable_count = len(unstable_tests)
-            problem_tests_pct = (flaky_count + unstable_count) / total_unique_tests * 100
+            problem_tests_pct = (unreliable_count + unstable_count) / total_unique_tests * 100
             stability_score = max(0, 100 - problem_tests_pct)
 
         # Get session analysis for trends
@@ -1707,7 +1707,7 @@ class MetricsAnalysis(AnalysisBase):
 
         Analyzes multiple factors while preserving session context:
         - Failure rates and patterns
-        - Test stability and flakiness
+        - Test stability and reliability
         - Performance and resource usage
         - Warning patterns
 
@@ -1756,13 +1756,13 @@ class MetricsAnalysis(AnalysisBase):
         }
 
     def _calculate_stability_score(self, sessions: List[TestSession]) -> float:
-        """Calculate stability score based on failures and flakiness."""
+        """Calculate stability score based on failures and reliability."""
         if not sessions:
             return 0.0
 
         total_tests = 0
         failed_tests = 0
-        flaky_tests = 0
+        unreliable_tests = 0
 
         # Analyze each session while preserving context
         for session in sessions:
@@ -1773,26 +1773,26 @@ class MetricsAnalysis(AnalysisBase):
                 if test.outcome == TestOutcome.FAILED:
                     failed_tests += 1
 
-                # Track outcomes within session for flakiness
+                # Track outcomes within session for reliability
                 session_outcomes[test.nodeid].append(test.outcome)
                 if len(session_outcomes[test.nodeid]) > 1:
                     prev = session_outcomes[test.nodeid][-2]
                     curr = session_outcomes[test.nodeid][-1]
                     if prev != curr:
-                        flaky_tests += 1
+                        unreliable_tests += 1
 
         if total_tests == 0:
             return 0.0
 
         # Calculate score components
         failure_ratio = failed_tests / total_tests
-        flaky_ratio = flaky_tests / total_tests
+        unreliable_ratio = unreliable_tests / total_tests
 
         # Convert to 0-100 score with penalties
         base_score = 100 * (1 - failure_ratio)
-        flaky_penalty = 20 * flaky_ratio  # Up to 20 point penalty for flakiness
+        unreliable_penalty = 20 * unreliable_ratio  # Up to 20 point penalty for unreliability
 
-        return max(0, min(100, base_score - flaky_penalty))
+        return max(0, min(100, base_score - unreliable_penalty))
 
     def _calculate_performance_score(self, sessions: List[TestSession]) -> float:
         """Calculate performance score based on duration and resource usage."""
@@ -2117,7 +2117,7 @@ class Analysis:
     def stability_report(self) -> Dict[str, Any]:
         """Generate a report focused on test stability.
 
-        Analyzes flakiness, consistent failures, and outcome patterns
+        Analyzes reliability, consistent failures, and outcome patterns
         while preserving session context.
 
         Returns:
@@ -2252,11 +2252,11 @@ class Analysis:
 
         return total_duration / total_tests if total_tests > 0 else 0.0
 
-    def identify_flaky_tests(self) -> List[str]:
+    def identify_unreliable_tests(self) -> List[str]:
         """Identify tests that have inconsistent outcomes across sessions.
 
         Returns:
-            List of test nodeids that are considered flaky
+            List of test nodeids that are considered unreliable
         """
         if not self._sessions:
             return []

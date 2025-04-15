@@ -801,9 +801,7 @@ def _start_interactive_shell():
                         table.add_row(name, file_path, file_size, is_active)
 
                     console.print(table)
-                    context["history"][history_index]["result"] = {
-                        "summary": f"Listed {len(profiles)} profiles"
-                    }
+                    context["history"][history_index]["result"] = {"summary": f"Listed {len(profiles)} profiles"}
 
                 elif subcommand == "create":
                     if len(parts) < 3:
@@ -2009,7 +2007,7 @@ def cli_compare(
     """Compare test results between two SUTs.
 
     This command performs a comparison between test results from two SUTs,
-    identifying new failures, fixed tests, flaky tests, and performance changes.
+    identifying new failures, fixed tests, nonreliability_rate tests, and performance changes.
     """
     console = Console()
 
@@ -2046,7 +2044,7 @@ def cli_compare(
             result_dict = {
                 "new_failures": result.new_failures,
                 "new_passes": result.new_passes,
-                "flaky_tests": result.flaky_tests,
+                "unreliable_tests": result.unreliable_tests,
                 "slower_tests": result.slower_tests,
                 "faster_tests": result.faster_tests,
                 "missing_tests": result.missing_tests,
@@ -2094,9 +2092,9 @@ def cli_compare(
                 ", ".join(result.new_passes[:5]) + ("..." if len(result.new_passes) > 5 else ""),
             )
             table.add_row(
-                "Flaky Tests",
-                str(len(result.flaky_tests)),
-                ", ".join(result.flaky_tests[:5]) + ("..." if len(result.flaky_tests) > 5 else ""),
+                "Nonreliability_rate Tests",
+                str(len(result.unreliable_tests)),
+                ", ".join(result.unreliable_tests[:5]) + ("..." if len(result.unreliable_tests) > 5 else ""),
             )
             table.add_row(
                 "Slower Tests",
@@ -2131,12 +2129,12 @@ def cli_compare(
                 console.print("\n[bold green]Suggested Next Steps:[/bold green]")
                 if result.new_failures:
                     console.print(
-                        "  - [yellow]High flakiness detected.[/yellow] Run 'insight analyze --sut",
+                        "  - [yellow]Low reliability detected.[/yellow] Run 'insight analyze --sut",
                         target_sut,
                     )
-                if result.flaky_tests:
+                if result.unreliable_tests:
                     console.print(
-                        "  - [red]High failure rate detected.[/red] Run 'insight analyze --flaky-only --sut",
+                        "  - [red]High failure rate detected.[/red] Run 'insight analyze --unreliable-only --sut",
                         target_sut,
                     )
             else:
@@ -2159,14 +2157,14 @@ def cli_analyze(
     test_pattern: Optional[str] = typer.Option(None, help="Test pattern (supports wildcards)"),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
     report_type: str = "health",  # Default to health report type
-    flaky_only: bool = typer.Option(False, help="Focus only on flaky tests"),
+    unreliable_only: bool = typer.Option(False, help="Focus only on unreliable tests"),
     format: OutputFormat = typer.Option(OutputFormat.TEXT, help="Output format (text or json)"),
     config_file: Optional[str] = typer.Option(None, help="Path to configuration file"),
 ):
     """Analyze test results for a specific SUT.
 
     This command performs analysis on test results, providing insights into
-    test health, stability, performance, and flakiness.
+    test health, stability, performance, and reliability.
     """
     console = Console()
 
@@ -2177,7 +2175,7 @@ def cli_analyze(
         # Fix the config_file parameter to handle typer.Option objects
         if isinstance(config_file, typer.models.OptionInfo):
             config_file = None
-            
+
         config = load_config(config_file)
 
         # Create API instance
@@ -2190,10 +2188,10 @@ def cli_analyze(
         if sut:
             query = query.for_sut(sut)
         query = query.in_last_days(days)
-            
+
         # Execute the query to get filtered sessions
         result = query.execute()
-        
+
         # Create analyzer with filtered sessions
         analyzer = api.analyze()
         analyzer._sessions = result.sessions
@@ -2251,7 +2249,7 @@ def cli_analyze(
                 metrics_to_include = config["reports"]["summary"]["metrics"]
 
             # Get sections to include from configuration
-            sections_to_include = ["top_failures", "top_flaky", "performance_issues"]
+            sections_to_include = ["top_failures", "top_unreliable", "performance_issues"]
             if (
                 config
                 and "reports" in config
@@ -2285,9 +2283,15 @@ def cli_analyze(
                 if "session_count" in metrics_to_include:
                     result_dict["total_sessions"] = result.total_sessions
                 if "reliability_index" in metrics_to_include:
-                    result_dict["reliability_index"] = result.reliability_metrics['reliability_index'] if hasattr(result, 'reliability_metrics') else 0
+                    result_dict["reliability_index"] = (
+                        result.reliability_metrics["reliability_index"] if hasattr(result, "reliability_metrics") else 0
+                    )
                 if "rerun_recovery_rate" in metrics_to_include:
-                    result_dict["rerun_recovery_rate"] = result.reliability_metrics['rerun_recovery_rate'] if hasattr(result, 'reliability_metrics') else 0
+                    result_dict["rerun_recovery_rate"] = (
+                        result.reliability_metrics["rerun_recovery_rate"]
+                        if hasattr(result, "reliability_metrics")
+                        else 0
+                    )
 
                 print(json.dumps(result_dict, indent=2))
             else:
@@ -2313,12 +2317,22 @@ def cli_analyze(
                     "failure_rate": ("Failure Rate", lambda r: f"{r['session_metrics'].get('failure_rate', 0):.1%}"),
                     "skip_rate": ("Skip Rate", lambda r: f"{r['session_metrics'].get('skip_rate', 0):.1%}"),
                     "error_rate": ("Error Rate", lambda r: f"{r['session_metrics'].get('error_rate', 0):.1%}"),
-                    "reliability_index": ("Reliability Index", lambda r: f"{r['reliability_metrics'].get('reliability_index', 100):.2f}" if 'reliability_metrics' in r else "N/A"),
-                    "rerun_recovery_rate": ("Rerun Recovery Rate", lambda r: f"{r['reliability_metrics'].get('rerun_recovery_rate', 100):.1f}%" if 'reliability_metrics' in r else "N/A"),
-                    "test_count": ("Total Tests", lambda r: str(r['session_metrics'].get('total_tests', 0))),
+                    "reliability_index": (
+                        "Reliability Index",
+                        lambda r: f"{r['reliability_metrics'].get('reliability_index', 100):.2f}"
+                        if "reliability_metrics" in r
+                        else "N/A",
+                    ),
+                    "rerun_recovery_rate": (
+                        "Rerun Recovery Rate",
+                        lambda r: f"{r['reliability_metrics'].get('rerun_recovery_rate', 100):.1f}%"
+                        if "reliability_metrics" in r
+                        else "N/A",
+                    ),
+                    "test_count": ("Total Tests", lambda r: str(r["session_metrics"].get("total_tests", 0))),
                     "session_count": (
                         "Total Sessions",
-                        lambda r: str(r['session_metrics'].get('total_sessions', 0)),
+                        lambda r: str(r["session_metrics"].get("total_sessions", 0)),
                     ),
                 }
 
@@ -2342,17 +2356,21 @@ def cli_analyze(
 
                     console.print(failure_table)
 
-                if "top_flaky" in sections_to_include and hasattr(result, "flaky_tests") and result.flaky_tests:
-                    console.print("\n[bold yellow]Top Flaky Tests:[/bold yellow]")
-                    flaky_table = Table(show_header=True, header_style="bold yellow")
-                    flaky_table.add_column("Test", style="cyan")
-                    flaky_table.add_column("Flaky Rate", style="yellow")
+                if (
+                    "top_unreliable" in sections_to_include
+                    and hasattr(result, "unreliable_tests")
+                    and result.unreliable_tests
+                ):
+                    console.print("\n[bold yellow]Top Unreliable Tests:[/bold yellow]")
+                    unreliable_table = Table(show_header=True, header_style="bold yellow")
+                    unreliable_table.add_column("Test", style="cyan")
+                    unreliable_table.add_column("Unreliable Rate", style="yellow")
 
-                    for test in result.flaky_tests[:10]:  # Limit to 10 for readability
-                        if hasattr(test, "flaky_rate") and hasattr(test, "nodeid"):
-                            flaky_table.add_row(test.nodeid, f"{test.flaky_rate:.1%}")
+                    for test in result.unreliable_tests[:10]:  # Limit to 10 for readability
+                        if hasattr(test, "nonreliability_rate") and hasattr(test, "nodeid"):
+                            unreliable_table.add_row(test.nodeid, f"{test.nonreliability_rate:.1%}")
 
-                    console.print(flaky_table)
+                    console.print(unreliable_table)
 
                 if "performance_issues" in sections_to_include and hasattr(result, "slow_tests") and result.slow_tests:
                     console.print("\n[bold cyan]Performance Issues:[/bold cyan]")
@@ -2368,26 +2386,36 @@ def cli_analyze(
 
                 # Recommendations
                 console.print("\nRecommendations:", style="bold")
-                
+
                 # Get metrics from the result dictionary
-                pass_rate = result['session_metrics'].get('pass_rate', 0)
-                reliability_index = result['reliability_metrics'].get('reliability_index', 100) if 'reliability_metrics' in result else 100
-                rerun_recovery_rate = result['reliability_metrics'].get('rerun_recovery_rate', 100) if 'reliability_metrics' in result else 100
-                
+                pass_rate = result["session_metrics"].get("pass_rate", 0)
+                reliability_index = (
+                    result["reliability_metrics"].get("reliability_index", 100)
+                    if "reliability_metrics" in result
+                    else 100
+                )
+                rerun_recovery_rate = (
+                    result["reliability_metrics"].get("rerun_recovery_rate", 100)
+                    if "reliability_metrics" in result
+                    else 100
+                )
+
                 recommendations = []
-                
+
                 # Test stability recommendations
-                if 'reliability_metrics' in result and reliability_index < 95:
-                    recommendations.append("- Low reliability index detected. Consider investigating test stability issues.")
-                    if 'reliability_metrics' in result and rerun_recovery_rate > 70:
+                if "reliability_metrics" in result and reliability_index < 95:
+                    recommendations.append(
+                        "- Low reliability index detected. Consider investigating test stability issues."
+                    )
+                    if "reliability_metrics" in result and rerun_recovery_rate > 70:
                         recommendations.append("  ✓ Good rerun recovery rate. Focus on tests that fail consistently.")
                     else:
                         recommendations.append("  ✗ Low rerun recovery rate. Tests may have genuine failures.")
-                
+
                 # Pass rate recommendations
                 if pass_rate < 0.9:
                     recommendations.append("- Low pass rate detected. Consider investigating test failures.")
-                
+
                 if not recommendations:
                     console.print("- No issues detected. Test suite is healthy!", style="green")
                 else:
@@ -2404,16 +2432,16 @@ def cli_analyze(
                 console.print("  - Run 'insight predict' to generate predictive analytics for this SUT.")
 
         elif report_type == "stability":
-            # Get consistently failing and flaky tests
+            # Get consistently failing and unreliable tests
             failing_tests = analyzer.identify_consistently_failing_tests()
-            flaky_tests = analyzer.identify_flaky_tests()
+            unreliable_tests = analyzer.identify_unreliable_tests()
 
             if format == OutputFormat.JSON:
                 import json
 
                 result_dict = {
                     "consistently_failing_tests": failing_tests,
-                    "flaky_tests": flaky_tests,
+                    "unreliable_tests": unreliable_tests,
                     "days_analyzed": days,
                 }
 
@@ -2444,23 +2472,23 @@ def cli_analyze(
                 else:
                     console.print("[green]No consistently failing tests found.[/green]")
 
-                if flaky_tests:
+                if unreliable_tests:
                     table = Table(
-                        title="Flaky Tests",
+                        title="Unreliable Tests",
                         show_header=True,
                         header_style="bold yellow",
                     )
                     table.add_column("Test", style="cyan")
 
-                    for test in flaky_tests[:20]:  # Limit to 20 tests for readability
+                    for test in unreliable_tests[:20]:  # Limit to 20 tests for readability
                         table.add_row(test)
 
-                    if len(flaky_tests) > 20:
-                        table.add_row(f"... and {len(flaky_tests) - 20} more")
+                    if len(unreliable_tests) > 20:
+                        table.add_row(f"... and {len(unreliable_tests) - 20} more")
 
                     console.print(table)
                 else:
-                    console.print("[green]No flaky tests found.[/green]")
+                    console.print("[green]No unreliable tests found.[/green]")
 
         elif report_type == "performance":
             # Get slowest tests
@@ -2504,64 +2532,64 @@ def cli_analyze(
                 else:
                     console.print("[yellow]No test duration data available.[/yellow]")
 
-        elif report_type == "flaky":
-            # Focus specifically on flaky tests
-            flaky_tests = analyzer.identify_flaky_tests()
+        elif report_type == "unreliable":
+            # Focus specifically on unreliable tests
+            unreliable_tests = analyzer.identify_unreliable_tests()
 
             if format == OutputFormat.JSON:
                 import json
 
                 result_dict = {
-                    "flaky_tests": flaky_tests,
-                    "count": len(flaky_tests),
+                    "unreliable_tests": unreliable_tests,
+                    "count": len(unreliable_tests),
                     "days_analyzed": days,
                 }
 
                 print(json.dumps(result_dict, indent=2))
             else:
-                # Rich text output for flaky tests report
-                title_parts = ["\n[bold blue]Flaky Tests Report"]
+                # Rich text output for unreliable tests report
+                title_parts = ["\n[bold blue]Unreliable Tests Report"]
                 if sut:
                     title_parts.append(f" for [yellow]{sut}[/yellow]")
                 title_parts.append(f" (Last {days} days)\n")
                 console.print("".join(title_parts))
 
-                if flaky_tests:
+                if unreliable_tests:
                     table = Table(
-                        title=f"Flaky Tests ({len(flaky_tests)} found)",
+                        title=f"Unreliable Tests ({len(unreliable_tests)} found)",
                         show_header=True,
                         header_style="bold yellow",
                     )
                     table.add_column("Test", style="cyan")
 
-                    for test in flaky_tests[:30]:  # Limit to 30 tests for readability
+                    for test in unreliable_tests[:30]:  # Limit to 30 tests for readability
                         table.add_row(test)
 
-                    if len(flaky_tests) > 30:
-                        table.add_row(f"... and {len(flaky_tests) - 30} more")
+                    if len(unreliable_tests) > 30:
+                        table.add_row(f"... and {len(unreliable_tests) - 30} more")
 
                     console.print(table)
 
-                    # Recommendations for flaky tests
-                    console.print("\n[bold]Recommendations for Addressing Flaky Tests:[/bold]")
+                    # Recommendations for unreliable tests
+                    console.print("\n[bold]Recommendations for Addressing Unreliable Tests:[/bold]")
                     console.print(
                         "  1. [yellow]Identify patterns[/yellow] - Look for common factors (async, timing, resources)"
                     )
                     console.print(
-                        "  2. [yellow]Isolate and reproduce[/yellow] - Try to reproduce the flakiness locally"
+                        "  2. [yellow]Isolate and reproduce[/yellow] - Try to reproduce the reliability-repeatability locally"
                     )
                     console.print(
                         "  3. [yellow]Add logging[/yellow] - Enhance logging to capture more context when tests fail"
                     )
                     console.print(
-                        "  4. [yellow]Consider quarantine[/yellow] - Move highly flaky tests to a separate suite"
+                        "  4. [yellow]Consider quarantine[/yellow] - Move highly unreliable tests to a separate suite"
                     )
                 else:
-                    console.print("[green]No flaky tests found in the analyzed period.[/green]")
+                    console.print("[green]No unreliable tests found in the analyzed period.[/green]")
 
         else:
             console.print(f"[bold red]Error:[/bold red] Unknown report type: {report_type}")
-            console.print("Available report types: health, stability, performance, flaky")
+            console.print("Available report types: health, stability, performance, unreliable")
 
     except Exception as e:
         if format == OutputFormat.JSON:
@@ -2584,11 +2612,11 @@ def cli_generate_insights(
     config_file: Optional[str] = typer.Option(None, help="Path to configuration file"),
     include_metrics: Optional[str] = typer.Option(
         None,
-        help="Comma-separated list of metrics to include (e.g., 'pass_rate,flaky_rate')",
+        help="Comma-separated list of metrics to include (e.g., 'pass_rate,nonreliability_rate')",
     ),
     include_sections: Optional[str] = typer.Option(
         None,
-        help="Comma-separated list of sections to include (e.g., 'top_failures,top_flaky')",
+        help="Comma-separated list of sections to include (e.g., 'top_failures,top_unreliable')",
     ),
     exclude_metrics: Optional[str] = typer.Option(None, help="Comma-separated list of metrics to exclude"),
     exclude_sections: Optional[str] = typer.Option(None, help="Comma-separated list of sections to exclude"),
@@ -2608,7 +2636,7 @@ def cli_generate_insights(
         # Fix the config_file parameter to handle typer.Option objects
         if isinstance(config_file, typer.models.OptionInfo):
             config_file = None
-            
+
         config = load_config(config_file)
 
         # Create API instance
@@ -2621,10 +2649,10 @@ def cli_generate_insights(
         if sut:
             query = query.with_sut(sut)
         query = query.in_last_days(days)
-            
+
         # Execute the query to get filtered sessions
         result = query.execute()
-        
+
         # Create insights instance with the query
         insight_api = api.insights().with_query(result)
 
@@ -2672,10 +2700,10 @@ def cli_generate_insights(
                     "test_count": result.test_count,
                     "session_count": result.session_count,
                     "pass_rate": result.pass_rate,
-                    "reliability_index": result.reliability_index if hasattr(result, 'reliability_index') else 0,
-                    "rerun_recovery_rate": result.rerun_recovery_rate if hasattr(result, 'rerun_recovery_rate') else 0,
+                    "reliability_index": result.reliability_index if hasattr(result, "reliability_index") else 0,
+                    "rerun_recovery_rate": result.rerun_recovery_rate if hasattr(result, "rerun_recovery_rate") else 0,
                     "top_failures": result.top_failures,
-                    "top_flaky": result.top_flaky,
+                    "top_unreliable": result.top_unreliable,
                     "performance_issues": result.performance_issues,
                     "days_analyzed": days,
                 }
@@ -2702,8 +2730,14 @@ def cli_generate_insights(
                 table.add_row("Test Count", str(result.test_count))
                 table.add_row("Session Count", str(result.session_count))
                 table.add_row("Pass Rate", f"{result.pass_rate:.1%}")
-                table.add_row("Reliability Index", f"{result.reliability_index:.2f}" if hasattr(result, 'reliability_index') else "N/A")
-                table.add_row("Rerun Recovery Rate", f"{result.rerun_recovery_rate:.1%}" if hasattr(result, 'rerun_recovery_rate') else "N/A")
+                table.add_row(
+                    "Reliability Index",
+                    f"{result.reliability_index:.2f}" if hasattr(result, "reliability_index") else "N/A",
+                )
+                table.add_row(
+                    "Rerun Recovery Rate",
+                    f"{result.rerun_recovery_rate:.1%}" if hasattr(result, "rerun_recovery_rate") else "N/A",
+                )
 
                 console.print(table)
 
@@ -2713,10 +2747,10 @@ def cli_generate_insights(
                     for i, test in enumerate(result.top_failures[:5], 1):
                         console.print(f"  {i}. {test}")
 
-                # Top flaky tests
-                if result.top_flaky:
-                    console.print("\n[bold yellow]Top Flaky Tests:[/bold yellow]")
-                    for i, test in enumerate(result.top_flaky[:5], 1):
+                # Top unreliable tests
+                if result.top_unreliable:
+                    console.print("\n[bold yellow]Top Unreliable Tests:[/bold yellow]")
+                    for i, test in enumerate(result.top_unreliable[:5], 1):
                         console.print(f"  {i}. {test}")
 
                 # Performance issues
@@ -2740,26 +2774,36 @@ def cli_generate_insights(
 
                 # Recommendations
                 console.print("\nRecommendations:", style="bold")
-                
+
                 # Get metrics from the result dictionary
-                pass_rate = result['session_metrics'].get('pass_rate', 0)
-                reliability_index = result['reliability_metrics'].get('reliability_index', 100) if 'reliability_metrics' in result else 100
-                rerun_recovery_rate = result['reliability_metrics'].get('rerun_recovery_rate', 100) if 'reliability_metrics' in result else 100
-                
+                pass_rate = result["session_metrics"].get("pass_rate", 0)
+                reliability_index = (
+                    result["reliability_metrics"].get("reliability_index", 100)
+                    if "reliability_metrics" in result
+                    else 100
+                )
+                rerun_recovery_rate = (
+                    result["reliability_metrics"].get("rerun_recovery_rate", 100)
+                    if "reliability_metrics" in result
+                    else 100
+                )
+
                 recommendations = []
-                
+
                 # Test stability recommendations
-                if 'reliability_metrics' in result and reliability_index < 95:
-                    recommendations.append("- Low reliability index detected. Consider investigating test stability issues.")
-                    if 'reliability_metrics' in result and rerun_recovery_rate > 70:
+                if "reliability_metrics" in result and reliability_index < 95:
+                    recommendations.append(
+                        "- Low reliability index detected. Consider investigating test stability issues."
+                    )
+                    if "reliability_metrics" in result and rerun_recovery_rate > 70:
                         recommendations.append("  ✓ Good rerun recovery rate. Focus on tests that fail consistently.")
                     else:
                         recommendations.append("  ✗ Low rerun recovery rate. Tests may have genuine failures.")
-                
+
                 # Pass rate recommendations
                 if pass_rate < 0.9:
                     recommendations.append("- Low pass rate detected. Consider investigating test failures.")
-                
+
                 if not recommendations:
                     console.print("- No issues detected. Test suite is healthy!", style="green")
                 else:
@@ -3171,7 +3215,7 @@ def cli_predict(
                     console.print("\n[bold]Recommendations:[/bold]")
                     if trend == "declining":
                         console.print("  - Investigate factors causing stability decline")
-                        console.print("  - Focus on improving test reliability and reducing flakiness")
+                        console.print("  - Focus on improving test reliability and reducing reliability-repeatability")
                         console.print("  - Consider implementing more robust test infrastructure")
                     elif trend == "improving":
                         console.print("  - Continue current testing practices that are improving stability")

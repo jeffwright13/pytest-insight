@@ -51,3 +51,37 @@ Would you like me to explain any specific aspect of the API in more detail, or w
 
 Feedback submitted
 Generating
+
+#### Unreliable Test Metrics
+
+Endpoints and responses related to unreliable tests have been renamed:
+
+Old: `/api/flaky_tests`
+New: `/api/unreliable_tests`
+
+Old: `flaky_tests` key in response
+New: `unreliable_tests` key in response
+
+Old: `flakiness_rate`
+New: `reliability_rate`
+
+Old: `most_flaky`
+New: `most_unreliable`
+
+#### Example: Get Most Unreliable Tests
+
+```json
+{
+  "unreliable_tests": [
+    {"nodeid": "test_module.py::test_unreliable", "unreliability_rate": 0.5, "total_runs": 8}
+  ],
+  "most_unreliable": ["test_module.py::test_unreliable"]
+}
+```
+
+#### CLI Output
+
+Console summaries and CLI output now reference "Unreliable Tests" and "Reliability Rate" instead of "Flaky Tests" and "Flaky Rate".
+
+Old: `Unreliable Test Count: 2, Most Flaky: ...`
+New: `Unreliable Test Count: 2, Most Unreliable: ...`

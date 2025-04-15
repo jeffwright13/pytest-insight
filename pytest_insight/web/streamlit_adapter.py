@@ -29,7 +29,7 @@ class StreamlitAdapter(VisualizationAdapter):
         with col1:
             st.metric("Pass Rate", f"{health_data['pass_rate']:.1f}%")
         with col2:
-            st.metric("Flaky Rate", f"{health_data['flaky_rate']:.1f}%")
+            st.metric("Reliability Rate", f"{health_data['reliability_rate']:.1f}%")
         with col3:
             st.metric("Health Score", f"{health_data['health_score']:.1f}/10")
 

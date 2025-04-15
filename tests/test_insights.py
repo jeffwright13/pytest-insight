@@ -45,12 +45,12 @@ def sample_test_results():
 def sample_rerun_group():
     """Create a sample rerun group for testing."""
     now = datetime.now()
-    rerun_group = RerunTestGroup(nodeid="test_module.py::test_flaky")
+    rerun_group = RerunTestGroup(nodeid="test_module.py::test_unreliable")
 
     # First run - failed with rerun outcome
     rerun_group.add_test(
         TestResult(
-            nodeid="test_module.py::test_flaky",
+            nodeid="test_module.py::test_unreliable",
             outcome=TestOutcome.RERUN,
             start_time=now,
             duration=1.0,
@@ -60,7 +60,7 @@ def sample_rerun_group():
     # Second run - passed
     rerun_group.add_test(
         TestResult(
-            nodeid="test_module.py::test_flaky",
+            nodeid="test_module.py::test_unreliable",
             outcome=TestOutcome.PASSED,
             start_time=now + timedelta(seconds=2),
             duration=1.0,
@@ -154,9 +154,9 @@ class TestInsightsModuleTests:
         assert outcome_dist["total_tests"] == 5  # Total tests across both sessions
         assert len(outcome_dist["outcomes"]) == 3  # PASSED, FAILED, SKIPPED
 
-        # Test flaky tests detection
-        flaky = insights.tests.flaky_tests()
-        assert flaky["total_flaky"] == 1
+        # Test unreliable tests detection
+        unreliable = insights.tests.unreliable_tests()
+        assert unreliable["total_unreliable"] == 1
 
         # Test slowest tests
         slow_tests = insights.tests.slowest_tests(limit=3)
@@ -328,7 +328,7 @@ class TestInsightsModuleTests:
                 "performance_score": 80,
                 "warning_score": 85,
             },
-            "recommendations": ["Fix flaky tests", "Improve test performance"],
+            "recommendations": ["Fix unreliable tests", "Improve test performance"],
         }
 
         # Mock the sessions attribute for new health metrics
@@ -395,9 +395,9 @@ class TestInsightsModuleTests:
                 TestOutcome.SKIPPED: {"count": 1},
             },
         }
-        mock_test_insights.flaky_tests.return_value = {
-            "total_flaky": 1,
-            "most_flaky": [("test_module.py::test_flaky", {"reruns": 2, "pass_rate": 0.5})],
+        mock_test_insights.unreliable_tests.return_value = {
+            "total_unreliable": 1,
+            "most_unreliable": [("test_module.py::test_unreliable", {"reruns": 2, "pass_rate": 0.5})],
         }
         mock_test_insights.slowest_tests.return_value = {
             "slowest_tests": [
@@ -459,6 +459,12 @@ class TestInsightsModuleTests:
         assert summary["duration_trend"]["direction"] == "increasing"
         assert summary["duration_trend"]["change"] == 0.15
         assert summary["duration_trend"]["significant"] is True
+
+        assert "unreliable_test_count" in summary
+        assert summary["unreliable_test_count"] == 1
+        assert "most_unreliable" in summary
+        assert isinstance(summary["most_unreliable"], list)
+        assert len(summary["most_unreliable"]) == 1
 
     def test_insights_with_profiles(self, monkeypatch, mocker):
         """Test insights initialization with profiles."""

@@ -94,7 +94,7 @@ class InsightDataProvider(DataProvider):
         # Format data for visualization
         return {
             "pass_rate": health_data.get("pass_rate", 0),
-            "flaky_rate": health_data.get("flaky_rate", 0),
+            "reliability_rate": health_data.get("reliability_rate", 0),
             "health_score": health_data.get("health_score", 0),
             "test_count": health_data.get("test_count", 0),
             "session_count": health_data.get("session_count", 0),

@@ -1,6 +1,5 @@
 import os
 import random
-import shutil
 from importlib.metadata import version
 from pathlib import Path
 
@@ -64,10 +63,10 @@ def cleanup_test_profiles():
 
     # Clean up test profiles
     print(f"\nCleaning up {len(TEST_PROFILE_FILES)} test profile files...")
-    
+
     # Get the profile manager
     profile_manager = get_profile_manager()
-    
+
     # Delete test profiles from the profile manager
     for name in TEST_PROFILE_NAMES:
         try:
@@ -75,7 +74,7 @@ def cleanup_test_profiles():
                 profile_manager.delete_profile(name)
         except Exception as e:
             print(f"Error deleting profile {name}: {e}")
-    
+
     # Delete any remaining test profile files
     for file_path in TEST_PROFILE_FILES:
         try:
@@ -84,7 +83,7 @@ def cleanup_test_profiles():
                 print(f"Deleted test profile file: {file_path}")
         except Exception as e:
             print(f"Error deleting file {file_path}: {e}")
-    
+
     # Also clean up any temporary files in the config directory
     config_dir = Path(profile_manager.config_path).parent
     for item in config_dir.glob("tmp*"):
@@ -103,18 +102,18 @@ def temp_profile_dir(tmp_path):
     profile_manager = get_profile_manager()
     global ORIGINAL_CONFIG_PATH
     ORIGINAL_CONFIG_PATH = profile_manager.config_path
-    
+
     # Create temporary profiles directory
     temp_dir = tmp_path / "pytest_insight_profiles"
     temp_dir.mkdir(exist_ok=True)
     temp_config = temp_dir / "profiles.json"
-    
+
     # Set the config path to the temporary directory
     profile_manager.config_path = temp_config
-    
+
     # Run the test
     yield temp_dir
-    
+
     # Restore original config path
     profile_manager.config_path = ORIGINAL_CONFIG_PATH
 

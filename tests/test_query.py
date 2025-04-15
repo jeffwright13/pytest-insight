@@ -1,7 +1,6 @@
 import uuid
 
 import pytest
-
 from pytest_insight.core.models import TestOutcome, TestResult, TestSession
 from pytest_insight.core.query import InvalidQueryParameterError, Query
 from pytest_insight.core.storage import ProfileManager, get_storage_instance
@@ -76,9 +75,7 @@ def test_session_with_tags(get_test_time, monkeypatch):
     profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
-    monkeypatch.setattr(
-        "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-    )
+    monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
     # Get the storage instance and add our test sessions
     storage = get_storage_instance(profile_name=test_profile_name)
@@ -114,9 +111,7 @@ def test_session_with_tags(get_test_time, monkeypatch):
         "staging-run-456",
         "dev-run-789",
     }
-    assert all(
-        len(s.test_results) == 1 for s in result.sessions
-    )  # All tests are preserved
+    assert all(len(s.test_results) == 1 for s in result.sessions)  # All tests are preserved
 
     # Test with_session_id_pattern() - filter by specific ID pattern
     query = Query(profile_name=test_profile_name)
@@ -127,11 +122,7 @@ def test_session_with_tags(get_test_time, monkeypatch):
 
     # Test combining filters - prod environment in us-west region
     query = Query(profile_name=test_profile_name)
-    result = (
-        query.with_session_tag("env", "prod")
-        .with_session_tag("region", "us-west")
-        .execute(sessions=all_sessions)
-    )
+    result = query.with_session_tag("env", "prod").with_session_tag("region", "us-west").execute(sessions=all_sessions)
     assert len(result) == 1
     assert result.sessions[0].session_id == "prod-run-123"
     assert result.sessions[0].session_tags["env"] == "prod"
@@ -230,9 +221,7 @@ def test_time_based_filtering(get_test_time, monkeypatch):
     profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
-    monkeypatch.setattr(
-        "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-    )
+    monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
     # Get the storage instance and add our test sessions
     storage = get_storage_instance(profile_name=test_profile_name)
@@ -259,19 +248,13 @@ def test_time_based_filtering(get_test_time, monkeypatch):
 
     # Test between() - sessions between 2 days ago and 12 hours ago
     query = Query(profile_name=test_profile_name)
-    result = query.between(two_days_ago, twelve_hours_ago).execute(
-        sessions=all_sessions
-    )
+    result = query.between(two_days_ago, twelve_hours_ago).execute(sessions=all_sessions)
     assert len(result) == 1
     assert result.sessions[0].session_id == "day-old-run"
 
     # Test combining filters - sessions before 12 hours ago AND with tag type=full
     query = Query(profile_name=test_profile_name)
-    result = (
-        query.before(twelve_hours_ago)
-        .with_session_tag("type", "full")
-        .execute(sessions=all_sessions)
-    )
+    result = query.before(twelve_hours_ago).with_session_tag("type", "full").execute(sessions=all_sessions)
     assert len(result) == 1
     assert result.sessions[0].session_id == "week-old-run"
 
@@ -366,9 +349,7 @@ def test_pattern_based_filtering(get_test_time, monkeypatch):
     profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
-    monkeypatch.setattr(
-        "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-    )
+    monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
     # Get the storage instance and add our test sessions
     storage = get_storage_instance(profile_name=test_profile_name)
@@ -396,18 +377,12 @@ def test_pattern_based_filtering(get_test_time, monkeypatch):
     # Test filter_by_test() with pattern - filter specific test
     query = Query(profile_name=test_profile_name)
     result = (
-        query.filter_by_test()
-        .with_nodeid_containing("test_query_performance")
-        .apply()
-        .execute(sessions=all_sessions)
+        query.filter_by_test().with_nodeid_containing("test_query_performance").apply().execute(sessions=all_sessions)
     )
     assert len(result) == 1
     assert result.sessions[0].session_id == "db-run-789"
     assert len(result.sessions[0].test_results) == 1
-    assert (
-        result.sessions[0].test_results[0].nodeid
-        == "test_db.py::test_query_performance"
-    )
+    assert result.sessions[0].test_results[0].nodeid == "test_db.py::test_query_performance"
 
     # Test with_session_id_pattern() - filter by session ID pattern
     query = Query(profile_name=test_profile_name)
@@ -516,9 +491,7 @@ def test_duration_based_filtering(get_test_time, monkeypatch):
     profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
-    monkeypatch.setattr(
-        "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-    )
+    monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
     # Get the storage instance and add our test sessions
     storage = get_storage_instance(profile_name=test_profile_name)
@@ -531,15 +504,8 @@ def test_duration_based_filtering(get_test_time, monkeypatch):
 
     # Test filter_by_test() with duration between - tests with duration between 1 and 3 seconds
     query = Query(profile_name=test_profile_name)
-    result = (
-        query.filter_by_test()
-        .with_duration_between(1.0, 3.0)
-        .apply()
-        .execute(sessions=all_sessions)
-    )
-    assert (
-        len(result) == 1
-    )  # Only mixed_duration_session has tests in the 1-3 second range
+    result = query.filter_by_test().with_duration_between(1.0, 3.0).apply().execute(sessions=all_sessions)
+    assert len(result) == 1  # Only mixed_duration_session has tests in the 1-3 second range
     assert result.sessions[0].session_id == "mixed-duration-run"
     # Check that only tests within the duration range are included
     assert len(result.sessions[0].test_results) == 1  # Only the medium test
@@ -547,12 +513,7 @@ def test_duration_based_filtering(get_test_time, monkeypatch):
 
     # Test filter_by_test() with duration between - tests with duration between 3 and 5 seconds
     query = Query(profile_name=test_profile_name)
-    result = (
-        query.filter_by_test()
-        .with_duration_between(3.0, 5.0)
-        .apply()
-        .execute(sessions=all_sessions)
-    )
+    result = query.filter_by_test().with_duration_between(3.0, 5.0).apply().execute(sessions=all_sessions)
     assert len(result) == 2
     assert {s.session_id for s in result.sessions} == {
         "mixed-duration-run",
@@ -704,9 +665,7 @@ def test_outcome_based_filtering(get_test_time, monkeypatch):
     profile_manager._create_profile(test_profile_name, "memory")
 
     # Mock get_profile_manager to return our test instance
-    monkeypatch.setattr(
-        "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-    )
+    monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
     # Get the storage instance and add our test sessions
     storage = get_storage_instance(profile_name=test_profile_name)
@@ -726,9 +685,7 @@ def test_outcome_based_filtering(get_test_time, monkeypatch):
         "passed-tests-run",
     }
     # Check that only passed tests are included
-    assert (
-        len(result.sessions[0].test_results) == 1
-    )  # Only the passed test from mixed_session
+    assert len(result.sessions[0].test_results) == 1  # Only the passed test from mixed_session
     assert result.sessions[0].test_results[0].outcome == TestOutcome.PASSED
     assert len(result.sessions[1].test_results) == 2
     assert all(t.outcome == TestOutcome.PASSED for t in result.sessions[1].test_results)
@@ -765,11 +722,7 @@ def test_outcome_based_filtering(get_test_time, monkeypatch):
 
     # Test combining filters - passed tests in smoke test sessions
     query = Query(profile_name=test_profile_name)
-    result = (
-        query.with_outcome(TestOutcome.PASSED)
-        .with_session_tag("type", "smoke")
-        .execute(sessions=all_sessions)
-    )
+    result = query.with_outcome(TestOutcome.PASSED).with_session_tag("type", "smoke").execute(sessions=all_sessions)
     assert len(result) == 1
     assert result.sessions[0].session_id == "passed-tests-run"
     assert len(result.sessions[0].test_results) == 2
