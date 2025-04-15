@@ -1706,234 +1706,132 @@ class Insights:
         RED = "\033[31m"
         CYAN = "\033[36m"
         MAGENTA = "\033[35m"
+        BOLD = "\033[1m"
 
-        # Helper function to colorize text
         def colorize(text, color_code):
             return f"{color_code}{text}{RESET}"
 
-        # Helper function to create section headers
-        def section_header(text):
-            return colorize(f"\n--- {text} ---", YELLOW)
+        def pct(val):
+            return f"{val:.1f}%" if isinstance(val, float) else str(val)
 
-        # Format output
+        # Build the summary output as per the requested format
         output = []
-
-        # Add note about single-session insights
-        output.append("Note: This summary shows insights for the current test session only.")
-        output.append("For multi-session/multi-system analysis, use the 'insight analyze' CLI command.")
-        output.append(
-            "More advanced users may use the Insight API, either directly via Python, or"
-            " via the REST API. See docs folder for more information."
+        output.append(f"{BOLD}{CYAN}{'='*20} Pytest-Insight Summary {'='*20}{RESET}")
+        # Last Session summary
+        session_time = (
+            self.analysis._sessions[0].session_start_time.strftime("%Y-%m-%d %H:%M")
+            if self.analysis._sessions and hasattr(self.analysis._sessions[0], "session_start_time")
+            else "Unknown"
         )
-
-        # Session Info Section
-        output.append(section_header("Test Session Info"))
-        output.append(f"    SUT Name: {sut_name}")
-        output.append(f"    Session ID: {session_id}")
-        if profile_name:
-            output.append(f"    Profile Name: {profile_name}")
-
-        # Health Score Section
-        output.append(section_header("Test Health"))
-        health_score = summary["health_score"]
-        health_color = GREEN if health_score >= 80 else (YELLOW if health_score >= 60 else RED)
-        health_text = f"{health_score:.2f}/100"
-        output.append(f"    Health Score: {colorize(health_text, health_color)}")
-
-        # Add detailed health score components
-        if "stability_score" in summary:
-            stability_color = (
-                GREEN if summary["stability_score"] >= 80 else (YELLOW if summary["stability_score"] >= 60 else RED)
-            )
-            stability_text = f"{summary['stability_score']:.2f}/100"
-            output.append(f"    Stability Score: {colorize(stability_text, stability_color)}")
-
-        if "performance_score" in summary:
-            perf_color = (
-                GREEN if summary["performance_score"] >= 80 else (YELLOW if summary["performance_score"] >= 60 else RED)
-            )
-            perf_text = f"{summary['performance_score']:.2f}/100"
-            output.append(f"    Performance Score: {colorize(perf_text, perf_color)}")
-
-        if "warning_score" in summary:
-            warn_color = (
-                GREEN if summary["warning_score"] >= 80 else (YELLOW if summary["warning_score"] >= 60 else RED)
-            )
-            warn_text = f"{summary['warning_score']:.2f}/100"
-            output.append(f"    Warning Score: {colorize(warn_text, warn_color)}")
-
-        # Add failure rate
-        if "failure_rate" in summary:
-            fail_color = GREEN if summary["failure_rate"] < 10 else (YELLOW if summary["failure_rate"] < 20 else RED)
-            fail_text = f"{summary['failure_rate']:.1f}%"
-            output.append(f"    Failure Rate: {colorize(fail_text, fail_color)}")
-
-        # Add warning rate
-        if "warning_rate" in summary:
-            warn_rate_color = (
-                GREEN if summary["warning_rate"] < 5 else (YELLOW if summary["warning_rate"] < 15 else RED)
-            )
-            warn_rate_text = f"{summary['warning_rate']:.1f}%"
-            output.append(f"    Warning Rate: {colorize(warn_rate_text, warn_rate_color)}")
-
-        # Add average duration
-        if "avg_duration" in summary:
-            avg_duration_color = (
-                GREEN if summary["avg_duration"] < 60 else (YELLOW if summary["avg_duration"] < 120 else RED)
-            )
-            avg_duration_text = f"{summary['avg_duration']:.2f}s"
-            output.append(f"    Average Duration: {colorize(avg_duration_text, avg_duration_color)}")
-
-        # Test Execution Summary
-        output.append(section_header("Test Execution Summary"))
-        output.append(f"    Total Tests: {colorize(str(summary['total_tests']), GREEN)}")
-
-        # Calculate total duration from sessions
-        total_duration = (
-            sum(session.session_duration for session in self.analysis._sessions) if self.analysis._sessions else 0
-        )
-        duration_text = f"{total_duration:.2f}s"
-        output.append(f"    Total Duration: {colorize(duration_text, GREEN)}")
-
-        # Add session start/stop times if available
-        if self.analysis._sessions and len(self.analysis._sessions) > 0:
-            session = self.analysis._sessions[0]  # Use the first session for start/stop times
-            output.append(f"    Start Time: {session.session_start_time.isoformat()}")
-            output.append(f"    Stop Time: {session.session_stop_time.isoformat()}")
-
-        # Outcome Distribution Section
-        output.append(section_header("Test Outcome Distribution"))
-        for outcome, count in summary["outcome_distribution"]:
-            # Choose color based on outcome
-            outcome_str = outcome.value.lower() if hasattr(outcome, "value") else str(outcome).lower()
-
-            if outcome_str == "passed":
-                color = GREEN
-            elif outcome_str in ["failed", "error"]:
-                color = RED
-            elif outcome_str == "skipped":
-                color = YELLOW
-            else:
-                color = CYAN
-
-            # Format the outcome and count
-            # Display a user-friendly name instead of the enum value
-            if hasattr(outcome, "name"):
-                # If it's an enum, use the name (e.g., "PASSED" instead of "TESTOUTCOME.PASSED")
-                display_name = outcome.name.capitalize()
-            else:
-                # Otherwise use the string representation but remove any class prefix
-                display_name = str(outcome).split(".")[-1].capitalize()
-
-            outcome_text = f"{display_name}: {count}"
-            output.append(f"    {colorize(outcome_text, color)}")
-
-        # Unreliable Tests Section
-        unreliable_count = summary.get("unreliable_test_count", 0)
-        if unreliable_count > 0:
-            output.append(section_header("Unreliable Tests"))
-            output.append(f"    Total Unreliable Tests: {colorize(str(unreliable_count), YELLOW)}")
-
-            most_unreliable = summary.get("most_unreliable", [])
-            if most_unreliable:
-                output.append("\n    Most Unreliable Tests:")
-
-                for i, unreliable in enumerate(most_unreliable):
-                    if isinstance(unreliable, tuple) and len(unreliable) >= 2:
-                        # Handle tuple format (nodeid, data)
-                        nodeid, data = unreliable
-                        unreliable_rate = data.get("unreliable_rate", 0) * 100 if isinstance(data, dict) else 0
-                    else:
-                        # Handle dictionary format
-                        nodeid = unreliable.get("nodeid", "Unknown")
-                        unreliable_rate = unreliable.get("unreliable_rate", 0) * 100
-
-                    output.append(
-                        f"    {i+1}. {nodeid} - Unreliable Rate: {colorize(f'{unreliable_rate:.1f}%', YELLOW)}"
-                    )
-
-        # Rerun Test Groups Section
+        sut = summary.get("sut_name", sut_name)
+        profile = profile_name or summary.get("profile_name", "default")
+        total_tests = summary.get("total_tests", 0)
+        passed = next((c for o, c in summary.get("outcome_distribution", []) if o == "passed"), 0)
+        failed = next((c for o, c in summary.get("outcome_distribution", []) if o == "failed"), 0)
+        xfailed = next((c for o, c in summary.get("outcome_distribution", []) if o == "xfailed"), 0)
+        skipped = next((c for o, c in summary.get("outcome_distribution", []) if o == "skipped"), 0)
+        pass_pct = (passed / total_tests * 100) if total_tests else 0
+        fail_pct = (failed / total_tests * 100) if total_tests else 0
+        rerun_count = summary.get("rerun_count", 0)
         rerun_groups = summary.get("rerun_test_groups", [])
-        rerun_count = len(rerun_groups) if rerun_groups else summary.get("rerun_count", 0)
-
-        if rerun_count > 0:
-            output.append(section_header("Test Reruns"))
-            output.append(f"    Total Rerun Groups: {colorize(str(rerun_count), MAGENTA)}")
-
-            # Calculate and display rerun success rate
-            success_count = sum(
-                1
-                for group in rerun_groups
-                if isinstance(group.get("final_outcome", ""), str)
-                and group.get("final_outcome", "").lower() == "passed"
-                or hasattr(group.get("final_outcome", ""), "value")
-                and str(group.get("final_outcome", "").value).lower() == "passed"
+        rerun_succeeded = sum(1 for g in rerun_groups if g.get("final_outcome") == "passed")
+        health_score = summary.get("health_score", 0)
+        health_grade = "A" if health_score >= 90 else "B" if health_score >= 80 else "C" if health_score >= 70 else "D"
+        health_label = {
+            "A": "Excellent",
+            "B": "Stable, minor unreliability",
+            "C": "Moderate issues",
+            "D": "Needs attention",
+        }[health_grade]
+        # Actionable (last session)
+        actionable = []
+        if summary.get("top_failing_tests"):
+            for t in summary["top_failing_tests"]:
+                if t.get("failure_count", 0) > 0:
+                    actionable.append(f"- Investigate persistent failure: {colorize(t['nodeid'], RED)}")
+        if summary.get("most_unreliable"):
+            actionable.append(
+                f"- {colorize(str(len(summary['most_unreliable'])), YELLOW)} new unreliable test(s) detected: "
+                + ", ".join(colorize(t[0], YELLOW) for t in summary["most_unreliable"][:2])
+            )
+        if summary.get("regressed_tests"):
+            actionable.append(
+                f"- {colorize(str(len(summary['regressed_tests'])), MAGENTA)} new regressions detected: "
+                + ", ".join(colorize(t["nodeid"], MAGENTA) for t in summary["regressed_tests"][:2])
             )
 
-            if rerun_groups:
-                success_rate = (success_count / len(rerun_groups)) * 100
-                output.append(f"    Rerun Success Rate: {colorize(f'{success_rate:.1f}%', CYAN)}")
-                total_attempts = sum(group.get("attempts", 0) for group in rerun_groups)
-                avg_attempts = total_attempts / len(rerun_groups)
-                output.append(f"    Average Attempts Per Rerun: {colorize(f'{avg_attempts:.1f}', CYAN)}")
-
-            output.append("\n    Top Rerun Tests:")
-
-            # Sort rerun groups by number of attempts (descending)
-            sorted_groups = sorted(rerun_groups, key=lambda g: g.get("attempts", 0), reverse=True)
-
-            for i, group in enumerate(sorted_groups):
-                # Choose color based on final outcome
-                final_outcome = group.get("final_outcome", "UNKNOWN")
-                final_outcome_str = (
-                    final_outcome.lower() if isinstance(final_outcome, str) else str(final_outcome).lower()
-                )
-
-                if final_outcome_str == "passed":
-                    outcome_color = GREEN
-                elif final_outcome_str in ["failed", "error"]:
-                    outcome_color = RED
-                else:
-                    outcome_color = YELLOW
-
-                # Format the group header
-                nodeid = group.get("nodeid", "Unknown")
-                attempts = group.get("attempts", 0)
-                output.append(f"\n    {i+1}. {nodeid}")
+        output.append(
+            f"\nLast Session: {colorize(session_time, CYAN)} | SUT: {colorize(sut, CYAN)} | Profile: {colorize(profile, CYAN)} | {colorize(str(total_tests), BOLD)} tests"
+        )
+        output.append(
+            f"  Outcomes:  {colorize(str(passed), GREEN)} passed ({colorize(f'{pass_pct:.1f}%', GREEN)}) | {colorize(str(failed), RED)} failed ({colorize(f'{fail_pct:.1f}%', RED)}) | {colorize(str(xfailed), MAGENTA)} xfailed | {colorize(str(skipped), YELLOW)} skipped"
+        )
+        output.append(
+            f"  Reruns:    {colorize(str(rerun_count), MAGENTA)} tests rerun | {colorize(str(rerun_succeeded), GREEN)} succeeded after rerun"
+        )
+        output.append(
+            f"  Health:    {colorize(health_grade, BOLD + GREEN if health_grade == 'A' else BOLD + YELLOW if health_grade == 'B' else BOLD + RED)} ({health_label})"
+        )
+        if actionable:
+            output.append("  Actionable: ")
+            for act in actionable:
+                output.append(f"    {act}")
+        else:
+            output.append("  Actionable: None")
+        output.append(f"\n{CYAN}{'-'*60}{RESET}")
+        # All Sessions (trend summary)
+        session_metrics = self.sessions.session_metrics() if hasattr(self, "sessions") else {}
+        session_count = session_metrics.get("session_count", 0)
+        all_sut = sut
+        all_passed = session_metrics.get("passed", 0)
+        all_failed = session_metrics.get("failed", 0)
+        all_xfailed = session_metrics.get("xfailed", 0)
+        all_skipped = session_metrics.get("skipped", 0)
+        all_total = session_metrics.get("total_tests", 0)
+        all_pass_pct = (all_passed / all_total * 100) if all_total else 0
+        all_fail_pct = (all_failed / all_total * 100) if all_total else 0
+        all_rerun = session_metrics.get("rerun_count", 0)
+        all_rerun_succeeded = session_metrics.get("rerun_succeeded", 0)
+        all_health = session_metrics.get("health_grade", "B+")
+        all_health_label = session_metrics.get("health_label", "Improving")
+        trends = summary.get("duration_trend", {})
+        fail_trend = summary.get("failure_trend", {})
+        unreliability_trend = colorize("↔", YELLOW)  # Placeholder, can be improved
+        duration_trend = {
+            "increasing": colorize("↑", RED),
+            "decreasing": colorize("↓", GREEN),
+            "stable": colorize("↔", YELLOW),
+        }.get(trends.get("direction", "stable"), colorize("↔", YELLOW))
+        output.append(
+            f"\nAll Sessions (last 30 days): {colorize(str(session_count), BOLD)} sessions | SUT: {colorize(all_sut, CYAN)}"
+        )
+        output.append(
+            f"  Outcomes:  {colorize(str(all_passed), GREEN)} passed ({colorize(f'{all_pass_pct:.1f}%', GREEN)}) | {colorize(str(all_failed), RED)} failed ({colorize(f'{all_fail_pct:.1f}%', RED)}) | {colorize(str(all_xfailed), MAGENTA)} xfailed | {colorize(str(all_skipped), YELLOW)} skipped"
+        )
+        output.append(
+            f"  Reruns:    {colorize(str(all_rerun), MAGENTA)} tests rerun | {colorize(str(all_rerun_succeeded), GREEN)} succeeded after rerun"
+        )
+        output.append(
+            f"  Health:    {colorize(all_health, BOLD + GREEN if all_health == 'A' else BOLD + YELLOW if all_health == 'B' else BOLD + RED)} ({all_health_label})"
+        )
+        output.append(
+            f"  Trends:    Failures {colorize('↓', GREEN) if fail_trend.get('improving') else colorize('↑', RED)} | Unreliability {unreliability_trend} | Duration {duration_trend}"
+        )
+        # Actionable (all sessions)
+        output.append("\n  Actionable:")
+        if summary.get("regressed_tests"):
+            for t in summary["regressed_tests"]:
                 output.append(
-                    f"       Attempts: {colorize(str(attempts), MAGENTA)}, Final Outcome: {colorize(str(final_outcome), outcome_color)}"
+                    f"    - {colorize(t['nodeid'], MAGENTA)} has failed in {colorize(str(len(t.get('sessions', [])), MAGENTA))} sessions"
                 )
-
-                # Show individual test attempts
-                tests = group.get("tests", [])
-                if tests:
-                    output.append("       Attempt History:")
-
-                    for j, test in enumerate(tests):
-                        test_outcome = test.get("outcome", "UNKNOWN")
-                        test_outcome_str = (
-                            test_outcome.lower() if isinstance(test_outcome, str) else str(test_outcome).lower()
-                        )
-
-                        # Choose color based on test outcome
-                        if test_outcome_str == "passed":
-                            test_color = GREEN
-                        elif test_outcome_str in ["failed", "error"]:
-                            test_color = RED
-                        elif test_outcome_str == "rerun":
-                            test_color = MAGENTA
-                        else:
-                            test_color = YELLOW
-
-                        duration = test.get("duration", 0)
-                        timestamp = test.get("start_time", "")
-                        timestamp_str = f" at {timestamp}" if timestamp else ""
-
-                        output.append(
-                            f"       - Attempt {j+1}: {colorize(str(test_outcome), test_color)} ({duration:.4f}s){timestamp_str}"
-                        )
-
-        # Join all lines and return
+        if summary.get("most_unreliable"):
+            output.append(
+                f"    - {colorize(str(len(summary['most_unreliable'])), YELLOW)} new unreliable tests detected in last 30 days"
+            )
+        if summary.get("top_failing_tests"):
+            for t in summary["top_failing_tests"]:
+                output.append(f"    - {colorize(t['nodeid'], RED)} is a top failure")
+        output.append(f"\n{CYAN}{'='*60}{RESET}")
         return "\n".join(output)
 
 
