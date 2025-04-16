@@ -14,6 +14,9 @@
 <body>
     <div class="container">
         <h1 class="mb-4">pytest-insight Dashboard</h1>
+        <div class="alert alert-info" role="alert" style="font-size:1.1em;">
+            <b>Insight API Docs:</b> <a href="/docs" target="_blank">Open Swagger (OpenAPI) Documentation</a>
+        </div>
 
         <div class="row">
             <div class="col-md-3">
@@ -50,8 +53,8 @@
                             <div class="card-body">
                                 <form id="query-form">
                                     <div class="mb-3">
-                                        <label for="query-path" class="form-label">Test Path</label>
-                                        <input type="text" class="form-control" id="query-path" placeholder="Path to test results">
+                                        <label for="query-profile" class="form-label">Storage Profile</label>
+                                        <input type="text" class="form-control" id="query-profile" placeholder="Profile name (e.g. default, staging, prod)">
                                     </div>
                                     <div class="mb-3">
                                         <label for="query-filter" class="form-label">Filter</label>
@@ -174,7 +177,7 @@
         // Setup form submissions
         document.getElementById('query-form').addEventListener('submit', function(e) {
             e.preventDefault();
-            const path = document.getElementById('query-path').value;
+            const profile = document.getElementById('query-profile').value;
             const filter = document.getElementById('query-filter').value;
 
             fetch('/api/operations/query/execute', {
@@ -183,7 +186,7 @@
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    path: path,
+                    profile: profile,
                     filter: filter
                 }),
             })
@@ -223,4 +226,3 @@
     </script>
 </body>
 </html>
-            

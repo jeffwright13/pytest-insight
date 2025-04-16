@@ -39,3 +39,6 @@ tui_files
 tests/test_plugin.py.old
 test_example.py
 Archive.zip
+
+# windsurf rules
+.windsurfrules

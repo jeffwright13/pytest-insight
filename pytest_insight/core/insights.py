@@ -1712,6 +1712,27 @@ class Insights:
 
         return self
 
+    def get_pass_rate_trend(self, last_n: int = 7) -> list:
+        """
+        Return the pass rate (%) for the last N sessions (most recent last).
+        """
+        # Get sessions sorted by session_start_time (oldest to newest)
+        sessions = sorted(self.analysis._sessions, key=lambda s: getattr(s, "session_start_time", None))
+        if not sessions:
+            return []
+
+        # Take the last N sessions
+        recent_sessions = sessions[-last_n:]
+        pass_rates = []
+        for session in recent_sessions:
+            test_results = getattr(session, "test_results", [])
+            total = len(test_results)
+            passed = sum(1 for t in test_results if getattr(t, "outcome", None) and getattr(t, "outcome").name == "PASSED")
+            rate = (passed / total * 100) if total else 0.0
+            pass_rates.append(round(rate, 2))
+
+        return pass_rates
+
     def summary_report(self) -> Dict[str, Any]:
         """Generate a comprehensive summary report.
 
@@ -2159,6 +2180,16 @@ class Insights:
                         )
         except Exception:
             pass
+        # Display Pass Rate Trend (Last 7 runs)
+        pass_rates = self.get_pass_rate_trend(7)
+        if len(pass_rates) > 1:
+            trend_str = " \u2192 ".join(f"{r:g}%" for r in pass_rates)
+            lines.append(f"Pass Rate Trend (Last 7 runs):  {trend_str}")
+        elif pass_rates:
+            lines.append(f"Pass Rate Trend (Last 7 runs):  {pass_rates[0]:g}%  (only one session available)")
+        else:
+            lines.append("Pass Rate Trend (Last 7 runs):  (no data)")
+
         return "\n".join(lines)
 
 

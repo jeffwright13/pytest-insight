@@ -778,6 +778,10 @@ class Query:
         # Get storage instance from profile
         self.storage = get_storage_instance(profile_name=profile_name)
 
+
+    def fred_flintstone(self) -> None:
+        pass
+
     def execute(self, sessions: Optional[List[TestSession]] = None) -> QueryResult:
         """Execute query and return results as QueryResult class instance.
 

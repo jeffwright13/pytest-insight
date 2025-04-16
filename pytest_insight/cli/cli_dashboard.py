@@ -63,6 +63,21 @@ def create_dashboard(
     _run_dashboard(port, profile, browser)
 
 
+@app.command("docs")
+def open_docs(
+    port: int = typer.Option(8000, help="Port where the API docs are served"),
+    browser: bool = typer.Option(True, "--browser/--no-browser", help="Open docs in browser automatically"),
+):
+    """Open the Insight API Swagger docs in your browser."""
+    url = f"http://localhost:{port}/docs"
+    if browser:
+        import webbrowser
+        webbrowser.open(url)
+        print(f"[INFO] Opened docs in browser: {url}")
+    else:
+        print(f"[INFO] Insight API Swagger docs: {url}")
+
+
 def _run_dashboard(port: int, profile: Optional[str], browser: bool):
     """Internal function to run the dashboard with the specified options.
 
@@ -71,6 +86,8 @@ def _run_dashboard(port: int, profile: Optional[str], browser: bool):
         profile: Storage profile to use
         browser: Whether to open the dashboard in a browser
     """
+    print(f"\n[INFO] Dashboard running at http://localhost:{port}/dashboard")
+    print(f"[INFO] Insight API Swagger docs available at http://localhost:{port}/docs\n")
     try:
         # Check for required dashboard dependencies
         missing_deps = []
