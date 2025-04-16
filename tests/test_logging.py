@@ -5,13 +5,16 @@ import os
 import re
 
 import pytest
+
 from pytest_insight.utils.logging_setup import UTCFormatter, setup_logging
 
 
 def test_utc_formatter():
     """Test that UTCFormatter correctly formats timestamps in UTC."""
     # Create a test formatter
-    formatter = UTCFormatter("%(asctime)s [UTC] - %(name)s - %(levelname)s - %(message)s")
+    formatter = UTCFormatter(
+        "%(asctime)s [UTC] - %(name)s - %(levelname)s - %(message)s"
+    )
 
     # Create a log record with a known timestamp
     record = logging.LogRecord(
@@ -29,7 +32,9 @@ def test_utc_formatter():
 
     # Verify the timestamp is in UTC format (ISO 8601 with UTC indicator)
     timestamp_pattern = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\+00:00 \[UTC\]"
-    assert re.search(timestamp_pattern, formatted), f"Timestamp not in UTC format: {formatted}"
+    assert re.search(
+        timestamp_pattern, formatted
+    ), f"Timestamp not in UTC format: {formatted}"
 
 
 def test_logger_uses_utc():
@@ -42,7 +47,9 @@ def test_logger_uses_utc():
 
     # Verify the logger is configured with our UTCFormatter
     for handler in test_logger.handlers:
-        assert isinstance(handler.formatter, UTCFormatter), "Logger not using UTCFormatter"
+        assert isinstance(
+            handler.formatter, UTCFormatter
+        ), "Logger not using UTCFormatter"
 
 
 def test_environment_variables():
@@ -60,10 +67,14 @@ def test_environment_variables():
         test_logger = setup_logging(logger_name="test_env_logger")
 
         # Check log level
-        assert test_logger.level == logging.ERROR, "Logger did not respect PYTEST_INSIGHT_LOG_LEVEL"
+        assert (
+            test_logger.level == logging.ERROR
+        ), "Logger did not respect PYTEST_INSIGHT_LOG_LEVEL"
 
         # Check for file handler
-        has_file_handler = any(isinstance(handler, logging.FileHandler) for handler in test_logger.handlers)
+        has_file_handler = any(
+            isinstance(handler, logging.FileHandler) for handler in test_logger.handlers
+        )
         assert has_file_handler, "Logger did not respect PYTEST_INSIGHT_LOG_FILE"
 
     finally:
@@ -93,7 +104,11 @@ def test_environment_variables():
 def test_log_level_parsing(log_level, expected_level):
     """Test that log levels are correctly parsed."""
     # Set up logger with specific log level
-    test_logger = setup_logging(logger_name=f"test_level_{log_level}", log_level=log_level)
+    test_logger = setup_logging(
+        logger_name=f"test_level_{log_level}", log_level=log_level
+    )
 
     # Check that the logger has the expected level
-    assert test_logger.level == expected_level, f"Expected level {expected_level} for '{log_level}'"
+    assert (
+        test_logger.level == expected_level
+    ), f"Expected level {expected_level} for '{log_level}'"

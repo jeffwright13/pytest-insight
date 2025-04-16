@@ -23,7 +23,12 @@ DEFAULT_CONFIG = {
     "reports": {
         "summary": {
             "enabled": True,
-            "metrics": ["pass_rate", "nonreliability_rate", "test_count", "session_count"],
+            "metrics": [
+                "pass_rate",
+                "nonreliability_rate",
+                "test_count",
+                "session_count",
+            ],
             "sections": ["top_failures", "top_unreliable", "performance_issues"],
         },
         "stability": {
@@ -80,7 +85,9 @@ def find_project_config() -> Optional[Dict[str, Any]]:
                 if "tool" in pyproject and "pytest-insight" in pyproject["tool"]:
                     return pyproject["tool"]["pytest-insight"]
         except Exception as e:
-            logger.warning(f"Error loading pytest-insight section from {pyproject_path}: {e}")
+            logger.warning(
+                f"Error loading pytest-insight section from {pyproject_path}: {e}"
+            )
 
     return None
 

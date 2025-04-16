@@ -52,7 +52,11 @@ def analyze_test_data(
     result = {}
 
     # Use a context manager for the status, but only if not in JSON mode
-    with console.status("[bold green]Analyzing test data...") if not json_mode else nullcontext():
+    with (
+        console.status("[bold green]Analyzing test data...")
+        if not json_mode
+        else nullcontext()
+    ):
         try:
             # Initialize sessions list
             sessions = []
@@ -74,7 +78,9 @@ def analyze_test_data(
                         return
                 except Exception as e:
                     if not json_mode:
-                        console.print(f"[bold red]Error loading from profile '{profile_name}':[/bold red] {str(e)}")
+                        console.print(
+                            f"[bold red]Error loading from profile '{profile_name}':[/bold red] {str(e)}"
+                        )
                         console.print("Falling back to file-based loading...")
                     # Fall back to file loading if profile loading fails
                     if data_path is None:
@@ -88,7 +94,9 @@ def analyze_test_data(
             if not profile_name or not sessions:
                 if not data_path:
                     if not json_mode:
-                        console.print("[bold red]Error:[/bold red] No data path specified.")
+                        console.print(
+                            "[bold red]Error:[/bold red] No data path specified."
+                        )
                     return
 
                 # Load the data file
@@ -97,23 +105,36 @@ def analyze_test_data(
                         raw_data = json.load(f)
                     except json.JSONDecodeError:
                         if not json_mode:
-                            console.print(f"[bold red]Error:[/bold red] Invalid JSON format in {data_path}")
+                            console.print(
+                                f"[bold red]Error:[/bold red] Invalid JSON format in {data_path}"
+                            )
                         return
 
                 # Determine the data structure and extract sessions
                 # Case 1: Direct list of session dictionaries
                 if isinstance(raw_data, list):
                     try:
-                        sessions = [TestSession.from_dict(session) for session in raw_data]
+                        sessions = [
+                            TestSession.from_dict(session) for session in raw_data
+                        ]
                     except Exception as e:
                         if not json_mode:
-                            console.print(f"[bold red]Error:[/bold red] Failed to parse sessions from list: {str(e)}")
+                            console.print(
+                                f"[bold red]Error:[/bold red] Failed to parse sessions from list: {str(e)}"
+                            )
                         return
 
                 # Case 2: Dictionary with a 'sessions' key
-                elif isinstance(raw_data, dict) and "sessions" in raw_data and isinstance(raw_data["sessions"], list):
+                elif (
+                    isinstance(raw_data, dict)
+                    and "sessions" in raw_data
+                    and isinstance(raw_data["sessions"], list)
+                ):
                     try:
-                        sessions = [TestSession.from_dict(session) for session in raw_data["sessions"]]
+                        sessions = [
+                            TestSession.from_dict(session)
+                            for session in raw_data["sessions"]
+                        ]
                     except Exception as e:
                         if not json_mode:
                             console.print(
@@ -133,7 +154,9 @@ def analyze_test_data(
 
             if not sessions:
                 if not json_mode:
-                    console.print("[bold yellow]Warning:[/bold yellow] No sessions found in the data source.")
+                    console.print(
+                        "[bold yellow]Warning:[/bold yellow] No sessions found in the data source."
+                    )
                 return
 
             # Now use the InsightAPI for a consistent interface
@@ -144,9 +167,13 @@ def analyze_test_data(
 
             # Apply SUT filter if specified
             if sut_filter:
-                filtered_sessions = [s for s in filtered_sessions if s.sut_name == sut_filter]
+                filtered_sessions = [
+                    s for s in filtered_sessions if s.sut_name == sut_filter
+                ]
                 if not json_mode:
-                    console.print(f"[bold]Filtered to:[/bold] {len(filtered_sessions)} sessions for SUT '{sut_filter}'")
+                    console.print(
+                        f"[bold]Filtered to:[/bold] {len(filtered_sessions)} sessions for SUT '{sut_filter}'"
+                    )
 
             # Apply days filter if specified
             if days:
@@ -157,7 +184,8 @@ def analyze_test_data(
                 filtered_sessions = [
                     s
                     for s in filtered_sessions
-                    if NormalizedDatetime(s.session_start_time) >= NormalizedDatetime(cutoff_date)
+                    if NormalizedDatetime(s.session_start_time)
+                    >= NormalizedDatetime(cutoff_date)
                 ]
                 if not json_mode:
                     console.print(
@@ -173,7 +201,11 @@ def analyze_test_data(
                 # We need to filter at the test level, not the session level
                 filtered_sessions_by_test = []
                 for session in filtered_sessions:
-                    matching_tests = [test for test in session.test_results if pattern.search(test.nodeid)]
+                    matching_tests = [
+                        test
+                        for test in session.test_results
+                        if pattern.search(test.nodeid)
+                    ]
                     if matching_tests:
                         # Create a copy of the session with only matching tests
                         session_copy = TestSession.from_dict(session.to_dict())
@@ -201,10 +233,16 @@ def analyze_test_data(
                 # Include the data path in the message
                 if profile_name:
                     console.print(
-                        Panel(f"[bold]Found {len(filtered_sessions)} test sessions in profile '{profile_name}'[/bold]")
+                        Panel(
+                            f"[bold]Found {len(filtered_sessions)} test sessions in profile '{profile_name}'[/bold]"
+                        )
                     )
                 else:
-                    console.print(Panel(f"[bold]Found {len(filtered_sessions)} test sessions in {data_path}[/bold]"))
+                    console.print(
+                        Panel(
+                            f"[bold]Found {len(filtered_sessions)} test sessions in {data_path}[/bold]"
+                        )
+                    )
 
             # Create an analysis object
             analysis = Analysis(sessions=filtered_sessions)
@@ -216,13 +254,17 @@ def analyze_test_data(
             unreliable_tests = analysis.identify_unreliable_tests()
             slowest_tests = analysis.identify_slowest_tests(limit=5)
             most_failing = analysis.identify_most_failing_tests(limit=5)
-            consistently_failing = analysis.identify_consistently_failing_tests(min_consecutive_failures=2)
+            consistently_failing = analysis.identify_consistently_failing_tests(
+                min_consecutive_failures=2
+            )
 
             # Get tests with hysteresis (predominantly failing but with occasional passes)
-            predominantly_failing = analysis.identify_consistently_failing_tests_with_hysteresis(
-                min_consecutive_failures=2,
-                hysteresis_threshold=0.2,  # Allow up to 20% passes
-                min_failure_rate=0.7,  # At least 70% failures
+            predominantly_failing = (
+                analysis.identify_consistently_failing_tests_with_hysteresis(
+                    min_consecutive_failures=2,
+                    hysteresis_threshold=0.2,  # Allow up to 20% passes
+                    min_failure_rate=0.7,  # At least 70% failures
+                )
             )
 
             # Display basic metrics
@@ -281,17 +323,25 @@ def analyze_test_data(
                     # Format timestamps - handle both datetime objects and float timestamps
                     try:
                         if isinstance(test["first_failure"], datetime):
-                            first_failure = test["first_failure"].strftime("%Y-%m-%d %H:%M")
+                            first_failure = test["first_failure"].strftime(
+                                "%Y-%m-%d %H:%M"
+                            )
                         else:
-                            first_failure = datetime.fromtimestamp(test["first_failure"]).strftime("%Y-%m-%d %H:%M")
+                            first_failure = datetime.fromtimestamp(
+                                test["first_failure"]
+                            ).strftime("%Y-%m-%d %H:%M")
                     except:
                         first_failure = "Unknown"
 
                     try:
                         if isinstance(test["last_failure"], datetime):
-                            last_failure = test["last_failure"].strftime("%Y-%m-%d %H:%M")
+                            last_failure = test["last_failure"].strftime(
+                                "%Y-%m-%d %H:%M"
+                            )
                         else:
-                            last_failure = datetime.fromtimestamp(test["last_failure"]).strftime("%Y-%m-%d %H:%M")
+                            last_failure = datetime.fromtimestamp(
+                                test["last_failure"]
+                            ).strftime("%Y-%m-%d %H:%M")
                     except:
                         last_failure = "Unknown"
 
@@ -315,7 +365,9 @@ def analyze_test_data(
                 console.print(consistent_table)
 
                 if len(consistently_failing) > 5:
-                    console.print(f"[dim]...and {len(consistently_failing) - 5} more consistently failing tests[/dim]")
+                    console.print(
+                        f"[dim]...and {len(consistently_failing) - 5} more consistently failing tests[/dim]"
+                    )
 
             # Display predominantly failing tests with hysteresis
             if predominantly_failing and not json_mode:
@@ -338,10 +390,14 @@ def analyze_test_data(
                 for test in predominantly_failing[:5]:  # Show top 5
                     # Format timestamps
                     first_occurrence = (
-                        test["first_occurrence"].strftime("%Y-%m-%d %H:%M") if test["first_occurrence"] else "Unknown"
+                        test["first_occurrence"].strftime("%Y-%m-%d %H:%M")
+                        if test["first_occurrence"]
+                        else "Unknown"
                     )
                     last_occurrence = (
-                        test["last_occurrence"].strftime("%Y-%m-%d %H:%M") if test["last_occurrence"] else "Unknown"
+                        test["last_occurrence"].strftime("%Y-%m-%d %H:%M")
+                        if test["last_occurrence"]
+                        else "Unknown"
                     )
 
                     # Format duration
@@ -410,7 +466,11 @@ def analyze_test_data(
                             session_id="base-comparison",
                             session_start_time=datetime.now(),
                             session_stop_time=datetime.now(),
-                            test_results=[test for session in current_sessions for test in session.test_results],
+                            test_results=[
+                                test
+                                for session in current_sessions
+                                for test in session.test_results
+                            ],
                             session_tags={"label": f"Last {compare_value} days"},
                         )
 
@@ -419,18 +479,28 @@ def analyze_test_data(
                             session_id="target-comparison",
                             session_start_time=datetime.now(),
                             session_stop_time=datetime.now(),
-                            test_results=[test for session in previous_sessions for test in session.test_results],
+                            test_results=[
+                                test
+                                for session in previous_sessions
+                                for test in session.test_results
+                            ],
                             session_tags={"label": f"Previous {compare_value} days"},
                         )
 
                         # Execute the comparison
-                        comparison_result = comparison.execute([base_session, target_session])
+                        comparison_result = comparison.execute(
+                            [base_session, target_session]
+                        )
 
                         # Display comparison results
                         comp_table = Table(title="Comparison Results")
                         comp_table.add_column("Metric", style="cyan")
-                        comp_table.add_column(f"Last {compare_value} days", style="green")
-                        comp_table.add_column(f"Previous {compare_value} days", style="blue")
+                        comp_table.add_column(
+                            f"Last {compare_value} days", style="green"
+                        )
+                        comp_table.add_column(
+                            f"Previous {compare_value} days", style="blue"
+                        )
                         comp_table.add_column("Change", style="yellow")
 
                         # Calculate comparison metrics from test results
@@ -440,36 +510,60 @@ def analyze_test_data(
 
                         # 2. Calculate test outcome metrics (using TestOutcome.PASSED enum value)
                         # Following metric style guide: test.outcome.passed
-                        test_outcome_passed_base = sum(1 for test in base_tests if test.outcome.value == "PASSED")
-                        test_outcome_passed_target = sum(1 for test in target_tests if test.outcome.value == "PASSED")
+                        test_outcome_passed_base = sum(
+                            1 for test in base_tests if test.outcome.value == "PASSED"
+                        )
+                        test_outcome_passed_target = sum(
+                            1 for test in target_tests if test.outcome.value == "PASSED"
+                        )
 
                         # Handle empty test collections to avoid division by zero
                         base_test_count = len(base_tests)
                         target_test_count = len(target_tests)
 
                         test_outcome_passed_rate_current = (
-                            test_outcome_passed_base / base_test_count if base_test_count > 0 else 0
+                            test_outcome_passed_base / base_test_count
+                            if base_test_count > 0
+                            else 0
                         )
                         test_outcome_passed_rate_previous = (
-                            test_outcome_passed_target / target_test_count if target_test_count > 0 else 0
+                            test_outcome_passed_target / target_test_count
+                            if target_test_count > 0
+                            else 0
                         )
                         test_outcome_passed_rate_change = (
-                            test_outcome_passed_rate_current - test_outcome_passed_rate_previous
+                            test_outcome_passed_rate_current
+                            - test_outcome_passed_rate_previous
                         )
 
                         # 3. Calculate test duration metrics
                         # Following metric style guide: test.duration.average
                         # Filter out None durations for robust calculation
-                        test_durations_base = [test.duration for test in base_tests if test.duration is not None]
-                        test_durations_target = [test.duration for test in target_tests if test.duration is not None]
+                        test_durations_base = [
+                            test.duration
+                            for test in base_tests
+                            if test.duration is not None
+                        ]
+                        test_durations_target = [
+                            test.duration
+                            for test in target_tests
+                            if test.duration is not None
+                        ]
 
                         test_duration_average_current = (
-                            sum(test_durations_base) / len(test_durations_base) if test_durations_base else 0
+                            sum(test_durations_base) / len(test_durations_base)
+                            if test_durations_base
+                            else 0
                         )
                         test_duration_average_previous = (
-                            sum(test_durations_target) / len(test_durations_target) if test_durations_target else 0
+                            sum(test_durations_target) / len(test_durations_target)
+                            if test_durations_target
+                            else 0
                         )
-                        test_duration_average_change = test_duration_average_current - test_duration_average_previous
+                        test_duration_average_change = (
+                            test_duration_average_current
+                            - test_duration_average_previous
+                        )
 
                         comp_table.add_row(
                             "Pass Rate",
@@ -490,20 +584,30 @@ def analyze_test_data(
                         # Show newly failing tests
                         if comparison_result.new_failures:
                             console.print("[bold red]Newly Failing Tests:[/bold red]")
-                            for test in comparison_result.new_failures[:5]:  # Limit to 5
+                            for test in comparison_result.new_failures[
+                                :5
+                            ]:  # Limit to 5
                                 console.print(f"  - {test}")
 
                         # Show newly passing tests
                         if comparison_result.new_passes:
-                            console.print("[bold green]Newly Passing Tests:[/bold green]")
+                            console.print(
+                                "[bold green]Newly Passing Tests:[/bold green]"
+                            )
                             for test in comparison_result.new_passes[:5]:  # Limit to 5
                                 console.print(f"  - {test}")
                     except ValueError:
-                        console.print("[bold red]Invalid comparison value. Must be a number of days.[/bold red]")
+                        console.print(
+                            "[bold red]Invalid comparison value. Must be a number of days.[/bold red]"
+                        )
 
                 elif compare_type == "version":
                     # Compare with a specific version
-                    version_query = api.query().filter_by_sut(sut_filter).filter_by_version(compare_value)
+                    version_query = (
+                        api.query()
+                        .filter_by_sut(sut_filter)
+                        .filter_by_version(compare_value)
+                    )
                     version_sessions = version_query.execute()
 
                     if version_sessions:
@@ -513,7 +617,11 @@ def analyze_test_data(
                             session_id="base-comparison",
                             session_start_time=datetime.now(),
                             session_stop_time=datetime.now(),
-                            test_results=[test for session in filtered_sessions for test in session.test_results],
+                            test_results=[
+                                test
+                                for session in filtered_sessions
+                                for test in session.test_results
+                            ],
                             session_tags={"label": "Current"},
                         )
 
@@ -522,30 +630,46 @@ def analyze_test_data(
                             session_id="target-comparison",
                             session_start_time=datetime.now(),
                             session_stop_time=datetime.now(),
-                            test_results=[test for session in version_sessions for test in session.test_results],
+                            test_results=[
+                                test
+                                for session in version_sessions
+                                for test in session.test_results
+                            ],
                             session_tags={"label": f"Version {compare_value}"},
                         )
 
                         # Execute the comparison
-                        comparison_result = comparison.execute([base_session, target_session])
+                        comparison_result = comparison.execute(
+                            [base_session, target_session]
+                        )
 
                         # Display comparison results (similar to above)
                         # ...
                     else:
-                        console.print(f"[bold red]No sessions found for version {compare_value}[/bold red]")
+                        console.print(
+                            f"[bold red]No sessions found for version {compare_value}[/bold red]"
+                        )
 
                 elif compare_type == "profile":
                     # Compare with a different storage profile
                     try:
                         # Get current sessions (already filtered above)
                         current_sessions = filtered_sessions
-                        current_label = f"Profile: {profile_name}" if profile_name else "Current"
+                        current_label = (
+                            f"Profile: {profile_name}" if profile_name else "Current"
+                        )
 
                         # Create API instances for both current and comparison profiles
                         # The mock tests are looking for these exact calls
-                        logger.debug(f"Creating InsightAPI with profile_name={profile_name}")
-                        current_api = InsightAPI(profile_name=profile_name)  # Will be None if no profile specified
-                        logger.debug(f"Creating InsightAPI with profile_name={compare_value}")
+                        logger.debug(
+                            f"Creating InsightAPI with profile_name={profile_name}"
+                        )
+                        current_api = InsightAPI(
+                            profile_name=profile_name
+                        )  # Will be None if no profile specified
+                        logger.debug(
+                            f"Creating InsightAPI with profile_name={compare_value}"
+                        )
                         compare_api = InsightAPI(profile_name=compare_value)
 
                         # Apply the same filters to the comparison profile
@@ -553,7 +677,9 @@ def analyze_test_data(
                         if sut_filter:
                             compare_query = compare_query.filter_by_sut(sut_filter)
                         if test_pattern:
-                            compare_query = compare_query.filter_by_test_name(test_pattern)
+                            compare_query = compare_query.filter_by_test_name(
+                                test_pattern
+                            )
 
                         # Use the date_range method instead of filter_by_date
                         compare_query = compare_query.date_range(
@@ -569,7 +695,11 @@ def analyze_test_data(
                                 session_id="base-comparison",
                                 session_start_time=datetime.now(),
                                 session_stop_time=datetime.now(),
-                                test_results=[test for session in current_sessions for test in session.test_results],
+                                test_results=[
+                                    test
+                                    for session in current_sessions
+                                    for test in session.test_results
+                                ],
                                 session_tags={"label": current_label},
                             )
 
@@ -578,30 +708,46 @@ def analyze_test_data(
                                 session_id="target-comparison",
                                 session_start_time=datetime.now(),
                                 session_stop_time=datetime.now(),
-                                test_results=[test for session in comparison_sessions for test in session.test_results],
+                                test_results=[
+                                    test
+                                    for session in comparison_sessions
+                                    for test in session.test_results
+                                ],
                                 session_tags={"label": f"Profile: {compare_value}"},
                             )
 
                             # Execute the comparison
-                            comparison_result = comparison.execute([base_session, target_session])
+                            comparison_result = comparison.execute(
+                                [base_session, target_session]
+                            )
 
                             # Display comparison results
                             comp_table = Table(title="Profile Comparison Results")
                             comp_table.add_column("Metric", style="cyan")
                             comp_table.add_column(current_label, style="green")
-                            comp_table.add_column(f"Profile: {compare_value}", style="blue")
+                            comp_table.add_column(
+                                f"Profile: {compare_value}", style="blue"
+                            )
                             comp_table.add_column("Change", style="yellow")
 
                             # Calculate comparison metrics from test results
                             # 1. Extract all test results from both sessions
                             base_tests = [test for test in base_session.test_results]
-                            target_tests = [test for test in target_session.test_results]
+                            target_tests = [
+                                test for test in target_session.test_results
+                            ]
 
                             # 2. Calculate test outcome metrics (using TestOutcome.PASSED enum value)
                             # Following metric style guide: test.outcome.passed
-                            test_outcome_passed_base = sum(1 for test in base_tests if test.outcome.value == "PASSED")
+                            test_outcome_passed_base = sum(
+                                1
+                                for test in base_tests
+                                if test.outcome.value == "PASSED"
+                            )
                             test_outcome_passed_target = sum(
-                                1 for test in target_tests if test.outcome.value == "PASSED"
+                                1
+                                for test in target_tests
+                                if test.outcome.value == "PASSED"
                             )
 
                             # Handle empty test collections to avoid division by zero
@@ -609,31 +755,47 @@ def analyze_test_data(
                             target_test_count = len(target_tests)
 
                             test_outcome_passed_rate_current = (
-                                test_outcome_passed_base / base_test_count if base_test_count > 0 else 0
+                                test_outcome_passed_base / base_test_count
+                                if base_test_count > 0
+                                else 0
                             )
                             comparison_test_outcome_passed_rate = (
-                                test_outcome_passed_target / target_test_count if target_test_count > 0 else 0
+                                test_outcome_passed_target / target_test_count
+                                if target_test_count > 0
+                                else 0
                             )
                             test_outcome_passed_rate_change = (
-                                test_outcome_passed_rate_current - comparison_test_outcome_passed_rate
+                                test_outcome_passed_rate_current
+                                - comparison_test_outcome_passed_rate
                             )
 
                             # 3. Calculate test duration metrics
                             # Following metric style guide: test.duration.average
                             # Filter out None durations for robust calculation
-                            test_durations_base = [test.duration for test in base_tests if test.duration is not None]
+                            test_durations_base = [
+                                test.duration
+                                for test in base_tests
+                                if test.duration is not None
+                            ]
                             test_durations_target = [
-                                test.duration for test in target_tests if test.duration is not None
+                                test.duration
+                                for test in target_tests
+                                if test.duration is not None
                             ]
 
                             test_duration_average_current = (
-                                sum(test_durations_base) / len(test_durations_base) if test_durations_base else 0
+                                sum(test_durations_base) / len(test_durations_base)
+                                if test_durations_base
+                                else 0
                             )
                             comparison_test_duration_average = (
-                                sum(test_durations_target) / len(test_durations_target) if test_durations_target else 0
+                                sum(test_durations_target) / len(test_durations_target)
+                                if test_durations_target
+                                else 0
                             )
                             test_duration_average_change = (
-                                test_duration_average_current - comparison_test_duration_average
+                                test_duration_average_current
+                                - comparison_test_duration_average
                             )
 
                             comp_table.add_row(
@@ -671,7 +833,9 @@ def analyze_test_data(
                                 console.print(
                                     f"[bold red]Tests failing in {current_label} but passing in Profile {compare_value}:[/bold red]"
                                 )
-                                for test in comparison_result.new_failures[:5]:  # Limit to 5
+                                for test in comparison_result.new_failures[
+                                    :5
+                                ]:  # Limit to 5
                                     console.print(f"  - {test}")
 
                             # Show newly passing tests
@@ -679,15 +843,25 @@ def analyze_test_data(
                                 console.print(
                                     f"[bold green]Tests passing in {current_label} but failing in Profile {compare_value}:[/bold green]"
                                 )
-                                for test in comparison_result.new_passes[:5]:  # Limit to 5
+                                for test in comparison_result.new_passes[
+                                    :5
+                                ]:  # Limit to 5
                                     console.print(f"  - {test}")
                         else:
-                            console.print(f"[bold yellow]No sessions found in profile '{compare_value}'[/bold yellow]")
+                            console.print(
+                                f"[bold yellow]No sessions found in profile '{compare_value}'[/bold yellow]"
+                            )
                     except Exception as e:
-                        console.print(f"[bold red]Error comparing with profile '{compare_value}':[/bold red] {str(e)}")
+                        console.print(
+                            f"[bold red]Error comparing with profile '{compare_value}':[/bold red] {str(e)}"
+                        )
                 else:
-                    console.print(f"[bold red]Unknown comparison type: {compare_type}[/bold red]")
-                    console.print("Valid formats: days:N, version:X.Y.Z, or profile:name")
+                    console.print(
+                        f"[bold red]Unknown comparison type: {compare_type}[/bold red]"
+                    )
+                    console.print(
+                        "Valid formats: days:N, version:X.Y.Z, or profile:name"
+                    )
 
             # Show trends if requested
             if show_trends and not json_mode:
@@ -740,7 +914,10 @@ def analyze_test_data(
                     session_date = session.session_start_time
 
                     for test_result in session.test_results:
-                        if hasattr(test_result, "outcome") and test_result.outcome == "failed":
+                        if (
+                            hasattr(test_result, "outcome")
+                            and test_result.outcome == "failed"
+                        ):
                             test_id = test_result.nodeid
                             if test_id not in test_timestamps:
                                 test_timestamps[test_id] = []
@@ -766,7 +943,9 @@ def analyze_test_data(
                     total_failures = len(timestamps)
 
                     # Calculate hourly distribution as percentages
-                    hour_percentages = [count / total_failures for count in hour_distribution]
+                    hour_percentages = [
+                        count / total_failures for count in hour_distribution
+                    ]
 
                     # Check for peaks (hours with significantly more failures)
                     avg_failures_per_hour = total_failures / 24
@@ -784,7 +963,9 @@ def analyze_test_data(
                         day_distribution[day] += 1
 
                     # Calculate day distribution as percentages
-                    day_percentages = [count / total_failures for count in day_distribution]
+                    day_percentages = [
+                        count / total_failures for count in day_distribution
+                    ]
 
                     # Check for peak days
                     avg_failures_per_day = total_failures / 7
@@ -797,7 +978,9 @@ def analyze_test_data(
 
                     # Only include tests with significant patterns
                     if peak_hours or peak_days:
-                        test_short = test_id.split("::")[-1] if "::" in test_id else test_id
+                        test_short = (
+                            test_id.split("::")[-1] if "::" in test_id else test_id
+                        )
 
                         seasonal_patterns.append(
                             {
@@ -827,7 +1010,9 @@ def analyze_test_data(
                         "Sunday",
                     ]
 
-                    seasonal_table = Table(title="Seasonal Failure Patterns", box=box.SIMPLE)
+                    seasonal_table = Table(
+                        title="Seasonal Failure Patterns", box=box.SIMPLE
+                    )
                     seasonal_table.add_column("Test", style="cyan")
                     seasonal_table.add_column("Total Failures", style="red")
                     seasonal_table.add_column("Time of Day Pattern", style="yellow")
@@ -839,7 +1024,10 @@ def analyze_test_data(
                         hour_pattern = ""
                         if pattern["peak_hours"]:
                             hour_pattern = ", ".join(
-                                [f"{hour}:00 ({int(pct*100)}%)" for hour, count, pct in pattern["peak_hours"]]
+                                [
+                                    f"{hour}:00 ({int(pct*100)}%)"
+                                    for hour, count, pct in pattern["peak_hours"]
+                                ]
                             )
                         else:
                             hour_pattern = "No significant pattern"
@@ -848,7 +1036,10 @@ def analyze_test_data(
                         day_pattern = ""
                         if pattern["peak_days"]:
                             day_pattern = ", ".join(
-                                [f"{day_names[day]} ({int(pct*100)}%)" for day, count, pct in pattern["peak_days"]]
+                                [
+                                    f"{day_names[day]} ({int(pct*100)}%)"
+                                    for day, count, pct in pattern["peak_days"]
+                                ]
                             )
                         else:
                             day_pattern = "No significant pattern"
@@ -862,11 +1053,15 @@ def analyze_test_data(
 
                     console.print(seasonal_table)
                 else:
-                    console.print("[yellow]No significant seasonal patterns identified in the dataset.[/yellow]")
+                    console.print(
+                        "[yellow]No significant seasonal patterns identified in the dataset.[/yellow]"
+                    )
 
             # 5. Test Stability Timeline
             if not json_mode:
-                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+                console.print(
+                    "\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time"
+                )
 
                 # Use the core API to get stability timeline data
                 insights = Insights(analysis=analysis)
@@ -886,7 +1081,9 @@ def analyze_test_data(
                     # Add date columns
                     sorted_dates = timeline_data["dates"]
                     for date in sorted_dates:
-                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+                        timeline_table.add_column(
+                            date.strftime("%Y-%m-%d"), style="yellow"
+                        )
 
                     # Add stability trend column
                     timeline_table.add_column("Trend", style="green")
@@ -896,7 +1093,9 @@ def analyze_test_data(
                     trends = timeline_data["trends"]
 
                     for nodeid in test_timeline:
-                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        test_short = (
+                            nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        )
                         row = [test_short]
 
                         # Add stability score for each date
@@ -941,7 +1140,9 @@ def analyze_test_data(
             # 6. Test Dependency Graph
             # Analyze which tests tend to fail together to identify potential dependencies
             if not json_mode:
-                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+                console.print(
+                    "\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies"
+                )
 
                 # Use the TestInsights API to get dependency graph data
                 insights = Insights(analysis=analysis)
@@ -951,7 +1152,9 @@ def analyze_test_data(
 
                 # Display the results
                 if dependencies:
-                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table = Table(
+                        title="Test Dependency Analysis", box=box.SIMPLE
+                    )
                     dependency_table.add_column("Test Relationship", style="cyan")
                     dependency_table.add_column("Strength", style="yellow")
                     dependency_table.add_column("Co-Failures", style="red")
@@ -979,7 +1182,9 @@ def analyze_test_data(
 
                     console.print(dependency_table)
                 else:
-                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+                    console.print(
+                        "[yellow]No significant test dependencies identified in the dataset.[/yellow]"
+                    )
 
             # 7. Environment Impact Analysis
             if not json_mode:
@@ -1009,14 +1214,18 @@ def analyze_test_data(
                         )
 
                     console.print(env_table)
-                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                    console.print(
+                        f"Environment Consistency Score: {consistency:.2f} (0-1 scale)"
+                    )
                 else:
                     console.print("[yellow]No environment data available.[/yellow]")
 
             # 4. Error Pattern Analysis
             # Analyze common error patterns across test failures
             if not json_mode:
-                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+                console.print(
+                    "[bold]Error Pattern Analysis:[/bold] Identifying common failure modes"
+                )
 
                 # Use the core API to get error pattern data
                 insights = Insights(analysis=analysis)
@@ -1031,7 +1240,9 @@ def analyze_test_data(
                 if failure_details and show_error_details:
                     console.print("\n[bold]Test Failure Details:[/bold]")
                     for i, failure in enumerate(failure_details):
-                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(
+                            f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}"
+                        )
                         console.print(f"[dim]Session: {failure['session_id']}[/dim]")
 
                         # Format and display the error message
@@ -1043,13 +1254,19 @@ def analyze_test_data(
                                 if line.strip():  # Skip empty lines
                                     console.print(f"  {line}")
                         else:
-                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+                            console.print(
+                                "[yellow]Error Message:[/yellow] [italic]No error message available[/italic]"
+                            )
 
                         console.print()  # Add a blank line between failures
                 elif failure_details:
                     # Just show a summary if detailed error messages are not requested
-                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
-                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+                    console.print(
+                        f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed"
+                    )
+                    console.print(
+                        "[italic]Use --show-errors to see detailed error messages[/italic]"
+                    )
 
                 # Then show the error pattern analysis
                 if patterns:
@@ -1069,7 +1286,9 @@ def analyze_test_data(
 
                     # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
-                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        console.print(
+                            "[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)"
+                        )
                         multi_error_table = Table(show_header=True)
                         multi_error_table.add_column("Test", style="cyan")
                         multi_error_table.add_column("Error Patterns", style="yellow")
@@ -1090,7 +1309,9 @@ def analyze_test_data(
                             "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
                         )
                     else:
-                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+                        console.print(
+                            "[italic]No test failures found in the analyzed data.[/italic]"
+                        )
 
             # Update JSON output with error pattern data
             if output_format == "json":
@@ -1113,7 +1334,9 @@ def analyze_test_data(
 
             # 5. Test Stability Timeline
             if not json_mode:
-                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+                console.print(
+                    "\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time"
+                )
 
                 # Use the core API to get stability timeline data
                 insights = Insights(analysis=analysis)
@@ -1133,7 +1356,9 @@ def analyze_test_data(
                     # Add date columns
                     sorted_dates = timeline_data["dates"]
                     for date in sorted_dates:
-                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+                        timeline_table.add_column(
+                            date.strftime("%Y-%m-%d"), style="yellow"
+                        )
 
                     # Add stability trend column
                     timeline_table.add_column("Trend", style="green")
@@ -1143,7 +1368,9 @@ def analyze_test_data(
                     trends = timeline_data["trends"]
 
                     for nodeid in test_timeline:
-                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        test_short = (
+                            nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        )
                         row = [test_short]
 
                         # Add stability score for each date
@@ -1188,7 +1415,9 @@ def analyze_test_data(
             # 6. Test Dependency Graph
             # Analyze which tests tend to fail together to identify potential dependencies
             if not json_mode:
-                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+                console.print(
+                    "\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies"
+                )
 
                 # Create a matrix of test co-failures
                 test_failures = {}
@@ -1264,9 +1493,7 @@ def analyze_test_data(
                                 # Bidirectional dependency
                                 direction = f"{test_id} ↔ {co_test}"
                                 strength = (pct_a_with_b + pct_b_with_a) / 2
-                                interpretation = (
-                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
-                                )
+                                interpretation = f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
 
                             dependencies.append(
                                 {
@@ -1284,7 +1511,9 @@ def analyze_test_data(
 
                 # Display the results
                 if dependencies:
-                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table = Table(
+                        title="Test Dependency Analysis", box=box.SIMPLE
+                    )
                     dependency_table.add_column("Test Relationship", style="cyan")
                     dependency_table.add_column("Strength", style="yellow")
                     dependency_table.add_column("Co-Failures", style="red")
@@ -1312,7 +1541,9 @@ def analyze_test_data(
 
                     console.print(dependency_table)
                 else:
-                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+                    console.print(
+                        "[yellow]No significant test dependencies identified in the dataset.[/yellow]"
+                    )
 
             # 7. Environment Impact Analysis
             if not json_mode:
@@ -1342,14 +1573,18 @@ def analyze_test_data(
                         )
 
                     console.print(env_table)
-                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                    console.print(
+                        f"Environment Consistency Score: {consistency:.2f} (0-1 scale)"
+                    )
                 else:
                     console.print("[yellow]No environment data available.[/yellow]")
 
             # 4. Error Pattern Analysis
             # Analyze common error patterns across test failures
             if not json_mode:
-                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+                console.print(
+                    "[bold]Error Pattern Analysis:[/bold] Identifying common failure modes"
+                )
 
                 # Use the core API to get error pattern data
                 insights = Insights(analysis=analysis)
@@ -1364,7 +1599,9 @@ def analyze_test_data(
                 if failure_details and show_error_details:
                     console.print("\n[bold]Test Failure Details:[/bold]")
                     for i, failure in enumerate(failure_details):
-                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(
+                            f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}"
+                        )
                         console.print(f"[dim]Session: {failure['session_id']}[/dim]")
 
                         # Format and display the error message
@@ -1376,13 +1613,19 @@ def analyze_test_data(
                                 if line.strip():  # Skip empty lines
                                     console.print(f"  {line}")
                         else:
-                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+                            console.print(
+                                "[yellow]Error Message:[/yellow] [italic]No error message available[/italic]"
+                            )
 
                         console.print()  # Add a blank line between failures
                 elif failure_details:
                     # Just show a summary if detailed error messages are not requested
-                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
-                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+                    console.print(
+                        f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed"
+                    )
+                    console.print(
+                        "[italic]Use --show-errors to see detailed error messages[/italic]"
+                    )
 
                 # Then show the error pattern analysis
                 if patterns:
@@ -1402,7 +1645,9 @@ def analyze_test_data(
 
                     # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
-                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        console.print(
+                            "[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)"
+                        )
                         multi_error_table = Table(show_header=True)
                         multi_error_table.add_column("Test", style="cyan")
                         multi_error_table.add_column("Error Patterns", style="yellow")
@@ -1423,7 +1668,9 @@ def analyze_test_data(
                             "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
                         )
                     else:
-                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+                        console.print(
+                            "[italic]No test failures found in the analyzed data.[/italic]"
+                        )
 
             # Update JSON output with error pattern data
             if output_format == "json":
@@ -1446,7 +1693,9 @@ def analyze_test_data(
 
             # 5. Test Stability Timeline
             if not json_mode:
-                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+                console.print(
+                    "\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time"
+                )
 
                 # Use the core API to get stability timeline data
                 insights = Insights(analysis=analysis)
@@ -1466,7 +1715,9 @@ def analyze_test_data(
                     # Add date columns
                     sorted_dates = timeline_data["dates"]
                     for date in sorted_dates:
-                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+                        timeline_table.add_column(
+                            date.strftime("%Y-%m-%d"), style="yellow"
+                        )
 
                     # Add stability trend column
                     timeline_table.add_column("Trend", style="green")
@@ -1476,7 +1727,9 @@ def analyze_test_data(
                     trends = timeline_data["trends"]
 
                     for nodeid in test_timeline:
-                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        test_short = (
+                            nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        )
                         row = [test_short]
 
                         # Add stability score for each date
@@ -1521,7 +1774,9 @@ def analyze_test_data(
             # 6. Test Dependency Graph
             # Analyze which tests tend to fail together to identify potential dependencies
             if not json_mode:
-                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+                console.print(
+                    "\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies"
+                )
 
                 # Create a matrix of test co-failures
                 test_failures = {}
@@ -1597,9 +1852,7 @@ def analyze_test_data(
                                 # Bidirectional dependency
                                 direction = f"{test_id} ↔ {co_test}"
                                 strength = (pct_a_with_b + pct_b_with_a) / 2
-                                interpretation = (
-                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
-                                )
+                                interpretation = f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
 
                             dependencies.append(
                                 {
@@ -1617,7 +1870,9 @@ def analyze_test_data(
 
                 # Display the results
                 if dependencies:
-                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table = Table(
+                        title="Test Dependency Analysis", box=box.SIMPLE
+                    )
                     dependency_table.add_column("Test Relationship", style="cyan")
                     dependency_table.add_column("Strength", style="yellow")
                     dependency_table.add_column("Co-Failures", style="red")
@@ -1645,7 +1900,9 @@ def analyze_test_data(
 
                     console.print(dependency_table)
                 else:
-                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+                    console.print(
+                        "[yellow]No significant test dependencies identified in the dataset.[/yellow]"
+                    )
 
             # 7. Environment Impact Analysis
             if not json_mode:
@@ -1675,14 +1932,18 @@ def analyze_test_data(
                         )
 
                     console.print(env_table)
-                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                    console.print(
+                        f"Environment Consistency Score: {consistency:.2f} (0-1 scale)"
+                    )
                 else:
                     console.print("[yellow]No environment data available.[/yellow]")
 
             # 4. Error Pattern Analysis
             # Analyze common error patterns across test failures
             if not json_mode:
-                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+                console.print(
+                    "[bold]Error Pattern Analysis:[/bold] Identifying common failure modes"
+                )
 
                 # Use the core API to get error pattern data
                 insights = Insights(analysis=analysis)
@@ -1697,7 +1958,9 @@ def analyze_test_data(
                 if failure_details and show_error_details:
                     console.print("\n[bold]Test Failure Details:[/bold]")
                     for i, failure in enumerate(failure_details):
-                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(
+                            f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}"
+                        )
                         console.print(f"[dim]Session: {failure['session_id']}[/dim]")
 
                         # Format and display the error message
@@ -1709,13 +1972,19 @@ def analyze_test_data(
                                 if line.strip():  # Skip empty lines
                                     console.print(f"  {line}")
                         else:
-                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+                            console.print(
+                                "[yellow]Error Message:[/yellow] [italic]No error message available[/italic]"
+                            )
 
                         console.print()  # Add a blank line between failures
                 elif failure_details:
                     # Just show a summary if detailed error messages are not requested
-                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
-                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+                    console.print(
+                        f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed"
+                    )
+                    console.print(
+                        "[italic]Use --show-errors to see detailed error messages[/italic]"
+                    )
 
                 # Then show the error pattern analysis
                 if patterns:
@@ -1735,7 +2004,9 @@ def analyze_test_data(
 
                     # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
-                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        console.print(
+                            "[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)"
+                        )
                         multi_error_table = Table(show_header=True)
                         multi_error_table.add_column("Test", style="cyan")
                         multi_error_table.add_column("Error Patterns", style="yellow")
@@ -1756,7 +2027,9 @@ def analyze_test_data(
                             "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
                         )
                     else:
-                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+                        console.print(
+                            "[italic]No test failures found in the analyzed data.[/italic]"
+                        )
 
             # Update JSON output with error pattern data
             if output_format == "json":
@@ -1779,7 +2052,9 @@ def analyze_test_data(
 
             # 5. Test Stability Timeline
             if not json_mode:
-                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+                console.print(
+                    "\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time"
+                )
 
                 # Use the core API to get stability timeline data
                 insights = Insights(analysis=analysis)
@@ -1799,7 +2074,9 @@ def analyze_test_data(
                     # Add date columns
                     sorted_dates = timeline_data["dates"]
                     for date in sorted_dates:
-                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+                        timeline_table.add_column(
+                            date.strftime("%Y-%m-%d"), style="yellow"
+                        )
 
                     # Add stability trend column
                     timeline_table.add_column("Trend", style="green")
@@ -1809,7 +2086,9 @@ def analyze_test_data(
                     trends = timeline_data["trends"]
 
                     for nodeid in test_timeline:
-                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        test_short = (
+                            nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        )
                         row = [test_short]
 
                         # Add stability score for each date
@@ -1854,7 +2133,9 @@ def analyze_test_data(
             # 6. Test Dependency Graph
             # Analyze which tests tend to fail together to identify potential dependencies
             if not json_mode:
-                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+                console.print(
+                    "\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies"
+                )
 
                 # Create a matrix of test co-failures
                 test_failures = {}
@@ -1930,9 +2211,7 @@ def analyze_test_data(
                                 # Bidirectional dependency
                                 direction = f"{test_id} ↔ {co_test}"
                                 strength = (pct_a_with_b + pct_b_with_a) / 2
-                                interpretation = (
-                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
-                                )
+                                interpretation = f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
 
                             dependencies.append(
                                 {
@@ -1950,7 +2229,9 @@ def analyze_test_data(
 
                 # Display the results
                 if dependencies:
-                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table = Table(
+                        title="Test Dependency Analysis", box=box.SIMPLE
+                    )
                     dependency_table.add_column("Test Relationship", style="cyan")
                     dependency_table.add_column("Strength", style="yellow")
                     dependency_table.add_column("Co-Failures", style="red")
@@ -1978,7 +2259,9 @@ def analyze_test_data(
 
                     console.print(dependency_table)
                 else:
-                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+                    console.print(
+                        "[yellow]No significant test dependencies identified in the dataset.[/yellow]"
+                    )
 
             # 7. Environment Impact Analysis
             if not json_mode:
@@ -2008,14 +2291,18 @@ def analyze_test_data(
                         )
 
                     console.print(env_table)
-                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                    console.print(
+                        f"Environment Consistency Score: {consistency:.2f} (0-1 scale)"
+                    )
                 else:
                     console.print("[yellow]No environment data available.[/yellow]")
 
             # 4. Error Pattern Analysis
             # Analyze common error patterns across test failures
             if not json_mode:
-                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+                console.print(
+                    "[bold]Error Pattern Analysis:[/bold] Identifying common failure modes"
+                )
 
                 # Use the core API to get error pattern data
                 insights = Insights(analysis=analysis)
@@ -2030,7 +2317,9 @@ def analyze_test_data(
                 if failure_details and show_error_details:
                     console.print("\n[bold]Test Failure Details:[/bold]")
                     for i, failure in enumerate(failure_details):
-                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(
+                            f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}"
+                        )
                         console.print(f"[dim]Session: {failure['session_id']}[/dim]")
 
                         # Format and display the error message
@@ -2042,13 +2331,19 @@ def analyze_test_data(
                                 if line.strip():  # Skip empty lines
                                     console.print(f"  {line}")
                         else:
-                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+                            console.print(
+                                "[yellow]Error Message:[/yellow] [italic]No error message available[/italic]"
+                            )
 
                         console.print()  # Add a blank line between failures
                 elif failure_details:
                     # Just show a summary if detailed error messages are not requested
-                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
-                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+                    console.print(
+                        f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed"
+                    )
+                    console.print(
+                        "[italic]Use --show-errors to see detailed error messages[/italic]"
+                    )
 
                 # Then show the error pattern analysis
                 if patterns:
@@ -2068,7 +2363,9 @@ def analyze_test_data(
 
                     # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
-                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        console.print(
+                            "[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)"
+                        )
                         multi_error_table = Table(show_header=True)
                         multi_error_table.add_column("Test", style="cyan")
                         multi_error_table.add_column("Error Patterns", style="yellow")
@@ -2089,7 +2386,9 @@ def analyze_test_data(
                             "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
                         )
                     else:
-                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+                        console.print(
+                            "[italic]No test failures found in the analyzed data.[/italic]"
+                        )
 
             # Update JSON output with error pattern data
             if output_format == "json":
@@ -2112,7 +2411,9 @@ def analyze_test_data(
 
             # 5. Test Stability Timeline
             if not json_mode:
-                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+                console.print(
+                    "\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time"
+                )
 
                 # Use the core API to get stability timeline data
                 insights = Insights(analysis=analysis)
@@ -2132,7 +2433,9 @@ def analyze_test_data(
                     # Add date columns
                     sorted_dates = timeline_data["dates"]
                     for date in sorted_dates:
-                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+                        timeline_table.add_column(
+                            date.strftime("%Y-%m-%d"), style="yellow"
+                        )
 
                     # Add stability trend column
                     timeline_table.add_column("Trend", style="green")
@@ -2142,7 +2445,9 @@ def analyze_test_data(
                     trends = timeline_data["trends"]
 
                     for nodeid in test_timeline:
-                        test_short = nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        test_short = (
+                            nodeid.split("::")[-1] if "::" in nodeid else nodeid
+                        )
                         row = [test_short]
 
                         # Add stability score for each date
@@ -2186,7 +2491,9 @@ def analyze_test_data(
 
             # Additional high-level metrics
             if not json_mode:
-                console.print(Panel("[bold cyan]Advanced Metrics & Insights[/bold cyan]"))
+                console.print(
+                    Panel("[bold cyan]Advanced Metrics & Insights[/bold cyan]")
+                )
 
             # 1. Test Health Score - composite score from 0-100
             health_factors = {
@@ -2202,15 +2509,21 @@ def analyze_test_data(
                 durations = [duration for _, duration in slowest_tests]
                 if durations:
                     mean_duration = sum(durations) / len(durations)
-                    variance = sum((d - mean_duration) ** 2 for d in durations) / len(durations)
+                    variance = sum((d - mean_duration) ** 2 for d in durations) / len(
+                        durations
+                    )
                     # Normalize: lower variance = higher score (max 15)
                     coefficient = 0.1  # Adjust based on typical variance values
-                    health_factors["duration_stability"] = 15 * (1 / (1 + coefficient * variance))
+                    health_factors["duration_stability"] = 15 * (
+                        1 / (1 + coefficient * variance)
+                    )
 
             # Calculate failure pattern component
             if total_tests > 0:
                 # Lower ratio of consistently failing tests = better score
-                consistent_failure_ratio = len(consistently_failing) / max(1, total_tests)
+                consistent_failure_ratio = len(consistently_failing) / max(
+                    1, total_tests
+                )
                 health_factors["failure_pattern"] = 15 * (1 - consistent_failure_ratio)
 
             # Calculate overall health score
@@ -2218,7 +2531,9 @@ def analyze_test_data(
             health_score = min(100, max(0, health_score))  # Clamp between 0-100
 
             # Calculate reliability index
-            environment_consistency = 0.8  # Default value if we can't calculate from data
+            environment_consistency = (
+                0.8  # Default value if we can't calculate from data
+            )
             test_consistency = 0.8  # Default value if we can't calculate from data
 
             # Check if we have environment information in session tags
@@ -2231,7 +2546,9 @@ def analyze_test_data(
                 # Calculate pass rate for this session
                 session_results = session.test_results
                 if session_results:
-                    session_pass_rate = sum(1 for t in session_results if t.outcome == "passed") / len(session_results)
+                    session_pass_rate = sum(
+                        1 for t in session_results if t.outcome == "passed"
+                    ) / len(session_results)
                     environments[env]["pass_rates"].append(session_pass_rate)
 
             # Calculate variance in pass rates across environments
@@ -2239,14 +2556,20 @@ def analyze_test_data(
                 env_pass_rates = []
                 for env, data in environments.items():
                     if data["pass_rates"]:
-                        avg_env_pass_rate = sum(data["pass_rates"]) / len(data["pass_rates"])
+                        avg_env_pass_rate = sum(data["pass_rates"]) / len(
+                            data["pass_rates"]
+                        )
                         env_pass_rates.append(avg_env_pass_rate)
 
                 if env_pass_rates:
                     mean_env_pass_rate = sum(env_pass_rates) / len(env_pass_rates)
-                    env_variance = sum((r - mean_env_pass_rate) ** 2 for r in env_pass_rates) / len(env_pass_rates)
+                    env_variance = sum(
+                        (r - mean_env_pass_rate) ** 2 for r in env_pass_rates
+                    ) / len(env_pass_rates)
                     # Lower variance = higher consistency
-                    environment_consistency = 1 / (1 + 10 * env_variance)  # Scale factor of 10 for better distribution
+                    environment_consistency = 1 / (
+                        1 + 10 * env_variance
+                    )  # Scale factor of 10 for better distribution
 
             # Calculate test result consistency (how consistently individual tests pass/fail)
             # Group test results by nodeid to analyze consistency
@@ -2282,14 +2605,20 @@ def analyze_test_data(
             # Combine factors for reliability index (0-100)
             reliability_index = (
                 pass_rate * 0.4  # 40% weight to pass rate
-                + (1 - len(unreliable_tests) / max(1, total_tests)) * 0.3  # 30% weight to lack of unreliability
-                + environment_consistency * 0.15  # 15% weight to environment consistency
+                + (1 - len(unreliable_tests) / max(1, total_tests))
+                * 0.3  # 30% weight to lack of unreliability
+                + environment_consistency
+                * 0.15  # 15% weight to environment consistency
                 + test_consistency * 0.15  # 15% weight to test result consistency
             ) * 100
             reliability_index = min(100, max(0, reliability_index))
 
             if not json_mode:
-                health_color = "green" if health_score >= 80 else "yellow" if health_score >= 60 else "red"
+                health_color = (
+                    "green"
+                    if health_score >= 80
+                    else "yellow" if health_score >= 60 else "red"
+                )
                 console.print(
                     f"[bold]Test Health Score:[/bold] [{health_color}]{health_score:.1f}/100[/{health_color}]"
                 )
@@ -2303,7 +2632,8 @@ def analyze_test_data(
                 # Raw scores (before weight multiplication)
                 raw_health_factors = {
                     "pass_rate": pass_rate * 100,
-                    "unreliability": (1 - len(unreliable_tests) / max(1, total_tests)) * 100,
+                    "unreliability": (1 - len(unreliable_tests) / max(1, total_tests))
+                    * 100,
                     "duration_stability": min(
                         100, health_factors["duration_stability"] * 100 / 15
                     ),  # Convert back to percentage, max 100%
@@ -2330,7 +2660,9 @@ def analyze_test_data(
             # 2. Reliability Index
             if not json_mode:
                 reliability_color = (
-                    "green" if reliability_index >= 80 else "yellow" if reliability_index >= 60 else "red"
+                    "green"
+                    if reliability_index >= 80
+                    else "yellow" if reliability_index >= 60 else "red"
                 )
                 console.print(
                     f"[bold]Reliability Index:[/bold] [{reliability_color}]{reliability_index:.1f}/100[/{reliability_color}]"
@@ -2345,7 +2677,10 @@ def analyze_test_data(
                 # Raw scores (before weight multiplication)
                 raw_reliability_factors = {
                     "Pass Rate": pass_rate * 100,
-                    "Unreliability Resistance": (1 - len(unreliable_tests) / max(1, total_tests)) * 100,
+                    "Unreliability Resistance": (
+                        1 - len(unreliable_tests) / max(1, total_tests)
+                    )
+                    * 100,
                     "Environment Consistency": environment_consistency * 100,
                     "Test Result Consistency": test_consistency * 100,
                 }
@@ -2364,7 +2699,9 @@ def analyze_test_data(
             # 3. Test Correlation Analysis
             # Identify tests that frequently fail together
             if not json_mode:
-                console.print("[bold]Test Correlation Analysis:[/bold] Identifying tests that fail together")
+                console.print(
+                    "[bold]Test Correlation Analysis:[/bold] Identifying tests that fail together"
+                )
 
             # Create a matrix of test failures by session
             test_failure_matrix = {}
@@ -2412,7 +2749,9 @@ def analyze_test_data(
             correlated_pairs = []
 
             # Only analyze tests that have failed at least once
-            failing_tests = [nodeid for nodeid, count in test_failure_counts.items() if count > 0]
+            failing_tests = [
+                nodeid for nodeid, count in test_failure_counts.items() if count > 0
+            ]
 
             # Calculate correlation coefficient for each pair of tests
             for i, test1 in enumerate(failing_tests):
@@ -2454,7 +2793,9 @@ def analyze_test_data(
                     ):
                         correlation = 0
                     else:
-                        numerator = (both_failed * neither_failed) - (test1_only * test2_only)
+                        numerator = (both_failed * neither_failed) - (
+                            test1_only * test2_only
+                        )
                         denominator = math.sqrt(
                             (both_failed + test1_only)
                             * (both_failed + test2_only)
@@ -2470,14 +2811,20 @@ def analyze_test_data(
                         else 0
                     )
                     conditional_prob_1_given_2 = (
-                        both_failed / (both_failed + test2_only) if (both_failed + test2_only) > 0 else 0
+                        both_failed / (both_failed + test2_only)
+                        if (both_failed + test2_only) > 0
+                        else 0
                     )
                     conditional_prob_2_given_1 = (
-                        both_failed / (both_failed + test1_only) if (both_failed + test1_only) > 0 else 0
+                        both_failed / (both_failed + test1_only)
+                        if (both_failed + test1_only) > 0
+                        else 0
                     )
 
                     # Only include pairs with significant correlation
-                    if (abs(correlation) > 0.3 or jaccard_similarity > 0.3) and both_failed > 0:
+                    if (
+                        abs(correlation) > 0.3 or jaccard_similarity > 0.3
+                    ) and both_failed > 0:
                         # Get shortened test names for display
                         test1_short = test1.split("::")[-1]
                         test2_short = test2.split("::")[-1]
@@ -2495,7 +2842,8 @@ def analyze_test_data(
                                 "both_failed": both_failed,
                                 "test1_failures": test1_only + both_failed,
                                 "test2_failures": test2_only + both_failed,
-                                "same_module": test1.split("::")[0] == test2.split("::")[0],
+                                "same_module": test1.split("::")[0]
+                                == test2.split("::")[0],
                             }
                         )
 
@@ -2506,11 +2854,17 @@ def analyze_test_data(
             if correlated_pairs:
                 test_frequency = {}
                 for pair in correlated_pairs:
-                    test_frequency[pair["test1"]] = test_frequency.get(pair["test1"], 0) + 1
-                    test_frequency[pair["test2"]] = test_frequency.get(pair["test2"], 0) + 1
+                    test_frequency[pair["test1"]] = (
+                        test_frequency.get(pair["test1"], 0) + 1
+                    )
+                    test_frequency[pair["test2"]] = (
+                        test_frequency.get(pair["test2"], 0) + 1
+                    )
 
                 # Sort by frequency
-                root_cause_candidates = sorted(test_frequency.items(), key=lambda x: x[1], reverse=True)
+                root_cause_candidates = sorted(
+                    test_frequency.items(), key=lambda x: x[1], reverse=True
+                )
 
                 # Get top 5 candidates
                 top_root_causes = root_cause_candidates[:5]
@@ -2576,7 +2930,10 @@ def analyze_test_data(
                             continue
 
                         # Skip if correlation is too weak
-                        if abs(pair["correlation"]) < 0.5 and pair["jaccard_similarity"] < 0.4:
+                        if (
+                            abs(pair["correlation"]) < 0.5
+                            and pair["jaccard_similarity"] < 0.4
+                        ):
                             continue
 
                         # Find if either test is already in a cluster
@@ -2610,7 +2967,9 @@ def analyze_test_data(
 
                     # Display clusters with additional insights
                     for i, cluster in enumerate(clusters):
-                        if len(cluster) >= 2:  # Only show clusters with at least 2 tests
+                        if (
+                            len(cluster) >= 2
+                        ):  # Only show clusters with at least 2 tests
                             # Check if tests in this cluster are from the same module
                             modules = set()
                             for test in cluster:
@@ -2648,11 +3007,15 @@ def analyze_test_data(
                                     ):
                                         failure_count += 1
 
-                                cluster_table.add_row(test_short, module, str(failure_count))
+                                cluster_table.add_row(
+                                    test_short, module, str(failure_count)
+                                )
 
                             console.print(cluster_table)
             elif not json_mode:
-                console.print("[italic]No significant test correlations found.[/italic]")
+                console.print(
+                    "[italic]No significant test correlations found.[/italic]"
+                )
 
             # Update JSON output with correlation data
             if output_format == "json":
@@ -2662,8 +3025,12 @@ def analyze_test_data(
                         "test2": pair["test2"],
                         "correlation": pair["correlation"],
                         "jaccard_similarity": pair["jaccard_similarity"],
-                        "conditional_prob_1_given_2": pair["conditional_prob_1_given_2"],
-                        "conditional_prob_2_given_1": pair["conditional_prob_2_given_1"],
+                        "conditional_prob_1_given_2": pair[
+                            "conditional_prob_1_given_2"
+                        ],
+                        "conditional_prob_2_given_1": pair[
+                            "conditional_prob_2_given_1"
+                        ],
                         "both_failed": pair["both_failed"],
                         "test1_failures": pair["test1_failures"],
                         "test2_failures": pair["test2_failures"],
@@ -2677,7 +3044,13 @@ def analyze_test_data(
                     result["test_failure_clusters"] = [
                         {
                             "tests": list(cluster),
-                            "module_count": len(set(test.split("::")[0] for test in cluster if "::" in test)),
+                            "module_count": len(
+                                set(
+                                    test.split("::")[0]
+                                    for test in cluster
+                                    if "::" in test
+                                )
+                            ),
                         }
                         for cluster in clusters
                         if len(cluster) >= 2
@@ -2686,7 +3059,8 @@ def analyze_test_data(
                 # Add root cause candidates
                 if "top_root_causes" in locals() and top_root_causes:
                     result["potential_root_causes"] = [
-                        {"test": test, "correlation_frequency": freq} for test, freq in top_root_causes
+                        {"test": test, "correlation_frequency": freq}
+                        for test, freq in top_root_causes
                     ]
 
             # Calculate and display test brittleness scores
@@ -2698,7 +3072,9 @@ def analyze_test_data(
                 for test_id in all_test_nodeids:
                     # Skip tests with too few runs
                     total_runs = sum(
-                        1 for session_key in test_failure_matrix if test_id in test_failure_matrix[session_key]
+                        1
+                        for session_key in test_failure_matrix
+                        if test_id in test_failure_matrix[session_key]
                     )
                     if total_runs < 3:
                         continue
@@ -2728,16 +3104,23 @@ def analyze_test_data(
                     for session_key in sorted_sessions:
                         if test_id in test_failure_matrix[session_key]:
                             current_outcome = test_failure_matrix[session_key][test_id]
-                            if last_outcome is not None and current_outcome != last_outcome:
+                            if (
+                                last_outcome is not None
+                                and current_outcome != last_outcome
+                            ):
                                 transitions += 1
                             last_outcome = current_outcome
 
                     # Normalize transitions by number of runs
-                    transition_rate = transitions / (total_runs - 1) if total_runs > 1 else 0
+                    transition_rate = (
+                        transitions / (total_runs - 1) if total_runs > 1 else 0
+                    )
 
                     # Calculate brittleness score (combination of failure rate and transition rate)
                     # Higher transition rate with moderate failure rate indicates brittleness
-                    brittleness_score = (0.4 * failure_rate + 0.6 * transition_rate) * 10
+                    brittleness_score = (
+                        0.4 * failure_rate + 0.6 * transition_rate
+                    ) * 10
 
                     # Store the results
                     test_brittleness[test_id] = {
@@ -2759,7 +3142,9 @@ def analyze_test_data(
 
                 # Display the results
                 if brittle_tests:
-                    brittleness_table = Table(title="Most Brittle Tests", box=box.SIMPLE)
+                    brittleness_table = Table(
+                        title="Most Brittle Tests", box=box.SIMPLE
+                    )
                     brittleness_table.add_column("Test", style="cyan")
                     brittleness_table.add_column("Brittleness Score", style="yellow")
                     brittleness_table.add_column("Failure Rate", style="red")
@@ -2779,7 +3164,9 @@ def analyze_test_data(
 
                     console.print(brittleness_table)
                 else:
-                    console.print("[yellow]No brittle tests identified in the dataset.[/yellow]")
+                    console.print(
+                        "[yellow]No brittle tests identified in the dataset.[/yellow]"
+                    )
 
             # Analyze seasonal patterns in test failures
             if not json_mode:
@@ -2791,7 +3178,10 @@ def analyze_test_data(
                     session_date = session.session_start_time
 
                     for test_result in session.test_results:
-                        if hasattr(test_result, "outcome") and test_result.outcome == "failed":
+                        if (
+                            hasattr(test_result, "outcome")
+                            and test_result.outcome == "failed"
+                        ):
                             test_id = test_result.nodeid
                             if test_id not in test_timestamps:
                                 test_timestamps[test_id] = []
@@ -2817,7 +3207,9 @@ def analyze_test_data(
                     total_failures = len(timestamps)
 
                     # Calculate hourly distribution as percentages
-                    hour_percentages = [count / total_failures for count in hour_distribution]
+                    hour_percentages = [
+                        count / total_failures for count in hour_distribution
+                    ]
 
                     # Check for peaks (hours with significantly more failures)
                     avg_failures_per_hour = total_failures / 24
@@ -2835,7 +3227,9 @@ def analyze_test_data(
                         day_distribution[day] += 1
 
                     # Calculate day distribution as percentages
-                    day_percentages = [count / total_failures for count in day_distribution]
+                    day_percentages = [
+                        count / total_failures for count in day_distribution
+                    ]
 
                     # Check for peak days
                     avg_failures_per_day = total_failures / 7
@@ -2878,7 +3272,9 @@ def analyze_test_data(
                         "Sunday",
                     ]
 
-                    seasonal_table = Table(title="Seasonal Failure Patterns", box=box.SIMPLE)
+                    seasonal_table = Table(
+                        title="Seasonal Failure Patterns", box=box.SIMPLE
+                    )
                     seasonal_table.add_column("Test", style="cyan")
                     seasonal_table.add_column("Total Failures", style="red")
                     seasonal_table.add_column("Time of Day Pattern", style="yellow")
@@ -2890,7 +3286,10 @@ def analyze_test_data(
                         hour_pattern = ""
                         if pattern["peak_hours"]:
                             hour_pattern = ", ".join(
-                                [f"{hour}:00 ({int(pct*100)}%)" for hour, count, pct in pattern["peak_hours"]]
+                                [
+                                    f"{hour}:00 ({int(pct*100)}%)"
+                                    for hour, count, pct in pattern["peak_hours"]
+                                ]
                             )
                         else:
                             hour_pattern = "No significant pattern"
@@ -2899,7 +3298,10 @@ def analyze_test_data(
                         day_pattern = ""
                         if pattern["peak_days"]:
                             day_pattern = ", ".join(
-                                [f"{day_names[day]} ({int(pct*100)}%)" for day, count, pct in pattern["peak_days"]]
+                                [
+                                    f"{day_names[day]} ({int(pct*100)}%)"
+                                    for day, count, pct in pattern["peak_days"]
+                                ]
                             )
                         else:
                             day_pattern = "No significant pattern"
@@ -2913,12 +3315,16 @@ def analyze_test_data(
 
                     console.print(seasonal_table)
                 else:
-                    console.print("[yellow]No significant seasonal patterns identified in the dataset.[/yellow]")
+                    console.print(
+                        "[yellow]No significant seasonal patterns identified in the dataset.[/yellow]"
+                    )
 
             # 4. Failure Pattern Recognition
             # Categorize failures by error type
             if not json_mode:
-                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+                console.print(
+                    "[bold]Error Pattern Analysis:[/bold] Identifying common failure modes"
+                )
 
                 # Use the core API to get error pattern data
                 insights = Insights(analysis=analysis)
@@ -2933,7 +3339,9 @@ def analyze_test_data(
                 if failure_details and show_error_details:
                     console.print("\n[bold]Test Failure Details:[/bold]")
                     for i, failure in enumerate(failure_details):
-                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(
+                            f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}"
+                        )
                         console.print(f"[dim]Session: {failure['session_id']}[/dim]")
 
                         # Format and display the error message
@@ -2945,13 +3353,19 @@ def analyze_test_data(
                                 if line.strip():  # Skip empty lines
                                     console.print(f"  {line}")
                         else:
-                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+                            console.print(
+                                "[yellow]Error Message:[/yellow] [italic]No error message available[/italic]"
+                            )
 
                         console.print()  # Add a blank line between failures
                 elif failure_details:
                     # Just show a summary if detailed error messages are not requested
-                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
-                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+                    console.print(
+                        f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed"
+                    )
+                    console.print(
+                        "[italic]Use --show-errors to see detailed error messages[/italic]"
+                    )
 
                 # Then show the error pattern analysis
                 if patterns:
@@ -2971,7 +3385,9 @@ def analyze_test_data(
 
                     # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
-                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        console.print(
+                            "[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)"
+                        )
                         multi_error_table = Table(show_header=True)
                         multi_error_table.add_column("Test", style="cyan")
                         multi_error_table.add_column("Error Patterns", style="yellow")
@@ -2992,7 +3408,9 @@ def analyze_test_data(
                             "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
                         )
                     else:
-                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+                        console.print(
+                            "[italic]No test failures found in the analyzed data.[/italic]"
+                        )
 
             # Update JSON output with error pattern data
             if output_format == "json":
@@ -3015,7 +3433,9 @@ def analyze_test_data(
 
             # 5. Test Stability Timeline
             if not json_mode:
-                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+                console.print(
+                    "\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time"
+                )
 
                 # Use the core API to get stability timeline data
                 insights = Insights(analysis=analysis)
@@ -3035,7 +3455,9 @@ def analyze_test_data(
                     # Add date columns
                     sorted_dates = timeline_data["dates"]
                     for date in sorted_dates:
-                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+                        timeline_table.add_column(
+                            date.strftime("%Y-%m-%d"), style="yellow"
+                        )
 
                     # Add stability trend column
                     timeline_table.add_column("Trend", style="green")
@@ -3090,7 +3512,9 @@ def analyze_test_data(
             # 6. Test Dependency Graph
             # Analyze which tests tend to fail together to identify potential dependencies
             if not json_mode:
-                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+                console.print(
+                    "\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies"
+                )
 
                 # Create a matrix of test co-failures
                 test_failures = {}
@@ -3166,9 +3590,7 @@ def analyze_test_data(
                                 # Bidirectional dependency
                                 direction = f"{test_id} ↔ {co_test}"
                                 strength = (pct_a_with_b + pct_b_with_a) / 2
-                                interpretation = (
-                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
-                                )
+                                interpretation = f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
 
                             dependencies.append(
                                 {
@@ -3186,7 +3608,9 @@ def analyze_test_data(
 
                 # Display the results
                 if dependencies:
-                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table = Table(
+                        title="Test Dependency Analysis", box=box.SIMPLE
+                    )
                     dependency_table.add_column("Test Relationship", style="cyan")
                     dependency_table.add_column("Strength", style="yellow")
                     dependency_table.add_column("Co-Failures", style="red")
@@ -3214,7 +3638,9 @@ def analyze_test_data(
 
                     console.print(dependency_table)
                 else:
-                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+                    console.print(
+                        "[yellow]No significant test dependencies identified in the dataset.[/yellow]"
+                    )
 
             # 7. Environment Impact Analysis
             if not json_mode:
@@ -3244,14 +3670,18 @@ def analyze_test_data(
                         )
 
                     console.print(env_table)
-                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                    console.print(
+                        f"Environment Consistency Score: {consistency:.2f} (0-1 scale)"
+                    )
                 else:
                     console.print("[yellow]No environment data available.[/yellow]")
 
             # 4. Error Pattern Analysis
             # Analyze common error patterns across test failures
             if not json_mode:
-                console.print("[bold]Error Pattern Analysis:[/bold] Identifying common failure modes")
+                console.print(
+                    "[bold]Error Pattern Analysis:[/bold] Identifying common failure modes"
+                )
 
                 # Use the core API to get error pattern data
                 insights = Insights(analysis=analysis)
@@ -3266,7 +3696,9 @@ def analyze_test_data(
                 if failure_details and show_error_details:
                     console.print("\n[bold]Test Failure Details:[/bold]")
                     for i, failure in enumerate(failure_details):
-                        console.print(f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}")
+                        console.print(
+                            f"[cyan]Failure #{i+1}:[/cyan] {failure['nodeid']}"
+                        )
                         console.print(f"[dim]Session: {failure['session_id']}[/dim]")
 
                         # Format and display the error message
@@ -3278,13 +3710,19 @@ def analyze_test_data(
                                 if line.strip():  # Skip empty lines
                                     console.print(f"  {line}")
                         else:
-                            console.print("[yellow]Error Message:[/yellow] [italic]No error message available[/italic]")
+                            console.print(
+                                "[yellow]Error Message:[/yellow] [italic]No error message available[/italic]"
+                            )
 
                         console.print()  # Add a blank line between failures
                 elif failure_details:
                     # Just show a summary if detailed error messages are not requested
-                    console.print(f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed")
-                    console.print("[italic]Use --show-errors to see detailed error messages[/italic]")
+                    console.print(
+                        f"\n[bold]Test Failures Found:[/bold] {len(failure_details)} tests failed"
+                    )
+                    console.print(
+                        "[italic]Use --show-errors to see detailed error messages[/italic]"
+                    )
 
                 # Then show the error pattern analysis
                 if patterns:
@@ -3304,7 +3742,9 @@ def analyze_test_data(
 
                     # Show tests with multiple error patterns (potentially unreliable or unstable)
                     if multi_error_tests:
-                        console.print("[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)")
+                        console.print(
+                            "[bold]Tests with Multiple Error Patterns:[/bold] (potentially unstable)"
+                        )
                         multi_error_table = Table(show_header=True)
                         multi_error_table.add_column("Test", style="cyan")
                         multi_error_table.add_column("Error Patterns", style="yellow")
@@ -3325,7 +3765,9 @@ def analyze_test_data(
                             "[italic]This may indicate that each test is failing with a unique error message.[/italic]"
                         )
                     else:
-                        console.print("[italic]No test failures found in the analyzed data.[/italic]")
+                        console.print(
+                            "[italic]No test failures found in the analyzed data.[/italic]"
+                        )
 
             # Update JSON output with error pattern data
             if output_format == "json":
@@ -3348,7 +3790,9 @@ def analyze_test_data(
 
             # 5. Test Stability Timeline
             if not json_mode:
-                console.print("\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time")
+                console.print(
+                    "\n[bold]Test Stability Timeline[/bold]: Tracking stability trends over time"
+                )
 
                 # Use the core API to get stability timeline data
                 insights = Insights(analysis=analysis)
@@ -3368,7 +3812,9 @@ def analyze_test_data(
                     # Add date columns
                     sorted_dates = timeline_data["dates"]
                     for date in sorted_dates:
-                        timeline_table.add_column(date.strftime("%Y-%m-%d"), style="yellow")
+                        timeline_table.add_column(
+                            date.strftime("%Y-%m-%d"), style="yellow"
+                        )
 
                     # Add stability trend column
                     timeline_table.add_column("Trend", style="green")
@@ -3423,7 +3869,9 @@ def analyze_test_data(
             # 6. Test Dependency Graph
             # Analyze which tests tend to fail together to identify potential dependencies
             if not json_mode:
-                console.print("\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies")
+                console.print(
+                    "\n[bold]Test Dependency Graph[/bold]: Identifying potential test dependencies"
+                )
 
                 # Create a matrix of test co-failures
                 test_failures = {}
@@ -3499,9 +3947,7 @@ def analyze_test_data(
                                 # Bidirectional dependency
                                 direction = f"{test_id} ↔ {co_test}"
                                 strength = (pct_a_with_b + pct_b_with_a) / 2
-                                interpretation = (
-                                    f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
-                                )
+                                interpretation = f"{test_id.split('::')[-1]} and {co_test.split('::')[-1]} fail together"
 
                             dependencies.append(
                                 {
@@ -3519,7 +3965,9 @@ def analyze_test_data(
 
                 # Display the results
                 if dependencies:
-                    dependency_table = Table(title="Test Dependency Analysis", box=box.SIMPLE)
+                    dependency_table = Table(
+                        title="Test Dependency Analysis", box=box.SIMPLE
+                    )
                     dependency_table.add_column("Test Relationship", style="cyan")
                     dependency_table.add_column("Strength", style="yellow")
                     dependency_table.add_column("Co-Failures", style="red")
@@ -3547,7 +3995,9 @@ def analyze_test_data(
 
                     console.print(dependency_table)
                 else:
-                    console.print("[yellow]No significant test dependencies identified in the dataset.[/yellow]")
+                    console.print(
+                        "[yellow]No significant test dependencies identified in the dataset.[/yellow]"
+                    )
 
             # 7. Environment Impact Analysis
             if not json_mode:
@@ -3577,7 +4027,9 @@ def analyze_test_data(
                         )
 
                     console.print(env_table)
-                    console.print(f"Environment Consistency Score: {consistency:.2f} (0-1 scale)")
+                    console.print(
+                        f"Environment Consistency Score: {consistency:.2f} (0-1 scale)"
+                    )
                 else:
                     console.print("[yellow]No environment data available.[/yellow]")
         except Exception as e:
@@ -3596,8 +4048,12 @@ def main():
         type=str,
         help="Path to the JSON data file (default: ~/.pytest_insight/practice.json)",
     )
-    parser.add_argument("--sut", "-s", type=str, help="Filter by System Under Test name")
-    parser.add_argument("--days", "-d", type=int, help="Filter to sessions from the last N days")
+    parser.add_argument(
+        "--sut", "-s", type=str, help="Filter by System Under Test name"
+    )
+    parser.add_argument(
+        "--days", "-d", type=int, help="Filter to sessions from the last N days"
+    )
     parser.add_argument(
         "--test",
         "-t",
@@ -3619,13 +4075,17 @@ def main():
         help="Compare with previous data (format: days:N, version:X.Y.Z, or profile:name)",
     )
     parser.add_argument("--trends", action="store_true", help="Show trends over time")
-    parser.add_argument("--generate-sample", action="store_true", help="Generate sample test data")
+    parser.add_argument(
+        "--generate-sample", action="store_true", help="Generate sample test data"
+    )
     parser.add_argument(
         "--show-errors",
         action="store_true",
         help="Show detailed error messages for failed tests",
     )
-    parser.add_argument("--version", "-v", action="store_true", help="Show version information")
+    parser.add_argument(
+        "--version", "-v", action="store_true", help="Show version information"
+    )
 
     args = parser.parse_args()
 
@@ -3655,12 +4115,18 @@ def main():
                 json_files = list(default_dir.glob("*.json"))
                 if json_files:
                     data_path = json_files[0]
-                    console.print(f"[yellow]No practice.json found, using {data_path.name} instead[/yellow]")
+                    console.print(
+                        f"[yellow]No practice.json found, using {data_path.name} instead[/yellow]"
+                    )
 
     # Generate sample data if requested or if no data exists
-    if (args.generate_sample or (data_path is None or not data_path.exists())) and not args.path:
+    if (
+        args.generate_sample or (data_path is None or not data_path.exists())
+    ) and not args.path:
         if not args.generate_sample:
-            console.print("[yellow]No test data found. Generating sample data...[/yellow]")
+            console.print(
+                "[yellow]No test data found. Generating sample data...[/yellow]"
+            )
         else:
             console.print("[green]Generating sample test data...[/green]")
 
@@ -3694,7 +4160,9 @@ def main():
                 """
                 # Define error patterns that are consistent based on test type and operation
                 # This ensures similar tests will have similar failures for correlation
-                test_operation = test_name.split("_")[-1] if "_" in test_name else "default"
+                test_operation = (
+                    test_name.split("_")[-1] if "_" in test_name else "default"
+                )
 
                 # Map test types to specific error patterns
                 type_error_mapping = {
@@ -3829,7 +4297,9 @@ def main():
 
                 # Create a realistic traceback
                 file_path = f"tests/{test_type}/{test_name}.py"
-                line_number = (hash(test_name) % 100) + 10  # Deterministic line number based on test name
+                line_number = (
+                    hash(test_name) % 100
+                ) + 10  # Deterministic line number based on test name
 
                 # Format based on test type
                 if test_operation in ["get", "list", "search"]:
@@ -3840,10 +4310,14 @@ def main():
                     code_context = f"response = client.{test_operation}('{test_type}', data=payload)"
                 elif test_operation in ["update"]:
                     function_name = f"test_{test_operation}_{test_type}"
-                    code_context = f"response = client.put('{test_type}/{id}', data=payload)"
+                    code_context = (
+                        f"response = client.put('{test_type}/{id}', data=payload)"
+                    )
                 elif test_operation in ["delete"]:
                     function_name = f"test_{test_operation}_{test_type}"
-                    code_context = f"response = client.{test_operation}('{test_type}/{id}')"
+                    code_context = (
+                        f"response = client.{test_operation}('{test_type}/{id}')"
+                    )
                 else:
                     function_name = f"test_{test_operation}"
                     code_context = f"result = {test_operation}()"
@@ -3869,7 +4343,9 @@ def main():
 
                 # Create 1-3 sessions per day
                 for session_num in range(random.randint(1, 3)):
-                    session_start = session_date - timedelta(hours=random.randint(0, 23))
+                    session_start = session_date - timedelta(
+                        hours=random.randint(0, 23)
+                    )
                     session_duration = random.uniform(5.0, 30.0)
                     session_stop = session_start + timedelta(seconds=session_duration)
 
@@ -3896,10 +4372,12 @@ def main():
 
                         # Create test start and stop times
                         test_duration = random.uniform(0.1, 5.0)
-                        test_start_time = datetime.fromisoformat(session["session_start_time"]) + timedelta(
-                            seconds=random.uniform(0, session_duration / 2)
+                        test_start_time = datetime.fromisoformat(
+                            session["session_start_time"]
+                        ) + timedelta(seconds=random.uniform(0, session_duration / 2))
+                        test_stop_time = test_start_time + timedelta(
+                            seconds=test_duration
                         )
-                        test_stop_time = test_start_time + timedelta(seconds=test_duration)
 
                         test = {
                             "nodeid": f"tests/{test_type}/{test_name}.py::test_function_{test_num}",
@@ -3911,7 +4389,9 @@ def main():
 
                         # Add realistic error message for failed tests
                         if outcome == "failed":
-                            test["longreprtext"] = generate_error_message(test_type, test_name)
+                            test["longreprtext"] = generate_error_message(
+                                test_type, test_name
+                            )
 
                         session["test_results"].append(test)
 

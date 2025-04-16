@@ -34,11 +34,17 @@ def test_sut_name_defaults_to_directory_name():
     expected_dir_name = re.sub(r"[^a-zA-Z0-9_-]", "-", expected_dir_name).lower()
 
     # Mock the TestSession creation to capture the arguments
-    with patch("pytest_insight.plugin.TestSession") as mock_test_session, patch("pytest_insight.plugin.storage"), patch(
-        "pytest_insight.plugin.insight_enabled", return_value=True
-    ), patch("pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]), patch(
-        "pytest_insight.plugin.datetime"
-    ) as mock_datetime, patch("pytest_insight.core.analysis.Analysis"), patch("pytest_insight.core.insights.Insights"):
+    with (
+        patch("pytest_insight.plugin.TestSession") as mock_test_session,
+        patch("pytest_insight.plugin.storage"),
+        patch("pytest_insight.plugin.insight_enabled", return_value=True),
+        patch(
+            "pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]
+        ),
+        patch("pytest_insight.plugin.datetime") as mock_datetime,
+        patch("pytest_insight.core.analysis.Analysis"),
+        patch("pytest_insight.core.insights.Insights"),
+    ):
         # Mock datetime.now() to return a consistent value
         mock_now = MagicMock()
         mock_datetime.now.return_value = mock_now
@@ -78,11 +84,17 @@ def test_sut_name_uses_custom_value_when_specified():
             pass
 
     # Mock the TestSession creation to capture the arguments
-    with patch("pytest_insight.plugin.TestSession") as mock_test_session, patch("pytest_insight.plugin.storage"), patch(
-        "pytest_insight.plugin.insight_enabled", return_value=True
-    ), patch("pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]), patch(
-        "pytest_insight.plugin.datetime"
-    ) as mock_datetime, patch("pytest_insight.core.analysis.Analysis"), patch("pytest_insight.core.insights.Insights"):
+    with (
+        patch("pytest_insight.plugin.TestSession") as mock_test_session,
+        patch("pytest_insight.plugin.storage"),
+        patch("pytest_insight.plugin.insight_enabled", return_value=True),
+        patch(
+            "pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]
+        ),
+        patch("pytest_insight.plugin.datetime") as mock_datetime,
+        patch("pytest_insight.core.analysis.Analysis"),
+        patch("pytest_insight.core.insights.Insights"),
+    ):
         # Mock datetime.now() to return a consistent value
         mock_now = MagicMock()
         mock_datetime.now.return_value = mock_now
@@ -122,12 +134,17 @@ def test_sut_name_fallback_when_directory_name_fails():
             pass
 
     # Mock the TestSession creation to capture the arguments
-    with patch("pytest_insight.plugin.TestSession") as mock_test_session, patch("pytest_insight.plugin.storage"), patch(
-        "pytest_insight.plugin.insight_enabled", return_value=True
-    ), patch("pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]), patch(
-        "os.path.basename", side_effect=OSError("Mocked error")
-    ), patch("pytest_insight.plugin.datetime") as mock_datetime, patch("pytest_insight.core.analysis.Analysis"), patch(
-        "pytest_insight.core.insights.Insights"
+    with (
+        patch("pytest_insight.plugin.TestSession") as mock_test_session,
+        patch("pytest_insight.plugin.storage"),
+        patch("pytest_insight.plugin.insight_enabled", return_value=True),
+        patch(
+            "pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]
+        ),
+        patch("os.path.basename", side_effect=OSError("Mocked error")),
+        patch("pytest_insight.plugin.datetime") as mock_datetime,
+        patch("pytest_insight.core.analysis.Analysis"),
+        patch("pytest_insight.core.insights.Insights"),
     ):
         # Mock datetime.now() to return a consistent value
         mock_now = MagicMock()
@@ -170,11 +187,17 @@ def test_test_system_name_override():
             pass
 
     # Mock the TestSession creation to capture the arguments
-    with patch("pytest_insight.plugin.TestSession") as mock_test_session, patch("pytest_insight.plugin.storage"), patch(
-        "pytest_insight.plugin.insight_enabled", return_value=True
-    ), patch("pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]), patch(
-        "pytest_insight.plugin.datetime"
-    ) as mock_datetime, patch("pytest_insight.core.analysis.Analysis"), patch("pytest_insight.core.insights.Insights"):
+    with (
+        patch("pytest_insight.plugin.TestSession") as mock_test_session,
+        patch("pytest_insight.plugin.storage"),
+        patch("pytest_insight.plugin.insight_enabled", return_value=True),
+        patch(
+            "pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]
+        ),
+        patch("pytest_insight.plugin.datetime") as mock_datetime,
+        patch("pytest_insight.core.analysis.Analysis"),
+        patch("pytest_insight.core.insights.Insights"),
+    ):
         # Mock datetime.now() to return a consistent value
         mock_now = MagicMock()
         mock_datetime.now.return_value = mock_now

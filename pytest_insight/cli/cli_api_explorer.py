@@ -81,11 +81,17 @@ def _run_api_explorer(port: int, profile: Optional[str], browser: bool):
         for package in ["fastapi", "uvicorn"]:
             if importlib.util.find_spec(package) is None:
                 missing_deps.append(package)
-        
+
         if missing_deps:
-            console.print(f"[bold red]Error: Missing required dependencies: {', '.join(missing_deps)}[/bold red]")
-            console.print("API Explorer functionality requires additional dependencies.")
-            console.print("Install them with: [bold]uv pip install 'pytest-insight[visualize]'[/bold]")
+            console.print(
+                f"[bold red]Error: Missing required dependencies: {', '.join(missing_deps)}[/bold red]"
+            )
+            console.print(
+                "API Explorer functionality requires additional dependencies."
+            )
+            console.print(
+                "Install them with: [bold]uv pip install 'pytest-insight[visualize]'[/bold]"
+            )
             sys.exit(1)
 
         # Set profile if specified
@@ -118,10 +124,13 @@ def _run_api_explorer(port: int, profile: Optional[str], browser: bool):
         # Create and run the FastAPI app
         app = create_introspected_api()
         import uvicorn
+
         uvicorn.run(app, host="0.0.0.0", port=port)
 
     except Exception as e:
-        console.print(f"[bold red]Error {'launching' if browser else 'creating'} API Explorer: {str(e)}[/bold red]")
+        console.print(
+            f"[bold red]Error {'launching' if browser else 'creating'} API Explorer: {str(e)}[/bold red]"
+        )
         import traceback
 
         console.print(traceback.format_exc(), style="red")

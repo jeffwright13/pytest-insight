@@ -72,7 +72,9 @@ class HTMLReportGenerator:
             cutoff_date = datetime.now() - timedelta(days=days)
             normalized_cutoff = NormalizedDatetime(cutoff_date)
             sessions = [
-                s for s in storage.load_sessions() if NormalizedDatetime(s.session_start_time) >= normalized_cutoff
+                s
+                for s in storage.load_sessions()
+                if NormalizedDatetime(s.session_start_time) >= normalized_cutoff
             ]
         else:
             sessions = storage.load_sessions()
@@ -83,7 +85,9 @@ class HTMLReportGenerator:
 
         # Sort sessions by start time (newest first)
         # Use NormalizedDatetime to handle timezone-aware and timezone-naive datetimes
-        sessions.sort(key=lambda s: NormalizedDatetime(s.session_start_time), reverse=True)
+        sessions.sort(
+            key=lambda s: NormalizedDatetime(s.session_start_time), reverse=True
+        )
 
         # Prepare report data
         report_data = self._prepare_report_data(sessions, title)
@@ -114,7 +118,9 @@ class HTMLReportGenerator:
 
         return output_path
 
-    def _prepare_report_data(self, sessions: List[TestSession], title: Optional[str] = None) -> Dict:
+    def _prepare_report_data(
+        self, sessions: List[TestSession], title: Optional[str] = None
+    ) -> Dict:
         """Prepare data for the HTML report template.
 
         Args:
@@ -165,10 +171,18 @@ class HTMLReportGenerator:
                 "start_time": session.session_start_time.isoformat(),
                 "duration": session.session_duration,
                 "test_count": len(session.test_results),
-                "passed": sum(1 for t in session.test_results if t.outcome == TestOutcome.PASSED),
-                "failed": sum(1 for t in session.test_results if t.outcome == TestOutcome.FAILED),
-                "skipped": sum(1 for t in session.test_results if t.outcome == TestOutcome.SKIPPED),
-                "error": sum(1 for t in session.test_results if t.outcome == TestOutcome.ERROR),
+                "passed": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.PASSED
+                ),
+                "failed": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.FAILED
+                ),
+                "skipped": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.SKIPPED
+                ),
+                "error": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.ERROR
+                ),
             }
             session_data.append(session_info)
 

@@ -191,12 +191,16 @@ class SessionAnalysis(AnalysisBase):
             return 0.0
 
         failed_sessions = sum(
-            1 for session in sessions if any(test.outcome == TestOutcome.FAILED for test in session.test_results)
+            1
+            for session in sessions
+            if any(test.outcome == TestOutcome.FAILED for test in session.test_results)
         )
 
         return failed_sessions / len(sessions)
 
-    def test_metrics(self, days: Optional[int] = None, chunk_size: int = 1000) -> Dict[str, Any]:
+    def test_metrics(
+        self, days: Optional[int] = None, chunk_size: int = 1000
+    ) -> Dict[str, Any]:
         """Calculate key test metrics for sessions.
 
         Analyzes test metrics while preserving session context to identify:
@@ -244,7 +248,9 @@ class SessionAnalysis(AnalysisBase):
         skipped_tests = 0
 
         # Process sessions in chunks for large datasets
-        session_chunks = [sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)]
+        session_chunks = [
+            sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)
+        ]
 
         session_count = 0
         for chunk in session_chunks:
@@ -284,7 +290,9 @@ class SessionAnalysis(AnalysisBase):
             "avg_tests_per_session": avg_tests_per_session,
         }
 
-    def detect_trends(self, days: Optional[int] = None, window_size: int = 7) -> Dict[str, Any]:
+    def detect_trends(
+        self, days: Optional[int] = None, window_size: int = 7
+    ) -> Dict[str, Any]:
         """Detect significant trends in session data.
 
         Analyzes trends while preserving session context to identify:
@@ -351,7 +359,9 @@ class SessionAnalysis(AnalysisBase):
         if len(sessions) > MAX_SESSIONS:
             # Take evenly distributed samples if we have too many sessions
             step = len(sessions) // MAX_SESSIONS
-            sessions = [sessions[i] for i in range(0, len(sessions), step)][:MAX_SESSIONS]
+            sessions = [sessions[i] for i in range(0, len(sessions), step)][
+                :MAX_SESSIONS
+            ]
 
         # Analyze duration trends
         duration_trend = self._analyze_duration_trend(sessions, window_size)
@@ -368,7 +378,9 @@ class SessionAnalysis(AnalysisBase):
             "warnings": warning_trend,
         }
 
-    def _analyze_duration_trend(self, sessions: List[TestSession], window_size: int) -> Dict[str, Any]:
+    def _analyze_duration_trend(
+        self, sessions: List[TestSession], window_size: int
+    ) -> Dict[str, Any]:
         """Analyze trends in test execution duration."""
         # Calculate average duration per session (with a limit on tests per session)
         MAX_TESTS_PER_SESSION = 1000
@@ -400,7 +412,9 @@ class SessionAnalysis(AnalysisBase):
             x_mean = sum(x) / len(x)
             y_mean = sum(durations) / len(durations)
 
-            numerator = sum((x[i] - x_mean) * (y - y_mean) for i, y in enumerate(durations))
+            numerator = sum(
+                (x[i] - x_mean) * (y - y_mean) for i, y in enumerate(durations)
+            )
             denominator = sum((x[i] - x_mean) ** 2 for i in x)
 
             if abs(denominator) < 1e-10:
@@ -409,12 +423,20 @@ class SessionAnalysis(AnalysisBase):
                 slope = numerator / denominator
 
         return {
-            "direction": ("increasing" if slope > 0.1 else "decreasing" if slope < -0.1 else "stable"),
-            "change_percent": (abs(slope) * 100 if abs(slope) < 100 else 100),  # Cap at 100%
+            "direction": (
+                "increasing"
+                if slope > 0.1
+                else "decreasing" if slope < -0.1 else "stable"
+            ),
+            "change_percent": (
+                abs(slope) * 100 if abs(slope) < 100 else 100
+            ),  # Cap at 100%
             "significant": False,  # TODO: Implement significance check
         }
 
-    def _analyze_failure_trend(self, sessions: List[TestSession], window_size: int) -> Dict[str, Any]:
+    def _analyze_failure_trend(
+        self, sessions: List[TestSession], window_size: int
+    ) -> Dict[str, Any]:
         """Analyze trends in test failures while preserving session context."""
         # Strict limits to prevent excessive computation
         MAX_TESTS_PER_SESSION = 500
@@ -472,7 +494,9 @@ class SessionAnalysis(AnalysisBase):
             x_mean = sum(x) / len(x)
             y_mean = sum(failure_rates) / len(failure_rates)
 
-            numerator = sum((i - x_mean) * (rate - y_mean) for i, rate in enumerate(failure_rates))
+            numerator = sum(
+                (i - x_mean) * (rate - y_mean) for i, rate in enumerate(failure_rates)
+            )
             denominator = sum((i - x_mean) ** 2 for i in x)
 
             if abs(denominator) < 1e-10:
@@ -481,12 +505,20 @@ class SessionAnalysis(AnalysisBase):
                 slope = numerator / denominator
 
         return {
-            "direction": ("worsening" if slope > 0.05 else "improving" if slope < -0.05 else "stable"),
-            "change_percent": (abs(slope) * 100 if abs(slope) < 100 else 100),  # Cap at 100%
+            "direction": (
+                "worsening"
+                if slope > 0.05
+                else "improving" if slope < -0.05 else "stable"
+            ),
+            "change_percent": (
+                abs(slope) * 100 if abs(slope) < 100 else 100
+            ),  # Cap at 100%
             "significant": False,  # TODO: Implement significance check
         }
 
-    def _analyze_warning_trend(self, sessions: List[TestSession], window_size: int) -> Dict[str, Any]:
+    def _analyze_warning_trend(
+        self, sessions: List[TestSession], window_size: int
+    ) -> Dict[str, Any]:
         """Analyze trends in test warnings."""
         # Strict limits to prevent excessive computation
         MAX_TESTS_PER_SESSION = 500
@@ -530,7 +562,10 @@ class SessionAnalysis(AnalysisBase):
             x_mean = sum(x) / len(x)
             y_mean = sum(warning_counts) / len(warning_counts)
 
-            numerator = sum((i - x_mean) * (count - y_mean) for i, count in enumerate(warning_counts))
+            numerator = sum(
+                (i - x_mean) * (count - y_mean)
+                for i, count in enumerate(warning_counts)
+            )
             denominator = sum((i - x_mean) ** 2 for i in x)
 
             if abs(denominator) < 1e-10:
@@ -546,10 +581,18 @@ class SessionAnalysis(AnalysisBase):
         )[:5]
 
         return {
-            "direction": ("increasing" if slope > 0.05 else "decreasing" if slope < -0.05 else "stable"),
-            "change_percent": (abs(slope) * 100 if abs(slope) < 100 else 100),  # Cap at 100%
+            "direction": (
+                "increasing"
+                if slope > 0.05
+                else "decreasing" if slope < -0.05 else "stable"
+            ),
+            "change_percent": (
+                abs(slope) * 100 if abs(slope) < 100 else 100
+            ),  # Cap at 100%
             "significant": False,  # TODO: Implement significance check
-            "common_warnings": [{"test": test, "count": count} for test, count in common_warnings],
+            "common_warnings": [
+                {"test": test, "count": count} for test, count in common_warnings
+            ],
         }
 
     def outcome_distribution(self, days: Optional[int] = None) -> Dict[str, int]:
@@ -580,7 +623,9 @@ class SessionAnalysis(AnalysisBase):
 
         return outcome_counts
 
-    def co_failures(self, min_correlation: float = 0.7, min_occurrences: int = 3) -> List[Dict[str, Any]]:
+    def co_failures(
+        self, min_correlation: float = 0.7, min_occurrences: int = 3
+    ) -> List[Dict[str, Any]]:
         """
         Identify clusters of tests that tend to fail together.
 
@@ -658,7 +703,9 @@ class SessionAnalysis(AnalysisBase):
         processed_pairs = set()
 
         # Sort correlations by strength
-        sorted_correlations = sorted(correlations.items(), key=lambda x: x[1]["correlation"], reverse=True)
+        sorted_correlations = sorted(
+            correlations.items(), key=lambda x: x[1]["correlation"], reverse=True
+        )
 
         # Process each correlation
         for (test_a, test_b), data in sorted_correlations:
@@ -691,7 +738,9 @@ class SessionAnalysis(AnalysisBase):
                     processed_pairs.add((other_a, other_b))
 
                     # Update correlation (use average)
-                    cluster["correlation"] = (cluster["correlation"] + other_data["correlation"]) / 2
+                    cluster["correlation"] = (
+                        cluster["correlation"] + other_data["correlation"]
+                    ) / 2
 
             # Add cluster to results
             clusters.append(cluster)
@@ -725,7 +774,9 @@ class SessionAnalysis(AnalysisBase):
         if total_unique_tests > 0:
             unreliable_count = len(unreliable_tests)
             unstable_count = len(unstable_tests)
-            problem_tests_pct = (unreliable_count + unstable_count) / total_unique_tests * 100
+            problem_tests_pct = (
+                (unreliable_count + unstable_count) / total_unique_tests * 100
+            )
             stability_score = max(0, 100 - problem_tests_pct)
 
         # Get session analysis for trends
@@ -797,7 +848,9 @@ class SessionAnalysis(AnalysisBase):
             "categories": categories,
         }
 
-    def behavior_changes(self, days: Optional[int] = 30) -> Dict[str, List[Dict[str, Any]]]:
+    def behavior_changes(
+        self, days: Optional[int] = 30
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Identify tests that have recently changed behavior (passing to failing or vice versa).
 
@@ -812,7 +865,9 @@ class SessionAnalysis(AnalysisBase):
 
         # Filter sessions by days if specified
         session_analysis = SessionAnalysis(self._sessions)
-        sessions = session_analysis._filter_sessions_by_days(days) if days else self._sessions
+        sessions = (
+            session_analysis._filter_sessions_by_days(days) if days else self._sessions
+        )
 
         if not sessions:
             return {}
@@ -824,7 +879,9 @@ class SessionAnalysis(AnalysisBase):
         test_outcomes = defaultdict(list)
         for session in sessions:
             for test in session.test_results:
-                test_outcomes[test.nodeid].append({"outcome": test.outcome, "timestamp": session.session_start_time})
+                test_outcomes[test.nodeid].append(
+                    {"outcome": test.outcome, "timestamp": session.session_start_time}
+                )
 
         # Identify tests with behavior changes
         recently_failing = []
@@ -856,7 +913,9 @@ class SessionAnalysis(AnalysisBase):
                     {
                         "nodeid": test_id,
                         "last_passed": last_passed,
-                        "failure_streak": sum(1 for o in recent_outcomes if o["outcome"].is_failed()),
+                        "failure_streak": sum(
+                            1 for o in recent_outcomes if o["outcome"].is_failed()
+                        ),
                     }
                 )
 
@@ -876,7 +935,9 @@ class SessionAnalysis(AnalysisBase):
                     {
                         "nodeid": test_id,
                         "last_failed": last_failed,
-                        "success_streak": sum(1 for o in recent_outcomes if not o["outcome"].is_failed()),
+                        "success_streak": sum(
+                            1 for o in recent_outcomes if not o["outcome"].is_failed()
+                        ),
                     }
                 )
 
@@ -885,7 +946,9 @@ class SessionAnalysis(AnalysisBase):
             "recently_passing": recently_passing,
         }
 
-    def top_failing_tests(self, days: Optional[int] = None, limit: int = 10) -> Dict[str, Any]:
+    def top_failing_tests(
+        self, days: Optional[int] = None, limit: int = 10
+    ) -> Dict[str, Any]:
         """Identify tests that fail most frequently across sessions.
 
         This metric helps identify systemic issues or brittle tests by clustering
@@ -932,7 +995,11 @@ class SessionAnalysis(AnalysisBase):
                 )
 
         # Sort by number of failures (descending)
-        top_failing = sorted(failing_tests, key=lambda x: (x["failures"], x["failure_rate"]), reverse=True)[:limit]
+        top_failing = sorted(
+            failing_tests,
+            key=lambda x: (x["failures"], x["failure_rate"]),
+            reverse=True,
+        )[:limit]
 
         # Calculate failure distribution
         total_failures = sum(test["failures"] for test in failing_tests)
@@ -976,7 +1043,11 @@ class SessionAnalysis(AnalysisBase):
         # Sort sessions by timestamp
         sorted_sessions = sorted(
             sessions,
-            key=lambda s: s.session_start_time if hasattr(s, "session_start_time") else datetime.min,
+            key=lambda s: (
+                s.session_start_time
+                if hasattr(s, "session_start_time")
+                else datetime.min
+            ),
         )
 
         # Get the most recent session
@@ -1002,7 +1073,10 @@ class SessionAnalysis(AnalysisBase):
                 # Check if test failed in the latest session
                 if test.outcome == TestOutcome.FAILED:
                     # Check if test was previously passing
-                    if nodeid in test_history and TestOutcome.PASSED in test_history[nodeid]:
+                    if (
+                        nodeid in test_history
+                        and TestOutcome.PASSED in test_history[nodeid]
+                    ):
                         regressed_tests.append(
                             {
                                 "nodeid": nodeid,
@@ -1012,7 +1086,9 @@ class SessionAnalysis(AnalysisBase):
                         )
 
         # Calculate regression rate
-        total_tests = len(set(nodeid for session in sessions for test in session.test_results))
+        total_tests = len(
+            set(nodeid for session in sessions for test in session.test_results)
+        )
         regression_rate = len(regressed_tests) / total_tests if total_tests > 0 else 0.0
 
         return {
@@ -1021,7 +1097,9 @@ class SessionAnalysis(AnalysisBase):
             "total_regressions": len(regressed_tests),
         }
 
-    def longest_running_tests(self, days: Optional[int] = None, limit: int = 10) -> Dict[str, Any]:
+    def longest_running_tests(
+        self, days: Optional[int] = None, limit: int = 10
+    ) -> Dict[str, Any]:
         """Identify the longest running tests across sessions.
 
         This metric helps guide optimization efforts by identifying tests that
@@ -1051,7 +1129,10 @@ class SessionAnalysis(AnalysisBase):
                         test_durations[nodeid].append(test.duration)
 
         # Calculate average durations and sort
-        avg_durations = [(nodeid, sum(durations) / len(durations)) for nodeid, durations in test_durations.items()]
+        avg_durations = [
+            (nodeid, sum(durations) / len(durations))
+            for nodeid, durations in test_durations.items()
+        ]
 
         # Sort by duration (descending) and return top N
         longest_tests = sorted(avg_durations, key=lambda x: x[1], reverse=True)[:limit]
@@ -1067,7 +1148,9 @@ class SessionAnalysis(AnalysisBase):
             "avg_duration": avg_duration,
         }
 
-    def test_suite_duration_trend(self, days: Optional[int] = None, window_size: int = 7) -> Dict[str, Any]:
+    def test_suite_duration_trend(
+        self, days: Optional[int] = None, window_size: int = 7
+    ) -> Dict[str, Any]:
         """Analyze the trend in test suite duration over time.
 
         This metric helps detect slow creep in runtime cost by tracking how the
@@ -1095,7 +1178,11 @@ class SessionAnalysis(AnalysisBase):
         # Sort sessions by timestamp
         sorted_sessions = sorted(
             sessions,
-            key=lambda s: s.session_start_time if hasattr(s, "session_start_time") else datetime.min,
+            key=lambda s: (
+                s.session_start_time
+                if hasattr(s, "session_start_time")
+                else datetime.min
+            ),
         )
 
         # Calculate session durations
@@ -1107,7 +1194,9 @@ class SessionAnalysis(AnalysisBase):
                 and session.session_start_time
                 and session.session_stop_time
             ):
-                duration = (session.session_stop_time - session.session_start_time).total_seconds()
+                duration = (
+                    session.session_stop_time - session.session_start_time
+                ).total_seconds()
                 timestamp = session.session_start_time
 
                 session_durations.append(
@@ -1132,8 +1221,12 @@ class SessionAnalysis(AnalysisBase):
             previous_window = session_durations[-2 * window_size : -window_size]
 
             if previous_window:  # Ensure we have enough data for comparison
-                recent_avg = sum(d["duration"] for d in recent_window) / len(recent_window)
-                previous_avg = sum(d["duration"] for d in previous_window) / len(previous_window)
+                recent_avg = sum(d["duration"] for d in recent_window) / len(
+                    recent_window
+                )
+                previous_avg = sum(d["duration"] for d in previous_window) / len(
+                    previous_window
+                )
 
                 # Calculate percent change
                 if previous_avg > 0:
@@ -1146,11 +1239,11 @@ class SessionAnalysis(AnalysisBase):
 
                 trend = {
                     "change": percent_change,
-                    "direction": "increasing"
-                    if percent_change > 0
-                    else "decreasing"
-                    if percent_change < 0
-                    else "stable",
+                    "direction": (
+                        "increasing"
+                        if percent_change > 0
+                        else "decreasing" if percent_change < 0 else "stable"
+                    ),
                 }
             else:
                 trend = {"change": 0, "direction": "stable"}
@@ -1226,7 +1319,9 @@ class TestAnalysis(AnalysisBase):
         test_history = defaultdict(list)
 
         # Process sessions in chunks for large datasets
-        session_chunks = [sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)]
+        session_chunks = [
+            sessions[i : i + chunk_size] for i in range(0, len(sessions), chunk_size)
+        ]
 
         session_count = 0
         for chunk in session_chunks:
@@ -1235,7 +1330,9 @@ class TestAnalysis(AnalysisBase):
 
                 # Process each test result
                 for test_result in session.test_results:
-                    test_history[test_result.nodeid].append((session_timestamp, test_result.outcome))
+                    test_history[test_result.nodeid].append(
+                        (session_timestamp, test_result.outcome)
+                    )
 
                 session_count += 1
 
@@ -1259,7 +1356,10 @@ class TestAnalysis(AnalysisBase):
                 unreliable_tests.append(
                     {
                         "nodeid": nodeid,
-                        "outcomes": [{"outcome": str(o), "count": c} for o, c in outcome_counts.items()],
+                        "outcomes": [
+                            {"outcome": str(o), "count": c}
+                            for o, c in outcome_counts.items()
+                        ],
                         "unreliability_rate": unreliability_rate,
                         "total_runs": total_runs,
                     }
@@ -1276,7 +1376,10 @@ class TestAnalysis(AnalysisBase):
                 continue
 
             # A test is unstable if it consistently fails
-            if all(outcome == TestOutcome.FAILED for _, outcome in outcomes) and len(outcomes) >= 2:
+            if (
+                all(outcome == TestOutcome.FAILED for _, outcome in outcomes)
+                and len(outcomes) >= 2
+            ):
                 unstable_tests.append(
                     {
                         "nodeid": nodeid,
@@ -1346,7 +1449,9 @@ class TestAnalysis(AnalysisBase):
 
         return outcome_counts
 
-    def co_failures(self, min_correlation: float = 0.7, min_occurrences: int = 3) -> List[Dict[str, Any]]:
+    def co_failures(
+        self, min_correlation: float = 0.7, min_occurrences: int = 3
+    ) -> List[Dict[str, Any]]:
         """
         Identify clusters of tests that tend to fail together.
 
@@ -1424,7 +1529,9 @@ class TestAnalysis(AnalysisBase):
         processed_pairs = set()
 
         # Sort correlations by strength
-        sorted_correlations = sorted(correlations.items(), key=lambda x: x[1]["correlation"], reverse=True)
+        sorted_correlations = sorted(
+            correlations.items(), key=lambda x: x[1]["correlation"], reverse=True
+        )
 
         # Process each correlation
         for (test_a, test_b), data in sorted_correlations:
@@ -1457,7 +1564,9 @@ class TestAnalysis(AnalysisBase):
                     processed_pairs.add((other_a, other_b))
 
                     # Update correlation (use average)
-                    cluster["correlation"] = (cluster["correlation"] + other_data["correlation"]) / 2
+                    cluster["correlation"] = (
+                        cluster["correlation"] + other_data["correlation"]
+                    ) / 2
 
             # Add cluster to results
             clusters.append(cluster)
@@ -1491,7 +1600,9 @@ class TestAnalysis(AnalysisBase):
         if total_unique_tests > 0:
             unreliable_count = len(unreliable_tests)
             unstable_count = len(unstable_tests)
-            problem_tests_pct = (unreliable_count + unstable_count) / total_unique_tests * 100
+            problem_tests_pct = (
+                (unreliable_count + unstable_count) / total_unique_tests * 100
+            )
             stability_score = max(0, 100 - problem_tests_pct)
 
         # Get session analysis for trends
@@ -1563,7 +1674,9 @@ class TestAnalysis(AnalysisBase):
             "categories": categories,
         }
 
-    def behavior_changes(self, days: Optional[int] = 30, threshold: int = 3) -> Dict[str, List[Dict[str, Any]]]:
+    def behavior_changes(
+        self, days: Optional[int] = 30, threshold: int = 3
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Detect tests that have recently changed behavior (failing or passing).
 
@@ -1587,7 +1700,9 @@ class TestAnalysis(AnalysisBase):
         test_outcomes = defaultdict(list)
         for session in sessions:
             for test in session.test_results:
-                test_outcomes[test.nodeid].append({"outcome": test.outcome, "timestamp": session.session_start_time})
+                test_outcomes[test.nodeid].append(
+                    {"outcome": test.outcome, "timestamp": session.session_start_time}
+                )
 
         # Identify tests with behavior changes
         recently_failing = []
@@ -1619,7 +1734,9 @@ class TestAnalysis(AnalysisBase):
                     {
                         "nodeid": test_id,
                         "last_passed": last_passed,
-                        "failure_streak": sum(1 for o in recent_outcomes if o["outcome"].is_failed()),
+                        "failure_streak": sum(
+                            1 for o in recent_outcomes if o["outcome"].is_failed()
+                        ),
                     }
                 )
 
@@ -1639,7 +1756,9 @@ class TestAnalysis(AnalysisBase):
                     {
                         "nodeid": test_id,
                         "last_failed": last_failed,
-                        "success_streak": sum(1 for o in recent_outcomes if not o["outcome"].is_failed()),
+                        "success_streak": sum(
+                            1 for o in recent_outcomes if not o["outcome"].is_failed()
+                        ),
                     }
                 )
 
@@ -1677,16 +1796,17 @@ class MetricsAnalysis(AnalysisBase):
         super().__init__()
         self._profile_name = profile_name
 
-        if storage is None and profile_name is not None:
-            storage = get_storage_instance(profile_name=profile_name)
-        elif storage is not None and profile_name is None:
-            # Try to get profile name from storage if available
-            profile_name = getattr(storage, "profile_name", None)
+        if storage is not None:
+            self.storage = storage
+        elif profile_name is not None:
+            self.storage = get_storage_instance(profile_name=profile_name)
+        else:
+            self.storage = get_storage_instance()
 
-        self.storage = storage
-        self._sessions = sessions
-        # Use profile-only approach for Query initialization
-        self._query = Query(profile_name=profile_name)
+        if sessions is not None:
+            self._sessions = sessions
+        else:
+            self._sessions = self.storage.load_sessions()
 
     def _get_sessions(self, days: Optional[int] = None) -> List[TestSession]:
         """Get sessions to analyze, optionally filtered by date range."""
@@ -1729,6 +1849,25 @@ class MetricsAnalysis(AnalysisBase):
         performance_score = self._calculate_performance_score(sessions)
         warning_score = self._calculate_warning_score(sessions)
 
+        # Calculate additional health metrics
+        total_tests = 0
+        failed_tests = 0
+        total_warnings = 0
+        for session in sessions:
+            for test in session.test_results:
+                total_tests += 1
+                if (
+                    getattr(test, "outcome", None)
+                    == getattr(test, "outcome", None).__class__.FAILED
+                    if hasattr(test, "outcome") and hasattr(test.outcome, "__class__")
+                    else False
+                ):
+                    failed_tests += 1
+                if getattr(test, "has_warning", False):
+                    total_warnings += 1
+        failure_rate = (failed_tests / total_tests * 100) if total_tests else 0.0
+        warning_rate = (total_warnings / total_tests * 100) if total_tests else 0.0
+
         # Calculate overall score (weighted average)
         weights = {
             "stability": 0.5,  # Most important
@@ -1743,7 +1882,9 @@ class MetricsAnalysis(AnalysisBase):
         )
 
         # Generate recommendations based on scores
-        recommendations = self._generate_recommendations(stability_score, performance_score, warning_score, sessions)
+        recommendations = self._generate_recommendations(
+            stability_score, performance_score, warning_score, sessions
+        )
 
         return {
             "overall_score": overall_score,
@@ -1751,6 +1892,8 @@ class MetricsAnalysis(AnalysisBase):
                 "stability": stability_score,
                 "performance": performance_score,
                 "warnings": warning_score,
+                "failure_rate": failure_rate,
+                "warning_rate": warning_rate,
             },
             "recommendations": recommendations,
         }
@@ -1790,7 +1933,9 @@ class MetricsAnalysis(AnalysisBase):
 
         # Convert to 0-100 score with penalties
         base_score = 100 * (1 - failure_ratio)
-        unreliable_penalty = 20 * unreliable_ratio  # Up to 20 point penalty for unreliability
+        unreliable_penalty = (
+            20 * unreliable_ratio
+        )  # Up to 20 point penalty for unreliability
 
         return max(0, min(100, base_score - unreliable_penalty))
 
@@ -1811,10 +1956,16 @@ class MetricsAnalysis(AnalysisBase):
             # Look for performance degradation within session
             if session_durations:
                 session_mean = mean(session_durations)
-                session_stddev = stdev(session_durations) if len(session_durations) > 1 else 0
+                session_stddev = (
+                    stdev(session_durations) if len(session_durations) > 1 else 0
+                )
 
                 # Count tests significantly slower than session average
-                sum(1 for d in session_durations if d > session_mean + 2 * session_stddev)
+                sum(
+                    1
+                    for d in session_durations
+                    if d > session_mean + 2 * session_stddev
+                )
 
         if not durations:
             return 0.0
@@ -1824,7 +1975,9 @@ class MetricsAnalysis(AnalysisBase):
         duration_stddev = stdev(durations) if len(durations) > 1 else 0
 
         # Score based on consistency and outliers
-        consistency_score = 100 * (1 - (duration_stddev / avg_duration if avg_duration > 0 else 0))
+        consistency_score = 100 * (
+            1 - (duration_stddev / avg_duration if avg_duration > 0 else 0)
+        )
 
         return max(0, min(100, consistency_score))
 
@@ -1862,7 +2015,9 @@ class MetricsAnalysis(AnalysisBase):
         repeat_ratio = repeated_warnings / total_tests if total_tests > 0 else 0
 
         base_score = 100 * (1 - warning_ratio)
-        repeat_penalty = 30 * repeat_ratio  # Up to 30 point penalty for repeated warnings
+        repeat_penalty = (
+            30 * repeat_ratio
+        )  # Up to 30 point penalty for repeated warnings
 
         return max(0, min(100, base_score - repeat_penalty))
 
@@ -1884,7 +2039,8 @@ class MetricsAnalysis(AnalysisBase):
                     {
                         "category": "stability",
                         "priority": "high",
-                        "message": "High failure rate detected in tests: " + ", ".join(failed_patterns[:3]),
+                        "message": "High failure rate detected in tests: "
+                        + ", ".join(failed_patterns[:3]),
                     }
                 )
 
@@ -1896,7 +2052,8 @@ class MetricsAnalysis(AnalysisBase):
                     {
                         "category": "performance",
                         "priority": "medium",
-                        "message": "Performance bottlenecks identified in: " + ", ".join(slow_tests[:3]),
+                        "message": "Performance bottlenecks identified in: "
+                        + ", ".join(slow_tests[:3]),
                     }
                 )
 
@@ -1908,7 +2065,8 @@ class MetricsAnalysis(AnalysisBase):
                     {
                         "category": "warnings",
                         "priority": "low",
-                        "message": "Recurring warnings found in: " + ", ".join(warning_patterns[:3]),
+                        "message": "Recurring warnings found in: "
+                        + ", ".join(warning_patterns[:3]),
                     }
                 )
 
@@ -1928,7 +2086,12 @@ class MetricsAnalysis(AnalysisBase):
                     failure_counts[test.nodeid] += 1
 
         # Return tests with highest failure counts
-        return [test for test, count in sorted(failure_counts.items(), key=lambda x: x[1], reverse=True)]
+        return [
+            test
+            for test, count in sorted(
+                failure_counts.items(), key=lambda x: x[1], reverse=True
+            )
+        ]
 
     def _find_slow_tests(self, sessions: List[TestSession]) -> List[str]:
         """Identify consistently slow tests while preserving session context."""
@@ -1948,10 +2111,14 @@ class MetricsAnalysis(AnalysisBase):
             avg_duration = mean(durations)
             if len(durations) > 1:
                 stdev(durations)
-                if avg_duration > mean(d for dur in test_durations.values() for d in dur):
+                if avg_duration > mean(
+                    d for dur in test_durations.values() for d in dur
+                ):
                     slow_tests.append((test_id, avg_duration))
 
-        return [test for test, _ in sorted(slow_tests, key=lambda x: x[1], reverse=True)]
+        return [
+            test for test, _ in sorted(slow_tests, key=lambda x: x[1], reverse=True)
+        ]
 
     def _analyze_warning_patterns(self, sessions: List[TestSession]) -> List[str]:
         """Analyze warning patterns while preserving session context."""
@@ -1967,7 +2134,12 @@ class MetricsAnalysis(AnalysisBase):
                     warning_counts[test.nodeid] += 1
 
         # Return tests with highest warning counts
-        return [test for test, count in sorted(warning_counts.items(), key=lambda x: x[1], reverse=True)]
+        return [
+            test
+            for test, count in sorted(
+                warning_counts.items(), key=lambda x: x[1], reverse=True
+            )
+        ]
 
 
 class Analysis:
@@ -2014,31 +2186,39 @@ class Analysis:
 
     def __init__(
         self,
-        storage: Optional[BaseStorage] = None,
-        sessions: Optional[List[TestSession]] = None,
+        sessions: Optional[list] = None,
         profile_name: Optional[str] = None,
+        storage: Optional[BaseStorage] = None,
+        **kwargs,
     ):
         """Initialize analysis components.
 
         Args:
-            storage: Storage instance for accessing test data.
-                    If None, uses storage from profile_name or default storage.
-            sessions: Optional list of sessions to analyze
-            profile_name: Optional profile name to use for storage configuration.
-                         Takes precedence over storage parameter if both are provided.
+            sessions: Optional list of sessions to use
+            profile_name: Optional profile name to use
+            storage: Optional storage instance to use
+            **kwargs: Additional keyword arguments for Analysis
         """
         self._profile_name = profile_name
 
-        if storage is None:
-            storage = get_storage_instance(profile_name=profile_name)
+        if storage is not None:
+            self.storage = storage
+        elif profile_name is not None:
+            self.storage = get_storage_instance(profile_name=profile_name)
+        else:
+            self.storage = get_storage_instance()
 
-        self.storage = storage
-        self._sessions = sessions
+        if sessions is not None:
+            self._sessions = sessions
+        else:
+            self._sessions = self.storage.load_sessions()
 
         # Initialize analysis components
-        self.sessions = SessionAnalysis(storage, sessions, profile_name)
-        self.tests = TestAnalysis(storage, sessions, profile_name)
-        self.metrics = MetricsAnalysis(storage, sessions, profile_name)
+        self.sessions = SessionAnalysis(
+            self.storage, self._sessions, self._profile_name
+        )
+        self.tests = TestAnalysis(self.storage, self._sessions, self._profile_name)
+        self.metrics = MetricsAnalysis(self.storage, self._sessions, self._profile_name)
 
     def with_profile(self, profile_name: str) -> "Analysis":
         """Set the storage profile for analysis.
@@ -2085,6 +2265,11 @@ class Analysis:
             sessions=filtered_sessions,
             profile_name=self._profile_name,
         )
+
+    @property
+    def session_analysis(self):
+        """Backward-compatible alias for self.sessions."""
+        return self.sessions
 
     def health_report(self, days: Optional[int] = None) -> Dict[str, Any]:
         """Generate a comprehensive health report for the test suite.
@@ -2192,7 +2377,10 @@ class Analysis:
         target_health = target_analysis.health_report()
 
         # Calculate differences
-        health_diff = target_health["health_score"]["overall_score"] - base_health["health_score"]["overall_score"]
+        health_diff = (
+            target_health["health_score"]["overall_score"]
+            - base_health["health_score"]["overall_score"]
+        )
 
         return {
             "base_health": base_health,
@@ -2325,7 +2513,9 @@ class Analysis:
         processed_pairs = set()
 
         # Sort correlations by strength
-        sorted_correlations = sorted(correlations.items(), key=lambda x: x[1]["correlation"], reverse=True)
+        sorted_correlations = sorted(
+            correlations.items(), key=lambda x: x[1]["correlation"], reverse=True
+        )
 
         # Process each correlation
         for (test_a, test_b), data in sorted_correlations:
@@ -2358,7 +2548,9 @@ class Analysis:
                     processed_pairs.add((other_a, other_b))
 
                     # Update correlation (use average)
-                    cluster["correlation"] = (cluster["correlation"] + other_data["correlation"]) / 2
+                    cluster["correlation"] = (
+                        cluster["correlation"] + other_data["correlation"]
+                    ) / 2
 
             # Add cluster to results
             clusters.append(cluster)
@@ -2403,7 +2595,10 @@ class Analysis:
                         test_durations[nodeid].append(final_duration)
 
         # Calculate average duration per test
-        avg_durations = [(nodeid, sum(durations) / len(durations)) for nodeid, durations in test_durations.items()]
+        avg_durations = [
+            (nodeid, sum(durations) / len(durations))
+            for nodeid, durations in test_durations.items()
+        ]
 
         # Sort by duration (descending) and return top N
         return sorted(avg_durations, key=lambda x: x[1], reverse=True)[:limit]
@@ -2445,7 +2640,9 @@ class Analysis:
         # Sort by failure count (descending) and return top N
         return sorted(failure_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
 
-    def identify_consistently_failing_tests(self, min_consecutive_failures: int = 2) -> List[dict]:
+    def identify_consistently_failing_tests(
+        self, min_consecutive_failures: int = 2
+    ) -> List[dict]:
         """Identify tests that have consistently failed over time.
 
         This method tracks tests that have failed in consecutive sessions,
@@ -2478,7 +2675,9 @@ class Analysis:
 
             # Process regular test results
             for test in session.test_results:
-                test_history.setdefault(test.nodeid, []).append((session_timestamp, test.outcome))
+                test_history.setdefault(test.nodeid, []).append(
+                    (session_timestamp, test.outcome)
+                )
 
             # Process rerun groups if available
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
@@ -2526,7 +2725,9 @@ class Analysis:
                                 "consecutive_failures": current_streak,
                                 "first_failure": streak_start,
                                 "last_failure": streak_end,
-                                "failure_duration": (streak_end - streak_start).total_seconds(),
+                                "failure_duration": (
+                                    streak_end - streak_start
+                                ).total_seconds(),
                             }
                         )
 
@@ -2596,7 +2797,9 @@ class Analysis:
 
             # Process regular test results
             for test in session.test_results:
-                test_history.setdefault(test.nodeid, []).append((session_timestamp, test.outcome))
+                test_history.setdefault(test.nodeid, []).append(
+                    (session_timestamp, test.outcome)
+                )
 
             # Process rerun groups if available
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
@@ -2624,7 +2827,9 @@ class Analysis:
                 continue
 
             # Analyze the entire history as a single streak with hysteresis
-            failure_count = sum(1 for _, outcome in history if outcome == TestOutcome.FAILED)
+            failure_count = sum(
+                1 for _, outcome in history if outcome == TestOutcome.FAILED
+            )
             total_count = len(history)
 
             # Calculate failure rate
@@ -2648,7 +2853,9 @@ class Analysis:
                         "failure_rate": failure_rate,
                         "first_occurrence": first_timestamp,
                         "last_occurrence": last_timestamp,
-                        "streak_duration": (last_timestamp - first_timestamp).total_seconds(),
+                        "streak_duration": (
+                            last_timestamp - first_timestamp
+                        ).total_seconds(),
                     }
                 )
 
@@ -2660,47 +2867,31 @@ class Analysis:
         )
 
 
-# Helper functions for creating analysis instances
 def analysis(
-    profile_name: Optional[str] = None,
-    sessions: Optional[List[TestSession]] = None,
-) -> Analysis:
-    """Create a new Analysis instance.
-
-    This is a convenience function for creating a new Analysis instance,
-    which is the entry point for the fluent analysis API.
+    sessions: Optional[list] = None, profile_name: Optional[str] = None, **kwargs
+) -> "Analysis":
+    """
+    Factory function to create a new Analysis instance.
 
     Args:
-        profile_name: Optional profile name to use for storage configuration.
-        sessions: Optional list of sessions to analyze
+        sessions: Optional list of sessions to use
+        profile_name: Optional profile name to use
+        **kwargs: Additional keyword arguments for Analysis
 
     Returns:
-        New Analysis instance ready for building analysis
-
-    Examples:
-        # Basic usage
-        result = analysis().health_report()
-
-        # With profile
-        result = analysis(profile_name="prod").health_report()
+        Analysis instance
     """
-    return Analysis(profile_name=profile_name, sessions=sessions)
+    return Analysis(sessions=sessions, profile_name=profile_name, **kwargs)
 
 
-def analysis_with_profile(profile_name: str) -> Analysis:
-    """Create a new Analysis instance with a specific profile.
-
-    This is a convenience function for creating a new Analysis instance
-    that uses a specific storage profile.
+def analysis_with_profile(profile_name: str) -> "Analysis":
+    """
+    Factory function to create a new Analysis instance for a specific profile.
 
     Args:
         profile_name: Name of the profile to use
 
     Returns:
         New Analysis instance configured with the specified profile
-
-    Examples:
-        # Analyze production data
-        result = analysis_with_profile("prod").health_report()
     """
     return Analysis(profile_name=profile_name)

@@ -20,19 +20,33 @@ class TestReliabilityMetrics:
         # Create rerun test groups
         rerun_group1 = RerunTestGroup(nodeid="test1")
         current_time = datetime.now()
-        test1_attempt1 = TestResult(nodeid="test1", outcome=TestOutcome.FAILED, start_time=current_time, duration=1.0)
+        test1_attempt1 = TestResult(
+            nodeid="test1",
+            outcome=TestOutcome.FAILED,
+            start_time=current_time,
+            duration=1.0,
+        )
         test1_attempt2 = TestResult(
-            nodeid="test1", outcome=TestOutcome.PASSED, start_time=current_time + timedelta(seconds=5), duration=1.0
+            nodeid="test1",
+            outcome=TestOutcome.PASSED,
+            start_time=current_time + timedelta(seconds=5),
+            duration=1.0,
         )
         rerun_group1.add_test(test1_attempt1)
         rerun_group1.add_test(test1_attempt2)
 
         rerun_group2 = RerunTestGroup(nodeid="test2")
         test2_attempt1 = TestResult(
-            nodeid="test2", outcome=TestOutcome.FAILED, start_time=current_time + timedelta(seconds=10), duration=1.0
+            nodeid="test2",
+            outcome=TestOutcome.FAILED,
+            start_time=current_time + timedelta(seconds=10),
+            duration=1.0,
         )
         test2_attempt2 = TestResult(
-            nodeid="test2", outcome=TestOutcome.FAILED, start_time=current_time + timedelta(seconds=15), duration=1.0
+            nodeid="test2",
+            outcome=TestOutcome.FAILED,
+            start_time=current_time + timedelta(seconds=15),
+            duration=1.0,
         )
         rerun_group2.add_test(test2_attempt1)
         rerun_group2.add_test(test2_attempt2)
@@ -105,9 +119,17 @@ class TestReliabilityMetrics:
 
         rerun_group1 = RerunTestGroup(nodeid="test1")
         current_time = datetime.now()
-        test1_attempt1 = TestResult(nodeid="test1", outcome=TestOutcome.FAILED, start_time=current_time, duration=1.0)
+        test1_attempt1 = TestResult(
+            nodeid="test1",
+            outcome=TestOutcome.FAILED,
+            start_time=current_time,
+            duration=1.0,
+        )
         test1_attempt2 = TestResult(
-            nodeid="test1", outcome=TestOutcome.PASSED, start_time=current_time + timedelta(seconds=5), duration=1.0
+            nodeid="test1",
+            outcome=TestOutcome.PASSED,
+            start_time=current_time + timedelta(seconds=5),
+            duration=1.0,
         )
         rerun_group1.add_test(test1_attempt1)
         rerun_group1.add_test(test1_attempt2)
@@ -121,10 +143,16 @@ class TestReliabilityMetrics:
 
         rerun_group2 = RerunTestGroup(nodeid="test2")
         test2_attempt1 = TestResult(
-            nodeid="test2", outcome=TestOutcome.FAILED, start_time=current_time + timedelta(seconds=10), duration=1.0
+            nodeid="test2",
+            outcome=TestOutcome.FAILED,
+            start_time=current_time + timedelta(seconds=10),
+            duration=1.0,
         )
         test2_attempt2 = TestResult(
-            nodeid="test2", outcome=TestOutcome.FAILED, start_time=current_time + timedelta(seconds=15), duration=1.0
+            nodeid="test2",
+            outcome=TestOutcome.FAILED,
+            start_time=current_time + timedelta(seconds=15),
+            duration=1.0,
         )
         rerun_group2.add_test(test2_attempt1)
         rerun_group2.add_test(test2_attempt2)

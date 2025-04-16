@@ -86,7 +86,9 @@ class TrendDataGenerator(PracticeDataGenerator):
 
         self.trend_strength = max(0.1, min(1.0, trend_strength))
         self.anomaly_rate = max(0.01, min(0.2, anomaly_rate))
-        self.correlation_groups = min(correlation_groups, 5)  # Limit to 5 for performance
+        self.correlation_groups = min(
+            correlation_groups, 5
+        )  # Limit to 5 for performance
 
         # Create correlated test groups that will fail together
         self.correlated_groups = self._create_correlated_groups()
@@ -140,7 +142,9 @@ class TrendDataGenerator(PracticeDataGenerator):
 
                 # Generate test nodeids for this correlation group
                 for j in range(group_size):
-                    module = random.choice(self.test_patterns.get(sut.split("-")[0], ["test_module"]))
+                    module = random.choice(
+                        self.test_patterns.get(sut.split("-")[0], ["test_module"])
+                    )
                     test_type = random.choice(self.test_types)
                     test_name = f"test_{test_type}_{self.text_gen.word()}"
                     nodeid = f"{module}::{test_name}"
@@ -233,7 +237,9 @@ class TrendDataGenerator(PracticeDataGenerator):
 
         return trend_factor * noise * day_factor
 
-    def _is_correlated_failure(self, sut: str, nodeid: str, session_time: datetime) -> bool:
+    def _is_correlated_failure(
+        self, sut: str, nodeid: str, session_time: datetime
+    ) -> bool:
         """Determine if this test should fail as part of a correlated group."""
         # Check if this test is part of any correlated group
         for group in self.correlated_groups.get(sut, []):
@@ -268,7 +274,9 @@ class TrendDataGenerator(PracticeDataGenerator):
             },
         )
 
-        error_type = random.choices(list(error_dist.keys()), weights=list(error_dist.values()), k=1)[0]
+        error_type = random.choices(
+            list(error_dist.keys()), weights=list(error_dist.values()), k=1
+        )[0]
 
         # Select a specific error pattern
         error_pattern = random.choice(self.ERROR_PATTERNS[error_type])
@@ -385,7 +393,8 @@ class TrendDataGenerator(PracticeDataGenerator):
             if random.random() < 0.7:  # 70% of unreliable tests have reruns
                 result.reruns = random.randint(1, 3)
                 result.rerun_outcomes = [
-                    random.choice([TestOutcome.PASSED, TestOutcome.FAILED]) for _ in range(result.reruns)
+                    random.choice([TestOutcome.PASSED, TestOutcome.FAILED])
+                    for _ in range(result.reruns)
                 ]
 
         return result
@@ -441,7 +450,9 @@ class TrendDataGenerator(PracticeDataGenerator):
         ]
 
         # Create a test name with a realistic pattern
-        test_name = f"test_{random.choice(test_categories)}_{random.choice(test_objects)}"
+        test_name = (
+            f"test_{random.choice(test_categories)}_{random.choice(test_objects)}"
+        )
 
         # Sometimes add a scenario
         if random.random() < 0.5:
@@ -454,7 +465,9 @@ class TrendDataGenerator(PracticeDataGenerator):
 
         return f"{module}::{test_name}"
 
-    def _create_session(self, sut_name: str, session_time: datetime, is_base: bool = False) -> TestSession:
+    def _create_session(
+        self, sut_name: str, session_time: datetime, is_base: bool = False
+    ) -> TestSession:
         """Create a test session with realistic test results and trends.
 
         Args:
@@ -484,7 +497,9 @@ class TrendDataGenerator(PracticeDataGenerator):
                 "region": random.choice(["us-east", "us-west", "eu-central"]),
                 "build": f"{random.randint(1000, 9999)}",
                 "version": f"{random.randint(1, 5)}.{random.randint(0, 9)}.{random.randint(0, 9)}",
-                "is_anomaly": ("true" if random.random() < self.anomaly_rate else "false"),
+                "is_anomaly": (
+                    "true" if random.random() < self.anomaly_rate else "false"
+                ),
             },
         )
 
@@ -516,17 +531,24 @@ class TrendDataGenerator(PracticeDataGenerator):
                 outcome = TestOutcome.PASSED
             else:
                 # For failed tests, determine if it's part of a correlated group
-                if sut_name in self.correlated_groups and nodeid in self.correlated_groups[sut_name]:
+                if (
+                    sut_name in self.correlated_groups
+                    and nodeid in self.correlated_groups[sut_name]
+                ):
                     # This test is part of a correlated group
                     # If any test in the group has failed, this one is more likely to fail
                     outcome = TestOutcome.FAILED
                 else:
-                    outcome = random.choice([TestOutcome.FAILED, TestOutcome.ERROR, TestOutcome.SKIPPED])
+                    outcome = random.choice(
+                        [TestOutcome.FAILED, TestOutcome.ERROR, TestOutcome.SKIPPED]
+                    )
 
             # Determine duration
             if outcome == TestOutcome.PASSED:
                 # Passed tests have more consistent durations
-                base_duration = self.test_durations.get(nodeid, random.uniform(0.1, 1.0))
+                base_duration = self.test_durations.get(
+                    nodeid, random.uniform(0.1, 1.0)
+                )
                 duration = base_duration * random.uniform(0.9, 1.1)
             else:
                 duration = random.uniform(0.05, 2.0)
@@ -582,7 +604,8 @@ class TrendDataGenerator(PracticeDataGenerator):
         # Show success message only after all operations are complete
         console.print(
             Panel(
-                f"Generated trend data for {self.days} days\n" f"Total sessions: {len(all_sessions)}",
+                f"Generated trend data for {self.days} days\n"
+                f"Total sessions: {len(all_sessions)}",
                 title="Success",
                 border_style="green",
             )
@@ -628,7 +651,9 @@ class TrendDataGenerator(PracticeDataGenerator):
                     # Create target sessions - limit for performance
                     num_targets = min(2, random.randint(1, self.targets_per_base))
                     for _ in range(num_targets):
-                        target_time = day_time + timedelta(hours=random.randint(12, 23), minutes=random.randint(0, 59))
+                        target_time = day_time + timedelta(
+                            hours=random.randint(12, 23), minutes=random.randint(0, 59)
+                        )
                         target_session = self._create_session(
                             sut_name=sut_name,
                             session_time=target_time,
@@ -657,7 +682,9 @@ class TrendDataGenerator(PracticeDataGenerator):
                 storage.save_session(session)
 
             console = Console()
-            console.print(f"[green]Saved {len(sessions)} sessions to profile: {self.storage_profile}[/green]")
+            console.print(
+                f"[green]Saved {len(sessions)} sessions to profile: {self.storage_profile}[/green]"
+            )
         except Exception as e:
             console = Console()
             console.print(f"[bold red]Error saving to profile: {str(e)}[/bold red]")
@@ -707,7 +734,9 @@ class TrendDataGenerator(PracticeDataGenerator):
             actual_days = min(days, 15)
             targets_per_base = 2
             suts_to_use = 3
-            console.print("[bold yellow]Using lightweight mode with reduced data volume[/bold yellow]")
+            console.print(
+                "[bold yellow]Using lightweight mode with reduced data volume[/bold yellow]"
+            )
         else:
             actual_days = days
             targets_per_base = 3
@@ -727,7 +756,9 @@ class TrendDataGenerator(PracticeDataGenerator):
             correlation_groups=2,
         )
         # Limit the number of SUTs for better performance
-        baseline_generator.sut_variations = baseline_generator.sut_variations[:suts_to_use]
+        baseline_generator.sut_variations = baseline_generator.sut_variations[
+            :suts_to_use
+        ]
 
         baseline_generator.pass_rate = 0.95  # Start with high pass rate
         baseline_generator.reliability_rate = 0.97  # High reliability
@@ -760,13 +791,16 @@ class TrendDataGenerator(PracticeDataGenerator):
             storage_profile="showcase",
             days=actual_days // 3,
             targets_per_base=targets_per_base,
-            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=actual_days - (actual_days // 3)),
+            start_date=datetime.now(ZoneInfo("UTC"))
+            - timedelta(days=actual_days - (actual_days // 3)),
             trend_strength=0.7,  # Strong degradation trend
             anomaly_rate=0.1,  # More anomalies
             correlation_groups=5,  # Increased from 3 to 5 for more co-failing test groups
         )
         # Limit the number of SUTs for better performance
-        degradation_generator.sut_variations = degradation_generator.sut_variations[:suts_to_use]
+        degradation_generator.sut_variations = degradation_generator.sut_variations[
+            :suts_to_use
+        ]
 
         degradation_generator.pass_rate = 0.85  # Lower pass rate
         degradation_generator.reliability_rate = 0.92  # Lower reliability
@@ -783,7 +817,9 @@ class TrendDataGenerator(PracticeDataGenerator):
 
                     # Increased base probability from 0.2 to 0.4 for more co-failing tests
                     base_probability = 0.4
-                    degradation_factor = degradation_generator._get_degradation_factor(session_time)
+                    degradation_factor = degradation_generator._get_degradation_factor(
+                        session_time
+                    )
                     probability = min(0.9, base_probability * degradation_factor)
 
                     is_group_failure = random.random() < probability
@@ -822,13 +858,16 @@ class TrendDataGenerator(PracticeDataGenerator):
             storage_profile="showcase",
             days=actual_days // 3,
             targets_per_base=targets_per_base,
-            start_date=datetime.now(ZoneInfo("UTC")) - timedelta(days=actual_days - 2 * (actual_days // 3)),
+            start_date=datetime.now(ZoneInfo("UTC"))
+            - timedelta(days=actual_days - 2 * (actual_days // 3)),
             trend_strength=0.5,  # Moderate trend (improvement)
             anomaly_rate=0.05,  # Fewer anomalies
             correlation_groups=2,
         )
         # Limit the number of SUTs for better performance
-        recovery_generator.sut_variations = recovery_generator.sut_variations[:suts_to_use]
+        recovery_generator.sut_variations = recovery_generator.sut_variations[
+            :suts_to_use
+        ]
 
         recovery_generator.pass_rate = 0.75  # Starting from lower point
         recovery_generator.reliability_rate = 0.88  # Still dealing with unreliability
@@ -857,7 +896,10 @@ class TrendDataGenerator(PracticeDataGenerator):
             0.5,
             1.0
             - recovery_generator.trend_strength
-            * ((session_time - recovery_generator.start_date) / timedelta(days=recovery_generator.days)),
+            * (
+                (session_time - recovery_generator.start_date)
+                / timedelta(days=recovery_generator.days)
+            ),
         )
         recovery_generator.generate_trend_data()
 

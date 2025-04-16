@@ -129,6 +129,7 @@ class InsightAPI:
         # Lazy import to avoid requiring scikit-learn for basic functionality
         try:
             from pytest_insight.core.predictive import predictive_analytics
+
             analysis_instance = self.analyze()
             return predictive_analytics(analysis_instance)
         except ImportError:
@@ -155,6 +156,7 @@ compare = comparison
 analyze = analysis
 get_insights = insights
 
+
 # Lazy loading for predictive analytics
 def get_predictive(analysis=None):
     """Create a new PredictiveAnalytics instance for forecasting and anomaly detection.
@@ -167,12 +169,14 @@ def get_predictive(analysis=None):
     """
     try:
         from pytest_insight.core.predictive import predictive_analytics
+
         return predictive_analytics(analysis)
     except ImportError:
         raise ImportError(
             "Predictive analytics functionality requires additional dependencies. "
             "Install them with: uv pip install 'pytest-insight[visualize]'"
         )
+
 
 __all__ = [
     # Main entry points

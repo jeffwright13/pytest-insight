@@ -99,7 +99,10 @@ class HealthMetricsAPI:
 
                         # Check if the first run failed (typical for rerun groups)
                         first_test = rerun_group.tests[0]
-                        if hasattr(first_test, "outcome") and first_test.outcome == TestOutcome.FAILED:
+                        if (
+                            hasattr(first_test, "outcome")
+                            and first_test.outcome == TestOutcome.FAILED
+                        ):
                             test_failures[nodeid]["failure_count"] += 1
                             total_failures += 1
 
@@ -122,7 +125,9 @@ class HealthMetricsAPI:
                 )
 
         # Sort by failure count (descending), then by failure rate (descending)
-        sorted_results = sorted(results, key=lambda x: (x["failure_count"], x["failure_rate"]), reverse=True)
+        sorted_results = sorted(
+            results, key=lambda x: (x["failure_count"], x["failure_rate"]), reverse=True
+        )
 
         return {"top_failing": sorted_results[:limit], "total_failures": total_failures}
 
@@ -150,7 +155,12 @@ class HealthMetricsAPI:
 
         # Sort sessions by timestamp
         sorted_sessions = sorted(
-            sessions, key=lambda s: s.session_start_time if hasattr(s, "session_start_time") else datetime.min
+            sessions,
+            key=lambda s: (
+                s.session_start_time
+                if hasattr(s, "session_start_time")
+                else datetime.min
+            ),
         )
 
         # Track test outcomes across sessions
@@ -177,7 +187,11 @@ class HealthMetricsAPI:
                 test_history[nodeid].append(
                     {
                         "session_id": session.id if hasattr(session, "id") else None,
-                        "timestamp": session.session_start_time if hasattr(session, "session_start_time") else None,
+                        "timestamp": (
+                            session.session_start_time
+                            if hasattr(session, "session_start_time")
+                            else None
+                        ),
                         "outcome": outcome,
                     }
                 )
@@ -214,7 +228,9 @@ class HealthMetricsAPI:
                 )
 
         # Calculate regression rate
-        regression_rate = (len(regressed_tests) / total_tests) * 100 if total_tests > 0 else 0
+        regression_rate = (
+            (len(regressed_tests) / total_tests) * 100 if total_tests > 0 else 0
+        )
 
         return {"regression_rate": regression_rate, "regressed_tests": regressed_tests}
 
@@ -254,7 +270,11 @@ class HealthMetricsAPI:
                 nodeid = test.nodeid
 
                 # Get test duration if available
-                if hasattr(test, "duration") and test.duration is not None and test.duration > 0:
+                if (
+                    hasattr(test, "duration")
+                    and test.duration is not None
+                    and test.duration > 0
+                ):
                     test_durations[nodeid].append(test.duration)
 
         # Calculate average durations and prepare results
@@ -297,21 +317,34 @@ class HealthMetricsAPI:
 
         sessions = self._get_sessions(days)
         if not sessions or len(sessions) < 2:
-            return {"trend": {"direction": "stable", "change": 0}, "significant": False, "durations": []}
+            return {
+                "trend": {"direction": "stable", "change": 0},
+                "significant": False,
+                "durations": [],
+            }
 
         # Sort sessions by timestamp
         sorted_sessions = sorted(
-            sessions, key=lambda s: s.session_start_time if hasattr(s, "session_start_time") else datetime.min
+            sessions,
+            key=lambda s: (
+                s.session_start_time
+                if hasattr(s, "session_start_time")
+                else datetime.min
+            ),
         )
 
         # Calculate total duration for each session
         session_durations = []
         for session in sorted_sessions:
-            if not hasattr(session, "session_start_time") or not hasattr(session, "session_stop_time"):
+            if not hasattr(session, "session_start_time") or not hasattr(
+                session, "session_stop_time"
+            ):
                 continue
 
             # Calculate session duration in seconds
-            duration = (session.session_stop_time - session.session_start_time).total_seconds()
+            duration = (
+                session.session_stop_time - session.session_start_time
+            ).total_seconds()
 
             # Skip invalid durations
             if duration <= 0:
@@ -321,7 +354,11 @@ class HealthMetricsAPI:
 
         # If we don't have enough data, return stable trend
         if len(session_durations) < 2:
-            return {"trend": {"direction": "stable", "change": 0}, "significant": False, "durations": session_durations}
+            return {
+                "trend": {"direction": "stable", "change": 0},
+                "significant": False,
+                "durations": session_durations,
+            }
 
         # Calculate trend using moving average
         if len(session_durations) < window_size:

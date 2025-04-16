@@ -381,7 +381,9 @@ async def query(query_request: GrafanaQuery):
                 day_analysis = Analysis(sessions=day_sessions)
                 health_report = day_analysis.health_report()
                 score = health_report["health_score"]["overall_score"]
-                timestamp = int(datetime.combine(day, datetime.min.time()).timestamp() * 1000)
+                timestamp = int(
+                    datetime.combine(day, datetime.min.time()).timestamp() * 1000
+                )
                 datapoints.append([score, timestamp])
             results.append({"target": "Health Score", "datapoints": datapoints})
 
@@ -391,7 +393,9 @@ async def query(query_request: GrafanaQuery):
                 day_analysis = Analysis(sessions=day_sessions)
                 health_report = day_analysis.health_report()
                 score = health_report["health_score"].get("stability_score", 0)
-                timestamp = int(datetime.combine(day, datetime.min.time()).timestamp() * 1000)
+                timestamp = int(
+                    datetime.combine(day, datetime.min.time()).timestamp() * 1000
+                )
                 datapoints.append([score, timestamp])
             results.append({"target": "Stability Score", "datapoints": datapoints})
 
@@ -401,7 +405,9 @@ async def query(query_request: GrafanaQuery):
                 day_analysis = Analysis(sessions=day_sessions)
                 health_report = day_analysis.health_report()
                 score = health_report["health_score"].get("performance_score", 0)
-                timestamp = int(datetime.combine(day, datetime.min.time()).timestamp() * 1000)
+                timestamp = int(
+                    datetime.combine(day, datetime.min.time()).timestamp() * 1000
+                )
                 datapoints.append([score, timestamp])
             results.append({"target": "Performance Score", "datapoints": datapoints})
 
@@ -416,7 +422,9 @@ async def query(query_request: GrafanaQuery):
                         if test.outcome == TestOutcome.PASSED:
                             passed += 1
                 pass_rate = (passed / total * 100) if total > 0 else 0
-                timestamp = int(datetime.combine(day, datetime.min.time()).timestamp() * 1000)
+                timestamp = int(
+                    datetime.combine(day, datetime.min.time()).timestamp() * 1000
+                )
                 datapoints.append([pass_rate, timestamp])
             results.append({"target": "Pass Rate (%)", "datapoints": datapoints})
 
@@ -431,7 +439,9 @@ async def query(query_request: GrafanaQuery):
                         if test.outcome == TestOutcome.FAILED:
                             failed += 1
                 failure_rate = (failed / total * 100) if total > 0 else 0
-                timestamp = int(datetime.combine(day, datetime.min.time()).timestamp() * 1000)
+                timestamp = int(
+                    datetime.combine(day, datetime.min.time()).timestamp() * 1000
+                )
                 datapoints.append([failure_rate, timestamp])
             results.append({"target": "Failure Rate (%)", "datapoints": datapoints})
 
@@ -441,9 +451,13 @@ async def query(query_request: GrafanaQuery):
                 day_analysis = Analysis(sessions=day_sessions)
                 unreliable_tests = day_analysis.find_unreliable_tests()
                 count = len(unreliable_tests)
-                timestamp = int(datetime.combine(day, datetime.min.time()).timestamp() * 1000)
+                timestamp = int(
+                    datetime.combine(day, datetime.min.time()).timestamp() * 1000
+                )
                 datapoints.append([count, timestamp])
-            results.append({"target": "Unreliable Tests Count", "datapoints": datapoints})
+            results.append(
+                {"target": "Unreliable Tests Count", "datapoints": datapoints}
+            )
 
         elif target == "avg_test_duration":
             datapoints = []
@@ -453,9 +467,13 @@ async def query(query_request: GrafanaQuery):
                     for test in session.test_results:
                         durations.append(test.duration)
                 avg_duration = sum(durations) / len(durations) if durations else 0
-                timestamp = int(datetime.combine(day, datetime.min.time()).timestamp() * 1000)
+                timestamp = int(
+                    datetime.combine(day, datetime.min.time()).timestamp() * 1000
+                )
                 datapoints.append([avg_duration, timestamp])
-            results.append({"target": "Average Test Duration (s)", "datapoints": datapoints})
+            results.append(
+                {"target": "Average Test Duration (s)", "datapoints": datapoints}
+            )
 
         elif target == "test_count_by_outcome":
             # Create a series for each outcome
@@ -465,10 +483,18 @@ async def query(query_request: GrafanaQuery):
                 outcome_counts = {outcome.name: 0 for outcome in TestOutcome}
                 for session in day_sessions:
                     for test in session.test_results:
-                        outcome_name = test.outcome.name if hasattr(test.outcome, "name") else str(test.outcome)
-                        outcome_counts[outcome_name] = outcome_counts.get(outcome_name, 0) + 1
+                        outcome_name = (
+                            test.outcome.name
+                            if hasattr(test.outcome, "name")
+                            else str(test.outcome)
+                        )
+                        outcome_counts[outcome_name] = (
+                            outcome_counts.get(outcome_name, 0) + 1
+                        )
 
-                timestamp = int(datetime.combine(day, datetime.min.time()).timestamp() * 1000)
+                timestamp = int(
+                    datetime.combine(day, datetime.min.time()).timestamp() * 1000
+                )
                 for outcome, count in outcome_counts.items():
                     if outcome not in outcome_series:
                         outcome_series[outcome] = []
@@ -477,7 +503,9 @@ async def query(query_request: GrafanaQuery):
             # Add a series for each outcome
             for outcome, datapoints in outcome_series.items():
                 if datapoints:  # Only include non-empty series
-                    results.append({"target": f"Tests {outcome}", "datapoints": datapoints})
+                    results.append(
+                        {"target": f"Tests {outcome}", "datapoints": datapoints}
+                    )
 
     return results
 
@@ -542,16 +570,32 @@ async def get_sessions(
                 "session_start_time": session.session_start_time,
                 "session_duration": session.session_duration,
                 "total_tests": len(session.test_results),
-                "passed_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.PASSED),
-                "failed_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.FAILED),
-                "skipped_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.SKIPPED),
-                "xfailed_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.XFAILED),
-                "xpassed_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.XPASSED),
-                "error_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.ERROR),
+                "passed_tests": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.PASSED
+                ),
+                "failed_tests": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.FAILED
+                ),
+                "skipped_tests": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.SKIPPED
+                ),
+                "xfailed_tests": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.XFAILED
+                ),
+                "xpassed_tests": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.XPASSED
+                ),
+                "error_tests": sum(
+                    1 for t in session.test_results if t.outcome == TestOutcome.ERROR
+                ),
                 "test_results": [
                     {
                         "name": test.name,
-                        "outcome": (test.outcome.name if hasattr(test.outcome, "name") else str(test.outcome)),
+                        "outcome": (
+                            test.outcome.name
+                            if hasattr(test.outcome, "name")
+                            else str(test.outcome)
+                        ),
                         "duration": test.duration,
                         "nodeid": test.nodeid,
                         "markers": test.markers,
@@ -566,7 +610,9 @@ async def get_sessions(
     return results
 
 
-@app.get("/api/sessions/{session_id}", response_model=TestSessionResponse, tags=["query"])
+@app.get(
+    "/api/sessions/{session_id}", response_model=TestSessionResponse, tags=["query"]
+)
 async def get_session(
     session_id: str = FastAPIPath(..., description="Session ID"),
     profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
@@ -588,16 +634,32 @@ async def get_session(
         "session_start_time": session.session_start_time,
         "session_duration": session.session_duration,
         "total_tests": len(session.test_results),
-        "passed_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.PASSED),
-        "failed_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.FAILED),
-        "skipped_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.SKIPPED),
-        "xfailed_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.XFAILED),
-        "xpassed_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.XPASSED),
-        "error_tests": sum(1 for t in session.test_results if t.outcome == TestOutcome.ERROR),
+        "passed_tests": sum(
+            1 for t in session.test_results if t.outcome == TestOutcome.PASSED
+        ),
+        "failed_tests": sum(
+            1 for t in session.test_results if t.outcome == TestOutcome.FAILED
+        ),
+        "skipped_tests": sum(
+            1 for t in session.test_results if t.outcome == TestOutcome.SKIPPED
+        ),
+        "xfailed_tests": sum(
+            1 for t in session.test_results if t.outcome == TestOutcome.XFAILED
+        ),
+        "xpassed_tests": sum(
+            1 for t in session.test_results if t.outcome == TestOutcome.XPASSED
+        ),
+        "error_tests": sum(
+            1 for t in session.test_results if t.outcome == TestOutcome.ERROR
+        ),
         "test_results": [
             {
                 "name": test.name,
-                "outcome": (test.outcome.name if hasattr(test.outcome, "name") else str(test.outcome)),
+                "outcome": (
+                    test.outcome.name
+                    if hasattr(test.outcome, "name")
+                    else str(test.outcome)
+                ),
                 "duration": test.duration,
                 "nodeid": test.nodeid,
                 "markers": test.markers,
@@ -613,10 +675,16 @@ async def get_session(
 async def get_tests(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(7, description="Number of days to include"),
-    pattern: Optional[str] = FastAPIQuery(None, description="Test name pattern to match"),
+    pattern: Optional[str] = FastAPIQuery(
+        None, description="Test name pattern to match"
+    ),
     outcome: Optional[str] = FastAPIQuery(None, description="Filter by test outcome"),
-    min_duration: Optional[float] = FastAPIQuery(None, description="Minimum test duration"),
-    max_duration: Optional[float] = FastAPIQuery(None, description="Maximum test duration"),
+    min_duration: Optional[float] = FastAPIQuery(
+        None, description="Minimum test duration"
+    ),
+    max_duration: Optional[float] = FastAPIQuery(
+        None, description="Maximum test duration"
+    ),
     limit: int = FastAPIQuery(100, description="Maximum number of tests to return"),
     profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
@@ -641,7 +709,9 @@ async def get_tests(
                 outcome_enum = TestOutcome[outcome.upper()]
                 query = query.with_outcome(outcome_enum)
             except KeyError:
-                raise HTTPException(status_code=400, detail=f"Invalid outcome: {outcome}")
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid outcome: {outcome}"
+                )
 
         if min_duration is not None or max_duration is not None:
             min_val = min_duration if min_duration is not None else 0
@@ -660,7 +730,10 @@ async def get_tests(
             if pattern and pattern.lower() not in test.nodeid.lower():
                 continue
 
-            if outcome and (not hasattr(test.outcome, "name") or test.outcome.name != outcome.upper()):
+            if outcome and (
+                not hasattr(test.outcome, "name")
+                or test.outcome.name != outcome.upper()
+            ):
                 continue
 
             if min_duration is not None and test.duration < min_duration:
@@ -672,7 +745,11 @@ async def get_tests(
             results.append(
                 {
                     "name": test.name,
-                    "outcome": (test.outcome.name if hasattr(test.outcome, "name") else str(test.outcome)),
+                    "outcome": (
+                        test.outcome.name
+                        if hasattr(test.outcome, "name")
+                        else str(test.outcome)
+                    ),
                     "duration": test.duration,
                     "nodeid": test.nodeid,
                     "markers": test.markers,
@@ -695,8 +772,12 @@ async def get_tests(
 async def get_health_report(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(7, description="Number of days to include"),
-    include_trends: bool = FastAPIQuery(True, description="Include trend analysis in the report"),
-    include_recommendations: bool = FastAPIQuery(True, description="Include improvement recommendations"),
+    include_trends: bool = FastAPIQuery(
+        True, description="Include trend analysis in the report"
+    ),
+    include_recommendations: bool = FastAPIQuery(
+        True, description="Include improvement recommendations"
+    ),
     min_score_threshold: Optional[float] = FastAPIQuery(
         None, description="Only return results if health score is below this threshold"
     ),
@@ -725,7 +806,10 @@ async def get_health_report(
         del health_report["health_score"]["recommendations"]
 
     # Check threshold if specified
-    if min_score_threshold is not None and health_report["health_score"]["overall_score"] > min_score_threshold:
+    if (
+        min_score_threshold is not None
+        and health_report["health_score"]["overall_score"] > min_score_threshold
+    ):
         raise HTTPException(
             status_code=404,
             detail=f"Health score {health_report['health_score']['overall_score']} is above threshold {min_score_threshold}",
@@ -734,15 +818,22 @@ async def get_health_report(
     return health_report
 
 
-@app.get("/api/analysis/stability", response_model=StabilityReportResponse, tags=["analysis"])
+@app.get(
+    "/api/analysis/stability", response_model=StabilityReportResponse, tags=["analysis"]
+)
 async def get_stability_report(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(7, description="Number of days to include"),
     min_nonreliability_rate: float = FastAPIQuery(
-        0.0, description="Minimum reliability/repeatability rate to include a test (0.0-1.0)"
+        0.0,
+        description="Minimum reliability/repeatability rate to include a test (0.0-1.0)",
     ),
-    max_tests: int = FastAPIQuery(100, description="Maximum number of tests to include in each category"),
-    include_patterns: bool = FastAPIQuery(True, description="Include outcome patterns in the report"),
+    max_tests: int = FastAPIQuery(
+        100, description="Maximum number of tests to include in each category"
+    ),
+    include_patterns: bool = FastAPIQuery(
+        True, description="Include outcome patterns in the report"
+    ),
     profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get stability report for test sessions with enhanced parametrization."""
@@ -785,9 +876,15 @@ async def get_stability_report(
 async def get_performance_report(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(7, description="Number of days to include"),
-    min_duration: float = FastAPIQuery(0.0, description="Minimum test duration to include (seconds)"),
-    max_tests: int = FastAPIQuery(100, description="Maximum number of tests to include"),
-    include_trends: bool = FastAPIQuery(True, description="Include duration trends in the report"),
+    min_duration: float = FastAPIQuery(
+        0.0, description="Minimum test duration to include (seconds)"
+    ),
+    max_tests: int = FastAPIQuery(
+        100, description="Maximum number of tests to include"
+    ),
+    include_trends: bool = FastAPIQuery(
+        True, description="Include duration trends in the report"
+    ),
     profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get performance report for test sessions with enhanced parametrization."""
@@ -812,7 +909,11 @@ async def get_performance_report(
     performance_metrics = performance_report.get("session_metrics", {})
 
     # Duration trends will be empty if not requested
-    duration_trends = {} if not include_trends else performance_report.get("performance", {}).get("duration_trends", {})
+    duration_trends = (
+        {}
+        if not include_trends
+        else performance_report.get("performance", {}).get("duration_trends", {})
+    )
 
     return {
         "slow_tests": slow_tests,
@@ -837,7 +938,9 @@ class TrendReportResponse(BaseModel):
 async def get_trend_report(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(30, description="Number of days to include"),
-    interval: str = FastAPIQuery("day", description="Trend interval (day, week, month)"),
+    interval: str = FastAPIQuery(
+        "day", description="Trend interval (day, week, month)"
+    ),
     profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Get comprehensive trend report showing how metrics change over time."""
@@ -857,7 +960,9 @@ async def get_trend_report(
             interval_key = session.start_time.date().isoformat()
         elif interval == "week":
             # Get the start of the week (Monday)
-            start_of_week = session.start_time.date() - timedelta(days=session.start_time.weekday())
+            start_of_week = session.start_time.date() - timedelta(
+                days=session.start_time.weekday()
+            )
             interval_key = start_of_week.isoformat()
         elif interval == "month":
             interval_key = f"{session.start_time.year}-{session.start_time.month:02d}"
@@ -892,7 +997,10 @@ async def get_trend_report(
 
         # Failure trend
         total_failures = sum(
-            1 for s in interval_sessions_list for t in s.test_results if t.outcome == TestOutcome.FAILED
+            1
+            for s in interval_sessions_list
+            for t in s.test_results
+            if t.outcome == TestOutcome.FAILED
         )
         total_tests = sum(len(s.test_results) for s in interval_sessions_list)
 
@@ -901,17 +1009,26 @@ async def get_trend_report(
                 "interval": interval_key,
                 "failure_count": total_failures,
                 "total_tests": total_tests,
-                "failure_rate": ((total_failures / total_tests * 100) if total_tests > 0 else 0),
+                "failure_rate": (
+                    (total_failures / total_tests * 100) if total_tests > 0 else 0
+                ),
             }
         )
 
         # Pass rate trend
-        passed_tests = sum(1 for s in interval_sessions_list for t in s.test_results if t.outcome == TestOutcome.PASSED)
+        passed_tests = sum(
+            1
+            for s in interval_sessions_list
+            for t in s.test_results
+            if t.outcome == TestOutcome.PASSED
+        )
 
         pass_rate_trend.append(
             {
                 "interval": interval_key,
-                "pass_rate": ((passed_tests / total_tests * 100) if total_tests > 0 else 0),
+                "pass_rate": (
+                    (passed_tests / total_tests * 100) if total_tests > 0 else 0
+                ),
                 "total_tests": total_tests,
                 "passed_tests": passed_tests,
             }
@@ -921,7 +1038,11 @@ async def get_trend_report(
             {
                 "interval": interval_key,
                 "total_tests": total_tests,
-                "unique_tests": len(set(t.nodeid for s in interval_sessions_list for t in s.test_results)),
+                "unique_tests": len(
+                    set(
+                        t.nodeid for s in interval_sessions_list for t in s.test_results
+                    )
+                ),
             }
         )
 
@@ -961,7 +1082,9 @@ async def get_coverage_report(
     sessions = query.get_sessions()
 
     if not sessions:
-        raise HTTPException(status_code=404, detail="No sessions found matching the criteria")
+        raise HTTPException(
+            status_code=404, detail="No sessions found matching the criteria"
+        )
 
     # Extract all unique tests
     all_tests = {}
@@ -1012,11 +1135,17 @@ class TestRegressionResponse(BaseModel):
     timestamp: datetime
 
 
-@app.get("/api/analysis/regression", response_model=TestRegressionResponse, tags=["analysis"])
+@app.get(
+    "/api/analysis/regression", response_model=TestRegressionResponse, tags=["analysis"]
+)
 async def get_regression_report(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
-    baseline_days: int = FastAPIQuery(14, description="Number of days to include for baseline"),
-    recent_days: int = FastAPIQuery(7, description="Number of days to include for recent tests"),
+    baseline_days: int = FastAPIQuery(
+        14, description="Number of days to include for baseline"
+    ),
+    recent_days: int = FastAPIQuery(
+        7, description="Number of days to include for recent tests"
+    ),
     min_duration_change: float = FastAPIQuery(
         0.5, description="Minimum duration change to consider significant (seconds)"
     ),
@@ -1041,7 +1170,9 @@ async def get_regression_report(
     recent_sessions = recent_query.get_sessions()
 
     if not baseline_sessions or not recent_sessions:
-        raise HTTPException(status_code=404, detail="Insufficient data for baseline or recent period")
+        raise HTTPException(
+            status_code=404, detail="Insufficient data for baseline or recent period"
+        )
 
     # Extract test results by nodeid
     baseline_tests = {}
@@ -1160,7 +1291,9 @@ class TestSuiteQualityResponse(BaseModel):
     timestamp: datetime
 
 
-@app.get("/api/analysis/quality", response_model=TestSuiteQualityResponse, tags=["analysis"])
+@app.get(
+    "/api/analysis/quality", response_model=TestSuiteQualityResponse, tags=["analysis"]
+)
 async def get_quality_report(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(30, description="Number of days to include"),
@@ -1177,7 +1310,9 @@ async def get_quality_report(
     sessions = query.get_sessions()
 
     if not sessions:
-        raise HTTPException(status_code=404, detail="No sessions found matching the criteria")
+        raise HTTPException(
+            status_code=404, detail="No sessions found matching the criteria"
+        )
 
     # Extract all unique tests
     all_tests = {}
@@ -1201,7 +1336,9 @@ async def get_quality_report(
         test_by_module[module].append(test)
 
         # Outcome
-        outcome = test.outcome.name if hasattr(test.outcome, "name") else str(test.outcome)
+        outcome = (
+            test.outcome.name if hasattr(test.outcome, "name") else str(test.outcome)
+        )
         test_by_outcome[outcome].append(test)
 
         # Duration
@@ -1217,11 +1354,18 @@ async def get_quality_report(
     # Calculate distribution percentages
     total_tests = len(all_tests)
 
-    module_distribution = {module: len(tests) / total_tests for module, tests in test_by_module.items()}
+    module_distribution = {
+        module: len(tests) / total_tests for module, tests in test_by_module.items()
+    }
 
-    outcome_distribution = {outcome: len(tests) / total_tests for outcome, tests in test_by_outcome.items()}
+    outcome_distribution = {
+        outcome: len(tests) / total_tests for outcome, tests in test_by_outcome.items()
+    }
 
-    duration_distribution = {category: len(tests) / total_tests for category, tests in test_by_duration.items()}
+    duration_distribution = {
+        category: len(tests) / total_tests
+        for category, tests in test_by_duration.items()
+    }
 
     # Analyze test complexity (based on duration variance and failure patterns)
     duration_stats = {
@@ -1250,7 +1394,9 @@ async def get_quality_report(
         if len(outcomes) > 1:
             unreliable_tests.append(test)
 
-    isolation_score = 1.0 - (len(unreliable_tests) / total_tests if total_tests > 0 else 0)
+    isolation_score = 1.0 - (
+        len(unreliable_tests) / total_tests if total_tests > 0 else 0
+    )
 
     # Generate quality score (weighted average of various factors)
     # - Distribution score: How well distributed tests are (higher is better)
@@ -1258,30 +1404,44 @@ async def get_quality_report(
     # - Isolation score: How isolated tests are (higher is better)
 
     # Distribution score: Penalize if tests are concentrated in few modules
-    distribution_score = 1.0 - max(module_distribution.values()) if module_distribution else 0
+    distribution_score = (
+        1.0 - max(module_distribution.values()) if module_distribution else 0
+    )
 
     # Complexity score: Penalize high variance in test duration
-    complexity_values = [stats["variance"] for stats in duration_stats.values() if stats["variance"] > 0]
+    complexity_values = [
+        stats["variance"] for stats in duration_stats.values() if stats["variance"] > 0
+    ]
     complexity_score = 1.0 - (mean(complexity_values) / 10 if complexity_values else 0)
     complexity_score = max(0, min(1, complexity_score))  # Clamp between 0 and 1
 
     # Calculate overall quality score
-    quality_score = (0.4 * distribution_score + 0.3 * complexity_score + 0.3 * isolation_score) * 100
+    quality_score = (
+        0.4 * distribution_score + 0.3 * complexity_score + 0.3 * isolation_score
+    ) * 100
 
     # Generate recommendations
     recommendations = []
 
     if distribution_score < 0.5:
-        recommendations.append("Tests are concentrated in too few modules. Consider more even test distribution.")
+        recommendations.append(
+            "Tests are concentrated in too few modules. Consider more even test distribution."
+        )
 
     if complexity_score < 0.5:
-        recommendations.append("High variance in test duration suggests complex tests. Consider simplifying tests.")
+        recommendations.append(
+            "High variance in test duration suggests complex tests. Consider simplifying tests."
+        )
 
     if isolation_score < 0.8:
-        recommendations.append("Many unreliable tests suggest isolation issues. Review test dependencies.")
+        recommendations.append(
+            "Many unreliable tests suggest isolation issues. Review test dependencies."
+        )
 
     if duration_distribution.get("very_slow", 0) > 0.2:
-        recommendations.append("Too many slow tests (>5s). Consider optimizing or parallelizing.")
+        recommendations.append(
+            "Too many slow tests (>5s). Consider optimizing or parallelizing."
+        )
 
     return {
         "quality_score": quality_score,
@@ -1309,11 +1469,15 @@ async def compare_suts(
     sut1: str = FastAPIQuery(..., description="First SUT to compare"),
     sut2: str = FastAPIQuery(..., description="Second SUT to compare"),
     days: int = FastAPIQuery(7, description="Number of days to include"),
-    include_tests: bool = FastAPIQuery(True, description="Include detailed test results"),
+    include_tests: bool = FastAPIQuery(
+        True, description="Include detailed test results"
+    ),
     min_duration_change: float = FastAPIQuery(
         0.1, description="Minimum duration change to consider significant (seconds)"
     ),
-    include_metrics: bool = FastAPIQuery(True, description="Include aggregated metrics comparison"),
+    include_metrics: bool = FastAPIQuery(
+        True, description="Include aggregated metrics comparison"
+    ),
     profile: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
 ):
     """Compare two SUTs and return the differences with enhanced parametrization."""
@@ -1327,14 +1491,22 @@ async def compare_suts(
         target_sessions = query.filter_by_sut(sut2).get_sessions()
 
         if not base_sessions:
-            raise HTTPException(status_code=404, detail=f"No sessions found for SUT '{sut1}'")
+            raise HTTPException(
+                status_code=404, detail=f"No sessions found for SUT '{sut1}'"
+            )
 
         if not target_sessions:
-            raise HTTPException(status_code=404, detail=f"No sessions found for SUT '{sut2}'")
+            raise HTTPException(
+                status_code=404, detail=f"No sessions found for SUT '{sut2}'"
+            )
 
         # Sort by start time (newest first) and take the first one
-        base_session = sorted(base_sessions, key=lambda s: s.start_time, reverse=True)[0]
-        target_session = sorted(target_sessions, key=lambda s: s.start_time, reverse=True)[0]
+        base_session = sorted(base_sessions, key=lambda s: s.start_time, reverse=True)[
+            0
+        ]
+        target_session = sorted(
+            target_sessions, key=lambda s: s.start_time, reverse=True
+        )[0]
 
         # Compare the sessions
         comparison = api.compare()
@@ -1398,11 +1570,25 @@ async def compare_suts(
         # Calculate session-level metrics
         base_metrics = {
             "total_tests": len(result.base_session.test_results),
-            "passed_tests": sum(1 for t in result.base_session.test_results if t.outcome == TestOutcome.PASSED),
-            "failed_tests": sum(1 for t in result.base_session.test_results if t.outcome == TestOutcome.FAILED),
-            "skipped_tests": sum(1 for t in result.base_session.test_results if t.outcome == TestOutcome.SKIPPED),
+            "passed_tests": sum(
+                1
+                for t in result.base_session.test_results
+                if t.outcome == TestOutcome.PASSED
+            ),
+            "failed_tests": sum(
+                1
+                for t in result.base_session.test_results
+                if t.outcome == TestOutcome.FAILED
+            ),
+            "skipped_tests": sum(
+                1
+                for t in result.base_session.test_results
+                if t.outcome == TestOutcome.SKIPPED
+            ),
             "avg_duration": (
-                mean([t.duration for t in result.base_session.test_results if t.duration])
+                mean(
+                    [t.duration for t in result.base_session.test_results if t.duration]
+                )
                 if result.base_session.test_results
                 else 0
             ),
@@ -1410,11 +1596,29 @@ async def compare_suts(
 
         target_metrics = {
             "total_tests": len(result.target_session.test_results),
-            "passed_tests": sum(1 for t in result.target_session.test_results if t.outcome == TestOutcome.PASSED),
-            "failed_tests": sum(1 for t in result.target_session.test_results if t.outcome == TestOutcome.FAILED),
-            "skipped_tests": sum(1 for t in result.target_session.test_results if t.outcome == TestOutcome.SKIPPED),
+            "passed_tests": sum(
+                1
+                for t in result.target_session.test_results
+                if t.outcome == TestOutcome.PASSED
+            ),
+            "failed_tests": sum(
+                1
+                for t in result.target_session.test_results
+                if t.outcome == TestOutcome.FAILED
+            ),
+            "skipped_tests": sum(
+                1
+                for t in result.target_session.test_results
+                if t.outcome == TestOutcome.SKIPPED
+            ),
             "avg_duration": (
-                mean([t.duration for t in result.target_session.test_results if t.duration])
+                mean(
+                    [
+                        t.duration
+                        for t in result.target_session.test_results
+                        if t.duration
+                    ]
+                )
                 if result.target_session.test_results
                 else 0
             ),
@@ -1461,7 +1665,9 @@ async def compare_suts(
 @app.get("/api/suts", response_model=SUTsResponse, tags=["query"])
 async def get_available_suts(
     all_profiles: bool = FastAPIQuery(False, description="Get SUTs from all profiles"),
-    profile: Optional[str] = FastAPIQuery(None, description="Specific profile to query"),
+    profile: Optional[str] = FastAPIQuery(
+        None, description="Specific profile to query"
+    ),
 ):
     """Get a list of all available Systems Under Test (SUTs).
 
@@ -1491,20 +1697,32 @@ async def get_available_suts(
         try:
             profile_obj = profile_manager.get_profile(profile_name)
             if profile_obj and profile_obj.file_path:
-                logging.info(f"Checking file path for profile {profile_name}: {profile_obj.file_path}")
+                logging.info(
+                    f"Checking file path for profile {profile_name}: {profile_obj.file_path}"
+                )
                 if os.path.exists(profile_obj.file_path):
                     try:
                         with open(profile_obj.file_path, "r") as f:
                             data = json.load(f)
                             if isinstance(data, list):
                                 for session in data:
-                                    if isinstance(session, dict) and "sut_name" in session and session["sut_name"]:
+                                    if (
+                                        isinstance(session, dict)
+                                        and "sut_name" in session
+                                        and session["sut_name"]
+                                    ):
                                         file_suts.add(session["sut_name"])
-                        logging.info(f"SUTs found in profile {profile_name} via file: {file_suts}")
+                        logging.info(
+                            f"SUTs found in profile {profile_name} via file: {file_suts}"
+                        )
                     except json.JSONDecodeError:
-                        logging.warning(f"Invalid JSON format in {profile_obj.file_path}")
+                        logging.warning(
+                            f"Invalid JSON format in {profile_obj.file_path}"
+                        )
                     except Exception as e:
-                        logging.warning(f"Error reading {profile_obj.file_path}: {str(e)}")
+                        logging.warning(
+                            f"Error reading {profile_obj.file_path}: {str(e)}"
+                        )
                 else:
                     logging.warning(f"File does not exist: {profile_obj.file_path}")
             else:
@@ -1528,10 +1746,16 @@ async def get_available_suts(
                 api = api.with_profile(profile_name)
 
             query_result = api.query().execute()
-            api_suts = {session.sut_name for session in query_result.sessions if session.sut_name}
+            api_suts = {
+                session.sut_name
+                for session in query_result.sessions
+                if session.sut_name
+            }
             logging.info(f"SUTs found in profile {profile_name} via API: {api_suts}")
         except Exception as e:
-            logging.warning(f"Error retrieving SUTs from profile {profile_name} via API: {str(e)}")
+            logging.warning(
+                f"Error retrieving SUTs from profile {profile_name} via API: {str(e)}"
+            )
             api_error = True
 
         return api_suts, api_error
@@ -1617,7 +1841,9 @@ class InsightsResponse(BaseModel):
 def get_insights(
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
     days: int = FastAPIQuery(7, description="Number of days to include"),
-    profile_name: Optional[str] = FastAPIQuery(None, description="Storage profile to use"),
+    profile_name: Optional[str] = FastAPIQuery(
+        None, description="Storage profile to use"
+    ),
 ):
     """Get insights summary for test sessions.
 
@@ -1665,10 +1891,12 @@ def get_insights(
             "warning_rate": summary.get("warning_rate", 0),
             "avg_duration": summary.get("avg_duration", 0),
             "outcome_distribution": {
-                str(outcome): {"count": count} for outcome, count in summary.get("outcome_distribution", [])
+                str(outcome): {"count": count}
+                for outcome, count in summary.get("outcome_distribution", [])
             },
             "slowest_tests": [
-                {"nodeid": nodeid, "duration": duration} for nodeid, duration in summary.get("slowest_tests", [])
+                {"nodeid": nodeid, "duration": duration}
+                for nodeid, duration in summary.get("slowest_tests", [])
             ],
             "failure_trend": summary.get("failure_trend", {}),
             "timestamp": datetime.now(),
@@ -1708,7 +1936,9 @@ def get_available_profiles():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/insights/{profile_name}", response_model=InsightsResponse, tags=["insights"])
+@app.get(
+    "/api/insights/{profile_name}", response_model=InsightsResponse, tags=["insights"]
+)
 def get_insights_with_profile(
     profile_name: str = FastAPIPath(..., description="Storage profile name"),
     sut: Optional[str] = FastAPIQuery(None, description="System Under Test name"),
@@ -1756,10 +1986,12 @@ def get_insights_with_profile(
             "warning_rate": summary.get("warning_rate", 0),
             "avg_duration": summary.get("avg_duration", 0),
             "outcome_distribution": {
-                str(outcome): {"count": count} for outcome, count in summary.get("outcome_distribution", [])
+                str(outcome): {"count": count}
+                for outcome, count in summary.get("outcome_distribution", [])
             },
             "slowest_tests": [
-                {"nodeid": nodeid, "duration": duration} for nodeid, duration in summary.get("slowest_tests", [])
+                {"nodeid": nodeid, "duration": duration}
+                for nodeid, duration in summary.get("slowest_tests", [])
             ],
             "failure_trend": summary.get("failure_trend", {}),
             "timestamp": datetime.now(),
@@ -1775,7 +2007,9 @@ def get_insights_with_profile(
 @app.post("/api/profiles", response_model=Dict[str, Any], tags=["profiles"])
 def create_profile_endpoint(
     name: str = FastAPIQuery(..., description="Profile name"),
-    storage_type: str = FastAPIQuery("json", description="Storage type (json, sqlite, etc.)"),
+    storage_type: str = FastAPIQuery(
+        "json", description="Storage type (json, sqlite, etc.)"
+    ),
     file_path: Optional[str] = FastAPIQuery(None, description="Path to storage file"),
 ):
     """Create a new storage profile.
@@ -1803,7 +2037,9 @@ def create_profile_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/api/profiles/{profile_name}", response_model=Dict[str, Any], tags=["profiles"])
+@app.delete(
+    "/api/profiles/{profile_name}", response_model=Dict[str, Any], tags=["profiles"]
+)
 def delete_profile(
     profile_name: str = FastAPIPath(..., description="Profile name to delete"),
 ):
@@ -1822,7 +2058,9 @@ def delete_profile(
         success = profile_manager.delete_profile(profile_name)
 
         if not success:
-            raise HTTPException(status_code=404, detail=f"Profile {profile_name} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Profile {profile_name} not found"
+            )
 
         return {"name": profile_name, "deleted": True}
 
@@ -2577,16 +2815,24 @@ class GeneratorOptions(BaseModel):
     """Model for test data generator options."""
 
     days: int = Field(7, description="Number of days to generate data for")
-    targets: int = Field(3, description="Maximum number of target sessions per base session")
-    start_date: Optional[str] = Field(None, description="Start date for data generation (YYYY-MM-DD)")
+    targets: int = Field(
+        3, description="Maximum number of target sessions per base session"
+    )
+    start_date: Optional[str] = Field(
+        None, description="Start date for data generation (YYYY-MM-DD)"
+    )
     output: Optional[str] = Field(None, description="Output path for practice database")
     pass_rate: float = Field(0.45, description="Base pass rate for normal tests")
     nonreliability_rate: float = Field(0.17, description="Rate of unreliable tests")
     warning_rate: float = Field(0.085, description="Base rate for test warnings")
     sut_filter: Optional[str] = Field(None, description="Filter SUTs by prefix")
-    categories: Optional[str] = Field(None, description="Comma-separated list of test categories to include")
+    categories: Optional[str] = Field(
+        None, description="Comma-separated list of test categories to include"
+    )
     quiet: bool = Field(False, description="Suppress detailed output")
-    profile: Optional[str] = Field(None, description="Storage profile to use for the generated data")
+    profile: Optional[str] = Field(
+        None, description="Storage profile to use for the generated data"
+    )
 
 
 @app.post("/api/generator/generate", response_model=Dict[str, Any], tags=["generator"])
@@ -2715,7 +2961,11 @@ async def debug_available_suts():
                     data = json.load(f)
                     suts = set()
                     for session in data:
-                        if isinstance(session, dict) and "sut_name" in session and session["sut_name"]:
+                        if (
+                            isinstance(session, dict)
+                            and "sut_name" in session
+                            and session["sut_name"]
+                        ):
                             suts.add(session["sut_name"])
                     result["direct_files"]["default"] = {
                         "path": str(default_path),
@@ -2742,7 +2992,11 @@ async def debug_available_suts():
                         data = json.load(f)
                         suts = set()
                         for session in data:
-                            if isinstance(session, dict) and "sut_name" in session and session["sut_name"]:
+                            if (
+                                isinstance(session, dict)
+                                and "sut_name" in session
+                                and session["sut_name"]
+                            ):
                                 suts.add(session["sut_name"])
                         result["profiles"][profile_name]["suts"] = list(suts)
                         result["profiles"][profile_name]["session_count"] = len(data)
@@ -2770,7 +3024,11 @@ async def debug_available_suts():
                                 data = json.load(f)
                                 if isinstance(data, list):
                                     for session in data:
-                                        if isinstance(session, dict) and "sut_name" in session and session["sut_name"]:
+                                        if (
+                                            isinstance(session, dict)
+                                            and "sut_name" in session
+                                            and session["sut_name"]
+                                        ):
                                             result["all_suts"].add(session["sut_name"])
                             result["direct_files"][str(json_file)] = {
                                 "path": str(json_file),

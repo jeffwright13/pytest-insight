@@ -194,7 +194,9 @@ class Comparison:
         self.target_query.for_sut(target_sut).with_session_id_pattern("target-*")
         return self
 
-    def with_performance_thresholds(self, slower_percent: float = 20, faster_percent: float = 20) -> "Comparison":
+    def with_performance_thresholds(
+        self, slower_percent: float = 20, faster_percent: float = 20
+    ) -> "Comparison":
         """Set custom performance thresholds for detecting slower and faster tests.
 
         Args:
@@ -207,7 +209,9 @@ class Comparison:
         if slower_percent <= 0:
             raise ComparisonError("Slower threshold percentage must be positive")
         if faster_percent <= 0 or faster_percent >= 100:
-            raise ComparisonError("Faster threshold percentage must be between 0 and 100")
+            raise ComparisonError(
+                "Faster threshold percentage must be between 0 and 100"
+            )
 
         self._slower_threshold = 1 + (slower_percent / 100)
         self._faster_threshold = 1 - (faster_percent / 100)
@@ -237,7 +241,9 @@ class Comparison:
         query_modifier(self.target_query)
         return self
 
-    def with_environment(self, base_env: Dict[str, str], target_env: Dict[str, str]) -> "Comparison":
+    def with_environment(
+        self, base_env: Dict[str, str], target_env: Dict[str, str]
+    ) -> "Comparison":
         """Filter sessions by environment tags.
 
         Args:
@@ -279,7 +285,9 @@ class Comparison:
             # Direct comparison:
             result = comparison.execute([base_session, target_session])
         """
-        if not sessions and not (self.base_query._session_filters or self.target_query._session_filters):
+        if not sessions and not (
+            self.base_query._session_filters or self.target_query._session_filters
+        ):
             raise ComparisonError("No sessions provided and no filters configured")
 
         if sessions:
@@ -289,9 +297,13 @@ class Comparison:
 
             # Validate session ID patterns
             if not base_session.session_id.startswith("base-"):
-                raise ComparisonError(f"Base session ID must start with 'base-', got: {base_session.session_id}")
+                raise ComparisonError(
+                    f"Base session ID must start with 'base-', got: {base_session.session_id}"
+                )
             if not target_session.session_id.startswith("target-"):
-                raise ComparisonError(f"Target session ID must start with 'target-', got: {target_session.session_id}")
+                raise ComparisonError(
+                    f"Target session ID must start with 'target-', got: {target_session.session_id}"
+                )
 
             # Create QueryResults for direct session comparison
             base_results = Query().execute([base_session])
@@ -313,8 +325,12 @@ class Comparison:
                 raise ComparisonError("No matching base and target sessions found")
 
             # Use most recent sessions if multiple matches
-            base_session = max(base_results.sessions, key=lambda s: s.session_start_time)
-            target_session = max(target_results.sessions, key=lambda s: s.session_start_time)
+            base_session = max(
+                base_results.sessions, key=lambda s: s.session_start_time
+            )
+            target_session = max(
+                target_results.sessions, key=lambda s: s.session_start_time
+            )
 
         # Build nodeid maps for efficient lookup
         base_tests = {t.nodeid: t for t in base_session.test_results}
@@ -345,9 +361,15 @@ class Comparison:
                 # A test can be both unreliable and a new failure/new pass
                 unreliable_tests.append(nodeid)
 
-                if base_test.outcome == TestOutcome.PASSED and target_test.outcome == TestOutcome.FAILED:
+                if (
+                    base_test.outcome == TestOutcome.PASSED
+                    and target_test.outcome == TestOutcome.FAILED
+                ):
                     new_failures.append(nodeid)
-                elif base_test.outcome == TestOutcome.FAILED and target_test.outcome == TestOutcome.PASSED:
+                elif (
+                    base_test.outcome == TestOutcome.FAILED
+                    and target_test.outcome == TestOutcome.PASSED
+                ):
                     new_passes.append(nodeid)
 
             # Track performance changes (independent of outcome changes)
@@ -400,7 +422,9 @@ def comparison(
         # With profiles
         result = comparison(base_profile="prod", target_profile="dev").execute()
     """
-    return Comparison(sessions=sessions, base_profile=base_profile, target_profile=target_profile)
+    return Comparison(
+        sessions=sessions, base_profile=base_profile, target_profile=target_profile
+    )
 
 
 def comparison_with_profiles(base_profile: str, target_profile: str) -> Comparison:

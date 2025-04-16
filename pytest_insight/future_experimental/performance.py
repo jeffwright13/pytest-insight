@@ -86,7 +86,9 @@ def get_performance_metrics() -> Dict[str, Dict[str, Any]]:
     return _performance_metrics
 
 
-def get_sorted_metrics(sort_by: str = "total_duration", limit: Optional[int] = None) -> List[tuple]:
+def get_sorted_metrics(
+    sort_by: str = "total_duration", limit: Optional[int] = None
+) -> List[tuple]:
     """Get performance metrics sorted by a specific field.
 
     Args:
@@ -96,7 +98,9 @@ def get_sorted_metrics(sort_by: str = "total_duration", limit: Optional[int] = N
     Returns:
         List of (operation_name, metrics) tuples sorted by the specified field
     """
-    sorted_ops = sorted(_performance_metrics.items(), key=lambda x: x[1].get(sort_by, 0), reverse=True)
+    sorted_ops = sorted(
+        _performance_metrics.items(), key=lambda x: x[1].get(sort_by, 0), reverse=True
+    )
 
     if limit:
         sorted_ops = sorted_ops[:limit]

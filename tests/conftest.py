@@ -4,11 +4,17 @@ from importlib.metadata import version
 from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
+from typer.testing import CliRunner
+
 from pytest_insight.core.models import TestOutcome, TestResult, TestSession
 from pytest_insight.core.storage import JSONStorage, ProfileManager, get_profile_manager
 from pytest_insight.test_data import (
     NodeId,
     TextGenerator,
+)
+from pytest_insight.test_data import get_test_time as get_test_time_fn
+from pytest_insight.test_data import (
     mock_test_result_error,
     mock_test_result_fail,
     mock_test_result_pass,
@@ -21,9 +27,6 @@ from pytest_insight.test_data import (
     random_test_result,
     random_test_session,
 )
-from pytest_insight.test_data import get_test_time as get_test_time_fn
-from pytest_mock import MockerFixture
-from typer.testing import CliRunner
 
 # Enable the pytester plugin explicitly
 pytest_plugins = ["pytester"]
@@ -44,7 +47,11 @@ def patched_create_profile(self, name, storage_type="json", file_path=None):
     profile = original_create_profile(self, name, storage_type, file_path)
 
     # Track the file path and name for cleanup if it's a test profile
-    if (name.startswith("test_") or name.startswith("test-")) and hasattr(profile, "file_path") and profile.file_path:
+    if (
+        (name.startswith("test_") or name.startswith("test-"))
+        and hasattr(profile, "file_path")
+        and profile.file_path
+    ):
         TEST_PROFILE_FILES.append(profile.file_path)
         TEST_PROFILE_NAMES.append(name)
 
@@ -204,10 +211,16 @@ def random_test_sessions_factory(random_test_session_factory, get_test_time):
         for i in range(num_sessions):
             session = random_test_session_factory()
             # Offset each session by 10 minutes to maintain clear chronological order
-            session.session_start_time = get_test_time(i * 600)  # 600 seconds = 10 minutes
-            session.session_stop_time = get_test_time((i + 1) * 600 - 1)  # End just before next session
+            session.session_start_time = get_test_time(
+                i * 600
+            )  # 600 seconds = 10 minutes
+            session.session_stop_time = get_test_time(
+                (i + 1) * 600 - 1
+            )  # End just before next session
             for j, result in enumerate(session.test_results):
-                result.start_time = get_test_time(i * 600 + j * 5)  # Space tests 5 seconds apart
+                result.start_time = get_test_time(
+                    i * 600 + j * 5
+                )  # Space tests 5 seconds apart
             sessions.append(session)
 
         return sessions

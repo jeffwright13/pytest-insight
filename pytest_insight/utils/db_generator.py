@@ -80,7 +80,9 @@ class PracticeDataGenerator:
         self.storage_profile = storage_profile
         # Only use target_path if no storage_profile is provided
         self.target_path = (
-            None if storage_profile else (target_path or Path.home() / ".pytest_insight" / "practice.json")
+            None
+            if storage_profile
+            else (target_path or Path.home() / ".pytest_insight" / "practice.json")
         )
         self.days = days
         self.targets_per_base = targets_per_base
@@ -106,7 +108,9 @@ class PracticeDataGenerator:
 
         # Filter SUTs if specified
         if sut_filter:
-            self.sut_variations = [sut for sut in self.sut_variations if sut.startswith(sut_filter)]
+            self.sut_variations = [
+                sut for sut in self.sut_variations if sut.startswith(sut_filter)
+            ]
             if not self.sut_variations:
                 raise ValueError(f"No SUTs found matching prefix '{sut_filter}'")
 
@@ -149,7 +153,9 @@ class PracticeDataGenerator:
             invalid_categories = set(test_categories) - set(self.test_patterns.keys())
             if invalid_categories:
                 raise ValueError(f"Invalid test categories: {invalid_categories}")
-            self.test_patterns = {k: v for k, v in self.test_patterns.items() if k in test_categories}
+            self.test_patterns = {
+                k: v for k, v in self.test_patterns.items() if k in test_categories
+            }
 
     def _get_test_time(self, offset_seconds: int = 0) -> datetime:
         """Get a consistent timezone-aware timestamp for tests.
@@ -183,9 +189,17 @@ class PracticeDataGenerator:
             start_time = start_time.replace(tzinfo=ZoneInfo("UTC"))
 
         caplog = self.text_gen.sentence()
-        capstderr = self.text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+        capstderr = (
+            self.text_gen.sentence()
+            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+            else ""
+        )
         capstdout = self.text_gen.sentence()
-        longreprtext = self.text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
+        longreprtext = (
+            self.text_gen.paragraph()
+            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
+            else ""
+        )
 
         return TestResult(
             nodeid=nodeid,
@@ -213,7 +227,9 @@ class PracticeDataGenerator:
         )
 
         # Get test patterns for this module
-        test_patterns = self.test_patterns.get(module_type) or random.choice(list(self.test_patterns.values()))
+        test_patterns = self.test_patterns.get(module_type) or random.choice(
+            list(self.test_patterns.values())
+        )
 
         # Generate test results
         test_results = []
@@ -302,8 +318,12 @@ class PracticeDataGenerator:
             # Check if the profile has a valid file path
             if profile.file_path is None:
                 # Create a default path for this profile
-                default_path = str(Path.home() / ".pytest_insight" / f"{profile_name}.json")
-                print(f"Profile has no file path. Creating a new profile with path: {default_path}")
+                default_path = str(
+                    Path.home() / ".pytest_insight" / f"{profile_name}.json"
+                )
+                print(
+                    f"Profile has no file path. Creating a new profile with path: {default_path}"
+                )
 
                 # We can't modify the existing profile directly, so we need to create a new one
                 # First, remember if this was the active profile
@@ -336,7 +356,9 @@ class PracticeDataGenerator:
             # Profile doesn't exist, create it
             print(f"Creating new profile: {profile_name}")
             default_path = str(Path.home() / ".pytest_insight" / f"{profile_name}.json")
-            return profile_manager._create_profile(name=profile_name, storage_type="json", file_path=default_path)
+            return profile_manager._create_profile(
+                name=profile_name, storage_type="json", file_path=default_path
+            )
 
     def _save_to_file(self, all_sessions):
         """Save sessions directly to a file with metadata."""
@@ -377,17 +399,25 @@ class PracticeDataGenerator:
         for day in range(self.days):
             for sut_name in self.sut_variations:
                 # Generate a timestamp for this day
-                day_time = (self.start_date or datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))) + timedelta(days=day)
+                day_time = (
+                    self.start_date or datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
+                ) + timedelta(days=day)
 
                 # Create a base session
-                base_session = self._create_session(sut_name=sut_name, session_time=day_time, is_base=True)
+                base_session = self._create_session(
+                    sut_name=sut_name, session_time=day_time, is_base=True
+                )
                 all_sessions.append(base_session)
 
                 # Generate target sessions for this base
                 for _ in range(random.randint(1, self.targets_per_base)):
                     # Target sessions are within the same day but at different times
-                    target_time = day_time + timedelta(hours=random.randint(1, 8), minutes=random.randint(0, 59))
-                    target_session = self._create_session(sut_name=sut_name, session_time=target_time)
+                    target_time = day_time + timedelta(
+                        hours=random.randint(1, 8), minutes=random.randint(0, 59)
+                    )
+                    target_session = self._create_session(
+                        sut_name=sut_name, session_time=target_time
+                    )
                     all_sessions.append(target_session)
 
         # Save the generated data
@@ -406,7 +436,9 @@ class PracticeDataGenerator:
 
                 # Save sessions to the storage
                 storage.save_sessions(all_sessions)
-                print(f"Saved {len(all_sessions)} sessions to profile '{self.storage_profile}'")
+                print(
+                    f"Saved {len(all_sessions)} sessions to profile '{self.storage_profile}'"
+                )
                 print(f"Storage path: {self.target_path}")
 
             except Exception as e:
@@ -537,7 +569,9 @@ def main(
                 # Use datetime(2023, 1, 1) as base like conftest.py
                 base = datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
                 parsed_date = datetime.strptime(start_date, "%Y-%m-%d")
-                parsed_start_date = base + timedelta(days=(parsed_date - datetime(2023, 1, 1)).days)
+                parsed_start_date = base + timedelta(
+                    days=(parsed_date - datetime(2023, 1, 1)).days
+                )
             except ValueError as e:
                 if "format" in str(e):
                     raise typer.BadParameter("Start date must be in YYYY-MM-DD format")
@@ -582,7 +616,9 @@ def main(
 
         if not quiet:
             if storage_profile:
-                print(f"Generated practice data for {days} days using profile '{storage_profile}'")
+                print(
+                    f"Generated practice data for {days} days using profile '{storage_profile}'"
+                )
             else:
                 print(f"Generated practice data for {days} days")
             print(f"Data saved to: {generator.target_path}")

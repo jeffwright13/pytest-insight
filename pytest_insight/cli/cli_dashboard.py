@@ -21,7 +21,9 @@ app = typer.Typer(help="Launch the pytest-insight web dashboard")
 def launch_dashboard(
     port: int = typer.Option(8501, help="Port to run the dashboard on"),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
-    browser: bool = typer.Option(True, "--browser/--no-browser", help="Open dashboard in browser automatically"),
+    browser: bool = typer.Option(
+        True, "--browser/--no-browser", help="Open dashboard in browser automatically"
+    ),
 ):
     """Launch the pytest-insight web dashboard and open it in a browser.
 
@@ -42,7 +44,9 @@ def launch_dashboard(
 def create_dashboard(
     port: int = typer.Option(8501, help="Port to run the dashboard on"),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
-    browser: bool = typer.Option(False, "--browser/--no-browser", help="Open dashboard in browser automatically"),
+    browser: bool = typer.Option(
+        False, "--browser/--no-browser", help="Open dashboard in browser automatically"
+    ),
 ):
     """Create the pytest-insight web dashboard without opening a browser.
 
@@ -89,7 +93,8 @@ def _run_dashboard(port: int, profile: Optional[str], browser: bool):
 
         # Define the shutdown flag file path
         shutdown_flag_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shutdown_dashboard.flag"
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "shutdown_dashboard.flag",
         )
 
         # Remove any existing shutdown flag file
@@ -114,7 +119,9 @@ def _run_dashboard(port: int, profile: Optional[str], browser: bool):
             cmd.extend(["--server.headless", "true"])
 
         # Launch the dashboard
-        print(f"{'Launching' if browser else 'Creating'} pytest-insight dashboard on port {port}...")
+        print(
+            f"{'Launching' if browser else 'Creating'} pytest-insight dashboard on port {port}..."
+        )
         print(f"Dashboard URL: http://localhost:{port}")
         print("Press Ctrl+C to stop the dashboard")
 

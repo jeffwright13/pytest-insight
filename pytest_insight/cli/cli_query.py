@@ -39,9 +39,15 @@ def query_tests(
     sut: Optional[str] = typer.Option(None, help="System Under Test (SUT) to query"),
     days: int = typer.Option(30, help="Number of days to include in query"),
     pattern: Optional[str] = typer.Option(None, help="Pattern to match test nodeids"),
-    outcome: Optional[str] = typer.Option(None, help="Filter by test outcome (PASSED, FAILED, etc.)"),
-    min_duration: Optional[float] = typer.Option(None, help="Minimum test duration in seconds"),
-    max_duration: Optional[float] = typer.Option(None, help="Maximum test duration in seconds"),
+    outcome: Optional[str] = typer.Option(
+        None, help="Filter by test outcome (PASSED, FAILED, etc.)"
+    ),
+    min_duration: Optional[float] = typer.Option(
+        None, help="Minimum test duration in seconds"
+    ),
+    max_duration: Optional[float] = typer.Option(
+        None, help="Maximum test duration in seconds"
+    ),
     profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
 ):
     """Query individual tests.

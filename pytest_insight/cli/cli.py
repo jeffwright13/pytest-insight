@@ -63,7 +63,9 @@ def list_all_profiles():
 @profile_app.command("create")
 def create_new_profile(
     name: str = typer.Argument(..., help="Name of the profile to create"),
-    path: Optional[str] = typer.Option(None, "--path", "-p", help="Path to store the profile data"),
+    path: Optional[str] = typer.Option(
+        None, "--path", "-p", help="Path to store the profile data"
+    ),
 ):
     """Create a new storage profile."""
     console = Console()
@@ -75,7 +77,9 @@ def create_new_profile(
 
 
 @profile_app.command("switch")
-def switch_to_profile(name: str = typer.Argument(..., help="Name of the profile to switch to")):
+def switch_to_profile(
+    name: str = typer.Argument(..., help="Name of the profile to switch to")
+):
     """Switch to a different storage profile."""
     console = Console()
     try:
@@ -94,7 +98,9 @@ def show_active_profile():
 
 
 @profile_app.command("load")
-def load_profile_sessions(path: str = typer.Argument(..., help="Path to the sessions file")):
+def load_profile_sessions(
+    path: str = typer.Argument(..., help="Path to the sessions file")
+):
     """Load sessions from a file into the active profile."""
     console = Console()
     try:
@@ -107,7 +113,8 @@ def load_profile_sessions(path: str = typer.Argument(..., help="Path to the sess
 @profile_app.command("metadata")
 def show_profile_metadata(
     profile_name: Optional[str] = typer.Argument(
-        None, help="Name of the profile to show metadata for. If not provided, shows metadata for all profiles."
+        None,
+        help="Name of the profile to show metadata for. If not provided, shows metadata for all profiles.",
     ),
 ):
     """Show metadata about storage profiles, including creation and modification timestamps."""
@@ -134,7 +141,11 @@ def show_profile_metadata(
         console.print(f"File path: {profile['file_path']}")
 
         # Format timestamps for display
-        created = profile["created"].isoformat() if hasattr(profile["created"], "isoformat") else profile["created"]
+        created = (
+            profile["created"].isoformat()
+            if hasattr(profile["created"], "isoformat")
+            else profile["created"]
+        )
         created_by = profile["created_by"]
         modified_at = (
             profile["last_modified"].isoformat()
@@ -159,7 +170,11 @@ def show_profile_metadata(
 
         for name, profile in metadata["profiles"].items():
             # Format timestamps for display
-            created = profile["created"].isoformat() if hasattr(profile["created"], "isoformat") else profile["created"]
+            created = (
+                profile["created"].isoformat()
+                if hasattr(profile["created"], "isoformat")
+                else profile["created"]
+            )
             modified_at = (
                 profile["last_modified"].isoformat()
                 if hasattr(profile["last_modified"], "isoformat")
@@ -167,7 +182,12 @@ def show_profile_metadata(
             )
 
             table.add_row(
-                name, profile["storage_type"], profile["created_by"], created, profile["last_modified_by"], modified_at
+                name,
+                profile["storage_type"],
+                profile["created_by"],
+                created,
+                profile["last_modified_by"],
+                modified_at,
             )
 
         console.print(table)
@@ -176,11 +196,21 @@ def show_profile_metadata(
 # Data generation commands
 @generate_app.command("practice")
 def generate_practice_data(
-    num_test_runs: int = typer.Option(3, "--runs", "-r", help="Number of test runs to generate"),
-    num_tests_per_run: int = typer.Option(20, "--tests", "-t", help="Number of tests per run"),
-    num_sessions_per_run: int = typer.Option(3, "--sessions", "-s", help="Number of sessions per run"),
-    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Output file for generated data"),
-    load_to_profile: bool = typer.Option(False, "--load", "-l", help="Load generated data to active profile"),
+    num_test_runs: int = typer.Option(
+        3, "--runs", "-r", help="Number of test runs to generate"
+    ),
+    num_tests_per_run: int = typer.Option(
+        20, "--tests", "-t", help="Number of tests per run"
+    ),
+    num_sessions_per_run: int = typer.Option(
+        3, "--sessions", "-s", help="Number of sessions per run"
+    ),
+    output_file: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output file for generated data"
+    ),
+    load_to_profile: bool = typer.Option(
+        False, "--load", "-l", help="Load generated data to active profile"
+    ),
 ):
     """Generate practice test data."""
     console = Console()
@@ -207,9 +237,13 @@ def generate_practice_data(
                         session_id=session_id,
                         session_data=session_data,
                     )
-            console.print(f"Generated data loaded to profile [bold]{profile.name}[/bold]")
+            console.print(
+                f"Generated data loaded to profile [bold]{profile.name}[/bold]"
+            )
 
-        console.print(f"Generated {num_test_runs} test runs with {num_tests_per_run} tests each")
+        console.print(
+            f"Generated {num_test_runs} test runs with {num_tests_per_run} tests each"
+        )
     except Exception as e:
         console.print(f"Error generating practice data: {str(e)}", style="red")
         console.print(traceback.format_exc(), style="red")

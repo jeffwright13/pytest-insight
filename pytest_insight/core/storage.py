@@ -65,7 +65,9 @@ class StorageProfile:
             "storage_type": self.storage_type,
             "file_path": self.file_path,
             "created": self.created.isoformat() if self.created else None,
-            "last_modified": self.last_modified.isoformat() if self.last_modified else None,
+            "last_modified": (
+                self.last_modified.isoformat() if self.last_modified else None
+            ),
             "created_by": self.created_by,
             "last_modified_by": self.last_modified_by,
         }
@@ -84,7 +86,9 @@ class StorageProfile:
                 created = datetime.fromisoformat(created_str)
             except (ValueError, TypeError):
                 # If conversion fails, use the string as-is for logging but set to current time
-                print(f"Warning: Invalid created format: {created_str}. Using current time.")
+                print(
+                    f"Warning: Invalid created format: {created_str}. Using current time."
+                )
                 created = datetime.now()
 
         last_modified = None
@@ -93,7 +97,9 @@ class StorageProfile:
                 last_modified = datetime.fromisoformat(last_modified_str)
             except (ValueError, TypeError):
                 # If conversion fails, use the string as-is for logging but set to current time
-                print(f"Warning: Invalid last_modified format: {last_modified_str}. Using current time.")
+                print(
+                    f"Warning: Invalid last_modified format: {last_modified_str}. Using current time."
+                )
                 last_modified = datetime.now()
 
         return cls(
@@ -145,7 +151,8 @@ class ProfileManager:
         try:
             data = json.loads(self.config_path.read_text())
             self.profiles = {
-                name: StorageProfile.from_dict(profile_data) for name, profile_data in data.get("profiles", {}).items()
+                name: StorageProfile.from_dict(profile_data)
+                for name, profile_data in data.get("profiles", {}).items()
             }
             self.active_profile_name = data.get("active_profile", "default")
 
@@ -159,7 +166,9 @@ class ProfileManager:
 
             # Log metadata if available
             if "last_modified" in data and "modified_by" in data:
-                print(f"Profiles last modified at {data['last_modified']} by {data['modified_by']}")
+                print(
+                    f"Profiles last modified at {data['last_modified']} by {data['modified_by']}"
+                )
 
         except Exception as e:
             print(f"Warning: Failed to load profiles from {self.config_path}: {e}")
@@ -191,11 +200,15 @@ class ProfileManager:
 
         # Only include non-memory profiles for persistence
         persistent_profiles = {
-            name: profile.to_dict() for name, profile in self.profiles.items() if profile.storage_type != "memory"
+            name: profile.to_dict()
+            for name, profile in self.profiles.items()
+            if profile.storage_type != "memory"
         }
 
         # Write to a temporary file first to avoid corruption
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, dir=str(self.config_path.parent)) as tmp:
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, dir=str(self.config_path.parent)
+        ) as tmp:
             json.dump(
                 {
                     "active_profile": self.active_profile_name,
@@ -210,7 +223,9 @@ class ProfileManager:
         # Use atomic replace to avoid corruption
         shutil.move(tmp.name, str(self.config_path))
 
-    def _create_profile(self, name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
+    def _create_profile(
+        self, name: str, storage_type: str = "json", file_path: Optional[str] = None
+    ) -> StorageProfile:
         """Create a new storage profile.
 
         Args:
@@ -309,13 +324,21 @@ class ProfileManager:
 
         # Filter by storage type if specified
         if storage_type:
-            result = {name: profile for name, profile in result.items() if profile.storage_type == storage_type}
+            result = {
+                name: profile
+                for name, profile in result.items()
+                if profile.storage_type == storage_type
+            }
 
         # Filter by pattern if specified
         if pattern:
             import fnmatch
 
-            result = {name: profile for name, profile in result.items() if fnmatch.fnmatch(name, pattern)}
+            result = {
+                name: profile
+                for name, profile in result.items()
+                if fnmatch.fnmatch(name, pattern)
+            }
 
         return result
 
@@ -399,7 +422,9 @@ class ProfileManager:
                 # and new format (profiles_backup_YYYYMMDD_HHMMSS_uniqueid.json)
                 filename = backup_file.name
                 # Extract the timestamp part (after profiles_backup_ and before .json or _uniqueid)
-                timestamp_str = filename.replace("profiles_backup_", "").replace(".json", "")
+                timestamp_str = filename.replace("profiles_backup_", "").replace(
+                    ".json", ""
+                )
 
                 # If there's an underscore after the timestamp, it's the new format with a unique ID
                 if "_" in timestamp_str:
@@ -490,7 +515,9 @@ class BaseStorage:
             f"{self.__class__.__name__} does not implement the load_sessions method...did you mean to call it on the {self.__class__.__name__} class?"
         )
 
-    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
+    def clear_sessions(
+        self, sessions_to_clear: Optional[List[TestSession]] = None
+    ) -> int:
         """Remove stored sessions.
 
         Args:
@@ -542,7 +569,9 @@ class InMemoryStorage(BaseStorage):
         """Save a test session."""
         self._sessions.append(session)
 
-    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
+    def clear_sessions(
+        self, sessions_to_clear: Optional[List[TestSession]] = None
+    ) -> int:
         """Clear all sessions or specific sessions from storage.
 
         Args:
@@ -562,14 +591,20 @@ class InMemoryStorage(BaseStorage):
         else:
             # Clear specific sessions
             session_ids_to_clear = {session.session_id for session in sessions_to_clear}
-            self._sessions = [session for session in self._sessions if session.session_id not in session_ids_to_clear]
+            self._sessions = [
+                session
+                for session in self._sessions
+                if session.session_id not in session_ids_to_clear
+            ]
             return initial_count - len(self._sessions)
 
 
 class JSONStorage(BaseStorage):
     """Storage for test sessions using JSON files."""
 
-    def __init__(self, file_path: Optional[Path] = None, profile_name: Optional[str] = None):
+    def __init__(
+        self, file_path: Optional[Path] = None, profile_name: Optional[str] = None
+    ):
         """Initialize storage with optional custom file path.
 
         Args:
@@ -609,9 +644,13 @@ class JSONStorage(BaseStorage):
                 if importlib.util.find_spec("ijson") is not None:
                     return self._load_sessions_streaming(chunk_size)
                 else:
-                    print("Warning: ijson not installed. Falling back to standard JSON loading.")
+                    print(
+                        "Warning: ijson not installed. Falling back to standard JSON loading."
+                    )
             except ImportError:
-                print("Warning: Could not check for ijson. Falling back to standard JSON loading.")
+                print(
+                    "Warning: Could not check for ijson. Falling back to standard JSON loading."
+                )
                 # Fall back to regular loading if import check fails
 
         try:
@@ -624,7 +663,9 @@ class JSONStorage(BaseStorage):
             # Create backup of corrupted file
             backup_path = self.file_path.with_suffix(".bak")
             shutil.copy2(self.file_path, backup_path)
-            print(f"Warning: JSON decode error in {self.file_path}. Backup created at {backup_path}")
+            print(
+                f"Warning: JSON decode error in {self.file_path}. Backup created at {backup_path}"
+            )
             return []
 
         # Handle both formats: {"sessions": [...]} and directly [...]
@@ -632,7 +673,9 @@ class JSONStorage(BaseStorage):
 
         # Ensure sessions_data is a list
         if not isinstance(sessions_data, list):
-            print(f"Warning: Invalid sessions data format. Expected list, got {type(sessions_data).__name__}")
+            print(
+                f"Warning: Invalid sessions data format. Expected list, got {type(sessions_data).__name__}"
+            )
             return []
 
         total_sessions = len(sessions_data)
@@ -650,7 +693,9 @@ class JSONStorage(BaseStorage):
                     elif isinstance(session_data, TestSession):
                         sessions.append(session_data)
                     else:
-                        print(f"Warning: Invalid session data type: {type(session_data).__name__}")
+                        print(
+                            f"Warning: Invalid session data type: {type(session_data).__name__}"
+                        )
                 except Exception as e:
                     print(f"Failed to load session: {e}")
 
@@ -668,7 +713,9 @@ class JSONStorage(BaseStorage):
         try:
             import ijson
         except ImportError:
-            print("Error: ijson package is required for streaming. Install with: pip install ijson")
+            print(
+                "Error: ijson package is required for streaming. Install with: pip install ijson"
+            )
             return []
 
         sessions = []
@@ -744,7 +791,9 @@ class JSONStorage(BaseStorage):
         except Exception as e:
             print(f"Warning: Failed to save sessions to {self.file_path}: {e}")
 
-    def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
+    def clear_sessions(
+        self, sessions_to_clear: Optional[List[TestSession]] = None
+    ) -> int:
         """Remove stored sessions.
 
         Args:
@@ -770,7 +819,9 @@ class JSONStorage(BaseStorage):
 
             # Keep only sessions not in the clear list
             remaining_sessions = [
-                session for session in current_sessions if session.session_id not in session_ids_to_clear
+                session
+                for session in current_sessions
+                if session.session_id not in session_ids_to_clear
             ]
 
             # Save the filtered sessions
@@ -811,7 +862,9 @@ class JSONStorage(BaseStorage):
                 return session
         return None
 
-    def export_sessions(self, export_path: str, days: Optional[int] = None, output_format: str = "json"):
+    def export_sessions(
+        self, export_path: str, days: Optional[int] = None, output_format: str = "json"
+    ):
         """Export test sessions to a file.
 
         Args:
@@ -844,7 +897,9 @@ class JSONStorage(BaseStorage):
         else:
             raise ValueError(f"Unsupported output format: {output_format}")
 
-    def import_sessions(self, import_path: str, merge_strategy: str = "skip_existing") -> Dict[str, int]:
+    def import_sessions(
+        self, import_path: str, merge_strategy: str = "skip_existing"
+    ) -> Dict[str, int]:
         """Import sessions from a file exported by another instance.
 
         Args:
@@ -924,7 +979,9 @@ class JSONStorage(BaseStorage):
         if merge_strategy == "replace_existing":
             # Remove existing sessions that will be replaced
             imported_ids = {session.session_id for session in imported_sessions}
-            existing_sessions = [s for s in existing_sessions if s.session_id not in imported_ids]
+            existing_sessions = [
+                s for s in existing_sessions if s.session_id not in imported_ids
+            ]
 
         # Combine existing and imported sessions
         all_sessions = existing_sessions + imported_sessions
@@ -950,7 +1007,9 @@ class JSONStorage(BaseStorage):
         try:
             with lock:
                 # Create a temporary file
-                temp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json")
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False, mode="w", suffix=".json"
+                )
                 try:
                     # Write data to temp file
                     json.dump({"sessions": sessions_data}, temp_file, indent=2)
@@ -991,7 +1050,9 @@ class JSONStorage(BaseStorage):
             # Create backup of corrupted file
             backup_path = self.file_path.with_suffix(".bak")
             shutil.copy2(self.file_path, backup_path)
-            print(f"Warning: JSON decode error in {self.file_path}. Backup created at {backup_path}")
+            print(
+                f"Warning: JSON decode error in {self.file_path}. Backup created at {backup_path}"
+            )
             return []
 
 
@@ -1021,7 +1082,9 @@ def get_storage_instance(
             elif profile.storage_type.lower() == "memory":
                 return InMemoryStorage()
             else:
-                raise ValueError(f"Unsupported storage type in profile '{profile_name}': {profile.storage_type}")
+                raise ValueError(
+                    f"Unsupported storage type in profile '{profile_name}': {profile.storage_type}"
+                )
         except ValueError:
             # Create the profile if it doesn't exist and ensure it's saved
             print(f"Creating new profile: '{profile_name}'")
@@ -1061,7 +1124,9 @@ def get_storage_instance(
     elif profile.storage_type.lower() == "memory":
         return InMemoryStorage()
     else:
-        raise ValueError(f"Unsupported storage type in active profile '{profile.name}': {profile.storage_type}")
+        raise ValueError(
+            f"Unsupported storage type in active profile '{profile.name}': {profile.storage_type}"
+        )
 
 
 # Global profile manager instance
@@ -1080,7 +1145,9 @@ def get_profile_manager() -> ProfileManager:
     return _profile_manager
 
 
-def create_profile(name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
+def create_profile(
+    name: str, storage_type: str = "json", file_path: Optional[str] = None
+) -> StorageProfile:
     """Create a new storage profile.
 
     Args:
@@ -1119,7 +1186,9 @@ def switch_profile(name: str) -> StorageProfile:
     return get_profile_manager().switch_profile(name)
 
 
-def list_profiles(storage_type: Optional[str] = None, pattern: Optional[str] = None) -> Dict[str, StorageProfile]:
+def list_profiles(
+    storage_type: Optional[str] = None, pattern: Optional[str] = None
+) -> Dict[str, StorageProfile]:
     """List available profiles, optionally filtered by storage type and/or name pattern.
 
     Args:
@@ -1185,7 +1254,9 @@ def get_profile_metadata(name: Optional[str] = None) -> Dict[str, Any]:
                     "storage_type": profile_data.get("storage_type", "unknown"),
                     "file_path": profile_data.get("file_path", "unknown"),
                     "created": safe_parse_datetime(profile_data.get("created")),
-                    "last_modified": safe_parse_datetime(profile_data.get("last_modified")),
+                    "last_modified": safe_parse_datetime(
+                        profile_data.get("last_modified")
+                    ),
                     "created_by": profile_data.get("created_by", "unknown"),
                     "last_modified_by": profile_data.get("last_modified_by", "unknown"),
                 }
@@ -1197,7 +1268,9 @@ def get_profile_metadata(name: Optional[str] = None) -> Dict[str, Any]:
                 name: {
                     "storage_type": profile_data.get("storage_type", "unknown"),
                     "created": safe_parse_datetime(profile_data.get("created")),
-                    "last_modified": safe_parse_datetime(profile_data.get("last_modified")),
+                    "last_modified": safe_parse_datetime(
+                        profile_data.get("last_modified")
+                    ),
                     "created_by": profile_data.get("created_by", "unknown"),
                     "last_modified_by": profile_data.get("last_modified_by", "unknown"),
                 }
@@ -1228,7 +1301,9 @@ def load_sessions(
     storage_instance = get_storage_instance(profile_name=profile_name)
 
     # All storage classes now support the same parameters via **kwargs
-    return storage_instance.load_sessions(chunk_size=chunk_size, use_streaming=use_streaming)
+    return storage_instance.load_sessions(
+        chunk_size=chunk_size, use_streaming=use_streaming
+    )
 
 
 # Main entry point

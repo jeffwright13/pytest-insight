@@ -1,14 +1,15 @@
 """CLI commands for displaying performance metrics."""
 
 import typer
+from rich.console import Console
+from rich.table import Table
+
 from pytest_insight.utils.performance import (
     get_most_called_operations,
     get_performance_metrics,
     get_slowest_operations,
     reset_metrics,
 )
-from rich.console import Console
-from rich.table import Table
 
 console = Console()
 performance = typer.Typer(
@@ -69,13 +70,19 @@ def print_performance_metrics(top_n: int = 10, sort_by: str = "total_duration"):
 
 @performance.command("show")
 def show(
-    top: int = typer.Option(10, "--top", "-t", help="Number of top operations to display"),
-    sort_by: str = typer.Option("total_duration", "--sort-by", "-s", help="Sort metric", show_choices=True),
+    top: int = typer.Option(
+        10, "--top", "-t", help="Number of top operations to display"
+    ),
+    sort_by: str = typer.Option(
+        "total_duration", "--sort-by", "-s", help="Sort metric", show_choices=True
+    ),
 ):
     """Display performance metrics."""
     if sort_by not in ["total_duration", "avg_duration", "call_count"]:
         console.print(f"[red]Invalid sort_by value: {sort_by}[/red]")
-        console.print("[yellow]Valid options are: total_duration, avg_duration, call_count[/yellow]")
+        console.print(
+            "[yellow]Valid options are: total_duration, avg_duration, call_count[/yellow]"
+        )
         return
     print_performance_metrics(top_n=top, sort_by=sort_by)
 
@@ -132,7 +139,11 @@ def analyze_showcase():
 
     # Add rows to the table
     for operation, metric in showcase_ops:
-        percentage = (metric["total_duration"] / total_duration) * 100 if total_duration > 0 else 0
+        percentage = (
+            (metric["total_duration"] / total_duration) * 100
+            if total_duration > 0
+            else 0
+        )
         table.add_row(
             operation,
             str(metric["call_count"]),
@@ -165,7 +176,9 @@ def analyze_showcase():
                 "[green]Consider optimizing rerun group generation by reducing complexity or implementing parallel processing.[/green]"
             )
     else:
-        console.print("[yellow]No showcase profile specific operations found in metrics.[/yellow]")
+        console.print(
+            "[yellow]No showcase profile specific operations found in metrics.[/yellow]"
+        )
 
 
 @performance.command("reset")

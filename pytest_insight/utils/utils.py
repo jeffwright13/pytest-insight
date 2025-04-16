@@ -110,24 +110,26 @@ class NormalizedDatetime:
         dt1, dt2 = self._get_normalized_pair(other)
         return dt1 >= dt2
 
-    def __sub__(self, other: Union["NormalizedDatetime", dt_module.datetime]) -> dt_module.timedelta:
+    def __sub__(
+        self, other: Union["NormalizedDatetime", dt_module.datetime]
+    ) -> dt_module.timedelta:
         """Subtraction operator with proper timezone handling.
-        
+
         Args:
             other: Another NormalizedDatetime or datetime object
-            
+
         Returns:
             timedelta representing the time difference
-            
+
         Raises:
             TypeError: If other is not a NormalizedDatetime or datetime
         """
         dt1, dt2 = self._get_normalized_pair(other)
         return dt1 - dt2
-        
+
     def total_seconds(self) -> float:
         """Get total seconds since the epoch.
-        
+
         Returns:
             Number of seconds since the epoch
         """
@@ -135,7 +137,7 @@ class NormalizedDatetime:
 
     def date(self) -> dt_module.date:
         """Get the date part of the datetime.
-        
+
         Returns:
             Date object representing the date part of the datetime
         """

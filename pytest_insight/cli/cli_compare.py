@@ -50,7 +50,9 @@ def compare_sessions(
     """
     from pytest_insight.cli.cli_dev import cli_compare_sessions
 
-    cli_compare_sessions(base_session=base_session, target_session=target_session, profile=profile)
+    cli_compare_sessions(
+        base_session=base_session, target_session=target_session, profile=profile
+    )
 
 
 if __name__ == "__main__":

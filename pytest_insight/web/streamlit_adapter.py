@@ -17,7 +17,9 @@ from pytest_insight.web.visualization_core import VisualizationAdapter
 class StreamlitAdapter(VisualizationAdapter):
     """Streamlit implementation of the VisualizationAdapter interface."""
 
-    def render_health_dashboard(self, sut: Optional[str] = None, days: int = 30) -> None:
+    def render_health_dashboard(
+        self, sut: Optional[str] = None, days: int = 30
+    ) -> None:
         """Render the health dashboard using Streamlit."""
         st.header("Test Health Metrics")
 
@@ -55,7 +57,9 @@ class StreamlitAdapter(VisualizationAdapter):
         st.write(f"Total Tests: {health_data['test_count']}")
         st.write(f"Total Sessions: {health_data['session_count']}")
 
-    def render_stability_dashboard(self, sut: Optional[str] = None, days: int = 30) -> None:
+    def render_stability_dashboard(
+        self, sut: Optional[str] = None, days: int = 30
+    ) -> None:
         """Render the stability dashboard using Streamlit."""
         st.header("Test Stability Analysis")
 
@@ -108,12 +112,16 @@ class StreamlitAdapter(VisualizationAdapter):
             # Display as table
             st.dataframe(df, use_container_width=True)
 
-    def render_predictive_dashboard(self, sut: Optional[str] = None, days_ahead: int = 7) -> None:
+    def render_predictive_dashboard(
+        self, sut: Optional[str] = None, days_ahead: int = 7
+    ) -> None:
         """Render the predictive dashboard using Streamlit."""
         st.header("Predictive Insights")
 
         # Get predictive data
-        predictive_data = self.data_provider.get_predictive_insights(sut=sut, days_ahead=days_ahead)
+        predictive_data = self.data_provider.get_predictive_insights(
+            sut=sut, days_ahead=days_ahead
+        )
 
         # Display failure prediction
         st.subheader("Failure Prediction")
@@ -199,7 +207,9 @@ class StreamlitAdapter(VisualizationAdapter):
 
         # Display anomaly summary
         anomaly_count = anomaly_data.get("anomaly_count", 0)
-        detection_date = anomaly_data.get("detection_date", datetime.datetime.now().isoformat())
+        detection_date = anomaly_data.get(
+            "detection_date", datetime.datetime.now().isoformat()
+        )
 
         st.metric("Detected Anomalies", anomaly_count)
         st.caption(f"Last detection run: {detection_date}")
@@ -228,7 +238,9 @@ class StreamlitAdapter(VisualizationAdapter):
         else:
             st.info("No anomalies detected")
 
-    def render_main_dashboard(self, sut: Optional[str] = None, days: int = 30, days_ahead: int = 7) -> None:
+    def render_main_dashboard(
+        self, sut: Optional[str] = None, days: int = 30, days_ahead: int = 7
+    ) -> None:
         """Render the main dashboard with all components using Streamlit."""
         st.title("Pytest Insight Dashboard")
 
@@ -238,13 +250,17 @@ class StreamlitAdapter(VisualizationAdapter):
 
             # SUT filter
             available_suts = self._get_available_suts()
-            selected_sut = st.selectbox("System Under Test", options=["All"] + available_suts, index=0)
+            selected_sut = st.selectbox(
+                "System Under Test", options=["All"] + available_suts, index=0
+            )
 
             # Convert "All" to None for API calls
             filter_sut = None if selected_sut == "All" else selected_sut
 
             # Time range filter
-            selected_days = st.slider("Historical Data (days)", min_value=7, max_value=90, value=days, step=7)
+            selected_days = st.slider(
+                "Historical Data (days)", min_value=7, max_value=90, value=days, step=7
+            )
 
             # Prediction range filter
             selected_days_ahead = st.slider(
@@ -278,7 +294,9 @@ class StreamlitAdapter(VisualizationAdapter):
             self.render_stability_dashboard(sut=filter_sut, days=selected_days)
 
         with tab3:
-            self.render_predictive_dashboard(sut=filter_sut, days_ahead=selected_days_ahead)
+            self.render_predictive_dashboard(
+                sut=filter_sut, days_ahead=selected_days_ahead
+            )
 
         with tab4:
             self.render_anomaly_dashboard(sut=filter_sut)

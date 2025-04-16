@@ -74,7 +74,9 @@ def generate_session_id(sut_name, date, index):
 def modify_test_result(test_result):
     """Modify a test result with a new outcome and timing."""
     # Randomly select a new outcome based on probabilities
-    outcome = random.choices(list(OUTCOME_PROBABILITIES.keys()), weights=list(OUTCOME_PROBABILITIES.values()))[0]
+    outcome = random.choices(
+        list(OUTCOME_PROBABILITIES.keys()), weights=list(OUTCOME_PROBABILITIES.values())
+    )[0]
 
     # Update the outcome
     test_result["outcome"] = outcome
@@ -104,7 +106,9 @@ def create_session_for_date(template_session, target_date, index):
         new_session["sut_name"] = random.choice(SUT_NAMES)
 
     # Update session ID
-    new_session["session_id"] = generate_session_id(new_session["sut_name"], target_date, index)
+    new_session["session_id"] = generate_session_id(
+        new_session["sut_name"], target_date, index
+    )
 
     # Set the start time to the target date with a random hour
     hour = random.randint(8, 18)  # Business hours
@@ -124,7 +128,9 @@ def create_session_for_date(template_session, target_date, index):
         modify_test_result(test_result)
 
         # Update test start and stop times relative to session start
-        test_start_offset = random.uniform(0, session_duration * 0.8)  # Start within first 80% of session
+        test_start_offset = random.uniform(
+            0, session_duration * 0.8
+        )  # Start within first 80% of session
         test_start = start_time + timedelta(seconds=test_start_offset)
         test_result["start_time"] = test_start.isoformat()
 
@@ -145,7 +151,10 @@ def backfill_data(existing_data, days=30, sessions_per_day=3):
     template_session = existing_data[0]
 
     # Find the earliest date in the existing data
-    earliest_date = min(datetime.fromisoformat(session["session_start_time"]) for session in existing_data).date()
+    earliest_date = min(
+        datetime.fromisoformat(session["session_start_time"])
+        for session in existing_data
+    ).date()
 
     # Generate new data starting from one day before the earliest date
     start_date = earliest_date - timedelta(days=days)

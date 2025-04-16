@@ -18,7 +18,9 @@ class DataProvider(ABC):
     """
 
     @abstractmethod
-    def get_health_metrics(self, sut: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
+    def get_health_metrics(
+        self, sut: Optional[str] = None, days: int = 30
+    ) -> Dict[str, Any]:
         """Get health metrics for visualization.
 
         Args:
@@ -31,7 +33,9 @@ class DataProvider(ABC):
         pass
 
     @abstractmethod
-    def get_stability_trends(self, sut: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
+    def get_stability_trends(
+        self, sut: Optional[str] = None, days: int = 30
+    ) -> Dict[str, Any]:
         """Get stability trends for visualization.
 
         Args:
@@ -44,7 +48,9 @@ class DataProvider(ABC):
         pass
 
     @abstractmethod
-    def get_predictive_insights(self, sut: Optional[str] = None, days_ahead: int = 7) -> Dict[str, Any]:
+    def get_predictive_insights(
+        self, sut: Optional[str] = None, days_ahead: int = 7
+    ) -> Dict[str, Any]:
         """Get predictive insights for visualization.
 
         Args:
@@ -82,7 +88,9 @@ class InsightDataProvider(DataProvider):
 
         self.api = InsightAPI(profile=profile)
 
-    def get_health_metrics(self, sut: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
+    def get_health_metrics(
+        self, sut: Optional[str] = None, days: int = 30
+    ) -> Dict[str, Any]:
         """Get health metrics from the pytest-insight API."""
         query = self.api.query()
         if sut:
@@ -101,7 +109,9 @@ class InsightDataProvider(DataProvider):
             "daily_metrics": health_data.get("daily_metrics", []),
         }
 
-    def get_stability_trends(self, sut: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
+    def get_stability_trends(
+        self, sut: Optional[str] = None, days: int = 30
+    ) -> Dict[str, Any]:
         """Get stability trends from the pytest-insight API."""
         query = self.api.query()
         if sut:
@@ -118,7 +128,9 @@ class InsightDataProvider(DataProvider):
             "most_unstable_tests": stability_data.get("most_unstable_tests", []),
         }
 
-    def get_predictive_insights(self, sut: Optional[str] = None, days_ahead: int = 7) -> Dict[str, Any]:
+    def get_predictive_insights(
+        self, sut: Optional[str] = None, days_ahead: int = 7
+    ) -> Dict[str, Any]:
         """Get predictive insights from the pytest-insight API."""
         query = self.api.query()
         if sut:
@@ -167,7 +179,9 @@ class VisualizationAdapter(ABC):
         self.data_provider = data_provider
 
     @abstractmethod
-    def render_health_dashboard(self, sut: Optional[str] = None, days: int = 30) -> None:
+    def render_health_dashboard(
+        self, sut: Optional[str] = None, days: int = 30
+    ) -> None:
         """Render the health dashboard.
 
         Args:
@@ -177,7 +191,9 @@ class VisualizationAdapter(ABC):
         pass
 
     @abstractmethod
-    def render_stability_dashboard(self, sut: Optional[str] = None, days: int = 30) -> None:
+    def render_stability_dashboard(
+        self, sut: Optional[str] = None, days: int = 30
+    ) -> None:
         """Render the stability dashboard.
 
         Args:
@@ -187,7 +203,9 @@ class VisualizationAdapter(ABC):
         pass
 
     @abstractmethod
-    def render_predictive_dashboard(self, sut: Optional[str] = None, days_ahead: int = 7) -> None:
+    def render_predictive_dashboard(
+        self, sut: Optional[str] = None, days_ahead: int = 7
+    ) -> None:
         """Render the predictive dashboard.
 
         Args:
@@ -206,7 +224,9 @@ class VisualizationAdapter(ABC):
         pass
 
     @abstractmethod
-    def render_main_dashboard(self, sut: Optional[str] = None, days: int = 30, days_ahead: int = 7) -> None:
+    def render_main_dashboard(
+        self, sut: Optional[str] = None, days: int = 30, days_ahead: int = 7
+    ) -> None:
         """Render the main dashboard with all components.
 
         Args:
@@ -218,7 +238,9 @@ class VisualizationAdapter(ABC):
 
 
 # Factory function to create the appropriate data provider
-def create_data_provider(provider_type: str = "insight", profile: Optional[str] = None) -> DataProvider:
+def create_data_provider(
+    provider_type: str = "insight", profile: Optional[str] = None
+) -> DataProvider:
     """Create a data provider of the specified type.
 
     Args:
@@ -235,7 +257,9 @@ def create_data_provider(provider_type: str = "insight", profile: Optional[str] 
 
 
 # Factory function to create the appropriate visualization adapter
-def create_visualization_adapter(adapter_type: str, data_provider: DataProvider) -> VisualizationAdapter:
+def create_visualization_adapter(
+    adapter_type: str, data_provider: DataProvider
+) -> VisualizationAdapter:
     """Create a visualization adapter of the specified type.
 
     Args:

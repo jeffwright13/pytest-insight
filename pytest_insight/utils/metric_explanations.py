@@ -108,7 +108,9 @@ def get_short_explanation(metric_name: str) -> str:
     Returns:
         Short explanation string or a default message if not found
     """
-    return SHORT_EXPLANATIONS.get(metric_name, f"No explanation available for {metric_name}")
+    return SHORT_EXPLANATIONS.get(
+        metric_name, f"No explanation available for {metric_name}"
+    )
 
 
 def get_detailed_explanation(metric_name: str) -> Dict[str, Any]:

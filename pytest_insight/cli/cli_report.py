@@ -75,7 +75,9 @@ def generate_report(
             output_path = f"pytest_insight_report_{timestamp}.html"
 
         # Generate the report
-        console.print(f"Generating HTML report from profile [bold]{profile_name}[/bold]...")
+        console.print(
+            f"Generating HTML report from profile [bold]{profile_name}[/bold]..."
+        )
 
         # Create absolute path if relative path is provided
         if not os.path.isabs(output_path):

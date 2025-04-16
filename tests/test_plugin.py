@@ -5,6 +5,7 @@ import time
 from datetime import timedelta
 
 import pytest
+
 from pytest_insight.core.models import TestOutcome, TestSession
 from pytest_insight.core.query import InvalidQueryParameterError, Query
 from pytest_insight.core.storage import InMemoryStorage
@@ -27,7 +28,10 @@ class Test_SessionCapture:
 
         session = sessions[0]
         assert len(session.test_results) == len(test_session_basic.test_results)
-        assert session.test_results[0].outcome == test_session_basic.test_results[0].outcome
+        assert (
+            session.test_results[0].outcome
+            == test_session_basic.test_results[0].outcome
+        )
         assert session.session_start_time < session.session_stop_time
 
     def test_test_result_context(self, test_result_fail):
@@ -252,7 +256,9 @@ class Test_QueryOperations:
         assert len(result.sessions) == 1  # Only session2 has all FAILED tests
         assert result.sessions[0].session_id == "session-2"
         # All tests in result should be FAILED
-        assert all(t.outcome == TestOutcome.FAILED for t in result.sessions[0].test_results)
+        assert all(
+            t.outcome == TestOutcome.FAILED for t in result.sessions[0].test_results
+        )
         # Should have all 7 tests from session2
         assert len(result.sessions[0].test_results) == 7
 
@@ -299,13 +305,17 @@ class Test_QueryOperations:
         )
 
         # Chain multiple filters: SUT + outcome
-        result = query.for_sut("test-service").with_outcome(TestOutcome.PASSED).execute()
+        result = (
+            query.for_sut("test-service").with_outcome(TestOutcome.PASSED).execute()
+        )
 
         # Should return only sessions with matching SUT and tests with matching outcome
         assert len(result.sessions) == 1
         assert result.sessions[0].sut_name == "test-service"
         # Should only include PASSED tests
-        assert all(t.outcome == TestOutcome.PASSED for t in result.sessions[0].test_results)
+        assert all(
+            t.outcome == TestOutcome.PASSED for t in result.sessions[0].test_results
+        )
         # Session metadata preserved
         assert result.sessions[0].session_id == test_session_basic.session_id
 
@@ -384,9 +394,15 @@ class Test_SUTNameBehavior:
         monkeypatch.setattr(plugin, "insight_enabled", lambda config: True)
 
         # Mock profile creation and saving to avoid serialization issues
-        with patch("pytest_insight.core.storage.ProfileManager.get_profile") as mock_get_profile, patch(
-            "pytest_insight.core.storage.ProfileManager._create_profile"
-        ) as mock_create_profile, patch("pytest_insight.core.storage.ProfileManager._save_profiles"):
+        with (
+            patch(
+                "pytest_insight.core.storage.ProfileManager.get_profile"
+            ) as mock_get_profile,
+            patch(
+                "pytest_insight.core.storage.ProfileManager._create_profile"
+            ) as mock_create_profile,
+            patch("pytest_insight.core.storage.ProfileManager._save_profiles"),
+        ):
             # Set up the mock profile
             mock_profile = MagicMock(spec=StorageProfile)
             mock_profile.storage_type = "memory"
@@ -432,9 +448,15 @@ class Test_SUTNameBehavior:
         monkeypatch.setattr(plugin, "insight_enabled", lambda config: True)
 
         # Mock profile creation and saving to avoid serialization issues
-        with patch("pytest_insight.core.storage.ProfileManager.get_profile") as mock_get_profile, patch(
-            "pytest_insight.core.storage.ProfileManager._create_profile"
-        ) as mock_create_profile, patch("pytest_insight.core.storage.ProfileManager._save_profiles"):
+        with (
+            patch(
+                "pytest_insight.core.storage.ProfileManager.get_profile"
+            ) as mock_get_profile,
+            patch(
+                "pytest_insight.core.storage.ProfileManager._create_profile"
+            ) as mock_create_profile,
+            patch("pytest_insight.core.storage.ProfileManager._save_profiles"),
+        ):
             # Set up the mock profile
             mock_profile = MagicMock(spec=StorageProfile)
             mock_profile.storage_type = "memory"
@@ -532,7 +554,9 @@ class Test_StorageConfiguration:
         nonexistent_profile = f"nonexistent_profile_{int(time.time())}"
 
         # Run with the non-existent profile and capture stderr
-        result = tester.runpytest("--insight", f"--insight-profile={nonexistent_profile}", "-v")
+        result = tester.runpytest(
+            "--insight", f"--insight-profile={nonexistent_profile}", "-v"
+        )
 
         # Test should still pass
         assert result.ret == pytest.ExitCode.OK
