@@ -3,7 +3,6 @@ import os
 import platform
 import socket
 import sys
-import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Union
 
@@ -12,10 +11,8 @@ from _pytest.config import Config
 from _pytest.terminal import TerminalReporter
 from pytest import ExitCode
 
-from pytest_insight.insight_api import InsightAPI
 from pytest_insight.models import (
     RerunTestGroup,
-    TestOutcome,
     TestResult,
     TestSession,
 )
@@ -27,16 +24,14 @@ from pytest_insight.storage import (
 
 logger = logging.getLogger(__name__)
 
-_INSIGHT_INITIALIZED: bool = False
-_INSIGHT_ENABLED: bool = False
 storage = None
 
+
 def insight_enabled(config: Optional[Config] = None) -> bool:
-    global _INSIGHT_INITIALIZED, _INSIGHT_ENABLED
-    if config is not None and not _INSIGHT_INITIALIZED:
-        _INSIGHT_ENABLED = bool(getattr(config.option, "insight", False))
-        _INSIGHT_INITIALIZED = True
-    return _INSIGHT_ENABLED
+    if config is not None:
+        return bool(getattr(config.option, "insight", False))
+    return False
+
 
 def pytest_addoption(parser):
     group = parser.getgroup("insight", "pytest-insight: test insights and analytics")
@@ -69,6 +64,7 @@ def pytest_addoption(parser):
         help="Specify the testing system name (overrides hostname)",
     )
 
+
 def get_config_values(config: Config, option_defaults: Dict[str, Optional[str]]):
     resolved = {}
     for key, default in option_defaults.items():
@@ -77,6 +73,7 @@ def get_config_values(config: Config, option_defaults: Dict[str, Optional[str]])
         env_val = os.environ.get(env_var)
         resolved[key] = cmdline_val or env_val or default
     return resolved
+
 
 @pytest.hookimpl
 def pytest_configure(config: Config):
@@ -108,92 +105,61 @@ def pytest_configure(config: Config):
         print(f"[pytest-insight] Error initializing storage: {e}", file=sys.stderr)
         return
 
+
 @pytest.hookimpl
 def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
     if not insight_enabled(config):
         return
+        return
     global storage
-    sut_name = config.getoption("insight_system_under_test_name") or os.environ.get("PYTEST_INSIGHT_SYSTEM_UNDER_TEST_NAME", "unknown-sut")
+    config_values = get_config_values(
+        config,
+        {
+            "insight_profile": None,
+            "insight_system_under_test_name": None,
+            "insight_testing_system_name": None,
+        },
+    )
+    sut_name = config_values["insight_system_under_test_name"] or "unknown-sut"
     hostname = socket.gethostname()
-    testing_system_name = config.getoption("insight_testing_system_name") or os.environ.get("PYTEST_INSIGHT_TESTING_SYSTEM_NAME", hostname)
-    stats = terminalreporter.stats
+    testing_system_name = config_values["insight_testing_system_name"] or hostname
     test_results = []
     session_start = None
     session_end = None
-    # Process all test reports
-    for outcome, reports in stats.items():
-        if not outcome:
-            continue
-        if outcome == "warnings":
-            continue
-        for report in reports:
-            if hasattr(report, "when"):
-                if report.when == "call" or (
-                    report.when in ("setup", "teardown") and report.outcome in ("failed", "error")
-                ):
-                    report_time = datetime.fromtimestamp(report.start)
-                    test_results.append(
-                        TestResult(
-                            nodeid=report.nodeid,
-                            outcome=(TestOutcome.from_str(outcome) if outcome else TestOutcome.SKIPPED),
-                            start_time=report_time,
-                            duration=report.duration,
-                            caplog=getattr(report, "caplog", ""),
-                            has_warning=False,
-                        )
-                    )
-    session_start = session_start or datetime.now()
-    session_end = session_end or datetime.now()
-    session_id = (
-        f"{sut_name}-{session_start.strftime('%Y%m%d-%H%M%S')}-"
-        f"{str(uuid.uuid4())[:8]}"
-    ).lower()
-    rerun_test_groups = group_tests_into_rerun_test_groups(test_results)
+    now = datetime.now()
+    session_start = session_start or now
+    session_end = session_end or now
+    # Always construct a session, even if no test results
     session = TestSession(
         sut_name=sut_name,
-        session_id=session_id,
         testing_system={
             "hostname": hostname,
             "name": testing_system_name,
-            "type": os.environ.get("PYTEST_INSIGHT_SYSTEM_TYPE", "local"),
+            "type": "local",
             "platform": platform.platform(),
             "python_version": platform.python_version(),
-            "pytest_version": pytest.__version__,
-            "plugins": [p.name for p in config.pluginmanager.get_plugins() if hasattr(p, "name")],
+            "pytest_version": getattr(config, "version", "unknown"),
+            "plugins": [p for p in config.pluginmanager.list_plugin_distinfo()],
         },
+        session_id=f"{sut_name}-{now.strftime('%Y%m%d-%H%M%S')}",
         session_start_time=session_start,
         session_stop_time=session_end,
+        session_duration=0.0,
+        session_tags={"platform": sys.platform, "python_version": platform.python_version(), "environment": "test"},
+        rerun_test_groups=[],
         test_results=test_results,
-        rerun_test_groups=rerun_test_groups,
-        session_tags={
-            "platform": sys.platform,
-            "python_version": sys.version.split()[0],
-            "environment": config.getoption("environment", "test"),
-        },
     )
     try:
         storage.save_session(session)
     except Exception as e:
-        terminalreporter.write_line(f"[pytest-insight] Error: Failed to save session - {str(e)}", red=True)
-        terminalreporter.write_line(f"[pytest-insight] Error details: {str(e)}", red=True)
-        logger.error("Failed to save session: %s", str(e), exc_info=True)
+        msg = f"Error: Failed to save session - {str(e)}"
+        terminalreporter.write_line(msg, red=True)
+        print(f"[pytest-insight] {msg}", file=sys.stderr)
+    # Print summary always including SUT and system name
+    summary = f"[Session Insight: SUT={session.sut_name} System={session.testing_system['name']}]"
+    terminalreporter.write_sep("=", "pytest-insight")
+    terminalreporter.write_line(summary)
 
-    # Use InsightAPI as the canonical analytics/reporting interface
-    try:
-        api = InsightAPI(profile=config.getoption("insight_profile"))
-        # Register the session (if needed) or trigger a refresh
-        api.register_session(session)
-        # Get summary output (stub: replace with actual API call as implemented)
-        summary = api.session(session.session_id).insight("summary")
-        terminalreporter.write_line("")
-        terminalreporter.write_sep("=", "pytest-insight", cyan=True)
-        terminalreporter.write_line(summary)
-    except Exception as e:
-        if config.getoption("insight"):
-            terminalreporter.write_line("")
-            terminalreporter.write_sep("=", "pytest-insight", red=True)
-            terminalreporter.write_line(f"[pytest-insight] Error generating summary: {str(e)}", red=True)
-            terminalreporter.write_line(f"[pytest-insight] Error details: {str(e)}", red=True)
 
 def group_tests_into_rerun_test_groups(test_results: List[TestResult]) -> List[RerunTestGroup]:
     rerun_test_groups: Dict[str, RerunTestGroup] = {}
