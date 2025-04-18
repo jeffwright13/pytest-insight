@@ -257,6 +257,29 @@ This creates test data with realistic patterns including:
 - Correlated test failures
 - Anomaly patterns for detection
 
+## Configuration Option Precedence
+
+When specifying configuration options for pytest-insight (such as `--insight-profile`, `--insight-sut`, or `--insight-testing-system`), the plugin determines the value using the following order of precedence:
+
+1. **Command-Line Option**: If the option is passed explicitly to pytest (e.g., `pytest --insight-profile=my_profile`), this value is used.
+2. **Environment Variable**: If no command-line option is provided, the plugin checks for an environment variable with the pattern `PYTEST_INSIGHT_<OPTION_NAME>` (e.g., `PYTEST_INSIGHT_PROFILE`).
+3. **Default Value**: If neither a command-line option nor an environment variable is set, the plugin falls back to its built-in default.
+
+This ensures you can flexibly control configuration in local development, CI pipelines, or shared environments.
+
+**Example:**
+
+```bash
+# Use a profile via environment variable (applies to all test runs in this shell)
+export PYTEST_INSIGHT_PROFILE=ci_profile
+pytest --insight
+
+# Override for a single run with a command-line option
+pytest --insight --insight-profile=dev_profile
+```
+
+See the [plugin.py](pytest_insight/plugin.py) source for implementation details (`get_config_values`).
+
 ## Documentation
 
 - [User Guide](docs/user_guide.md): Detailed usage examples and best practices
@@ -316,3 +339,5 @@ Using short options:
 
 ```bash
 pytest --insight --is="my-application" --itsn="ci-runner-1"
+
+```
