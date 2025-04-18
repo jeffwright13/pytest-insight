@@ -1,6 +1,6 @@
 [project]
 name = "pytest-insight"
-version = "0.9.0"
+version = "0.9.1"
 description = "A pytest plugin for collecting, analyzing, and visualizing test and test-session metrics"
 readme = "README.md"
 authors = [
@@ -102,3 +102,18 @@ line-ending = "auto"
 dev = [
     "tox>=4.25.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "cli: CLI tests",
+    "api: API tests",
+    "e2e: End-to-end tests",
+    "smoke: Smoke tests"
+]
+norecursedirs = [".git", "__pycache__", "pytest_insight_v1"]
