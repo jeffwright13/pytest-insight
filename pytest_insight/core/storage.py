@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import filelock
 
-from pytest_insight.models import TestSession
+from pytest_insight.core.models import TestSession
 
 DEFAULT_STORAGE_PATH = Path.home() / ".pytest_insight" / "default.json"
 

@@ -11,12 +11,12 @@ from _pytest.config import Config
 from _pytest.terminal import TerminalReporter
 from pytest import ExitCode
 
-from pytest_insight.models import (
+from pytest_insight.core.models import (
     RerunTestGroup,
     TestResult,
     TestSession,
 )
-from pytest_insight.storage import (
+from pytest_insight.core.storage import (
     create_profile,
     get_profile_manager,
     get_storage_instance,
@@ -43,22 +43,18 @@ def pytest_addoption(parser):
     )
     group.addoption(
         "--insight-profile",
-        "--ip",
         action="store",
         default=None,
         help="Specify the storage profile to use",
     )
     group.addoption(
-        "--insight-system-under-test-name",
         "--insight-sut-name",
-        "--is",
         action="store",
         default=None,
         help="Specify the System Under Test (SUT) name",
     )
     group.addoption(
         "--insight-testing-system-name",
-        "--itsn",
         action="store",
         default=None,
         help="Specify the testing system name (overrides hostname)",
@@ -110,17 +106,16 @@ def pytest_configure(config: Config):
 def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
     if not insight_enabled(config):
         return
-        return
     global storage
     config_values = get_config_values(
         config,
         {
             "insight_profile": None,
-            "insight_system_under_test_name": None,
+            "insight_sut_name": None,
             "insight_testing_system_name": None,
         },
     )
-    sut_name = config_values["insight_system_under_test_name"] or "unknown-sut"
+    sut_name = config_values["insight_sut_name"] or "unknown-sut"
     hostname = socket.gethostname()
     testing_system_name = config_values["insight_testing_system_name"] or hostname
     test_results = []
@@ -139,13 +134,17 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
             "platform": platform.platform(),
             "python_version": platform.python_version(),
             "pytest_version": getattr(config, "version", "unknown"),
-            "plugins": [p for p in config.pluginmanager.list_plugin_distinfo()],
+            "plugins": list(config.pluginmanager.list_plugin_distinfo()),
         },
         session_id=f"{sut_name}-{now.strftime('%Y%m%d-%H%M%S')}",
         session_start_time=session_start,
         session_stop_time=session_end,
         session_duration=0.0,
-        session_tags={"platform": sys.platform, "python_version": platform.python_version(), "environment": "test"},
+        session_tags={
+            "platform": sys.platform,
+            "python_version": platform.python_version(),
+            "environment": "test",
+        },
         rerun_test_groups=[],
         test_results=test_results,
     )

@@ -341,3 +341,94 @@ Using short options:
 pytest --insight --is="my-application" --itsn="ci-runner-1"
 
 ```
+
+## Fluent, Composable InsightAPI: Advanced Analytics and Query Patterns
+
+pytest-insight provides a powerful, discoverable, and fully composable analytics API for mining your test history. All analytics and reporting are accessed through a single `InsightAPI` entry point, with a fluent interface for chaining custom queries and extracting advanced metrics.
+
+## Key Concepts
+- **Two-Level Filtering:**
+  - **Session-Level:** Filter entire test sessions (by SUT, time range, warnings, etc.)
+  - **Test-Level:** Filter by individual test properties while preserving session context
+- **Session Context Preservation:** All queries return full `TestSession` objects, never isolated test results. This lets you analyze warnings, reruns, relationships, and correlated failures.
+- **Fluent Chaining:** Compose arbitrary filters and analytics by chaining methods. Drill down or aggregate up as needed.
+- **Unified Analytics:** All insights are accessed via `.insight(kind)` for discoverability and extensibility.
+
+## Usage Patterns and Examples
+
+### 1. See All Tests That Ran Together
+```python
+sessions = api.session().for_sut("service").in_last_days(7).execute()
+for session in sessions:
+    print([t.nodeid for t in session.test_results])
+```
+
+### 2. Access Session-Level Warnings
+```python
+for session in api.session().for_sut("service").execute():
+    print(getattr(session, 'warnings', None))  # Replace with actual attribute if needed
+```
+
+### 3. Track Rerun Patterns
+```python
+for session in api.session().execute():
+    print({t.nodeid: getattr(t, 'reruns', 0) for t in session.test_results})
+```
+
+### 4. Analyze Test Relationships (Tests That Appear Together)
+```python
+filtered_sessions = api.session().filter_by_test().with_duration(10.0, float("inf")).apply().execute()
+for session in filtered_sessions:
+    print("Tests together:", [t.nodeid for t in session.test_results])
+```
+
+### 5. Identify Correlated Failures (Multiple Failures in a Session)
+```python
+for session in api.session().execute():
+    failed = [t.nodeid for t in session.test_results if t.outcome == 'failed']
+    if len(failed) > 1:
+        print("Correlated failures:", failed)
+```
+
+### 6. Monitor Performance Trends (Reliability Over Time)
+```python
+trends = api.temporal().trend_over_time(metric="reliability", interval="day")
+from pprint import pprint
+pprint(trends)
+```
+
+## Fluent Query and Analytics API Overview
+
+- **Session-level only:**
+    ```python
+    api.session().for_sut("service").in_last_days(7).insight("health")
+    ```
+- **Test-level with context:**
+    ```python
+    api.session().filter_by_test().with_duration(10.0, float("inf")).apply().insight("reliability")
+    ```
+- **Direct test-level analytics:**
+    ```python
+    api.test().with_name("test_login").with_duration(10.0, float("inf")).insight("reliability")
+    ```
+
+## Benefits
+- See all tests that ran together
+- Access session-level warnings
+- Track rerun patterns
+- Analyze test relationships
+- Identify correlated failures
+- Monitor performance trends
+- All analytics available via `.insight(kind)` for discoverability and extensibility
+
+## Jupyter Notebook Examples
+
+See [`EXAMPLES.ipynb`](EXAMPLES.ipynb) for a ready-to-run notebook with all these advanced analytics, query patterns, and more. You can open and execute this notebook in VSCode or any Jupyter-compatible environment.
+
+## VSCode/Jupyter Support
+- VSCode (and Windsurf) fully support Jupyter Notebooks (`.ipynb`) for interactive exploration and execution.
+- Open `EXAMPLES.ipynb` in VSCode and run each cell to explore the API and your test data.
+
+## Extending the API
+- Add more `.insight()` types as needed (e.g., `"duration"`, `"failure_rate"`, `"correlated_failures"`).
+- All analytics logic is routed through the unified API for maintainability and discoverability.

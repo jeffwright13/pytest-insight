@@ -9,7 +9,7 @@ import string
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from pytest_insight.models import (
+from pytest_insight.core.models import (
     RerunTestGroup,
     TestOutcome,
     TestResult,

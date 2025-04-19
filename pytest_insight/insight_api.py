@@ -1,58 +1,52 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
-from pytest_insight.utils import NormalizedDatetime
+from pytest_insight.core.models import TestSession
+from pytest_insight.core.query import SessionQuery, TestQuery
+from pytest_insight.facets.comparative import ComparativeInsight
+from pytest_insight.facets.meta import MetaInsight
+from pytest_insight.facets.predictive import PredictiveInsight
+from pytest_insight.facets.session import SessionInsight
+from pytest_insight.facets.summary import SummaryInsight
+from pytest_insight.facets.temporal import TemporalInsight
+from pytest_insight.facets.test import TestInsight
+from pytest_insight.facets.trend import TrendInsight
+from pytest_insight.utils.utils import NormalizedDatetime
 
 
 class InsightAPI:
     """
-    Unified entry point for all test insights.
-    Each method is a stub for a different insight type.
-    Extend these with real logic as you build out the system.
+    Unified entry point for all test insights (faceted interface).
+    Provides fluent, composable access to all analytics facets.
     """
+    def __init__(self, sessions: list[TestSession] = None, profile: str = None):
+        # In a real implementation, load sessions from storage/profile
+        self.sessions = sessions or []
+        self.profile = profile
 
-    def __init__(self, profile: Optional[str] = None) -> None:
-        self.profile: Optional[str] = profile
-        self._sessions: Dict[str, Any] = {}  # session_id -> TestSession
-        self._last_session_id: Optional[str] = None
+    def summary(self) -> SummaryInsight:
+        return SummaryInsight(self.sessions)
 
-    def register_session(self, session: Any) -> None:
-        self._sessions[session.session_id] = session
-        self._last_session_id = session.session_id
+    def session(self) -> SessionQuery:
+        return SessionQuery(self.sessions)
 
-    def session(self, session_id: Optional[str] = None) -> "SessionInsightStub":
-        # Return a stub that can access the session
-        if session_id is None:
-            session_id = self._last_session_id
-        return SessionInsightStub(self._sessions.get(session_id))
+    def test(self) -> TestQuery:
+        return TestQuery(SessionQuery(self.sessions))
 
-    def tests(self) -> "TestInsightStub":
-        """Test-level insight stub (all tests)."""
-        return TestInsightStub()
+    def temporal(self) -> TemporalInsight:
+        return TemporalInsight(self.sessions)
 
-    def over_time(self, days: int = 30) -> "TemporalInsightStub":
-        """Temporal insight stub (trends over time)."""
-        return TemporalInsightStub(days)
+    def comparative(self) -> ComparativeInsight:
+        return ComparativeInsight(self.sessions)
 
-    def compare(self, sut_a: Optional[str] = None, sut_b: Optional[str] = None) -> "ComparativeInsightStub":
-        """Comparative insight stub (compare SUTs or versions)."""
-        return ComparativeInsightStub(sut_a, sut_b)
+    def trend(self) -> TrendInsight:
+        return TrendInsight(self.sessions)
 
-    def trend(self) -> "TrendInsightStub":
-        """Trend-focused insight stub (emerging patterns)."""
-        return TrendInsightStub()
+    def predictive(self) -> PredictiveInsight:
+        return PredictiveInsight(self.sessions)
 
-    def predictive(self) -> "PredictiveInsightStub":
-        """Predictive insight stub (forecasting/anomaly detection)."""
-        return PredictiveInsightStub()
-
-    def meta(self) -> "MetaInsightStub":
-        """Meta/process insight stub (maintenance, process health)."""
-        return MetaInsightStub()
-
-    def summary(self) -> "SummaryInsight":
-        """Return the summary insight facet."""
-        return SummaryInsight(self._sessions)
+    def meta(self) -> MetaInsight:
+        return MetaInsight(self.sessions)
 
 
 # --- Stub Classes for Each Insight Type ---
@@ -78,7 +72,7 @@ class TestInsightStub:
     def filter(self, **kwargs: Any) -> "TestInsightStub":
         return self  # chaining stub
 
-    def insight(self, kind: str = "flakiness") -> str:
+    def insight(self, kind: str = "reliability") -> str:
         return f"[Test Insight: {kind}]"
 
 
@@ -114,88 +108,19 @@ class MetaInsightStub:
         return f"[Meta Insight: {kind}]"
 
 
-class SummaryInsight:
-    """Facet for computing high-level summary metrics over test sessions."""
+class SummaryInsightStub:
+    def __init__(self, sessions: list[Any]) -> None:
+        self.sessions = sessions
 
-    def __init__(self, sessions: Dict[str, Any]) -> None:
-        """
-        Args:
-            sessions (dict): Mapping of session_id to TestSession objects.
-        """
-        self.sessions: Dict[str, Any] = sessions
-
-    def get(
-        self,
-        duration: Optional[timedelta] = None,
-        since: Optional["datetime"] = None,
-        days: Optional[int] = None,
-        hours: Optional[int] = None,
-        minutes: Optional[int] = None,
-        seconds: Optional[int] = None,
-        outcome: Optional[str] = None,
-        sut: Optional[str] = None,
-    ) -> dict:
-        """
-        Compute summary metrics for filtered sessions.
-
-        Args:
-            duration (timedelta, optional): Time window for filtering.
-            since (datetime, optional): Only sessions since this timestamp.
-            days, hours, minutes, seconds (int, optional): Alternative time window.
-            outcome (str, optional): Filter by session outcome.
-            sut (str, optional): Filter by system under test.
-
-        Returns:
-            dict: Summary metrics.
-        """
-        sessions = list(self.sessions.values())
-        now = NormalizedDatetime.now()
-
-        # Determine cutoff time
-        cutoff = None
-        if since is not None:
-            cutoff = NormalizedDatetime(since)
-        elif duration is not None:
-            cutoff = NormalizedDatetime(now.dt - duration)
-        elif any([days, hours, minutes, seconds]):
-            delta = timedelta(days=days or 0, hours=hours or 0, minutes=minutes or 0, seconds=seconds or 0)
-            cutoff = NormalizedDatetime(now.dt - delta)
-
-        # Filter sessions
-        if cutoff:
-            sessions = [
-                s
-                for s in sessions
-                if hasattr(s, "session_start_time") and NormalizedDatetime(s.session_start_time) >= cutoff
-            ]
-        if outcome is not None:
-            sessions = [s for s in sessions if getattr(s, "outcome", None) == outcome]
-        if sut is not None:
-            sessions = [s for s in sessions if getattr(s, "sut", None) == sut]
-
-        # Compute metrics (replace with actual analysis logic if available)
-        total_sessions = len(sessions)
-        total_tests = sum(len(getattr(s, "test_results", [])) for s in sessions)
-        pass_rate = (
-            sum(1 for s in sessions if getattr(s, "outcome", None) == "passed") / total_sessions
-            if total_sessions
-            else None
-        )
-        reliability_score = pass_rate  # For now, reliability = pass_rate
-        first_session = min(
-            (getattr(s, "session_start_time", None) for s in sessions if getattr(s, "session_start_time", None)),
-            default=None,
-        )
-        last_session = max(
-            (getattr(s, "session_start_time", None) for s in sessions if getattr(s, "session_start_time", None)),
-            default=None,
-        )
-
-        return {
-            "total_sessions": total_sessions,
-            "total_tests": total_tests,
-            "pass_rate": pass_rate,
-            "reliability_score": reliability_score,
-            "first_session": first_session,
-            "last_session": last_session,
-        }
+    def insight(self, kind: str = "summary") -> str:
+        if not self.sessions:
+            return "[Summary Insight: No sessions found]"
+        if kind == "summary":
+            total_sessions = len(self.sessions)
+            total_tests = sum(len(getattr(s, "test_results", [])) for s in self.sessions)
+            return (
+                f"Summary: {total_sessions} sessions, "
+                f"{total_tests} tests, "
+                f"SUTs: {', '.join(sorted(set(getattr(s, 'sut_name', 'unknown') for s in self.sessions)))}"
+            )
+        return f"[Summary Insight: {kind}] ({len(self.sessions)} sessions)"
