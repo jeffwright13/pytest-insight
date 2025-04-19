@@ -73,9 +73,19 @@ def test_testresult_from_dict():
 # ---- RerunTestGroup ----
 def test_reruntestgroup_add_and_final_outcome():
     start = NormalizedDatetime(datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc))
-    tr1 = TestResult("foo", TestOutcome.RERUN, start, stop_time=start + timedelta(seconds=1), duration=1)
+    tr1 = TestResult(
+        "foo",
+        TestOutcome.RERUN,
+        start,
+        stop_time=start + timedelta(seconds=1),
+        duration=1,
+    )
     tr2 = TestResult(
-        "foo", TestOutcome.FAILED, start + timedelta(seconds=1), stop_time=start + timedelta(seconds=2), duration=1
+        "foo",
+        TestOutcome.FAILED,
+        start + timedelta(seconds=1),
+        stop_time=start + timedelta(seconds=2),
+        duration=1,
     )
     group = RerunTestGroup(nodeid="foo")
     group.add_test(tr1)
@@ -95,7 +105,13 @@ def test_reruntestgroup_add_and_final_outcome():
 def test_testsession_add_and_to_from_dict():
     start = NormalizedDatetime(datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc))
     stop = start + timedelta(seconds=10)
-    tr = TestResult("foo", TestOutcome.PASSED, start, stop_time=start + timedelta(seconds=2), duration=2)
+    tr = TestResult(
+        "foo",
+        TestOutcome.PASSED,
+        start,
+        stop_time=start + timedelta(seconds=2),
+        duration=2,
+    )
     group = RerunTestGroup(nodeid="foo")
     group.add_test(tr)
     session = TestSession(

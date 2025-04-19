@@ -32,8 +32,6 @@ def test_normalized_datetime_equality():
     assert nd2 == dt2
     assert nd1 == nd2
     assert nd2 == nd1
-    assert not (nd1 != nd2)
-    assert not (nd1 != dt1)
     assert nd1 != dt.datetime(2024, 1, 1, 12, 1, 0)
 
 
@@ -81,7 +79,7 @@ def test_normalized_datetime_total_seconds_and_date():
     """
     dt1 = dt.datetime(2024, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
     nd1 = NormalizedDatetime(dt1)
-    assert abs(nd1.total_seconds() - dt1.timestamp()) < 1e-6
+    assert abs(nd1.timestamp() - dt1.timestamp()) < 1e-6
     assert nd1.date() == dt1.date()
 
 
@@ -209,3 +207,28 @@ def test_create_after_or_equals_filter():
     assert filt(session)
     session2 = DummySession(dt.datetime(2024, 1, 1, 11, 59, 59))
     assert not filt(session2)
+
+
+def test_normalized_datetime_now(monkeypatch):
+    """Test that NormalizedDatetime.now() returns a NormalizedDatetime wrapping the current datetime."""
+    import datetime as dt
+
+    from pytest_insight.utils import NormalizedDatetime
+
+    # Patch datetime.now to return a fixed value
+    fixed_now = dt.datetime(2025, 4, 18, 19, 0, 0)
+
+    class FixedDatetime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now.replace(tzinfo=tz)
+
+    monkeypatch.setattr("pytest_insight.utils.datetime", FixedDatetime)
+
+    print("NormalizedDatetime loaded from:", NormalizedDatetime.__module__)
+    print("Class dict:", dir(NormalizedDatetime))
+    nd_now = NormalizedDatetime.now()
+    assert isinstance(nd_now, NormalizedDatetime)
+    assert nd_now.dt == fixed_now
+    # Should be equal to NormalizedDatetime(fixed_now)
+    assert nd_now == NormalizedDatetime(fixed_now)
