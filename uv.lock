@@ -2394,6 +2394,7 @@ dependencies = [
     { name = "rich" },
     { name = "sparklines" },
     { name = "tabulate" },
+    { name = "tomli" },
     { name = "typer" },
 ]
 
@@ -2486,6 +2487,7 @@ requires-dist = [
     { name = "sparklines", specifier = ">=0.5.0" },
     { name = "streamlit", marker = "extra == 'visualize'", specifier = ">=1.22.0" },
     { name = "tabulate", specifier = ">=0.9.0" },
+    { name = "tomli", specifier = ">=2.2.1" },
     { name = "typer", specifier = ">=0.15.0" },
     { name = "uvicorn", marker = "extra == 'visualize'", specifier = ">=0.20.0" },
 ]

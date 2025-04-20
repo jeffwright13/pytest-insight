@@ -163,15 +163,25 @@ methods = [
 ]
 
 # ==============================
-# Output Configuration
+# Terminal Output Configuration
 # ==============================
+[terminal]
+enabled = true
+sections = ["summary", "slowest_tests", "unreliable_tests", "trends"]
 
-[output]
-# Output format (text, json, html)
-format = "text"
-# Color output in terminal
-color = true
-# Verbosity level (0-3)
-verbosity = 1
-# Output file (leave empty for stdout)
-file = ""
+[terminal.insights.summary]
+show = true
+fields = ["total_sessions", "total_tests", "pass_rate", "fail_rate"]
+
+[terminal.insights.slowest_tests]
+show = true
+limit = 5
+
+[terminal.insights.unreliable_tests]
+show = true
+limit = 5
+columns = ["nodeid", "reliability", "runs", "failures"]
+
+[terminal.insights.trends]
+show = true
+types = ["duration", "failures"]
