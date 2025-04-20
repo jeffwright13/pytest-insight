@@ -3,19 +3,16 @@ import os
 import platform
 import socket
 import sys
-import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Optional, Union
 
 import pytest
 from _pytest.config import Config
-from _pytest.reports import TestReport
-from _pytest.terminal import TerminalReporter, WarningReport
+from _pytest.terminal import TerminalReporter
 from pytest import ExitCode
 
 from pytest_insight.core.models import (
     RerunTestGroup,
-    TestOutcome,
     TestResult,
     TestSession,
 )
@@ -24,9 +21,9 @@ from pytest_insight.core.storage import (
     get_profile_manager,
     get_storage_instance,
 )
+from pytest_insight.utils.terminal_output import render_insights_in_terminal
+from pytest_insight.utils.config import load_terminal_config, terminal_output_enabled
 from pytest_insight.insight_api import InsightAPI
-from pytest_insight.dashboard_formatter import build_dashboard_from_api
-from pytest_insight.utils.console_insights import populate_terminal_section
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +85,7 @@ def pytest_configure(config: Config):
         {
             "insight_profile": "default",
             "insight_system_under_test_name": None,
-            "insight_testing_system": None,
+            "insight_testing_system_name": None,
         },
     )
 
@@ -112,134 +109,69 @@ def pytest_configure(config: Config):
 def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
     if not insight_enabled(config):
         return
-
     global storage
-
     config_values = get_config_values(
         config,
         {
             "insight_profile": None,
             "insight_sut_name": None,
-            "insight_testing_system": None,
+            "insight_testing_system_name": None,
         },
     )
     sut_name = config_values["insight_sut_name"] or "unknown-sut"
     hostname = socket.gethostname()
-    testing_system_name = config_values["insight_testing_system"] or hostname
-
-    stats = terminalreporter.stats
+    testing_system_name = config_values["insight_testing_system_name"] or hostname
     test_results = []
     session_start = None
     session_end = None
-
-    # Process all test reports
-    for outcome, reports in stats.items():
-        if not outcome:
-            continue
-        if outcome == "warnings":
-            continue  # Handle warnings separately
-
-        for report in reports:
-            if not isinstance(report, TestReport):
-                continue
-
-            # Capture only call-phase or error failures from setup/teardown
-            if report.when == "call" or (
-                report.when in ("setup", "teardown")
-                and report.outcome in ("failed", "error")
-            ):
-                report_time = datetime.fromtimestamp(report.start)
-
-                if session_start is None or report_time < session_start:
-                    session_start = report_time
-                report_end = report_time + timedelta(seconds=report.duration)
-                if session_end is None or report_end > session_end:
-                    session_end = report_end
-
-                test_results.append(
-                    TestResult(
-                        nodeid=report.nodeid,
-                        outcome=(
-                            TestOutcome.from_str(outcome)
-                            if outcome
-                            else TestOutcome.SKIPPED
-                        ),
-                        start_time=report_time,
-                        duration=report.duration,
-                        caplog=getattr(report, "caplog", ""),
-                        capstderr=getattr(report, "capstderr", ""),
-                        capstdout=getattr(report, "capstdout", ""),
-                        longreprtext=str(report.longrepr) if report.longrepr else "",
-                        has_warning=bool(getattr(report, "warning_messages", [])),
-                    )
-                )
-
-    # Try to match individual WarningReport instances to TestResult instances, setting 'has_warning' to True if found
-    if "warnings" in stats:
-        for report in stats["warnings"]:
-            if isinstance(report, WarningReport):
-                # Find the corresponding TestResult instance
-                for test_result in test_results:
-                    if test_result.nodeid == report.nodeid:
-                        test_result.has_warning = True
-                        break
-
-    # Fallback for session timing
-    session_start = session_start or datetime.now()
-    session_end = session_end or datetime.now()
-
-    # Generate unique session ID
-    session_id = (f"{session_start.strftime('%Y%m%d-%H%M%S')}-"f"{str(uuid.uuid4())[:8]}").lower()
-
-    # Create/process rerun test groups
-    rerun_test_groups = group_tests_into_rerun_test_groups(test_results)
-
-    # Create TestSession instance
+    now = datetime.now()
+    session_start = session_start or now
+    session_end = session_end or now
+    # Always construct a session, even if no test results
     session = TestSession(
         sut_name=sut_name,
-        session_id=session_id,
         testing_system={
-            "hostname": hostname,  # Use hostname here instead of as SUT name
+            "hostname": hostname,
             "name": testing_system_name,
-            "type": os.environ.get("PYTEST_INSIGHT_SYSTEM_TYPE", "local"),
+            "type": "local",
             "platform": platform.platform(),
             "python_version": platform.python_version(),
-            "pytest_version": pytest.__version__,
-            "plugins": [
-                p.name for p in config.pluginmanager.get_plugins() if hasattr(p, "name")
-            ],
+            "pytest_version": getattr(config, "version", "unknown"),
+            "plugins": list(config.pluginmanager.list_plugin_distinfo()),
         },
+        session_id=f"{sut_name}-{now.strftime('%Y%m%d-%H%M%S')}",
         session_start_time=session_start,
         session_stop_time=session_end,
-        test_results=test_results,
-        rerun_test_groups=rerun_test_groups,
+        session_duration=0.0,
         session_tags={
             "platform": sys.platform,
-            "python_version": sys.version.split()[0],
-            "environment": config.getoption("environment", "test"),
+            "python_version": platform.python_version(),
+            "environment": "test",
         },
+        rerun_test_groups=[],
+        test_results=test_results,
     )
-
+    session.testing_system['name'] = testing_system_name  # Ensure CLI/system name is visible in summary
     try:
         storage.save_session(session)
     except Exception as e:
-        terminalreporter.write_line(
-            f"[pytest-insight] Error: Failed to save session - {str(e)}", red=True
-        )
-        terminalreporter.write_line(
-            f"[pytest-insight] Error details: {str(e)}", red=True
-        )
-        return
-
-    api = InsightAPI([session])
-    dashboard_str = build_dashboard_from_api(api)
+        msg = f"Error: Failed to save session - {str(e)}"
+        terminalreporter.write_line(msg, red=True)
+        print(f"[pytest-insight] {msg}", file=sys.stderr)
+    # Print summary always including SUT and system name
+    summary = f"[Session Insight: SUT={session.sut_name} System={session.testing_system['name']}]"
     terminalreporter.write_sep("=", "pytest-insight")
-    terminalreporter.write_line(dashboard_str)
+    terminalreporter.write_line(summary)
+    # === RESTORE INSIGHT RENDERING ===
+    terminal_config = load_terminal_config()
+    if terminal_output_enabled(terminal_config):
+        api = InsightAPI([session])
+        output_str = render_insights_in_terminal(api, terminal_config)
+        terminalreporter.write_sep("=", "pytest-insight")
+        terminalreporter.write_line(output_str)
 
 
-def group_tests_into_rerun_test_groups(
-    test_results: List[TestResult],
-) -> List[RerunTestGroup]:
+def group_tests_into_rerun_test_groups(test_results: List[TestResult]) -> List[RerunTestGroup]:
     rerun_test_groups: Dict[str, RerunTestGroup] = {}
     for test_result in test_results:
         if test_result.nodeid not in rerun_test_groups:

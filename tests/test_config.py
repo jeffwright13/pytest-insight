@@ -3,7 +3,7 @@ Tests for pytest_insight.config (terminal config loader and enable/disable logic
 """
 import textwrap
 
-from pytest_insight import config as insight_config
+from pytest_insight.utils import config as insight_config
 
 TERMINAL_TOML = textwrap.dedent(
     """

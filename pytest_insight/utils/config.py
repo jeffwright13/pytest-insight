@@ -100,24 +100,22 @@ def load_terminal_config(path: str = None) -> dict:
                 insights[key] = config[insight_key]
         if insights:
             terminal["insights"] = insights
+        # Fill in missing keys with defaults
+        for k, v in _DEFAULT_TERMINAL_CONFIG.items():
+            if k not in terminal:
+                terminal[k] = v
         return terminal
     except Exception as e:
         print(f"[pytest-insight] Failed to load terminal config: {e}\nUsing defaults.")
         return _DEFAULT_TERMINAL_CONFIG
 
-
-def terminal_output_enabled(terminal_config: dict = None) -> bool:
+def terminal_output_enabled(config: dict) -> bool:
     """
-    Returns True if terminal output is enabled, considering both config and environment variable.
-    Env var PYTEST_INSIGHT_TERMINAL=0 or false disables output regardless of config.
+    Returns True if terminal output is enabled in the config.
+    Respects the PYTEST_INSIGHT_TERMINAL environment variable if set.
     """
     import os
-
-    env = os.getenv("PYTEST_INSIGHT_TERMINAL")
-    if env is not None and env.lower() in ("0", "false", "no"):  # explicit disable
-        return False
-    if terminal_config is None:
-        from .config import load_terminal_config
-
-        terminal_config = load_terminal_config()
-    return terminal_config.get("enabled", True)
+    env_val = os.getenv("PYTEST_INSIGHT_TERMINAL")
+    if env_val is not None:
+        return env_val.strip().lower() not in ("0", "false", "no", "off", "n", "")
+    return config.get("enabled", True)
