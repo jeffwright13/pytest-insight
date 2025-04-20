@@ -9,11 +9,20 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
+
 import typer
-from pytest_insight.core.models import TestSession, TestResult
+
+from pytest_insight.core.models import (
+    RerunTestGroup,
+    TestOutcome,
+    TestResult,
+    TestSession,
+)
+
 
 class HistoryDataGenerator:
     """Generates historical test sessions with trends, correlations, and variability."""
+
     def __init__(
         self,
         days: int = 30,
@@ -56,25 +65,25 @@ class HistoryDataGenerator:
         base, top = self.pass_rate_range
         if sut == self.suts[0]:
             # Improving
-            return min(top, base + (top-base)*self.trend_strength*day/(self.days-1))
+            return min(top, base + (top - base) * self.trend_strength * day / (self.days - 1))
         elif sut == self.suts[1]:
             # Declining
-            return max(base, top - (top-base)*self.trend_strength*day/(self.days-1))
+            return max(base, top - (top - base) * self.trend_strength * day / (self.days - 1))
         else:
             # Cyclic
-            return base + (top-base)*(0.5+0.5*random.uniform(-1,1)*self.trend_strength)
+            return base + (top - base) * (0.5 + 0.5 * random.uniform(-1, 1) * self.trend_strength)
 
     def _get_correlated_failures(self, day: int) -> List[str]:
         # Pick a group of tests to fail together (simulate correlation)
-        group_size = max(2, len(self.test_ids)//self.correlation_groups)
-        start = random.randint(0, len(self.test_ids)-group_size)
-        return self.test_ids[start:start+group_size]
+        group_size = max(2, len(self.test_ids) // self.correlation_groups)
+        start = random.randint(0, len(self.test_ids) - group_size)
+        return self.test_ids[start : start + group_size]
 
     def generate(self) -> List[TestSession]:
         now = datetime.now()
         sessions = []
         for day in range(self.days):
-            day_time = now - timedelta(days=(self.days-day))
+            day_time = now - timedelta(days=(self.days - day))
             for s in range(self.sessions_per_day):
                 sut = random.choice(self.suts)
                 session_id = f"{sut}-{day}-{s}-{random.randint(1000,9999)}"
@@ -83,54 +92,149 @@ class HistoryDataGenerator:
                 test_results = []
                 for tid in self.test_ids:
                     if tid in correlated:
-                        outcome = "failed"
+                        outcome = "FAILED"
                     else:
-                        outcome = "passed" if random.random() < pass_rate else "failed"
-                    duration = random.uniform(1, 10) + (0 if outcome=="passed" else random.uniform(0, 10))
-                    test_results.append(TestResult(
-                        nodeid=tid,
-                        outcome=outcome,
-                        start_time=day_time,
-                        stop_time=day_time + timedelta(seconds=duration),
-                        duration=duration,
-                    ))
-                session_outcome = "passed" if all(t.outcome=="passed" for t in test_results) else "failed"
-                sessions.append(TestSession(
-                    session_id=session_id,
-                    session_start_time=day_time,
-                    outcome=session_outcome,
-                    test_results=test_results,
-                ))
+                        outcome = "PASSED" if random.random() < pass_rate else "FAILED"
+                    duration = 0 if outcome == "PASSED" else random.uniform(0, 10)
+                    test_results.append(
+                        TestResult(
+                            nodeid=tid,
+                            outcome=TestOutcome.from_str(outcome),
+                            start_time=day_time,
+                            stop_time=day_time + timedelta(seconds=duration),
+                            duration=duration,
+                        )
+                    )
+                # Add realistic session tags and system info
+                session_tags = {
+                    "env": random.choice(["dev", "staging", "prod"]),
+                    "branch": random.choice(["main", "develop", "feature-x"]),
+                    "user": random.choice(["alice", "bob", "carol"]),
+                }
+                testing_system = {
+                    "os": random.choice(["linux", "windows", "macos"]),
+                    "python": random.choice(["3.9", "3.10", "3.11", "3.12"]),
+                    "ci": random.choice(["github", "gitlab", "jenkins"]),
+                }
+                # Simulate rerun test groups for a subset of test_ids
+                rerun_test_groups = []
+                rerun_candidates = random.sample(self.test_ids, k=max(1, len(self.test_ids) // 4))
+                for nodeid in rerun_candidates:
+                    rerun_results = [
+                        TestResult(
+                            nodeid=nodeid,
+                            outcome=TestOutcome.from_str(random.choice(["FAILED", "PASSED"])),
+                            start_time=day_time,
+                            stop_time=day_time + timedelta(seconds=random.uniform(0.1, 2)),
+                            duration=random.uniform(0.1, 2),
+                            caplog="Rerun log",
+                            capstderr="",
+                            capstdout="",
+                            longreprtext="",
+                            has_warning=False,
+                        )
+                        for _ in range(random.randint(2, 3))
+                    ]
+                    rerun_test_groups.append(
+                        RerunTestGroup(
+                            nodeid=nodeid,
+                            tests=rerun_results,
+                        )
+                    )
+                session_stop_time = max(tr.stop_time for tr in test_results)
+                session_duration = (session_stop_time - day_time).total_seconds()
+                sessions.append(
+                    TestSession(
+                        sut_name=sut,
+                        session_id=session_id,
+                        session_start_time=day_time,
+                        session_stop_time=session_stop_time,
+                        session_duration=session_duration,
+                        test_results=test_results,
+                        rerun_test_groups=rerun_test_groups,
+                        session_tags=session_tags,
+                        testing_system=testing_system,
+                    )
+                )
         return sessions
 
-    def save_profile(self, sessions: List[TestSession], path: Path):
-        # Serialize sessions to JSON (as dicts)
+    def save_profile(self, sessions: List[TestSession], path: Path, append: bool = False):
+        """
+        Serialize sessions to JSON (as dicts) and save to file.
+        By default, overwrites any existing file. If append=True, appends to existing file (merges sessions).
+        """
+
         def session_to_dict(sess: TestSession):
             return {
                 "session_id": sess.session_id,
+                "sut_name": sess.sut_name,
                 "session_start_time": sess.session_start_time.isoformat(),
-                "outcome": sess.outcome,
+                "session_stop_time": sess.session_stop_time.isoformat(),
+                "session_duration": sess.session_duration,
+                "session_tags": sess.session_tags,
+                "testing_system": sess.testing_system,
                 "test_results": [
                     {
                         "nodeid": tr.nodeid,
-                        "outcome": tr.outcome,
+                        "outcome": (tr.outcome.to_str() if hasattr(tr.outcome, "to_str") else str(tr.outcome)),
                         "start_time": tr.start_time.isoformat(),
                         "stop_time": tr.stop_time.isoformat(),
                         "duration": tr.duration,
-                    } for tr in sess.test_results
-                ]
+                        "caplog": getattr(tr, "caplog", ""),
+                        "capstderr": getattr(tr, "capstderr", ""),
+                        "capstdout": getattr(tr, "capstdout", ""),
+                        "longreprtext": getattr(tr, "longreprtext", ""),
+                        "has_warning": getattr(tr, "has_warning", False),
+                    }
+                    for tr in sess.test_results
+                ],
+                "rerun_test_groups": [
+                    {
+                        "nodeid": rg.nodeid,
+                        "tests": [
+                            {
+                                "nodeid": t.nodeid,
+                                "outcome": (t.outcome.to_str() if hasattr(t.outcome, "to_str") else str(t.outcome)),
+                                "start_time": t.start_time.isoformat(),
+                                "stop_time": t.stop_time.isoformat(),
+                                "duration": t.duration,
+                                "caplog": getattr(t, "caplog", ""),
+                                "capstderr": getattr(t, "capstderr", ""),
+                                "capstdout": getattr(t, "capstdout", ""),
+                                "longreprtext": getattr(t, "longreprtext", ""),
+                                "has_warning": getattr(t, "has_warning", False),
+                            }
+                            for t in rg.tests
+                        ],
+                    }
+                    for rg in sess.rerun_test_groups
+                ],
             }
+
+        data = [session_to_dict(sess) for sess in sessions]
+        if append and path.exists():
+            with open(path, "r") as f:
+                try:
+                    existing = json.load(f)
+                except Exception:
+                    existing = []
+            data = existing + data
         with open(path, "w") as f:
-            json.dump([session_to_dict(s) for s in sessions], f, indent=2)
+            json.dump(data, f, indent=2)
+
 
 app = typer.Typer()
+
 
 @app.command()
 def generate(
     days: int = typer.Option(30, help="Number of days of history to generate."),
     sessions_per_day: int = typer.Option(4, help="Sessions per day."),
     suts: str = typer.Option("api-service,ui-service,db-service", help="Comma-separated SUT names."),
-    test_ids: str = typer.Option("test_login,test_logout,test_create_user,test_delete_user,test_update_profile,test_list_items,test_db_connect,test_db_query,test_api_health,test_ui_render", help="Comma-separated test ids."),
+    test_ids: str = typer.Option(
+        "test_login,test_logout,test_create_user,test_delete_user,test_update_profile,test_list_items,test_db_connect,test_db_query,test_api_health,test_ui_render",
+        help="Comma-separated test ids.",
+    ),
     trend_strength: float = typer.Option(0.7, help="Trend strength (0-1)."),
     anomaly_rate: float = typer.Option(0.05, help="Rate of correlated/anomalous failures."),
     correlation_groups: int = typer.Option(3, help="Number of correlated test groups."),
@@ -139,6 +243,7 @@ def generate(
     warning_rate: float = typer.Option(0.1, help="Warning rate."),
     seed: Optional[int] = typer.Option(None, help="Random seed for reproducibility."),
     output: Path = typer.Option("practice_profile.json", help="Output JSON file."),
+    append: bool = typer.Option(False, help="Append to existing file instead of overwriting."),
 ):
     """Generate historical test data and save as a profile (JSON)."""
     generator = HistoryDataGenerator(
@@ -154,8 +259,9 @@ def generate(
         seed=seed,
     )
     sessions = generator.generate()
-    generator.save_profile(sessions, output)
+    generator.save_profile(sessions, output, append)
     typer.echo(f"Generated {len(sessions)} sessions and saved to {output}")
+
 
 if __name__ == "__main__":
     app()

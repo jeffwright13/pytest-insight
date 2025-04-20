@@ -16,7 +16,18 @@ DEFAULT_STORAGE_PATH = Path.home() / ".pytest_insight" / "default.json"
 
 
 class StorageProfile:
-    """Represents a storage configuration profile, which is a named storage configuration used to differentiate between different storage backends, different file paths, different SUTs/setups/environments, etc."""
+    """
+    Represents a storage configuration profile, which is a named storage configuration used to differentiate between different storage backends, different file paths, different SUTs/setups/environments, etc.
+
+    Args:
+        name (str): Unique name for the profile.
+        storage_type (str): Type of storage (json, memory, etc.).
+        file_path (Optional[str]): Custom path for storage.
+        created (Optional[datetime]): Creation timestamp.
+        last_modified (Optional[datetime]): Last modification timestamp.
+        created_by (Optional[str]): Username of creator.
+        last_modified_by (Optional[str]): Username of last modifier.
+    """
 
     def __init__(
         self,
@@ -28,16 +39,17 @@ class StorageProfile:
         created_by: Optional[str] = None,
         last_modified_by: Optional[str] = None,
     ):
-        """Initialize a storage profile.
+        """
+        Initialize a storage profile.
 
         Args:
-            name: Unique name for the profile
-            storage_type: Type of storage (json, memory, etc.)
-            file_path: Optional custom path for storage. If None, a default path will be generated based on the profile name.
-            created: Timestamp when the profile was created
-            last_modified: Timestamp when the profile was last modified
-            created_by: Username of the person who created the profile
-            last_modified_by: Username of the person who last modified the profile
+            name (str): Unique name for the profile
+            storage_type (str): Type of storage (json, memory, etc.)
+            file_path (Optional[str]): Optional custom path for storage
+            created (Optional[datetime]): Timestamp when the profile was created
+            last_modified (Optional[datetime]): Timestamp when the profile was last modified
+            created_by (Optional[str]): Username of the person who created the profile
+            last_modified_by (Optional[str]): Username of the person who last modified the profile
         """
         self.name = name
         self.storage_type = storage_type
@@ -60,7 +72,12 @@ class StorageProfile:
             self.file_path = file_path
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert profile to dictionary for serialization."""
+        """
+        Convert profile to dictionary for serialization.
+
+        Returns:
+            dict: Dictionary representation of the profile.
+        """
         return {
             "name": self.name,
             "storage_type": self.storage_type,
@@ -73,7 +90,14 @@ class StorageProfile:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StorageProfile":
-        """Create profile from dictionary."""
+        """
+        Create profile from dictionary.
+
+        Args:
+            data (Dict[str, Any]): Dictionary representation of the profile.
+        Returns:
+            StorageProfile: Instantiated StorageProfile object.
+        """
         # Handle backward compatibility for profiles with old field names
         created_str = data.get("created") or data.get("created_at")
         last_modified_str = data.get("last_modified") or data.get("last_modified_at")
@@ -109,14 +133,18 @@ class StorageProfile:
 
 
 class ProfileManager:
-    """Manages storage profiles for pytest-insight. Profiles are used to differentiate between different storage
-    backends, different file paths, different SUTs/setups/environments, etc."""
+    """
+    Manages storage profiles for pytest-insight.
+
+    Profiles are used to differentiate between different storage backends, file paths, SUTs, setups, environments, etc.
+    """
 
     def __init__(self, config_path: Optional[Path] = None):
-        """Initialize profile manager.
+        """
+        Initialize profile manager.
 
         Args:
-            config_path: Optional custom path for profile configuration
+            config_path (Optional[Path]): Optional custom path for profile configuration.
         """
         # Create the main directory structure
         base_dir = Path.home() / ".pytest_insight"
@@ -134,7 +162,12 @@ class ProfileManager:
         self._load_profiles()
 
     def _load_profiles(self) -> None:
-        """Load profiles from configuration file."""
+        """
+        Load profiles from configuration file.
+
+        Returns:
+            None
+        """
         if not self.config_path.exists():
             # Create default profile
             default_profile = StorageProfile("default", "json")
@@ -170,7 +203,12 @@ class ProfileManager:
             self._save_profiles()
 
     def _save_profiles(self) -> None:
-        """Save profiles to disk."""
+        """
+        Save profiles to disk.
+
+        Returns:
+            None
+        """
         # Don't save if we're in memory-only mode
         if hasattr(self, "memory_only") and self.memory_only:
             return
@@ -212,15 +250,15 @@ class ProfileManager:
         shutil.move(tmp.name, str(self.config_path))
 
     def _create_profile(self, name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
-        """Create a new storage profile.
+        """
+        Create a new storage profile.
 
         Args:
-            name: Unique name for the profile
-            storage_type: Type of storage (json, memory, etc.)
-            file_path: Optional custom path for storage
-
+            name (str): Unique name for the profile
+            storage_type (str): Type of storage (json, memory, etc.)
+            file_path (Optional[str]): Optional custom path for storage
         Returns:
-            The created profile
+            StorageProfile: The created profile
         """
         if name in self.profiles:
             raise ValueError(f"Profile '{name}' already exists")
@@ -231,14 +269,13 @@ class ProfileManager:
         return profile
 
     def get_profile(self, name: Optional[str] = None) -> StorageProfile:
-        """Get a profile by name.
+        """
+        Get a profile by name.
 
         Args:
-            name: Name of the profile to get, or None for active profile
-
+            name (Optional[str]): Name of the profile to get, or None for active profile
         Returns:
-            The requested profile
-
+            StorageProfile: The requested profile
         Raises:
             ValueError: If profile does not exist
         """
@@ -255,14 +292,13 @@ class ProfileManager:
         return self.profiles[profile_name]
 
     def switch_profile(self, name: str) -> StorageProfile:
-        """Switch to a different profile.
+        """
+        Switch to a different profile.
 
         Args:
-            name: Name of the profile to switch to
-
+            name (str): Name of the profile to switch to
         Returns:
-            The activated profile
-
+            StorageProfile: The activated profile
         Raises:
             ValueError: If profile does not exist
         """
@@ -274,11 +310,11 @@ class ProfileManager:
         return self.profiles[name]
 
     def delete_profile(self, name: str) -> None:
-        """Delete a profile.
+        """
+        Delete a profile.
 
         Args:
-            name: Name of the profile to delete
-
+            name (str): Name of the profile to delete
         Raises:
             ValueError: If profile does not exist or is the active profile
         """
@@ -297,14 +333,14 @@ class ProfileManager:
     def list_profiles(
         self, storage_type: Optional[str] = None, pattern: Optional[str] = None
     ) -> Dict[str, StorageProfile]:
-        """List available profiles, optionally filtered by storage type and/or name pattern.
+        """
+        List available profiles, optionally filtered by storage type and/or name pattern.
 
         Args:
-            storage_type: Optional filter by storage type ('json' or 'memory')
-            pattern: Optional glob pattern to filter profile names
-
+            storage_type (Optional[str]): Optional filter by storage type ('json' or 'memory')
+            pattern (Optional[str]): Optional glob pattern to filter profile names
         Returns:
-            Dictionary of profile names to profile objects that match the filters
+            dict: Dictionary of profile names to profile objects that match the filters
         """
         result = self.profiles.copy()
 
@@ -321,18 +357,20 @@ class ProfileManager:
         return result
 
     def get_active_profile(self) -> StorageProfile:
-        """Get the currently active profile.
+        """
+        Get the currently active profile.
 
         Returns:
-            The active profile
+            StorageProfile: The active profile
         """
         return self.get_profile(self.active_profile_name)
 
     def backup_profiles(self) -> Optional[Path]:
-        """Create a timestamped backup of the profiles file.
+        """
+        Create a timestamped backup of the profiles file.
 
         Returns:
-            Path to the created backup file, or None if backup couldn't be created
+            Path: Path to the created backup file, or None if backup couldn't be created
         """
         if not self.config_path.exists():
             print("No profiles file to backup")
@@ -359,10 +397,13 @@ class ProfileManager:
             return None
 
     def _cleanup_old_backups(self, max_backups: int = 10) -> None:
-        """Remove old backups, keeping only the most recent ones.
+        """
+        Remove old backups, keeping only the most recent ones.
 
         Args:
-            max_backups: Maximum number of backups to keep
+            max_backups (int): Maximum number of backups to keep
+        Returns:
+            None
         """
         backup_dir = self.config_path.parent / "backups"
         if not backup_dir.exists():
@@ -383,10 +424,11 @@ class ProfileManager:
                 print(f"Failed to remove old backup {old_backup}: {e}")
 
     def list_backups(self) -> List[Dict[str, Any]]:
-        """List available backup files with metadata.
+        """
+        List available backup files with metadata.
 
         Returns:
-            List of dictionaries with backup metadata
+            list: List of dictionaries with backup metadata
         """
         backup_dir = self.config_path.parent / "backups"
         if not backup_dir.exists():
@@ -430,13 +472,13 @@ class ProfileManager:
         return backups
 
     def restore_from_backup(self, backup_path: Union[str, Path]) -> bool:
-        """Restore profiles from a backup file.
+        """
+        Restore profiles from a backup file.
 
         Args:
-            backup_path: Path to the backup file to restore from
-
+            backup_path (Union[str, Path]): Path to the backup file to restore from
         Returns:
-            True if restore was successful, False otherwise
+            bool: True if restore was successful, False otherwise
         """
         backup_path = Path(backup_path) if isinstance(backup_path, str) else backup_path
 
@@ -463,10 +505,19 @@ class ProfileManager:
 
 
 class BaseStorage:
-    """Abstract interface for persisting test session data."""
+    """
+    Abstract interface for persisting test session data.
+    """
 
     def save_session(self, test_session: TestSession) -> None:
-        """Persist a test session."""
+        """
+        Persist a test session.
+
+        Args:
+            test_session (TestSession): Test session to save
+        Raises:
+            NotImplementedError: If not implemented by subclass
+        """
         raise NotImplementedError(
             f"{self.__class__.__name__} does not implement the save_session method...did you mean to call it on the {self.__class__.__name__} class?"
         )
@@ -476,7 +527,8 @@ class BaseStorage:
         chunk_size: int = 1000,
         **kwargs,
     ) -> List[TestSession]:
-        """Retrieve past test sessions.
+        """
+        Retrieve past test sessions.
 
         This base implementation provides a common interface for all storage types.
         Subclasses can implement additional parameters via **kwargs.
@@ -485,73 +537,97 @@ class BaseStorage:
             chunk_size: Number of sessions to load at once (for large files)
 
         Returns:
-            List of TestSession objects
+            list: List of TestSession objects
+        Raises:
+            NotImplementedError: If not implemented by subclass
         """
         raise NotImplementedError(
             f"{self.__class__.__name__} does not implement the load_sessions method...did you mean to call it on the {self.__class__.__name__} class?"
         )
 
     def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
-        """Remove stored sessions.
+        """
+        Remove stored sessions.
 
         Args:
-            sessions_to_clear: Optional list of TestSession objects to remove.
+            sessions_to_clear (Optional[List[TestSession]]): Optional list of TestSession objects to remove.
                               If None, removes all sessions.
-
         Returns:
-            Number of sessions removed
+            int: Number of sessions removed
+        Raises:
+            NotImplementedError: If not implemented by subclass
         """
         raise NotImplementedError(
             f"{self.__class__.__name__} does not implement the clear_sessions method...did you mean to call it on the {self.__class__.__name__} class?"
         )
 
     def get_session_by_id(self, session_id: str) -> Optional[TestSession]:
-        """Retrieve a test session by its unique identifier."""
+        """
+        Retrieve a test session by its unique identifier.
+
+        Args:
+            session_id (str): The ID of the session to retrieve
+        Returns:
+            TestSession: The TestSession with the matching ID or None if not found
+        """
         sessions = self.load_sessions()
         return next((s for s in sessions if s.session_id == session_id), None)
 
     def get_last_session(self) -> Optional[TestSession]:
-        """Get the most recent test session.
+        """
+        Get the most recent test session.
 
         Returns:
-            The most recent session, or None if no sessions exist
+            TestSession: The most recent session, or None if no sessions exist
         """
         sessions = self.load_sessions()
         return max(sessions, key=lambda s: s.session_start_time) if sessions else None
 
 
 class InMemoryStorage(BaseStorage):
-    """In-memory storage implementation."""
+    """
+    In-memory storage implementation.
+    """
 
     def __init__(self, sessions: Optional[List[TestSession]] = None):
-        """Initialize storage with optional sessions."""
+        """
+        Initialize storage with optional sessions.
+
+        Args:
+            sessions (Optional[List[TestSession]]): Optional list of sessions to initialize with
+        """
         super().__init__()
         self._sessions = sessions if sessions is not None else []
 
     def load_sessions(self, **kwargs) -> List[TestSession]:
-        """Get all stored sessions.
+        """
+        Get all stored sessions.
 
         Args:
             **kwargs: Additional parameters (ignored in memory storage)
-
         Returns:
-            List of TestSession objects
+            list: List of TestSession objects
         """
         return self._sessions.copy()
 
     def save_session(self, session: TestSession) -> None:
-        """Save a test session."""
+        """
+        Save a test session.
+
+        Args:
+            session (TestSession): Test session to save
+        """
         self._sessions.append(session)
 
     def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
-        """Clear all sessions or specific sessions from storage.
+        """
+        Clear all sessions or specific sessions from storage.
 
         Args:
-            sessions_to_clear: Optional list of session IDs to clear.
+            sessions_to_clear (Optional[List[TestSession]]): Optional list of session IDs to clear.
                                If None, all sessions are cleared.
-
         Returns:
-            Number of sessions removed
+            int: Number of sessions removed
         """
         # Get current sessions count
         initial_count = len(self._sessions)
@@ -568,15 +644,18 @@ class InMemoryStorage(BaseStorage):
 
 
 class JSONStorage(BaseStorage):
-    """Storage for test sessions using JSON files."""
+    """
+    Storage for test sessions using JSON files.
+    """
 
     def __init__(self, file_path: Optional[Path] = None, profile_name: Optional[str] = None):
-        """Initialize storage with optional custom file path.
+        """
+        Initialize storage with optional custom file path.
 
         Args:
-            file_path: Optional custom path for session storage.
+            file_path (Optional[Path]): Optional custom path for session storage.
                       If not provided, uses ~/.pytest_insight/sessions.json
-            profile_name: Optional profile name for this storage instance.
+            profile_name (Optional[str]): Optional profile name for this storage instance.
         """
         super().__init__()
         self.file_path = Path(file_path) if file_path else DEFAULT_STORAGE_PATH
@@ -592,14 +671,15 @@ class JSONStorage(BaseStorage):
         use_streaming: bool = False,
         **kwargs,
     ) -> List[TestSession]:
-        """Load all test sessions from storage.
+        """
+        Load all test sessions from storage.
 
         Args:
-            chunk_size: Number of sessions to load at once (for large files)
-            use_streaming: Whether to use streaming parser for large files (requires ijson)
-
+            chunk_size (int): Number of sessions to load at once (for large files)
+            use_streaming (bool): Whether to use streaming parser for large files (requires ijson)
+            **kwargs: Additional parameters (ignored in JSON storage)
         Returns:
-            List of TestSession objects
+            list: List of TestSession objects
         """
         # Use streaming parser for large files if requested
         if use_streaming:
@@ -658,13 +738,13 @@ class JSONStorage(BaseStorage):
         return sessions
 
     def _load_sessions_streaming(self, chunk_size: int = 1000) -> List[TestSession]:
-        """Load sessions using a streaming JSON parser for large files.
+        """
+        Load sessions using a streaming JSON parser for large files.
 
         Args:
-            chunk_size: Number of sessions to process at once
-
+            chunk_size (int): Number of sessions to process at once
         Returns:
-            List of TestSession objects
+            list: List of TestSession objects
         """
         try:
             import ijson
@@ -715,10 +795,11 @@ class JSONStorage(BaseStorage):
             return []
 
     def save_session(self, session: TestSession) -> None:
-        """Save a single test session to storage.
+        """
+        Save a single test session to storage.
 
         Args:
-            session: Test session to save
+            session (TestSession): Test session to save
         """
 
         try:
@@ -734,10 +815,11 @@ class JSONStorage(BaseStorage):
             print(f"Warning: Failed to save session to {self.file_path}: {e}")
 
     def save_sessions(self, sessions: List[TestSession]) -> None:
-        """Save multiple test sessions to storage.
+        """
+        Save multiple test sessions to storage.
 
         Args:
-            sessions: List of test sessions to save
+            sessions (List[TestSession]): List of test sessions to save
         """
 
         try:
@@ -746,14 +828,14 @@ class JSONStorage(BaseStorage):
             print(f"Warning: Failed to save sessions to {self.file_path}: {e}")
 
     def clear_sessions(self, sessions_to_clear: Optional[List[TestSession]] = None) -> int:
-        """Remove stored sessions.
+        """
+        Remove stored sessions.
 
         Args:
-            sessions_to_clear: Optional list of TestSession objects to remove.
+            sessions_to_clear (Optional[List[TestSession]]): Optional list of TestSession objects to remove.
                               If None, removes all sessions.
-
         Returns:
-            Number of sessions removed
+            int: Number of sessions removed
         """
         if sessions_to_clear is None:
             # Clear all sessions
@@ -781,14 +863,20 @@ class JSONStorage(BaseStorage):
             return initial_count - len(remaining_sessions)
 
     def clear(self) -> None:
-        """Clear all sessions from storage."""
+        """
+        Clear all sessions from storage.
+
+        Returns:
+            None
+        """
         self._write_json_safely([])
 
     def get_last_session(self) -> Optional[TestSession]:
-        """Get the most recent test session.
+        """
+        Get the most recent test session.
 
         Returns:
-            The most recent TestSession or None if no sessions exist
+            TestSession: The most recent TestSession or None if no sessions exist
         """
         sessions = self.load_sessions()
         if not sessions:
@@ -798,13 +886,13 @@ class JSONStorage(BaseStorage):
         return sorted(sessions, key=lambda s: s.session_start_time, reverse=True)[0]
 
     def get_session_by_id(self, session_id: str) -> Optional[TestSession]:
-        """Get a test session by its ID.
+        """
+        Get a test session by its ID.
 
         Args:
-            session_id: The ID of the session to retrieve
-
+            session_id (str): The ID of the session to retrieve
         Returns:
-            The TestSession with the matching ID or None if not found
+            TestSession: The TestSession with the matching ID or None if not found
         """
         sessions = self.load_sessions()
         for session in sessions:
@@ -813,12 +901,13 @@ class JSONStorage(BaseStorage):
         return None
 
     def export_sessions(self, export_path: str, days: Optional[int] = None, output_format: str = "json"):
-        """Export test sessions to a file.
+        """
+        Export test sessions to a file.
 
         Args:
-            export_path: Path to export file
-            days: Optional number of days to include in export
-            output_format: Optional output format (json or csv)
+            export_path (str): Path to export file
+            days (Optional[int]): Optional number of days to include in export
+            output_format (str): Optional output format (json or csv)
         """
         # Get sessions
         sessions = self.load_sessions()
@@ -846,17 +935,17 @@ class JSONStorage(BaseStorage):
             raise ValueError(f"Unsupported output format: {output_format}")
 
     def import_sessions(self, import_path: str, merge_strategy: str = "skip_existing") -> Dict[str, int]:
-        """Import sessions from a file exported by another instance.
+        """
+        Import sessions from a file exported by another instance.
 
         Args:
-            import_path: Path to the file containing exported sessions
-            merge_strategy: How to handle duplicate session IDs:
+            import_path (str): Path to the file containing exported sessions
+            merge_strategy (str): How to handle duplicate session IDs:
                 - "skip_existing": Skip sessions that already exist (default)
                 - "replace_existing": Replace existing sessions with imported ones
                 - "keep_both": Keep both versions, appending a suffix to imported IDs
-
         Returns:
-            Dictionary with import statistics:
+            dict: Dictionary with import statistics:
                 - total: Total number of sessions in the import file
                 - imported: Number of sessions successfully imported
                 - skipped: Number of sessions skipped
@@ -936,12 +1025,15 @@ class JSONStorage(BaseStorage):
         return stats
 
     def _write_json_safely(self, sessions_data: List[Dict]) -> None:
-        """Write JSON data safely to avoid corruption.
+        """
+        Write JSON data safely to avoid corruption.
 
         Uses file locking to prevent concurrent writes from multiple processes.
 
         Args:
-            sessions_data: List of session data dictionaries
+            sessions_data (List[Dict]): List of session data dictionaries
+        Returns:
+            None
         """
         # Create a lock file path
         lock_file = f"{self.file_path}.lock"
@@ -976,10 +1068,11 @@ class JSONStorage(BaseStorage):
                 print(f"Warning: Could not delete lock file {lock_file}")
 
     def _read_json_safely(self) -> Any:
-        """Read JSON data from storage file. Creates a backup if the file is corrupted, then returns empty list. Also returns empty list if file doesn't exist or is invalid.
+        """
+        Read JSON data from storage file. Creates a backup if the file is corrupted, then returns empty list. Also returns empty list if file doesn't exist or is invalid.
 
         Returns:
-            Parsed JSON data, or empty list if file was corrupted, doesn't exist or is invalid
+            Any: Parsed JSON data, or empty list if file was corrupted, doesn't exist or is invalid
         """
         if not self.file_path.exists():
             return []
@@ -999,17 +1092,17 @@ class JSONStorage(BaseStorage):
 def get_storage_instance(
     profile_name: Optional[str] = None,
 ) -> BaseStorage:
-    """Get a storage instance configured according to the specified profile.
+    """
+    Get a storage instance configured according to the specified profile.
 
     This function returns a storage instance configured according to the specified profile.
     If no profile is specified, it will try to use the profile from the PYTEST_INSIGHT_PROFILE
     environment variable. If that's not set, it will use the active profile from the profile manager.
 
     Args:
-        profile_name: Optional profile name to use
-
+        profile_name (Optional[str]): Optional profile name to use
     Returns:
-        Configured storage instance
+        BaseStorage: Configured storage instance
     """
     profile_manager = get_profile_manager()
 
@@ -1070,10 +1163,11 @@ _profile_manager = None
 
 
 def get_profile_manager() -> ProfileManager:
-    """Get the global profile manager instance.
+    """
+    Get the global profile manager instance.
 
     Returns:
-        ProfileManager instance
+        ProfileManager: ProfileManager instance
     """
     global _profile_manager
     if _profile_manager is None:
@@ -1082,16 +1176,15 @@ def get_profile_manager() -> ProfileManager:
 
 
 def create_profile(name: str, storage_type: str = "json", file_path: Optional[str] = None) -> StorageProfile:
-    """Create a new storage profile.
+    """
+    Create a new storage profile.
 
     Args:
-        name: Unique name for the profile
-        storage_type: Type of storage (json, memory, etc.)
-        file_path: Optional custom path for storage
-
+        name (str): Unique name for the profile
+        storage_type (str): Type of storage (json, memory, etc.)
+        file_path (Optional[str]): Optional custom path for storage
     Returns:
-        The created profile
-
+        StorageProfile: The created profile
     Raises:
         ValueError: If profile already exists
     """
@@ -1109,47 +1202,48 @@ def create_profile(name: str, storage_type: str = "json", file_path: Optional[st
 
 
 def switch_profile(name: str) -> StorageProfile:
-    """Switch to a different profile.
+    """
+    Switch to a different profile.
 
     Args:
-        name: Name of the profile to switch to
-
+        name (str): Name of the profile to switch to
     Returns:
-        The activated profile
+        StorageProfile: The activated profile
     """
     return get_profile_manager().switch_profile(name)
 
 
 def list_profiles(storage_type: Optional[str] = None, pattern: Optional[str] = None) -> Dict[str, StorageProfile]:
-    """List available profiles, optionally filtered by storage type and/or name pattern.
+    """
+    List available profiles, optionally filtered by storage type and/or name pattern.
 
     Args:
-        storage_type: Optional filter by storage type ('json' or 'memory')
-        pattern: Optional glob pattern to filter profile names
-
+        storage_type (Optional[str]): Optional filter by storage type ('json' or 'memory')
+        pattern (Optional[str]): Optional glob pattern to filter profile names
     Returns:
-        Dictionary of profile names to profile objects that match the filters
+        dict: Dictionary of profile names to profile objects that match the filters
     """
     return get_profile_manager().list_profiles(storage_type, pattern)
 
 
 def get_active_profile() -> StorageProfile:
-    """Get the currently active profile.
+    """
+    Get the currently active profile.
 
     Returns:
-        The active profile
+        StorageProfile: The active profile
     """
     return get_profile_manager().get_active_profile()
 
 
 def get_profile_metadata(name: Optional[str] = None) -> Dict[str, Any]:
-    """Get metadata about a profile or all profiles.
+    """
+    Get metadata about a profile or all profiles.
 
     Args:
-        name: Optional name of the profile to get metadata for. If None, returns metadata for all profiles.
-
+        name (Optional[str]): Optional name of the profile to get metadata for. If None, returns metadata for all profiles.
     Returns:
-        Dictionary containing metadata about the profile(s)
+        dict: Dictionary containing metadata about the profile(s)
     """
     profile_manager = get_profile_manager()
 
@@ -1216,15 +1310,15 @@ def load_sessions(
     chunk_size: int = 1000,
     use_streaming: bool = False,
 ) -> List[TestSession]:
-    """Load sessions from the specified storage profile.
+    """
+    Load sessions from the specified storage profile.
 
     Args:
-        profile_name: Storage profile name to use
-        chunk_size: Number of sessions to load at once (for large files)
-        use_streaming: Whether to use streaming parser for large files (requires ijson)
-
+        profile_name (Optional[str]): Storage profile name to use
+        chunk_size (int): Number of sessions to load at once (for large files)
+        use_streaming (bool): Whether to use streaming parser for large files (requires ijson)
     Returns:
-        List of TestSession objects
+        list: List of TestSession objects
     """
     storage_instance = get_storage_instance(profile_name=profile_name)
 

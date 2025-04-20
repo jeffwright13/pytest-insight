@@ -1,7 +1,9 @@
 from pytest_insight.core.models import TestSession
 
+
 class MetaInsight:
     """Insights about the test process itself (maintenance burden, stability over time)."""
+
     def __init__(self, sessions: list[TestSession]):
         self.sessions = sessions
 
@@ -14,5 +16,13 @@ class MetaInsight:
         return {
             "unique_tests": len(unique_tests),
             "total_sessions": len(self.sessions),
-            "tests_per_session": len(unique_tests) / len(self.sessions) if self.sessions else None
+            "tests_per_session": (len(unique_tests) / len(self.sessions) if self.sessions else None),
         }
+
+    def insight(self, kind: str = "maintenance_burden"):
+        burden = self.maintenance_burden()
+        return (
+            f"Unique tests: {burden['unique_tests']}, "
+            f"Sessions: {burden['total_sessions']}, "
+            f"Tests/session: {burden['tests_per_session']:.2f}" if burden['tests_per_session'] is not None else "Tests/session: N/A"
+        )

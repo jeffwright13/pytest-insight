@@ -16,6 +16,8 @@ class NormalizedDatetime:
     """
 
     def __init__(self, dt: dt_module.datetime):
+        if isinstance(dt, NormalizedDatetime):
+            dt = dt.dt
         self.dt = dt
         self.has_tzinfo = dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
 
@@ -29,9 +31,25 @@ class NormalizedDatetime:
         """Create a NormalizedDatetime from an ISO 8601 string."""
         return cls(dt_module.datetime.fromisoformat(iso_str))
 
+    @classmethod
+    def from_json(cls, value):
+        """Create NormalizedDatetime from ISO string, datetime, or None."""
+        if value is None:
+            return None
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, dt_module.datetime):
+            return cls(value)
+        # Assume ISO string
+        return cls(dt_module.datetime.fromisoformat(value.replace("Z", "+00:00")))
+
     def to_iso(self):
         """Return ISO 8601 formatted string for the wrapped datetime."""
         return self.dt.isoformat()
+
+    def to_json(self):
+        """Return ISO string for JSON serialization."""
+        return self.dt.isoformat().replace("+00:00", "Z") if self.dt.tzinfo and self.dt.tzinfo.utcoffset(self.dt) == dt_module.timedelta(0) else self.dt.isoformat()
 
     def __getattr__(self, name):
         # Delegate all unknown attributes/methods to the underlying datetime

@@ -2383,7 +2383,7 @@ wheels = [
 
 [[package]]
 name = "pytest-insight"
-version = "0.9.1"
+version = "0.9.2"
 source = { editable = "." }
 dependencies = [
     { name = "colorama" },
@@ -2392,6 +2392,8 @@ dependencies = [
     { name = "prompt-toolkit" },
     { name = "pytest" },
     { name = "rich" },
+    { name = "sparklines" },
+    { name = "tabulate" },
     { name = "typer" },
 ]
 
@@ -2481,7 +2483,9 @@ requires-dist = [
     { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.0.270" },
     { name = "scikit-learn", marker = "extra == 'visualize'", specifier = ">=1.2.0" },
+    { name = "sparklines", specifier = ">=0.5.0" },
     { name = "streamlit", marker = "extra == 'visualize'", specifier = ">=1.22.0" },
+    { name = "tabulate", specifier = ">=0.9.0" },
     { name = "typer", specifier = ">=0.15.0" },
     { name = "uvicorn", marker = "extra == 'visualize'", specifier = ">=0.20.0" },
 ]
@@ -3176,6 +3180,15 @@ wheels = [
 ]
 
 [[package]]
+name = "sparklines"
+version = "0.5.0"
+source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }
+sdist = { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/42/10/a55ffb7b5ae130804ebcb53ecbb711a902403fe7efe67739aceeb4daf8f5/sparklines-0.5.0.tar.gz", hash = "sha256:069e48633fc1af354e9bbdfd0a644c1279d6632a572446aa9d741105f1177000" }
+wheels = [
+    { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/e9/da/a58f65cdf8117ae679ee4ddb3ab502d6ded7be2616d13cb179151e045b94/sparklines-0.5.0-py3-none-any.whl", hash = "sha256:436861df6382a5cf663ea9e0a52dcb5d4f95f5111f8e01eb637eca529e3f6807" },
+]
+
+[[package]]
 name = "stack-data"
 version = "0.6.3"
 source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }
@@ -3230,6 +3243,15 @@ dependencies = [
 sdist = { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/3e/c0/7286284567e5045f0c587c426d0c41aee5d10c0a2e360e627a83037e9f0c/streamlit-1.44.1.tar.gz", hash = "sha256:c6914ed6d5b76870b461510476806db370f36425ae0e6654d227c988288198d3" }
 wheels = [
     { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/eb/17/fc425e1d4d86e31b2aaf0812a2ef2163763a0670d671720c7c36e8679323/streamlit-1.44.1-py3-none-any.whl", hash = "sha256:9fe355f58b11f4eb71e74f115ce1f38c4c9eaff2733e6bcffb510ac1298a5990" },
+]
+
+[[package]]
+name = "tabulate"
+version = "0.9.0"
+source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }
+sdist = { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c" }
+wheels = [
+    { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f" },
 ]
 
 [[package]]

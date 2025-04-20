@@ -1,7 +1,7 @@
 import datetime as dt
 
 import pytest
-from pytest_insight.utils import (
+from pytest_insight.utils.utils import (
     NormalizedDatetime,
     create_after_filter,
     create_after_or_equals_filter,
@@ -213,7 +213,7 @@ def test_normalized_datetime_now(monkeypatch):
     """Test that NormalizedDatetime.now() returns a NormalizedDatetime wrapping the current datetime."""
     import datetime as dt
 
-    from pytest_insight.utils import NormalizedDatetime
+    from pytest_insight.utils.utils import NormalizedDatetime
 
     # Patch datetime.now to return a fixed value
     fixed_now = dt.datetime(2025, 4, 18, 19, 0, 0)
@@ -223,7 +223,7 @@ def test_normalized_datetime_now(monkeypatch):
         def now(cls, tz=None):
             return fixed_now.replace(tzinfo=tz)
 
-    monkeypatch.setattr("pytest_insight.utils.datetime", FixedDatetime)
+    monkeypatch.setattr("pytest_insight.utils.utils.datetime", FixedDatetime)
 
     print("NormalizedDatetime loaded from:", NormalizedDatetime.__module__)
     print("Class dict:", dir(NormalizedDatetime))
