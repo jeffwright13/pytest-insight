@@ -21,9 +21,9 @@ from pytest_insight.core.storage import (
     get_profile_manager,
     get_storage_instance,
 )
-from pytest_insight.utils.terminal_output import render_insights_in_terminal
-from pytest_insight.utils.config import load_terminal_config, terminal_output_enabled
 from pytest_insight.insight_api import InsightAPI
+from pytest_insight.utils.config import load_terminal_config, terminal_output_enabled
+from pytest_insight.utils.terminal_output import render_insights_in_terminal
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ def pytest_configure(config: Config):
         {
             "insight_profile": "default",
             "insight_system_under_test_name": None,
-            "insight_testing_system_name": None,
+            "insight_testing_system": None,
         },
     )
 
@@ -115,12 +115,15 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         {
             "insight_profile": None,
             "insight_sut_name": None,
-            "insight_testing_system_name": None,
+            "insight_testing_system": None,
         },
     )
     sut_name = config_values["insight_sut_name"] or "unknown-sut"
     hostname = socket.gethostname()
-    testing_system_name = config_values["insight_testing_system_name"] or hostname
+    testing_system_name = config_values["insight_testing_system"] or hostname
+    # DEBUG: Print config values and resolved testing_system_name
+    print(f"[pytest-insight DEBUG] config_values: {config_values}", file=sys.stderr)
+    print(f"[pytest-insight DEBUG] Resolved testing_system_name: {testing_system_name}", file=sys.stderr)
     test_results = []
     session_start = None
     session_end = None
@@ -151,7 +154,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         rerun_test_groups=[],
         test_results=test_results,
     )
-    session.testing_system['name'] = testing_system_name  # Ensure CLI/system name is visible in summary
+    session.testing_system["name"] = testing_system_name  # Ensure CLI/system name is visible in summary
     try:
         storage.save_session(session)
     except Exception as e:

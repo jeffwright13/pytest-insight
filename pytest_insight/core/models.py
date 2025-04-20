@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+
 class TestOutcome(Enum):
     """
     Test outcome states.
@@ -28,6 +29,7 @@ class TestOutcome(Enum):
         RERUN: Test was rerun
         ERROR: Test errored
     """
+
     __test__ = False  # Tell Pytest this is NOT a test class
 
     PASSED = "PASSED"  # Internal representation in UPPERCASE
@@ -83,6 +85,7 @@ class TestOutcome(Enum):
         """
         return self in (self.FAILED, self.ERROR)
 
+
 @dataclass
 class TestResult:
     """
@@ -100,6 +103,7 @@ class TestResult:
         longreprtext (str): Long representation of failure, if any.
         has_warning (bool): Whether the test had a warning.
     """
+
     __test__ = False  # Tell Pytest this is NOT a test class
 
     nodeid: str
@@ -189,6 +193,7 @@ class TestResult:
             has_warning=data.get("has_warning", False),
         )
 
+
 @dataclass
 class RerunTestGroup:
     """
@@ -198,6 +203,7 @@ class RerunTestGroup:
         nodeid (str): Test node ID.
         tests (List[TestResult]): List of TestResult objects for each rerun.
     """
+
     __test__ = False
 
     nodeid: str
@@ -213,17 +219,20 @@ class RerunTestGroup:
         self.tests.append(result)
         self.tests.sort(key=lambda t: t.start_time)
 
-    def final_outcome(self) -> Optional[TestOutcome]:
+    @property
+    def final_outcome(self):
         """
         Get the outcome of the final test (non-RERUN and non-ERROR).
 
         Returns:
             Optional[TestOutcome]: Final outcome if available.
         """
-        for t in reversed(self.tests):
-            if t.outcome not in (TestOutcome.RERUN, TestOutcome.ERROR):
-                return t.outcome
-        return None
+        from pytest_insight.core.models import TestOutcome
+
+        outcomes = [t.outcome for t in self.tests]
+        if TestOutcome.FAILED in outcomes:
+            return TestOutcome.FAILED
+        return outcomes[-1] if outcomes else None
 
     def to_dict(self) -> Dict:
         """
@@ -251,6 +260,7 @@ class RerunTestGroup:
         group.tests = [TestResult.from_dict(t) for t in data["tests"]]
         return group
 
+
 @dataclass
 class TestSession:
     """
@@ -267,6 +277,7 @@ class TestSession:
         rerun_test_groups (List[RerunTestGroup]): Groups of rerun tests.
         test_results (List[TestResult]): List of test results in the session.
     """
+
     __test__ = False  # Tell Pytest this is NOT a test class
 
     sut_name: str = ""
@@ -327,6 +338,7 @@ class TestSession:
             TestSession: Instantiated TestSession object.
         """
         from pytest_insight.utils.utils import NormalizedDatetime
+
         if not isinstance(data, dict):
             raise ValueError(f"Invalid data for TestSession. Expected dict, got {type(data)}")
 

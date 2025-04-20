@@ -1,7 +1,3 @@
-from typing import Any, Optional
-
-from pytest_insight.core.models import TestSession
-from pytest_insight.core.query import SessionQuery, TestQuery
 from pytest_insight.facets.comparative import ComparativeInsight
 from pytest_insight.facets.meta import MetaInsight
 from pytest_insight.facets.predictive import PredictiveInsight
@@ -24,12 +20,13 @@ class InsightAPI:
             self.sessions = sessions
         elif profile is not None:
             from pytest_insight.core.storage import get_storage_instance
+
             storage = get_storage_instance(profile)
             self.sessions = storage.load_sessions()
         else:
             self.sessions = []
 
-    def test(self, nodeid=None):
+    def test(self, nodeid=None, **kwargs):
         """Return TestInsight for a single test or all tests if nodeid is None."""
         if nodeid is not None:
             filtered = []
@@ -45,8 +42,8 @@ class InsightAPI:
         """Return TrendInsight for all sessions."""
         return TrendInsight(self.sessions)
 
-    def session(self, session_id=None):
-        """Return SessionInsight for a single session or all sessions if session_id is None."""
+    def session(self, session_id=None, **kwargs):
+        """Return SessionInsight for all or a filtered session."""
         if session_id is not None:
             filtered = [s for s in self.sessions if getattr(s, "session_id", None) == session_id]
             return SessionInsight(filtered)
@@ -69,6 +66,14 @@ class InsightAPI:
         """Return MetaInsight for meta analytics."""
         return MetaInsight(self.sessions)
 
+    def summary(self):
+        """Return a SummaryInsight object for the sessions."""
+        return SummaryInsight(self.sessions)
+
+    def available_insights(self):
+        """Return a list of available insight kinds."""
+        return ["summary", "session", "sessions", "test", "tests", "trend", "compare", "predictive", "meta", "temporal"]
+
     # Fluent API example methods for filtering, etc. (stubs)
     def filter(self, **kwargs):
         # Example: filter(name="test_login")
@@ -81,17 +86,25 @@ class InsightAPI:
         return InsightAPI(self.sessions)  # Placeholder
 
     # Unified insight access
-    def insight(self, kind: str):
+    def insight(self, kind: str, **kwargs):
         # Example: api.insight("reliability")
         # Dispatch to the correct facet
+        if kind == "summary":
+            return SummaryInsight(self.sessions)
         if kind == "reliability":
-            return self.test().insight("reliability")
+            return self.test().insight("reliability", **kwargs)
         if kind == "trend":
-            return self.trend().insight("trend")
+            return self.trend(**kwargs)
         if kind == "session":
-            return self.session().insight("health")
+            return self.session(**kwargs)
+        if kind == "test":
+            return self.test(**kwargs)
         if kind == "predictive":
-            return self.predictive().insight("predictive")
+            return self.predictive(**kwargs)
         if kind == "meta":
-            return self.meta().insight("meta")
+            return self.meta(**kwargs)
+        if kind == "compare":
+            return self.compare(**kwargs)
+        if kind == "temporal":
+            return self.temporal(**kwargs)
         raise ValueError(f"Unknown insight kind: {kind}")
