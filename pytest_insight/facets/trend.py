@@ -114,3 +114,17 @@ class TrendInsight:
             "failure_trends": self.failure_trends(),
             "emerging_patterns": self.emerging_patterns() if hasattr(self, "emerging_patterns") else None,
         }
+
+    def filter(self, sut: str = None, nodeid: str = None):
+        """Return a new TrendInsight filtered by SUT or test nodeid.
+        Args:
+            sut (str): Filter sessions by SUT name.
+            nodeid (str): Only consider trends for a specific test nodeid.
+        """
+        filtered_sessions = self.sessions
+        if sut is not None:
+            filtered_sessions = [s for s in filtered_sessions if getattr(s, "sut_name", None) == sut]
+        if nodeid is not None:
+            # Only keep sessions that have at least one test with the nodeid
+            filtered_sessions = [s for s in filtered_sessions if any(getattr(t, "nodeid", None) == nodeid for t in getattr(s, "test_results", []))]
+        return TrendInsight(filtered_sessions)
