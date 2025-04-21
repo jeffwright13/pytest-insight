@@ -1,4 +1,5 @@
 from pytest_insight.core.models import TestSession
+from tabulate import tabulate
 
 
 class TrendInsight:
@@ -66,8 +67,10 @@ class TrendInsight:
         trends = {d: {"fail_rate": v["failed"] / v["total"] if v["total"] else 0.0, **v} for d, v in by_date.items()}
         return {"failures_by_day": trends}
 
-    def insight(self, kind: str = "trend") -> dict:
-        """Return key trend insights (duration and failure trends)."""
+    def insight(self, kind: str = "trend", tabular: bool = True, **kwargs):
+        if kind in {"summary", "health"}:
+            from pytest_insight.facets.summary import SummaryInsight
+            return SummaryInsight(self.sessions)
         if kind == "trend":
             return {
                 "duration_trends": self.duration_trends(),
@@ -75,18 +78,39 @@ class TrendInsight:
             }
         raise ValueError(f"Unsupported insight kind: {kind}")
 
-    def unified_insight(self, kind: str = "trend"):
+    def unified_insight(self, kind: str = "trend", tabular: bool = True):
         """
-        Return a human-friendly summary of detected emerging patterns.
+        Return a summary of detected emerging patterns.
+        Args:
+            kind (str): The kind of insight to return.
+            tabular (bool): If True, returns a tabular string; else, returns a plain string.
         """
         if kind == "trend":
             patterns = self.emerging_patterns()
             if not patterns:
                 return "No emerging trends detected."
-            msg = f"Detected {len(patterns)} emerging pattern(s):\n"
-            for p in patterns[:5]:
-                msg += f"- {p['nodeid']}: {p['issue']}\n"
-            if len(patterns) > 5:
-                msg += f"...and {len(patterns) - 5} more."
-            return msg
+            if tabular:
+                rows = []
+                for p in patterns:
+                    rows.append([
+                        p.get("nodeid", ""),
+                        p.get("issue", ""),
+                        p.get("recent_failure_time", p.get("max_duration", ""))
+                    ])
+                return tabulate(rows, headers=["NodeID", "Issue", "Detail"], tablefmt="github")
+            else:
+                msg = f"Detected {len(patterns)} emerging pattern(s):\n"
+                for p in patterns[:5]:
+                    msg += f"- {p['nodeid']}: {p['issue']}\n"
+                if len(patterns) > 5:
+                    msg += f"...and {len(patterns) - 5} more."
+                return msg
         raise ValueError(f"Unsupported insight kind: {kind}")
+
+    def as_dict(self):
+        """Return trend-level metrics as a dict for dashboard rendering."""
+        return {
+            "duration_trends": self.duration_trends(),
+            "failure_trends": self.failure_trends(),
+            "emerging_patterns": self.emerging_patterns() if hasattr(self, "emerging_patterns") else None,
+        }

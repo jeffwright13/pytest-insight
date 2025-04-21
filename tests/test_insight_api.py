@@ -37,7 +37,7 @@ def sample_sessions():
 
 def test_summary_returns_summary_insight(sample_sessions):
     api = InsightAPI(sessions=sample_sessions)
-    summary = api.summary()
+    summary = api.insight("summary")
     assert isinstance(summary, SummaryInsight)
     stats = summary.aggregate_stats()
     assert stats["total_sessions"] == 2

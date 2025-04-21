@@ -1,0 +1,55 @@
+[terminal]
+enabled = true
+columns = 3
+width = 120
+min_panel_width = 36
+sections = [
+  "summary",
+  "session",
+  "test",
+  "trend",
+  "compare",
+  "predictive",
+  "meta",
+  "temporal",
+  "slowest_tests",
+  "unreliable_tests",
+  "trends"
+]
+
+[terminal.insights.summary]
+show = true
+fields = ["total_sessions", "total_tests", "pass_rate", "fail_rate", "reliability"]
+
+[terminal.insights.session]
+show = true
+fields = ["session_id", "total_tests", "passed", "failed", "skipped"]
+
+[terminal.insights.test]
+show = true
+
+[terminal.insights.trend]
+show = true
+
+[terminal.insights.compare]
+show = true
+
+[terminal.insights.predictive]
+show = true
+
+[terminal.insights.meta]
+show = true
+
+[terminal.insights.temporal]
+show = true
+
+[terminal.insights.slowest_tests]
+show = true
+limit = 5
+
+[terminal.insights.unreliable_tests]
+show = true
+limit = 5
+
+[terminal.insights.trends]
+show = true

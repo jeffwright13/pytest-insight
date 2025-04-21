@@ -1,4 +1,5 @@
 from collections import defaultdict
+from tabulate import tabulate
 
 from pytest_insight.core.models import TestSession
 
@@ -30,9 +31,29 @@ class TemporalInsight:
             )
         return series
 
-    def insight(self, kind: str = "trend"):
-        series = self.trend_over_time()
-        if not series:
-            return "No trend data."
-        last = series[-1]
-        return f"Most recent reliability: {last['reliability']:.2%} on {last['interval']} ({last['total_tests']} tests)"
+    def insight(self, kind: str = "trend", tabular: bool = True, **kwargs):
+        if kind in {"summary", "health"}:
+            from pytest_insight.facets.summary import SummaryInsight
+            return SummaryInsight(self.sessions)
+        if kind == "trend":
+            series = self.trend_over_time()
+            if not series:
+                return "No trend data."
+            if tabular:
+                rows = [
+                    [str(s["interval"]),
+                     f"{s.get('reliability', 0.0):.2%}" if s.get('reliability') is not None else "N/A",
+                     s.get("total_tests", "")
+                    ]
+                    for s in series
+                ]
+                return tabulate(rows, headers=["Interval", "Reliability", "Total Tests"], tablefmt="github")
+            else:
+                last = series[-1]
+                return f"Most recent reliability: {last['reliability']:.2%} on {last['interval']} ({last['total_tests']} tests)"
+        raise ValueError(f"Unsupported insight kind: {kind}")
+
+    def as_dict(self):
+        """Return temporal metrics as a dict for dashboard rendering."""
+        # Placeholder: just return all sessions for now
+        return {"sessions": [s.session_id for s in self.sessions]}

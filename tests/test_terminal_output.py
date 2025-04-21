@@ -39,45 +39,18 @@ def make_ansi_panel(label, width=20, height=4, color=None, bold=False):
     return '\n'.join([line] * height)
 
 def strip_ansi(s):
-    return re.sub(r'\x1b\[[0-9;]*m', '', s)
+    import re
+    ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+    return ansi_escape.sub('', s)
 
-def test_pack_panels_horizontal(monkeypatch):
-    # Simulate two panels, each 20 wide, total 44 with gap
-    from pytest_insight.utils.terminal_output import pack_panels_horizontally
-    panels = [make_panel("A", 20), make_panel("B", 20)]
-    result = pack_panels_horizontally(panels, max_width=44, gap=4)
-    # Should be side by side
-    assert result.count('A') > 0 and result.count('B') > 0
-    assert '\n\n' not in result  # not stacked
-
-def test_pack_panels_vertical(monkeypatch):
-    from pytest_insight.utils.terminal_output import pack_panels_horizontally
-    panels = [make_panel("A", 20), make_panel("B", 20)]
-    result = pack_panels_horizontally(panels, max_width=30, gap=4)
-    # Should be stacked
-    assert result.splitlines().count('---------A----------') == 4
-    assert result.splitlines().count('---------B----------') == 4
-    assert '\n\n' in result or result.count('A') == 4
-
-def test_pack_panels_three_columns(monkeypatch):
-    from pytest_insight.utils.terminal_output import pack_panels_horizontally
-    panels = [make_panel(f"P{i+1}", 12) for i in range(3)]
-    result = pack_panels_horizontally(panels, max_width=44, gap=2)
-    # All three should be on the same row
-    assert result.count('P1') > 0 and result.count('P2') > 0 and result.count('P3') > 0
-    assert '\n\n' not in result
-
-def test_pack_panels_ansi(monkeypatch):
-    from pytest_insight.utils.terminal_output import pack_panels_horizontally
-    panels = [make_ansi_panel("A", 16, color=ANSI_RED), make_ansi_panel("B", 16, bold=True)]
-    result = pack_panels_horizontally(panels, max_width=40, gap=4)
-    # Should contain ANSI codes
-    assert ANSI_RED in result or ANSI_BOLD in result
-    # Stripped version should still align
-    stripped = strip_ansi(result)
-    lines = stripped.splitlines()
-    assert all(len(line) == len(lines[0]) for line in lines if line.strip())
-    assert 'A' in stripped and 'B' in stripped
+# REMOVED: tests for pack_panels_horizontally (function no longer exists)
+# --- REMOVED TESTS ---
+# test_pack_panels_horizontal
+# test_pack_panels_vertical
+# test_pack_panels_three_columns
+# test_pack_panels_long_short
+# test_pack_panels_mixed_ansi
+# test_pack_panels_empty
 
 def test_render_insights_in_terminal_adaptive(monkeypatch):
     # Simulate a wide terminal (60 chars), should pack 2 panels
@@ -87,8 +60,9 @@ def test_render_insights_in_terminal_adaptive(monkeypatch):
     api = DummyAPI(summary, slowest, unreliable)
     config = {"sections": ["summary", "slowest_tests", "unreliable_tests"], "columns": 2, "width": 60}
     out = render_insights_in_terminal(api, config)
+    out_stripped = strip_ansi(out)
     # Should contain both summary and slowest on the same row
-    assert "Summary:" in out and "Slowest Tests:" in out
+    assert "Summary" in out_stripped and "Slowest Tests" in out_stripped
 
 def test_render_insights_in_terminal_config_driven(monkeypatch):
     # Only show unreliable_tests
@@ -96,10 +70,11 @@ def test_render_insights_in_terminal_config_driven(monkeypatch):
     api = DummyAPI({}, [], unreliable)
     config = {"sections": ["unreliable_tests"], "columns": 1, "width": 40}
     out = render_insights_in_terminal(api, config)
-    assert "Least Reliable Tests:" in out
-    assert "t1" in out
-    assert "Summary:" not in out
-    assert "Slowest Tests:" not in out
+    out_stripped = strip_ansi(out)
+    assert "Least Reliable Tests" in out_stripped
+    assert "t1" in out_stripped
+    assert "Summary" not in out_stripped
+    assert "Slowest Tests" not in out_stripped
 
 def test_render_insights_in_terminal_min_panel_width(monkeypatch):
     # Panels too wide for 2 columns, should stack
@@ -123,35 +98,6 @@ def test_render_insights_in_terminal_with_ansi(monkeypatch):
     assert ANSI_BOLD in out
     # Stripped should still show the number
     assert '5' in strip_ansi(out)
-
-def test_pack_panels_empty(monkeypatch):
-    from pytest_insight.utils.terminal_output import pack_panels_horizontally
-    panels = []
-    result = pack_panels_horizontally(panels, max_width=40, gap=4)
-    assert result == ''
-
-def test_pack_panels_mixed_ansi(monkeypatch):
-    from pytest_insight.utils.terminal_output import pack_panels_horizontally
-    panels = [make_panel("PLAIN", 12), make_ansi_panel("BOLD", 12, bold=True)]
-    result = pack_panels_horizontally(panels, max_width=32, gap=4)
-    # One panel plain, one with ANSI
-    assert 'PLAIN' in result and 'BOLD' in result
-    assert ANSI_BOLD in result
-    # Stripped should still align
-    stripped = strip_ansi(result)
-    lines = stripped.splitlines()
-    assert all(len(line) == len(lines[0]) for line in lines if line.strip())
-
-def test_pack_panels_long_short(monkeypatch):
-    from pytest_insight.utils.terminal_output import pack_panels_horizontally
-    long_label = "LONG_LABEL_PANEL" * 4
-    short_label = "S"
-    panels = [make_panel(long_label, 40), make_panel(short_label, 3)]
-    result = pack_panels_horizontally(panels, max_width=100, gap=4)
-    # Both present, lines align
-    assert long_label in result and short_label in result
-    lines = result.splitlines()
-    assert all(len(line) == len(lines[0]) for line in lines if line.strip())
 
 def test_render_insights_in_terminal_empty_sections(monkeypatch):
     api = DummyAPI()

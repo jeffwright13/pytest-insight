@@ -26,16 +26,12 @@ class InsightAPI:
         else:
             self.sessions = []
 
-    def test(self, nodeid=None, **kwargs):
-        """Return TestInsight for a single test or all tests if nodeid is None."""
-        if nodeid is not None:
-            filtered = []
-            for s in self.sessions:
-                for t in getattr(s, "test_results", []):
-                    if getattr(t, "nodeid", None) == nodeid:
-                        filtered.append(s)
-                        break
-            return TestInsight(filtered)
+    def sessions(self):
+        """Return a SessionInsight over all sessions."""
+        return SessionInsight(self.sessions)
+
+    def tests(self):
+        """Return a TestInsight over all sessions/tests."""
         return TestInsight(self.sessions)
 
     def trend(self):
@@ -67,12 +63,52 @@ class InsightAPI:
         return MetaInsight(self.sessions)
 
     def summary(self):
-        """Return a SummaryInsight object for the sessions."""
-        return SummaryInsight(self.sessions)
+        """Return summary metrics as a dict for the sessions."""
+        return SummaryInsight(self.sessions).as_dict()
+
+    def summary_as_text(self):
+        """Return a formatted string summary for the sessions (for CLI/reporting)."""
+        return str(SummaryInsight(self.sessions))
 
     def available_insights(self):
-        """Return a list of available insight kinds."""
-        return ["summary", "session", "sessions", "test", "tests", "trend", "compare", "predictive", "meta", "temporal"]
+        """Return a list of available insight kinds (introspected from insight methods)."""
+        import inspect
+        # Find all methods starting with _insight_*
+        insight_methods = [
+            name[len("_insight_"):] for name, method in inspect.getmembers(self, predicate=inspect.ismethod)
+            if name.startswith("_insight_")
+        ]
+        return sorted(insight_methods)
+
+    def insight(self, kind: str, **kwargs):
+        # Introspective registry: call self._insight_<kind>(**kwargs) if it exists
+        method_name = f"_insight_{kind}"
+        if hasattr(self, method_name):
+            method = getattr(self, method_name)
+            return method(**kwargs)
+        raise ValueError(f"Unsupported insight kind: {kind}")
+
+    # --- Insight factory methods ---
+    def _insight_summary(self, **kwargs):
+        return SummaryInsight(self.sessions)
+    def _insight_health(self, **kwargs):
+        return SummaryInsight(self.sessions)
+    def _insight_reliability(self, **kwargs):
+        return self.tests().insight("reliability", **kwargs)
+    def _insight_trend(self, **kwargs):
+        return self.trend(**kwargs)
+    def _insight_session(self, **kwargs):
+        return self.session(**kwargs)
+    def _insight_test(self, **kwargs):
+        return self.tests(**kwargs)
+    def _insight_predictive(self, **kwargs):
+        return self.predictive(**kwargs)
+    def _insight_meta(self, **kwargs):
+        return self.meta(**kwargs)
+    def _insight_compare(self, **kwargs):
+        return self.compare(**kwargs)
+    def _insight_temporal(self, **kwargs):
+        return self.temporal(**kwargs)
 
     # Fluent API example methods for filtering, etc. (stubs)
     def filter(self, **kwargs):
@@ -84,27 +120,3 @@ class InsightAPI:
         # Example: restrict sessions to last N days
         # Implement time filtering logic as needed
         return InsightAPI(self.sessions)  # Placeholder
-
-    # Unified insight access
-    def insight(self, kind: str, **kwargs):
-        # Example: api.insight("reliability")
-        # Dispatch to the correct facet
-        if kind == "summary":
-            return SummaryInsight(self.sessions)
-        if kind == "reliability":
-            return self.test().insight("reliability", **kwargs)
-        if kind == "trend":
-            return self.trend(**kwargs)
-        if kind == "session":
-            return self.session(**kwargs)
-        if kind == "test":
-            return self.test(**kwargs)
-        if kind == "predictive":
-            return self.predictive(**kwargs)
-        if kind == "meta":
-            return self.meta(**kwargs)
-        if kind == "compare":
-            return self.compare(**kwargs)
-        if kind == "temporal":
-            return self.temporal(**kwargs)
-        raise ValueError(f"Unknown insight kind: {kind}")

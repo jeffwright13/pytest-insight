@@ -69,13 +69,7 @@ insight = "pytest_insight.plugin"
 
 [project.scripts]
 # New unified CLI command
-insight = "pytest_insight.__main__:app"
-
-# Legacy commands (will be deprecated in future versions)
-insights = "pytest_insight.utils.analyze_test_data:main"
-insights-new = "pytest_insight.utils.analyze_test_data_new:main"
-insight-gen = "pytest_insight.utils.db_generator:app"
-insight-api = "pytest_insight.utils.server_launcher:main"
+insight = "pytest_insight_v1.__main__:app"
 
 [build-system]
 requires = ["hatchling"]

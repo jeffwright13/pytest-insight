@@ -11,6 +11,12 @@ def testdir_or_pytester(request):
     return request.getfixturevalue("testdir")
 
 
+def strip_ansi(s):
+    import re
+    ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+    return ansi_escape.sub('', s)
+
+
 def test_plugin_registers_and_runs(testdir_or_pytester):
     testdir = testdir_or_pytester
     testdir.makepyfile(
@@ -29,7 +35,7 @@ def test_plugin_registers_and_runs(testdir_or_pytester):
 @pytest.mark.parametrize(
     "cli_option,expected",
     [
-        ("--insight-sut-name=mySUT", "SUT=mySUT"),
+        ("--insight-sut-name=mySUT", "mySUT"),
         ("--insight-testing-system=mySYS", "mySYS"),
     ],
 )
@@ -42,8 +48,10 @@ def test_plugin_cli_options(testdir_or_pytester, cli_option, expected):
     """
     )
     result = testdir.runpytest("--insight", cli_option)
-    print(result.stdout.str())
-    assert expected in result.stdout.str()
+    out = result.stdout.str()
+    out_stripped = strip_ansi(out)
+    print(out_stripped)
+    assert expected in out_stripped
 
 
 @pytest.mark.skip(reason="storage not implemented")

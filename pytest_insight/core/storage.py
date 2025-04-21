@@ -1045,6 +1045,22 @@ class JSONStorage(BaseStorage):
                 # Create a temporary file
                 temp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json")
                 try:
+
+
+                    for i, sess in enumerate(sessions_data):
+                        try:
+                            json.dumps(sess)
+                        except Exception as e:
+                            print(f"[DEBUG] Session {i} not serializable: {e}")
+                            # Optionally, print the keys and types for further diagnosis
+                            for k, v in sess.items():
+                                try:
+                                    json.dumps(v)
+                                except Exception as inner_e:
+                                    print(f"  [DEBUG] Key '{k}' not serializable: {inner_e}, type: {type(v)}")
+                            raise  # Stop at first failure for clarity
+
+
                     # Write data to temp file
                     json.dump({"sessions": sessions_data}, temp_file, indent=2)
                     temp_file.close()

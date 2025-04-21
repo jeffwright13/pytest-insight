@@ -1,6 +1,7 @@
 from pytest_insight.core.models import TestSession
 from collections import defaultdict
 import numpy as np
+from tabulate import tabulate
 
 
 class PredictiveInsight:
@@ -43,19 +44,33 @@ class PredictiveInsight:
             warning = "Reliability is trending downward. Possible regression risk!"
         return {"future_reliability": forecast_next, "trend": trend, "warning": warning}
 
-    def insight(self, kind: str = "predictive_failure"):
-        """
-        Return a human-friendly summary of the forecast and trend.
-        """
-        forecast = self.forecast()
-        rel = forecast.get("future_reliability")
-        trend = forecast.get("trend")
-        warning = forecast.get("warning")
-        if rel is None:
-            return warning or "Forecasted Reliability: N/A"
-        msg = f"Next session forecasted reliability: {rel:.2%}. "
-        if trend is not None:
-            msg += f"Trend: {'downward' if trend < 0 else 'upward'} ({trend:+.2%}/day). "
-        if warning:
-            msg += f"Warning: {warning}"
-        return msg
+    def as_dict(self):
+        """Return predictive metrics as a dict for dashboard rendering."""
+        return self.forecast()
+
+    def insight(self, kind: str = "predictive_failure", tabular: bool = True, **kwargs):
+        if kind in {"summary", "health"}:
+            from pytest_insight.facets.summary import SummaryInsight
+            return SummaryInsight(self.sessions)
+        if kind == "predictive_failure":
+            forecast = self.forecast()
+            rel = forecast.get("future_reliability")
+            trend = forecast.get("trend")
+            warning = forecast.get("warning")
+            if tabular:
+                rows = [[
+                    f"{rel:.2%}" if rel is not None else "N/A",
+                    f"{'downward' if trend < 0 else 'upward'} ({trend:+.2%}/day)" if trend is not None else "N/A",
+                    warning or ""
+                ]]
+                return tabulate(rows, headers=["Forecasted Reliability", "Trend", "Warning"], tablefmt="github")
+            else:
+                if rel is None:
+                    return warning or "Forecasted Reliability: N/A"
+                msg = f"Next session forecasted reliability: {rel:.2%}. "
+                if trend is not None:
+                    msg += f"Trend: {'downward' if trend < 0 else 'upward'} ({trend:+.2%}/day). "
+                if warning:
+                    msg += f"Warning: {warning}"
+                return msg
+        raise ValueError(f"Unsupported insight kind: {kind}")

@@ -1,4 +1,5 @@
 from pytest_insight.core.models import TestSession
+from tabulate import tabulate
 
 
 class ComparativeInsight:
@@ -30,15 +31,35 @@ class ComparativeInsight:
                 results[k]["reliability"] = None
         return results
 
-    def insight(self, kind: str = "regression"):
-        # For now, just show the best/worst SUT reliability in this session set
-        suts = {}
-        for s in self.sessions:
-            suts.setdefault(s.sut_name, []).append(s)
-        summary = []
-        for sut, sess in suts.items():
-            total_tests = sum(len(s.test_results) for s in sess)
-            passes = sum(1 for s in sess for t in s.test_results if t.outcome == "passed")
-            reliability = passes / total_tests if total_tests else None
-            summary.append(f"{sut}: {reliability:.2%}" if reliability is not None else f"{sut}: N/A")
-        return "Reliability by SUT: " + ", ".join(summary)
+    def insight(self, kind: str = "regression", tabular: bool = True, **kwargs):
+        if kind in {"summary", "health"}:
+            from pytest_insight.facets.summary import SummaryInsight
+            return SummaryInsight(self.sessions)
+        if kind == "regression":
+            # For now, just show the best/worst SUT reliability in this session set
+            suts = {}
+            for s in self.sessions:
+                suts.setdefault(s.sut_name, []).append(s)
+            summary = []
+            for sut, sess in suts.items():
+                total_tests = sum(len(s.test_results) for s in sess)
+                passes = sum(1 for s in sess for t in s.test_results if t.outcome == "passed")
+                reliability = passes / total_tests if total_tests else None
+                summary.append({
+                    "SUT": sut,
+                    "Reliability": f"{reliability:.2%}" if reliability is not None else "N/A",
+                    "Total Tests": total_tests
+                })
+            if tabular:
+                return tabulate(summary, headers="keys", tablefmt="github")
+            else:
+                return "Reliability by SUT: " + ", ".join(f"{s['SUT']}: {s['Reliability']}" for s in summary)
+        raise ValueError(f"Unsupported insight kind: {kind}")
+
+    def as_dict(self):
+        """Return comparative metrics as a dict for dashboard rendering."""
+        # Example: compare SUTs if at least two present
+        suts = list({getattr(s, "sut_name", None) for s in self.sessions})
+        if len(suts) >= 2:
+            return {"sut_comparison": self.compare_suts(suts[0], suts[1])}
+        return {"sut_comparison": None}

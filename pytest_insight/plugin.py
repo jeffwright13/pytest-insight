@@ -84,7 +84,7 @@ def pytest_configure(config: Config):
         config,
         {
             "insight_profile": "default",
-            "insight_system_under_test_name": None,
+            "insight_sut_name": None,
             "insight_testing_system": None,
         },
     )
@@ -121,9 +121,6 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     sut_name = config_values["insight_sut_name"] or "unknown-sut"
     hostname = socket.gethostname()
     testing_system_name = config_values["insight_testing_system"] or hostname
-    # DEBUG: Print config values and resolved testing_system_name
-    print(f"[pytest-insight DEBUG] config_values: {config_values}", file=sys.stderr)
-    print(f"[pytest-insight DEBUG] Resolved testing_system_name: {testing_system_name}", file=sys.stderr)
     test_results = []
     session_start = None
     session_end = None
@@ -132,15 +129,15 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
     session_end = session_end or now
     # Always construct a session, even if no test results
     session = TestSession(
-        sut_name=sut_name,
+        sut_name=sut_name,  # Use config value
         testing_system={
             "hostname": hostname,
-            "name": testing_system_name,
+            "name": testing_system_name,  # Use config value
             "type": "local",
             "platform": platform.platform(),
             "python_version": platform.python_version(),
             "pytest_version": getattr(config, "version", "unknown"),
-            "plugins": list(config.pluginmanager.list_plugin_distinfo()),
+            # 'plugins' field removed for simplicity and serialization safety
         },
         session_id=f"{sut_name}-{now.strftime('%Y%m%d-%H%M%S')}",
         session_start_time=session_start,
@@ -154,7 +151,7 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         rerun_test_groups=[],
         test_results=test_results,
     )
-    session.testing_system["name"] = testing_system_name  # Ensure CLI/system name is visible in summary
+    session.testing_system["name"] = testing_system_name
     try:
         storage.save_session(session)
     except Exception as e:
@@ -162,9 +159,6 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         terminalreporter.write_line(msg, red=True)
         print(f"[pytest-insight] {msg}", file=sys.stderr)
     # Print summary always including SUT and system name
-    summary = f"[Session Insight: SUT={session.sut_name} System={session.testing_system['name']}]"
-    terminalreporter.write_sep("=", "pytest-insight")
-    terminalreporter.write_line(summary)
     # === RESTORE INSIGHT RENDERING ===
     terminal_config = load_terminal_config()
     if terminal_output_enabled(terminal_config):

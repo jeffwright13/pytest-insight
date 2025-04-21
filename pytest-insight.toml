@@ -167,11 +167,30 @@ methods = [
 # ==============================
 [terminal]
 enabled = true
-sections = ["summary", "slowest_tests", "unreliable_tests", "trends"]
+sections = [
+    "summary",
+    "slowest_tests",
+    "unreliable_tests",
+    "trends",
+    "session",
+    "test",
+    "trend",
+    "compare",
+    "predictive",
+    "meta",
+    "temporal"
+]
 
 [terminal.insights.summary]
 show = true
-fields = ["total_sessions", "total_tests", "pass_rate", "fail_rate"]
+fields = [
+    "total_sessions",
+    "total_tests",
+    "pass_rate",
+    "fail_rate",
+    "reliability",
+    "outcome_counts"
+]
 
 [terminal.insights.slowest_tests]
 show = true
@@ -180,8 +199,55 @@ limit = 5
 [terminal.insights.unreliable_tests]
 show = true
 limit = 5
-columns = ["nodeid", "reliability", "runs", "failures"]
+columns = [
+    "nodeid",
+    "reliability",
+    "runs",
+    "failures",
+    "unreliable_rate"
+]
 
 [terminal.insights.trends]
 show = true
-types = ["duration", "failures"]
+types = [
+    "duration",
+    "failures",
+    "emerging_patterns"
+]
+
+[terminal.insights.session]
+show = true
+fields = [
+    "total_tests",
+    "passed",
+    "failed",
+    "skipped",
+    "xfailed",
+    "xpassed",
+    "rerun",
+    "error",
+    "reliability"
+]
+
+[terminal.insights.test]
+show = true
+
+[terminal.insights.trend]
+show = true
+
+[terminal.insights.compare]
+show = true
+
+[terminal.insights.predictive]
+show = true
+
+[terminal.insights.meta]
+show = true
+fields = [
+    "unique_tests",
+    "total_sessions",
+    "tests_per_session"
+]
+
+[terminal.insights.temporal]
+show = true

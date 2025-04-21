@@ -1,4 +1,6 @@
 from collections import defaultdict
+from tabulate import tabulate
+import pprint
 
 from pytest_insight.core.models import TestSession
 
@@ -91,14 +93,20 @@ class TestInsight:
         }
         return metrics
 
-    def insight(self, kind: str = "reliability"):
-        if kind == "reliability":
-            report = self.reliability_report()
-            if not report:
-                return "No test reliability data."
-            avg_rel = sum(r['reliability'] for r in report if r['reliability'] is not None) / len(report)
-            return f"Avg Test Reliability: {avg_rel:.2%} across {len(report)} tests"
-        elif kind == "detailed":
+    def as_dict(self):
+        """Return test-level metrics as a dict for dashboard rendering."""
+        return {
+            "outcome_distribution": self.outcome_distribution(),
+            "unreliable_tests": self.unreliable_tests(),
+            "slowest_tests": self.slowest_tests(),
+            "test_reliability_metrics": self.test_reliability_metrics(),
+        }
+
+    def insight(self, kind: str = "reliability", tabular: bool = True, **kwargs):
+        if kind in {"summary", "health"}:
+            from pytest_insight.facets.summary import SummaryInsight
+            return SummaryInsight(self.sessions)
+        if kind == "detailed":
             return {
                 "outcome_distribution": self.outcome_distribution(),
                 "unreliable_tests": self.unreliable_tests(),
@@ -106,3 +114,30 @@ class TestInsight:
                 "test_reliability_metrics": self.test_reliability_metrics(),
             }
         raise ValueError(f"Unsupported insight kind: {kind}")
+
+    def filter(self, **criteria):
+        """Return a new TestInsight with sessions containing tests matching given criteria.
+        Example: .filter(nodeid="test_login", min_duration=1.0)
+        Supported criteria:
+            - nodeid: filter sessions containing a test with this nodeid
+            - outcome: filter sessions containing a test with this outcome
+            - min_duration: sessions with a test whose duration >= min_duration
+            - max_duration: sessions with a test whose duration <= max_duration
+        Note: Always returns sessions (with context), not isolated tests.
+        """
+        filtered_sessions = []
+        for s in self.sessions:
+            for t in getattr(s, "test_results", []):
+                match = True
+                if "nodeid" in criteria and getattr(t, "nodeid", None) != criteria["nodeid"]:
+                    match = False
+                if "outcome" in criteria and getattr(t, "outcome", None) != criteria["outcome"]:
+                    match = False
+                if "min_duration" in criteria and getattr(t, "duration", None) is not None and t.duration < criteria["min_duration"]:
+                    match = False
+                if "max_duration" in criteria and getattr(t, "duration", None) is not None and t.duration > criteria["max_duration"]:
+                    match = False
+                if match:
+                    filtered_sessions.append(s)
+                    break  # Only need one matching test per session
+        return TestInsight(filtered_sessions)

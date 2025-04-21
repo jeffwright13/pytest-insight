@@ -4,10 +4,9 @@ HistoryDataGenerator: Generate realistic, configurable historical test data for 
 - Usage: CLI or importable class for integration/testing/demo
 """
 
-import json
+import os
 import random
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import List, Optional
 
 import typer
@@ -18,6 +17,7 @@ from pytest_insight.core.models import (
     TestResult,
     TestSession,
 )
+from pytest_insight.core.storage import ProfileManager, get_storage_instance
 
 
 class HistoryDataGenerator:
@@ -158,69 +158,76 @@ class HistoryDataGenerator:
                 )
         return sessions
 
-    def save_profile(self, sessions: List[TestSession], path: Path, append: bool = False):
+    def save_profile(self, sessions: List[TestSession], profile_name: str, append: bool = False):
         """
-        Serialize sessions to JSON (as dicts) and save to file.
-        By default, overwrites any existing file. If append=True, appends to existing file (merges sessions).
+        Save sessions using the ProfileManager and get_storage_instance exclusively (no direct file handling).
         """
+        profile_mgr = ProfileManager()
+        # Ensure profile exists (create if not present)
+        if profile_name not in profile_mgr.profiles:
+            profile_mgr.add_profile(profile_name, storage_type="json")
+        storage = get_storage_instance(profile_name=profile_name)
+        if append:
+            existing = storage.load_sessions()
+            all_sessions = existing + sessions
+        else:
+            all_sessions = sessions
+        # Save all sessions (overwrite or append)
+        if hasattr(storage, '_write_json_safely'):
+            storage._write_json_safely([s.to_dict() for s in all_sessions])
+        else:
+            if not append:
+                storage.clear_sessions()
+            for session in all_sessions:
+                storage.save_session(session)
+        typer.echo(f"Saved {len(sessions)} sessions to profile '{profile_name}' at {getattr(storage, 'file_path', 'unknown location')}")
 
-        def session_to_dict(sess: TestSession):
-            return {
-                "session_id": sess.session_id,
-                "sut_name": sess.sut_name,
-                "session_start_time": sess.session_start_time.isoformat(),
-                "session_stop_time": sess.session_stop_time.isoformat(),
-                "session_duration": sess.session_duration,
-                "session_tags": sess.session_tags,
-                "testing_system": sess.testing_system,
-                "test_results": [
-                    {
-                        "nodeid": tr.nodeid,
-                        "outcome": (tr.outcome.to_str() if hasattr(tr.outcome, "to_str") else str(tr.outcome)),
-                        "start_time": tr.start_time.isoformat(),
-                        "stop_time": tr.stop_time.isoformat(),
-                        "duration": tr.duration,
-                        "caplog": getattr(tr, "caplog", ""),
-                        "capstderr": getattr(tr, "capstderr", ""),
-                        "capstdout": getattr(tr, "capstdout", ""),
-                        "longreprtext": getattr(tr, "longreprtext", ""),
-                        "has_warning": getattr(tr, "has_warning", False),
-                    }
-                    for tr in sess.test_results
-                ],
-                "rerun_test_groups": [
-                    {
-                        "nodeid": rg.nodeid,
-                        "tests": [
-                            {
-                                "nodeid": t.nodeid,
-                                "outcome": (t.outcome.to_str() if hasattr(t.outcome, "to_str") else str(t.outcome)),
-                                "start_time": t.start_time.isoformat(),
-                                "stop_time": t.stop_time.isoformat(),
-                                "duration": t.duration,
-                                "caplog": getattr(t, "caplog", ""),
-                                "capstderr": getattr(t, "capstderr", ""),
-                                "capstdout": getattr(t, "capstdout", ""),
-                                "longreprtext": getattr(t, "longreprtext", ""),
-                                "has_warning": getattr(t, "has_warning", False),
-                            }
-                            for t in rg.tests
-                        ],
-                    }
-                    for rg in sess.rerun_test_groups
-                ],
-            }
-
-        data = [session_to_dict(sess) for sess in sessions]
-        if append and path.exists():
-            with open(path, "r") as f:
-                try:
-                    existing = json.load(f)
-                except Exception:
-                    existing = []
-            data = existing + data
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
+    def to_dict(self, sess: TestSession):
+        return {
+            "session_id": sess.session_id,
+            "sut_name": sess.sut_name,
+            "session_start_time": sess.session_start_time.isoformat(),
+            "session_stop_time": sess.session_stop_time.isoformat(),
+            "session_duration": sess.session_duration,
+            "session_tags": sess.session_tags,
+            "testing_system": sess.testing_system,
+            "test_results": [
+                {
+                    "nodeid": tr.nodeid,
+                    "outcome": (tr.outcome.to_str() if hasattr(tr.outcome, "to_str") else str(tr.outcome)),
+                    "start_time": tr.start_time.isoformat(),
+                    "stop_time": tr.stop_time.isoformat(),
+                    "duration": tr.duration,
+                    "caplog": getattr(tr, "caplog", ""),
+                    "capstderr": getattr(tr, "capstderr", ""),
+                    "capstdout": getattr(tr, "capstdout", ""),
+                    "longreprtext": getattr(tr, "longreprtext", ""),
+                    "has_warning": getattr(tr, "has_warning", False),
+                }
+                for tr in sess.test_results
+            ],
+            "rerun_test_groups": [
+                {
+                    "nodeid": rg.nodeid,
+                    "tests": [
+                        {
+                            "nodeid": t.nodeid,
+                            "outcome": (t.outcome.to_str() if hasattr(t.outcome, "to_str") else str(t.outcome)),
+                            "start_time": t.start_time.isoformat(),
+                            "stop_time": t.stop_time.isoformat(),
+                            "duration": t.duration,
+                            "caplog": getattr(t, "caplog", ""),
+                            "capstderr": getattr(t, "capstderr", ""),
+                            "capstdout": getattr(t, "capstdout", ""),
+                            "longreprtext": getattr(t, "longreprtext", ""),
+                            "has_warning": getattr(t, "has_warning", False),
+                        }
+                        for t in rg.tests
+                    ],
+                }
+                for rg in sess.rerun_test_groups
+            ],
+        }
 
 
 app = typer.Typer()
@@ -242,10 +249,10 @@ def generate(
     pass_rate_max: float = typer.Option(0.95, help="Maximum pass rate."),
     warning_rate: float = typer.Option(0.1, help="Warning rate."),
     seed: Optional[int] = typer.Option(None, help="Random seed for reproducibility."),
-    output: Path = typer.Option("practice_profile.json", help="Output JSON file."),
-    append: bool = typer.Option(False, help="Append to existing file instead of overwriting."),
+    profile_name: str = typer.Option("default", help="Storage profile to use (default: 'default')."),
+    append: bool = typer.Option(False, help="Append to existing profile instead of overwriting."),
 ):
-    """Generate historical test data and save as a profile (JSON)."""
+    """Generate historical test data and save using a pytest-insight storage profile (via ProfileManager)."""
     generator = HistoryDataGenerator(
         days=days,
         sessions_per_day=sessions_per_day,
@@ -259,8 +266,45 @@ def generate(
         seed=seed,
     )
     sessions = generator.generate()
-    generator.save_profile(sessions, output, append)
-    typer.echo(f"Generated {len(sessions)} sessions and saved to {output}")
+    generator.save_profile(sessions, profile_name, append)
+    typer.echo(f"Generated {len(sessions)} sessions and saved to profile '{profile_name}'")
+
+
+@app.command()
+def purge_profiles(
+    force: bool = typer.Option(False, help="Actually delete profiles and files (required for destructive action)."),
+    dry_run: bool = typer.Option(False, help="Show what would be deleted, but don't actually delete anything."),
+):
+    """Purge all pytest-insight storage profiles and their data files (with dry run support)."""
+    profile_mgr = ProfileManager()
+    profiles = list(profile_mgr.profiles.values())
+    if not profiles:
+        typer.echo("No profiles found.")
+        raise typer.Exit(0)
+
+    typer.echo("The following profiles and files would be deleted:")
+    for prof in profiles:
+        typer.echo(f"- {prof.name}: {prof.file_path}")
+
+    if dry_run:
+        typer.echo("[DRY RUN] No files or profiles deleted.")
+        raise typer.Exit(0)
+
+    if not force:
+        typer.echo("This is a destructive operation. Use --force to actually delete all profiles and files.")
+        raise typer.Exit(1)
+
+    for prof in profiles:
+        if prof.file_path and os.path.exists(prof.file_path):
+            os.remove(prof.file_path)
+            typer.echo(f"Deleted file: {prof.file_path}")
+        else:
+            typer.echo(f"File not found: {prof.file_path}")
+        typer.echo(f"Removed profile: {prof.name}")
+    profile_mgr.profiles.clear()
+    profile_mgr.active_profile_name = None
+    profile_mgr._save_profiles()
+    typer.echo("All profiles and their files have been purged.")
 
 
 if __name__ == "__main__":
