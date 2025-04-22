@@ -20,7 +20,7 @@ def analyze_health(
     """Analyze test health metrics.
 
     This command generates health metrics for test sessions, including pass rates,
-    nonreliability_rate rates, and overall health scores.
+    reliability_rate rates, and overall health scores.
 
     Examples:
         insight analyze health --sut my-service
@@ -91,9 +91,7 @@ def analyze_top_failing(
     console.print(f"\n[bold]Top {limit} Failing Tests[/bold] (past {days} days)")
 
     if not results["top_failing"]:
-        console.print(
-            "[yellow]No failing tests found in the specified time period.[/yellow]"
-        )
+        console.print("[yellow]No failing tests found in the specified time period.[/yellow]")
         return
 
     table = Table(show_header=True)
@@ -104,9 +102,7 @@ def analyze_top_failing(
 
     for test in results["top_failing"]:
         failure_rate = f"{test['failure_rate'] * 100:.1f}%"
-        table.add_row(
-            test["nodeid"], str(test["failures"]), str(test["total_runs"]), failure_rate
-        )
+        table.add_row(test["nodeid"], str(test["failures"]), str(test["total_runs"]), failure_rate)
 
     console.print(table)
     console.print(f"\nTotal failures: {results['total_failures']}")
@@ -171,18 +167,14 @@ def analyze_regression_rate(
         regressed_table.add_column("Latest Outcome", style="red")
 
         for test in results["regressed_tests"]:
-            previous_outcomes = ", ".join(
-                [outcome.name for outcome in test["previous_outcomes"]]
-            )
+            previous_outcomes = ", ".join([outcome.name for outcome in test["previous_outcomes"]])
             latest_outcome = test["latest_outcome"].name
 
             regressed_table.add_row(test["nodeid"], previous_outcomes, latest_outcome)
 
         console.print(regressed_table)
     else:
-        console.print(
-            "[green]No regressions detected in the specified time period.[/green]"
-        )
+        console.print("[green]No regressions detected in the specified time period.[/green]")
 
 
 @app.command("longest-tests")
@@ -220,9 +212,7 @@ def analyze_longest_tests(
     results = analysis.sessions.longest_running_tests(days=days, limit=limit)
 
     # Display results
-    console.print(
-        f"\n[bold]Top {limit} Longest Running Tests[/bold] (past {days} days)"
-    )
+    console.print(f"\n[bold]Top {limit} Longest Running Tests[/bold] (past {days} days)")
 
     if not results["longest_tests"]:
         console.print("[yellow]No tests found in the specified time period.[/yellow]")
@@ -240,9 +230,7 @@ def analyze_longest_tests(
         max_duration = f"{test['max_duration']:.2f}s"
         min_duration = f"{test['min_duration']:.2f}s"
 
-        table.add_row(
-            test["nodeid"], avg_duration, max_duration, min_duration, str(test["runs"])
-        )
+        table.add_row(test["nodeid"], avg_duration, max_duration, min_duration, str(test["runs"]))
 
     console.print(table)
     console.print(f"\nTotal Duration: {results['total_duration']:.2f}s")
@@ -284,9 +272,7 @@ def analyze_duration_trend(
     results = analysis.sessions.test_suite_duration_trend(days=days, window_size=window)
 
     # Display results
-    console.print(
-        f"\n[bold]Test Suite Duration Trend[/bold] (past {days} days, window size: {window})"
-    )
+    console.print(f"\n[bold]Test Suite Duration Trend[/bold] (past {days} days, window size: {window})")
 
     if not results["durations"]:
         console.print("[yellow]Not enough data to analyze duration trend.[/yellow]")
@@ -305,9 +291,7 @@ def analyze_duration_trend(
         trend_text = f"[green]Decreasing[/green] (Change: {change:.1f}%)"
 
     console.print(f"Trend: {trend_text}")
-    console.print(
-        f"Significant: {'[red]Yes[/red]' if results['significant'] else '[blue]No[/blue]'}"
-    )
+    console.print(f"Significant: {'[red]Yes[/red]' if results['significant'] else '[blue]No[/blue]'}")
 
     # Show recent session durations
     console.print("\n[bold]Recent Session Durations:[/bold]")

@@ -66,9 +66,7 @@ def analyze_test_data(
                 create_profile(profile_name, "json", data_path)
             except Exception as e:
                 if not json_mode:
-                    console.print(
-                        f"[bold red]Error creating profile for data path:[/bold red] {str(e)}"
-                    )
+                    console.print(f"[bold red]Error creating profile for data path:[/bold red] {str(e)}")
                 else:
                     print(
                         json.dumps(
@@ -114,9 +112,7 @@ def analyze_test_data(
                 return result
         except Exception as e:
             if not json_mode:
-                console.print(
-                    f"[bold red]Error accessing sessions:[/bold red] {str(e)}"
-                )
+                console.print(f"[bold red]Error accessing sessions:[/bold red] {str(e)}")
                 console.print(
                     Panel(
                         "[bold red]No test data available or error accessing data.[/bold red]\n\n"
@@ -139,9 +135,8 @@ def analyze_test_data(
             result = {
                 "session_metrics": insights.sessions.session_metrics(),
                 "outcome_distribution": insights.tests.outcome_distribution(),
-                "unreliable_tests": insights.tests.unreliable_tests(),
-                "slowest_tests": insights.tests.slowest_tests(),
-                "environment_impact": insights.sessions.environment_impact(),
+                "reliability_tests": insights.tests.reliability_tests(),
+                "stability": insights.tests.test_health_score(),
             }
 
             # Add additional data based on flags
@@ -173,9 +168,7 @@ def analyze_test_data(
             return result
         else:
             # For text output, display results using Rich
-            console.print(
-                f"[bold]Found {session_count} test sessions in {profile_name}[/bold]"
-            )
+            console.print(f"[bold]Found {session_count} test sessions in {profile_name}[/bold]")
 
             # Display session metrics
             metrics = insights.sessions.session_metrics()
@@ -183,9 +176,7 @@ def analyze_test_data(
             metrics_table.add_column("Metric", style="cyan")
             metrics_table.add_column("Value", style="green")
 
-            metrics_table.add_row(
-                "Total Sessions", str(metrics.get("total_sessions", 0))
-            )
+            metrics_table.add_row("Total Sessions", str(metrics.get("total_sessions", 0)))
             metrics_table.add_row("Total Tests", str(metrics.get("total_tests", 0)))
 
             # Calculate pass rate
@@ -199,9 +190,9 @@ def analyze_test_data(
             metrics_table.add_row("Avg Test Duration", f"{avg_duration:.3f}s")
 
             # Add unreliable test count
-            unreliable_tests = insights.tests.unreliable_tests()
-            unreliable_count = unreliable_tests.get("total_unreliable", 0)
-            metrics_table.add_row("Unreliable Tests", str(unreliable_count))
+            reliability_tests = insights.tests.reliability_tests()
+            reliability_count = reliability_tests.get("total_reliable", 0)
+            metrics_table.add_row("Reliable Tests", str(reliability_count))
 
             console.print(metrics_table)
 
@@ -232,9 +223,7 @@ def analyze_test_data(
                             failing_tests[test] = failing_tests.get(test, 0) + 1
 
                 # Sort by failure count and display top 5
-                sorted_failures = sorted(
-                    failing_tests.items(), key=lambda x: x[1], reverse=True
-                )
+                sorted_failures = sorted(failing_tests.items(), key=lambda x: x[1], reverse=True)
                 for test_name, count in sorted_failures[:5]:
                     fail_table.add_row(test_name, str(count))
 
@@ -259,9 +248,7 @@ def analyze_test_data(
                 console.print(env_table)
 
                 if "consistency" in env_impact:
-                    console.print(
-                        f"Environment Consistency Score: {env_impact['consistency']:.2f} (0-1 scale)"
-                    )
+                    console.print(f"Environment Consistency Score: {env_impact['consistency']:.2f} (0-1 scale)")
 
             # Show trends if requested
             if show_trends:
@@ -300,9 +287,7 @@ def analyze_test_data(
 
                     direction = "improved" if diff > 0 else "declined"
                     color = "green" if diff > 0 else "red"
-                    console.print(
-                        f"Pass Rate: [bold {color}]{abs(diff):.2f}% {direction}[/bold {color}]"
-                    )
+                    console.print(f"Pass Rate: [bold {color}]{abs(diff):.2f}% {direction}[/bold {color}]")
 
             # Show completion message
             console.print(
@@ -350,14 +335,10 @@ def analyze_test_data(
 def main():
     """Main function to run the analysis CLI."""
     parser = argparse.ArgumentParser(description="Analyze pytest test results")
-    parser.add_argument(
-        "--data-path", "-d", help="Path to test data (default: use configured storage)"
-    )
+    parser.add_argument("--data-path", "-d", help="Path to test data (default: use configured storage)")
     parser.add_argument("--sut", "-s", help="Filter by system under test")
     parser.add_argument("--days", type=int, help="Filter by number of days")
-    parser.add_argument(
-        "--format", "-f", choices=["text", "json"], default="text", help="Output format"
-    )
+    parser.add_argument("--format", "-f", choices=["text", "json"], default="text", help="Output format")
     parser.add_argument("--test", "-t", help="Filter by test name pattern")
     parser.add_argument("--profile", "-p", help="Storage profile to use")
     parser.add_argument(
@@ -365,21 +346,15 @@ def main():
         "-c",
         help="Compare with another dataset (format: days:N, version:X.Y.Z, or profile:name)",
     )
-    parser.add_argument(
-        "--show-trends", "--trends", action="store_true", help="Show trend analysis"
-    )
+    parser.add_argument("--show-trends", "--trends", action="store_true", help="Show trend analysis")
     parser.add_argument(
         "--show-error-details",
         "--errors",
         action="store_true",
         help="Show detailed error information",
     )
-    parser.add_argument(
-        "--version", "-v", action="store_true", help="Show version information"
-    )
-    parser.add_argument(
-        "--generate-sample", action="store_true", help="Generate sample test data"
-    )
+    parser.add_argument("--version", "-v", action="store_true", help="Show version information")
+    parser.add_argument("--generate-sample", action="store_true", help="Generate sample test data")
 
     args = parser.parse_args()
 

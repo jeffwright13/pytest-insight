@@ -2,7 +2,6 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-
 from pytest_insight.core.comparison import Comparison, ComparisonError, ComparisonResult
 from pytest_insight.core.models import TestOutcome, TestResult, TestSession
 from pytest_insight.core.query import Query
@@ -71,11 +70,7 @@ class Test_Comparison:
 
     def test_basic_comparison(self, base_session, target_session):
         """Test basic comparison functionality."""
-        comparison = (
-            Comparison()
-            .between_suts("api-service", "api-service")
-            .execute([base_session, target_session])
-        )
+        comparison = Comparison().between_suts("api-service", "api-service").execute([base_session, target_session])
 
         assert isinstance(comparison, ComparisonResult)
 
@@ -102,9 +97,7 @@ class Test_Comparison:
     def test_environment_comparison(self, base_session, target_session):
         """Test comparing across environments."""
         comparison = (
-            Comparison()
-            .with_environment({"python": "3.9"}, {"python": "3.10"})
-            .execute([base_session, target_session])
+            Comparison().with_environment({"python": "3.9"}, {"python": "3.10"}).execute([base_session, target_session])
         )
 
         assert isinstance(comparison, ComparisonResult)
@@ -115,11 +108,7 @@ class Test_Comparison:
         now = get_test_time()
         comparison = (
             Comparison()
-            .apply_to_both(
-                lambda q: q.date_range(
-                    now - timedelta(days=14), now - timedelta(days=7)
-                )
-            )
+            .apply_to_both(lambda q: q.date_range(now - timedelta(days=14), now - timedelta(days=7)))
             .execute([base_session, target_session])
         )
 
@@ -133,13 +122,13 @@ class Test_Comparison:
         assert "test_api.py::test_get" in comparison.slower_tests
         assert "test_api.py::test_post" in comparison.faster_tests
 
-    def test_unreliable_detection(self, base_session, target_session):
-        """Test unreliable test detection."""
+    def test_reliability_detection(self, base_session, target_session):
+        """Test reliability test detection."""
         comparison = Comparison().execute([base_session, target_session])
 
-        # Both tests changed outcomes, should be marked as unreliable
-        assert "test_api.py::test_get" in comparison.unreliable_tests
-        assert "test_api.py::test_post" in comparison.unreliable_tests
+        # Both tests changed outcomes, should be marked as reliability tests
+        assert "test_api.py::test_get" in comparison.reliability_tests
+        assert "test_api.py::test_post" in comparison.reliability_tests
 
     def test_comparison_validation_no_sessions_no_filters(self):
         """Test input validation."""
@@ -210,9 +199,7 @@ class Test_Comparison:
             .apply_to_both(
                 lambda q: q.filter_by_test()
                 .with_nodeid_containing("get")  # Match tests with 'get' in nodeid
-                .with_duration_between(
-                    0.5, float("inf")
-                )  # This should pass (both sessions have durations > 0.5)
+                .with_duration_between(0.5, float("inf"))  # This should pass (both sessions have durations > 0.5)
                 .apply()
             )
             .execute([base_session, target_session])
@@ -229,7 +216,7 @@ class Test_Comparison:
         1. Filter Combinations:
            - Session-level filters (environment)
            - Test-level filters (pattern matching)
-           - Outcome filters (failures, unreliable)
+           - Outcome filters (failures, reliability)
 
         2. Two-Level Design:
            - Session filters applied first
@@ -266,18 +253,14 @@ class Test_Comparison:
     @pytest.mark.usefixtures("base_session")
     @pytest.mark.usefixtures("target_session")
     @patch("pytest_insight.core.query.Query")
-    def test_comparison_with_profiles(
-        self, mock_query, base_session, target_session, mocker
-    ):
+    def test_comparison_with_profiles(self, mock_query, base_session, target_session, mocker):
         """Test comparison initialization with profiles."""
         # Mock the Query class to verify profile parameters are passed
         mock_query_instance = mocker.MagicMock()
         mock_query.return_value = mock_query_instance
 
         # Mock profile creation and retrieval
-        mock_profile_manager = mocker.patch(
-            "pytest_insight.core.storage.get_profile_manager"
-        )
+        mock_profile_manager = mocker.patch("pytest_insight.core.storage.get_profile_manager")
         mock_profile_manager_instance = mocker.MagicMock()
         mock_profile_manager.return_value = mock_profile_manager_instance
 
@@ -396,21 +379,15 @@ class Test_Comparison:
         # Verify method returns self for chaining
         assert result is comparison
 
-    def test_execute_with_profiles(
-        self, base_session, target_session, mocker, tmp_path
-    ):
+    def test_execute_with_profiles(self, base_session, target_session, mocker, tmp_path):
         """Test execute method with profiles."""
 
         # Create a temporary file path (file doesn't need to exist if only the path is needed)
         temp_file_path = tmp_path / "dummy.json"
 
         # Mock the ProfileManager.get_profile method
-        mock_profile = mocker.patch(
-            "pytest_insight.core.storage.ProfileManager.get_profile"
-        )
-        mock_profile.return_value = mocker.MagicMock(
-            storage_type="json", file_path=str(temp_file_path)
-        )
+        mock_profile = mocker.patch("pytest_insight.core.storage.ProfileManager.get_profile")
+        mock_profile.return_value = mocker.MagicMock(storage_type="json", file_path=str(temp_file_path))
 
         # Create a mock ComparisonResult
         mock_comparison_result = ComparisonResult(
@@ -420,7 +397,7 @@ class Test_Comparison:
             target_session=target_session,
             new_failures=[],
             new_passes=[],
-            unreliable_tests=[],
+            reliability_tests=[],
             slower_tests=[],
             faster_tests=[],
             missing_tests=[],
@@ -429,9 +406,7 @@ class Test_Comparison:
         )
 
         # Mock the execute method to return our mock_comparison_result
-        mock_execute = mocker.patch.object(
-            Comparison, "execute", return_value=mock_comparison_result
-        )
+        mock_execute = mocker.patch.object(Comparison, "execute", return_value=mock_comparison_result)
 
         # Create comparison with profiles
         comparison = Comparison(base_profile="profile1", target_profile="profile2")
@@ -464,12 +439,8 @@ class Test_Comparison:
 
         # Test comparison function
         comparison(base_profile="profile1", target_profile="profile2")
-        mock_comparison.assert_called_with(
-            sessions=None, base_profile="profile1", target_profile="profile2"
-        )
+        mock_comparison.assert_called_with(sessions=None, base_profile="profile1", target_profile="profile2")
 
         # Test comparison_with_profiles function
         comparison_with_profiles("profile1", "profile2")
-        mock_comparison.assert_called_with(
-            base_profile="profile1", target_profile="profile2"
-        )
+        mock_comparison.assert_called_with(base_profile="profile1", target_profile="profile2")

@@ -81,15 +81,10 @@ def select_profile() -> str:
             default_index = profile_options.index(active_name)
 
     # If a profile was specified via CLI, use that as the default
-    if (
-        hasattr(st.session_state, "cli_profile")
-        and st.session_state.cli_profile in profile_options
-    ):
+    if hasattr(st.session_state, "cli_profile") and st.session_state.cli_profile in profile_options:
         default_index = profile_options.index(st.session_state.cli_profile)
         # Show a message indicating we're using the CLI-specified profile
-        st.sidebar.success(
-            f"Using profile specified from command line: {st.session_state.cli_profile}"
-        )
+        st.sidebar.success(f"Using profile specified from command line: {st.session_state.cli_profile}")
 
     # Let user select profile
     col1, col2 = st.sidebar.columns([3, 1])
@@ -158,16 +153,11 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                 for s in sessions:
                     if hasattr(s, "session_start_time") and s.session_start_time:
                         # Use NormalizedDatetime to handle timezone differences
-                        if (
-                            NormalizedDatetime(s.session_start_time)
-                            >= normalized_cutoff
-                        ):
+                        if NormalizedDatetime(s.session_start_time) >= normalized_cutoff:
                             filtered_sessions.append(s)
 
                 sessions = filtered_sessions
-                st.sidebar.info(
-                    f"Filtered to {len(sessions)} sessions in last {days} days"
-                )
+                st.sidebar.info(f"Filtered to {len(sessions)} sessions in last {days} days")
             except Exception as e:
                 st.error(f"Error filtering sessions by date: {e}")
                 st.code(traceback.format_exc())
@@ -243,9 +233,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
             # Dock 1 percentage point for each percent of unstable tests
             if health_score_penalty > 0:
                 # Convert health score to 0-100 scale if needed
-                health_score_100 = (
-                    health_score * 10 if health_score <= 10 else health_score
-                )
+                health_score_100 = health_score * 10 if health_score <= 10 else health_score
 
                 # Apply penalty (capped at 50% of the score to avoid excessive penalties)
                 max_penalty = health_score_100 * 0.5
@@ -253,11 +241,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                 health_score_100 = max(health_score_100 - actual_penalty, 0)
 
                 # Convert back to original scale if needed
-                health_score = (
-                    health_score_100 / 10
-                    if health_score_100 <= 100
-                    else health_score_100
-                )
+                health_score = health_score_100 / 10 if health_score_100 <= 100 else health_score_100
         except Exception as e:
             st.sidebar.warning(f"Error applying health score penalty: {e}")
 
@@ -352,19 +336,13 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                 "📊 **Low reliability index detected.** Consider investigating test stability issues."
             )
             if rerun_recovery_rate > 70:
-                recommendations.append(
-                    "✅ Good rerun recovery rate. Focus on tests that fail consistently."
-                )
+                recommendations.append("✅ Good rerun recovery rate. Focus on tests that fail consistently.")
             else:
-                recommendations.append(
-                    "❌ Low rerun recovery rate. Tests may have genuine failures."
-                )
+                recommendations.append("❌ Low rerun recovery rate. Tests may have genuine failures.")
 
         # Pass rate recommendations
         if pass_rate < 90:
-            recommendations.append(
-                "🔴 **Low pass rate detected.** Consider investigating test failures."
-            )
+            recommendations.append("🔴 **Low pass rate detected.** Consider investigating test failures.")
 
         # Display recommendations or a healthy message
         if recommendations:
@@ -394,9 +372,7 @@ def display_health_metrics(api: InsightAPI, sut: Optional[str], days: int):
                                 outcome = test.outcome
                                 if isinstance(outcome, TestOutcome):
                                     outcome = outcome.value.lower()
-                                outcome_counts[outcome] = (
-                                    outcome_counts.get(outcome, 0) + 1
-                                )
+                                outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
 
             if outcome_counts:
                 # Create DataFrame for plotting
@@ -462,10 +438,7 @@ def display_stability_trends(api: InsightAPI, sut: Optional[str], days: int):
                 for s in sessions:
                     if hasattr(s, "session_start_time") and s.session_start_time:
                         # Use NormalizedDatetime to handle timezone differences
-                        if (
-                            NormalizedDatetime(s.session_start_time)
-                            >= normalized_cutoff
-                        ):
+                        if NormalizedDatetime(s.session_start_time) >= normalized_cutoff:
                             filtered_sessions.append(s)
 
                 sessions = filtered_sessions
@@ -500,10 +473,7 @@ def display_stability_trends(api: InsightAPI, sut: Optional[str], days: int):
             # Group sessions by date
             sessions_by_date = {}
             for session in sessions:
-                if (
-                    hasattr(session, "session_start_time")
-                    and session.session_start_time
-                ):
+                if hasattr(session, "session_start_time") and session.session_start_time:
                     # Get the date part only
                     date_key = session.session_start_time.date().isoformat()
                     if date_key not in sessions_by_date:
@@ -523,25 +493,18 @@ def display_stability_trends(api: InsightAPI, sut: Optional[str], days: int):
 
                     for test in session.test_results:
                         total_tests += 1
-                        if (
-                            hasattr(test, "outcome")
-                            and test.outcome == TestOutcome.FAILED
-                        ):
+                        if hasattr(test, "outcome") and test.outcome == TestOutcome.FAILED:
                             failed_tests += 1
                         if hasattr(test, "duration") and test.duration:
                             total_duration += test.duration
 
                 # Add failure rate data point
                 failure_rate = failed_tests / total_tests if total_tests > 0 else 0
-                trends["failure_trend"]["data_points"].append(
-                    {"date": date_key, "rate": failure_rate}
-                )
+                trends["failure_trend"]["data_points"].append({"date": date_key, "rate": failure_rate})
 
                 # Add duration data point
                 avg_duration = total_duration / total_tests if total_tests > 0 else 0
-                trends["duration_trend"]["data_points"].append(
-                    {"date": date_key, "duration": avg_duration}
-                )
+                trends["duration_trend"]["data_points"].append({"date": date_key, "duration": avg_duration})
 
             # Determine trend direction
             if len(trends["failure_trend"]["data_points"]) >= 2:
@@ -589,9 +552,7 @@ def display_stability_trends(api: InsightAPI, sut: Optional[str], days: int):
 
                     for point in failure_data.get("data_points", []):
                         dates.append(point.get("date"))
-                        rates.append(
-                            point.get("rate", 0) * 100
-                        )  # Convert to percentage
+                        rates.append(point.get("rate", 0) * 100)  # Convert to percentage
 
                     if dates and rates:
                         df = pd.DataFrame({"Date": dates, "Failure Rate (%)": rates})
@@ -609,9 +570,7 @@ def display_stability_trends(api: InsightAPI, sut: Optional[str], days: int):
                             if trend_direction == "increasing":
                                 st.warning("⚠️ Failure rate is significantly increasing")
                             elif trend_direction == "decreasing":
-                                st.success(
-                                    "✅ Failure rate is significantly decreasing"
-                                )
+                                st.success("✅ Failure rate is significantly decreasing")
                         else:
                             st.info("ℹ️ Failure rate is stable")
                     else:
@@ -650,13 +609,9 @@ def display_stability_trends(api: InsightAPI, sut: Optional[str], days: int):
 
                         if trend_significant:
                             if trend_direction == "increasing":
-                                st.warning(
-                                    "⚠️ Test duration is significantly increasing"
-                                )
+                                st.warning("⚠️ Test duration is significantly increasing")
                             elif trend_direction == "decreasing":
-                                st.success(
-                                    "✅ Test duration is significantly decreasing"
-                                )
+                                st.success("✅ Test duration is significantly decreasing")
                         else:
                             st.info("ℹ️ Test duration is stable")
                     else:
@@ -699,10 +654,7 @@ def display_predictive_insights(api: InsightAPI, sut: Optional[str], days: int):
                 for s in sessions:
                     if hasattr(s, "session_start_time") and s.session_start_time:
                         # Use NormalizedDatetime to handle timezone differences
-                        if (
-                            NormalizedDatetime(s.session_start_time)
-                            >= normalized_cutoff
-                        ):
+                        if NormalizedDatetime(s.session_start_time) >= normalized_cutoff:
                             filtered_sessions.append(s)
 
                 sessions = filtered_sessions
@@ -732,33 +684,22 @@ def display_predictive_insights(api: InsightAPI, sut: Optional[str], days: int):
             try:
                 predictions = predictive.failure_prediction()
 
-                if (
-                    predictions
-                    and isinstance(predictions, dict)
-                    and "predictions" in predictions
-                ):
+                if predictions and isinstance(predictions, dict) and "predictions" in predictions:
                     pred_data = predictions["predictions"]
 
                     if isinstance(pred_data, dict) and pred_data:
                         # Convert dictionary to list of dictionaries for display
-                        pred_list = [
-                            {"test": test, "probability": prob}
-                            for test, prob in pred_data.items()
-                        ]
+                        pred_list = [{"test": test, "probability": prob} for test, prob in pred_data.items()]
 
                         # Sort by probability (descending)
-                        pred_list = sorted(
-                            pred_list, key=lambda x: x["probability"], reverse=True
-                        )
+                        pred_list = sorted(pred_list, key=lambda x: x["probability"], reverse=True)
 
                         # Create DataFrame for displaying predictions
                         df = pd.DataFrame(pred_list)
 
                         # Format probability as percentage
                         if "probability" in df.columns:
-                            df["probability"] = df["probability"].apply(
-                                lambda x: f"{x*100:.1f}%"
-                            )
+                            df["probability"] = df["probability"].apply(lambda x: f"{x*100:.1f}%")
 
                         # Display as table
                         st.dataframe(df, use_container_width=True)
@@ -780,11 +721,7 @@ def display_predictive_insights(api: InsightAPI, sut: Optional[str], days: int):
             try:
                 forecast = predictive.stability_forecast()
 
-                if (
-                    forecast
-                    and isinstance(forecast, dict)
-                    and "forecasted_stability" in forecast
-                ):
+                if forecast and isinstance(forecast, dict) and "forecasted_stability" in forecast:
                     # Create a simple display of the forecast
                     current = forecast.get("current_stability")
                     forecasted = forecast.get("forecasted_stability")
@@ -832,11 +769,7 @@ def display_predictive_insights(api: InsightAPI, sut: Optional[str], days: int):
             try:
                 anomalies = predictive.anomaly_detection()
 
-                if (
-                    anomalies
-                    and isinstance(anomalies, dict)
-                    and "anomalies" in anomalies
-                ):
+                if anomalies and isinstance(anomalies, dict) and "anomalies" in anomalies:
                     anomaly_list = anomalies.get("anomalies", [])
 
                     if anomaly_list:
@@ -910,10 +843,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
                 for s in sessions:
                     if hasattr(s, "session_start_time") and s.session_start_time:
                         # Use NormalizedDatetime to handle timezone differences
-                        if (
-                            NormalizedDatetime(s.session_start_time)
-                            >= normalized_cutoff
-                        ):
+                        if NormalizedDatetime(s.session_start_time) >= normalized_cutoff:
                             filtered_sessions.append(s)
 
                 sessions = filtered_sessions
@@ -929,9 +859,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
         try:
             sessions = sorted(
                 sessions,
-                key=lambda s: NormalizedDatetime(
-                    getattr(s, "session_start_time", datetime.now(ZoneInfo("UTC")))
-                ),
+                key=lambda s: NormalizedDatetime(getattr(s, "session_start_time", datetime.now(ZoneInfo("UTC")))),
             )
         except Exception as e:
             st.error(f"Error sorting sessions: {e}")
@@ -953,7 +881,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
         pass_rates = []
         fail_rates = []
         avg_durations = []
-        nonreliability_rates = []
+        reliability_rates = []
         test_counts = []
 
         for date_key, date_sessions in sorted(sessions_by_date.items()):
@@ -968,23 +896,11 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
 
             # Calculate metrics
             total_tests = len(all_tests)
-            passed_tests = sum(
-                1
-                for t in all_tests
-                if hasattr(t, "outcome") and t.outcome == TestOutcome.PASSED
-            )
-            failed_tests = sum(
-                1
-                for t in all_tests
-                if hasattr(t, "outcome") and t.outcome == TestOutcome.FAILED
-            )
+            passed_tests = sum(1 for t in all_tests if hasattr(t, "outcome") and t.outcome == TestOutcome.PASSED)
+            failed_tests = sum(1 for t in all_tests if hasattr(t, "outcome") and t.outcome == TestOutcome.FAILED)
 
             # Calculate average duration
-            durations = [
-                t.duration
-                for t in all_tests
-                if hasattr(t, "duration") and t.duration is not None
-            ]
+            durations = [t.duration for t in all_tests if hasattr(t, "duration") and t.duration is not None]
             avg_duration = sum(durations) / len(durations) if durations else 0
 
             # Calculate reliability-repeatability (tests that have both passed and failed on the same day)
@@ -995,25 +911,15 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
                         test_outcomes[test.nodeid] = set()
                     test_outcomes[test.nodeid].add(test.outcome)
 
-            unreliable_tests = sum(
-                1 for outcomes in test_outcomes.values() if len(outcomes) > 1
-            )
-            nonreliability_rate = (
-                unreliable_tests / len(test_outcomes) if test_outcomes else 0
-            )
+            unreliable_tests = sum(1 for outcomes in test_outcomes.values() if len(outcomes) > 1)
+            reliability_rate = 1 - (unreliable_tests / len(test_outcomes)) if test_outcomes else 0
 
             # Store metrics
             dates.append(date_key)
-            pass_rates.append(
-                passed_tests / total_tests * 100 if total_tests > 0 else 0
-            )
-            fail_rates.append(
-                failed_tests / total_tests * 100 if total_tests > 0 else 0
-            )
+            pass_rates.append(passed_tests / total_tests * 100 if total_tests > 0 else 0)
+            fail_rates.append(failed_tests / total_tests * 100 if total_tests > 0 else 0)
             avg_durations.append(avg_duration)
-            nonreliability_rates.append(
-                nonreliability_rate * 100
-            )  # Convert to percentage
+            reliability_rates.append(reliability_rate * 100)  # Convert to percentage
             test_counts.append(total_tests)
 
         if not dates:
@@ -1021,9 +927,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
             return
 
         # Create tabs for different trend visualizations
-        tab1, tab2, tab3 = st.tabs(
-            ["Pass/Fail Rates", "Execution Times", "reliability-repeatability Index"]
-        )
+        tab1, tab2, tab3 = st.tabs(["Pass/Fail Rates", "Execution Times", "Reliability-Repeatability Index"])
 
         with tab1:
             st.subheader("Pass/Fail Rates Over Time")
@@ -1062,9 +966,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
             fig.update_layout(
                 yaxis=dict(title="Rate (%)"),
                 yaxis2=dict(title="Test Count", overlaying="y", side="right"),
-                legend=dict(
-                    orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-                ),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 margin=dict(t=50, b=0, l=0, r=0),
                 hovermode="x unified",
             )
@@ -1080,13 +982,9 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
                 if abs(pass_rate_change) < 1:
                     trend_message = "Pass rate has remained stable."
                 elif pass_rate_change > 0:
-                    trend_message = (
-                        f"Pass rate has improved by {pass_rate_change:.1f}%."
-                    )
+                    trend_message = f"Pass rate has improved by {pass_rate_change:.1f}%."
                 else:
-                    trend_message = (
-                        f"Pass rate has decreased by {abs(pass_rate_change):.1f}%."
-                    )
+                    trend_message = f"Pass rate has decreased by {abs(pass_rate_change):.1f}%."
 
                 st.info(trend_message)
 
@@ -1126,9 +1024,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
             fig.update_layout(
                 yaxis=dict(title="Duration (seconds)"),
                 yaxis2=dict(title="Test Count", overlaying="y", side="right"),
-                legend=dict(
-                    orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-                ),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 margin=dict(t=50, b=0, l=0, r=0),
                 hovermode="x unified",
             )
@@ -1141,9 +1037,7 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
                 last_duration = avg_durations[-1]
 
                 if first_duration > 0:
-                    duration_change_pct = (
-                        (last_duration - first_duration) / first_duration * 100
-                    )
+                    duration_change_pct = (last_duration - first_duration) / first_duration * 100
 
                     if abs(duration_change_pct) < 5:
                         trend_message = "Test execution time has remained stable."
@@ -1155,31 +1049,31 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
                     st.info(trend_message)
 
         with tab3:
-            st.subheader("Test reliability-repeatability Index")
+            st.subheader("Test Reliability-Repeatability Index")
 
             # Create DataFrame for plotting
-            df_unreliable = pd.DataFrame(
+            df_reliable = pd.DataFrame(
                 {
                     "Date": dates,
-                    "reliability-repeatability (%)": nonreliability_rates,
+                    "Reliability-Repeatability (%)": reliability_rates,
                     "Test Count": test_counts,
                 }
             )
 
             # Create line chart
             fig = px.line(
-                df_unreliable,
+                df_reliable,
                 x="Date",
-                y="reliability-repeatability (%)",
-                title="Test reliability-repeatability Index",
+                y="Reliability-Repeatability (%)",
+                title="Test Reliability-Repeatability Index",
                 markers=True,
             )
 
             # Add test count as a bar chart on secondary y-axis
             fig.add_trace(
                 go.Bar(
-                    x=df_unreliable["Date"],
-                    y=df_unreliable["Test Count"],
+                    x=df_reliable["Date"],
+                    y=df_reliable["Test Count"],
                     name="Test Count",
                     opacity=0.3,
                     yaxis="y2",
@@ -1188,11 +1082,9 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
 
             # Update layout for dual y-axis
             fig.update_layout(
-                yaxis=dict(title="reliability-repeatability (%)"),
+                yaxis=dict(title="Reliability-Repeatability (%)"),
                 yaxis2=dict(title="Test Count", overlaying="y", side="right"),
-                legend=dict(
-                    orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-                ),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 margin=dict(t=50, b=0, l=0, r=0),
                 hovermode="x unified",
             )
@@ -1200,27 +1092,25 @@ def display_test_execution_trends(api: InsightAPI, sut: Optional[str], days: int
             st.plotly_chart(fig, use_container_width=True)
 
             # Calculate trend
-            if len(nonreliability_rates) >= 2:
-                first_unreliable = nonreliability_rates[0]
-                last_unreliable = nonreliability_rates[-1]
-                unreliable_change = last_unreliable - first_unreliable
+            if len(reliability_rates) >= 2:
+                first_reliable = reliability_rates[0]
+                last_reliable = reliability_rates[-1]
+                reliable_change = last_reliable - first_reliable
 
-                if abs(unreliable_change) < 1:
-                    trend_message = (
-                        "Test reliability-repeatability has remained stable."
-                    )
-                elif unreliable_change > 0:
-                    trend_message = f"Test reliability-repeatability has increased by {unreliable_change:.1f}%."
+                if abs(reliable_change) < 1:
+                    trend_message = "Test reliability-repeatability has remained stable."
+                elif reliable_change > 0:
+                    trend_message = f"Test reliability-repeatability has increased by {reliable_change:.1f}%."
                 else:
-                    trend_message = f"Test reliability-repeatability has decreased by {abs(unreliable_change):.1f}%."
+                    trend_message = f"Test reliability-repeatability has decreased by {abs(reliable_change):.1f}%."
 
                 st.info(trend_message)
 
             # Add explanation of reliability-repeatability
             st.markdown(
                 """
-            **reliability-repeatability Index**: Percentage of tests that have inconsistent outcomes (both pass and fail)
-            on the same day. low reliability indicates unstable tests that need attention.
+            **Reliability-Repeatability Index**: Percentage of tests that have consistent outcomes (both pass and fail)
+            on the same day. High reliability indicates stable tests that need less attention.
             """
             )
 
@@ -1265,10 +1155,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                 for s in sessions:
                     if hasattr(s, "session_start_time") and s.session_start_time:
                         # Use NormalizedDatetime to handle timezone differences
-                        if (
-                            NormalizedDatetime(s.session_start_time)
-                            >= normalized_cutoff
-                        ):
+                        if NormalizedDatetime(s.session_start_time) >= normalized_cutoff:
                             filtered_sessions.append(s)
 
                 sessions = filtered_sessions
@@ -1281,9 +1168,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
             return
 
         # Create tabs for different impact analyses
-        tab1, tab2, tab3 = st.tabs(
-            ["Critical Tests", "Failure Correlations", "Co-Failing Tests"]
-        )
+        tab1, tab2, tab3 = st.tabs(["Critical Tests", "Failure Correlations", "Co-Failing Tests"])
 
         with tab1:
             st.subheader("Most Critical Tests")
@@ -1321,7 +1206,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                     if hasattr(test, "outcome") and test.outcome == TestOutcome.FAILED:
                         test_stats[nodeid]["failures"] += 1
 
-                    if hasattr(test, "duration") and test.duration is not None:
+                    if hasattr(test, "duration") and test.duration:
                         test_stats[nodeid]["total_duration"] += test.duration
 
                     if hasattr(session, "session_id") and session.session_id:
@@ -1340,11 +1225,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                 session_failures[session_id] = []
 
                 for test in session.test_results:
-                    if (
-                        hasattr(test, "nodeid")
-                        and hasattr(test, "outcome")
-                        and test.outcome == TestOutcome.FAILED
-                    ):
+                    if hasattr(test, "nodeid") and hasattr(test, "outcome") and test.outcome == TestOutcome.FAILED:
                         session_failures[session_id].append(test.nodeid)
 
             # Calculate dependency scores
@@ -1372,21 +1253,15 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                 dependency_score = dependency_scores.get(nodeid, 0)
 
                 # Normalize dependency score (0-1 range)
-                max_dependency = (
-                    max(dependency_scores.values()) if dependency_scores else 1
-                )
-                normalized_dependency = (
-                    dependency_score / max_dependency if max_dependency > 0 else 0
-                )
+                max_dependency = max(dependency_scores.values()) if dependency_scores else 1
+                normalized_dependency = dependency_score / max_dependency if max_dependency > 0 else 0
 
                 # Calculate criticality score (weighted sum of factors)
                 criticality = (
                     (failure_rate * 0.4)
                     + (normalized_dependency * 0.3)
                     + (execution_frequency * 0.2)
-                    + (
-                        min(1.0, avg_duration / 10) * 0.1
-                    )  # Cap duration impact at 10 seconds
+                    + (min(1.0, avg_duration / 10) * 0.1)  # Cap duration impact at 10 seconds
                 )
 
                 # Extract test name from nodeid for better display
@@ -1468,17 +1343,13 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
             # Identify frequently failing tests
             failing_tests = []
             for nodeid, stats in test_stats.items():
-                if (
-                    stats["failures"] >= 2
-                ):  # Only include tests that failed at least twice
+                if stats["failures"] >= 2:  # Only include tests that failed at least twice
                     failing_tests.append(nodeid)
 
             # Limit to top 15 most frequently failing tests to keep matrix readable
             if len(failing_tests) > 15:
                 # Sort by failure count
-                failing_tests = sorted(
-                    failing_tests, key=lambda x: test_stats[x]["failures"], reverse=True
-                )[:15]
+                failing_tests = sorted(failing_tests, key=lambda x: test_stats[x]["failures"], reverse=True)[:15]
 
             if failing_tests:
                 # Create correlation matrix
@@ -1506,17 +1377,12 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
 
                             # Calculate correlation coefficient (0-1)
                             if failures1 > 0 and failures2 > 0:
-                                correlation_matrix[test1][test2] = co_failures / min(
-                                    failures1, failures2
-                                )
+                                correlation_matrix[test1][test2] = co_failures / min(failures1, failures2)
                             else:
                                 correlation_matrix[test1][test2] = 0
 
                 # Extract test names for better display
-                test_names = [
-                    nodeid.split("::")[-1] if "::" in nodeid else nodeid
-                    for nodeid in failing_tests
-                ]
+                test_names = [nodeid.split("::")[-1] if "::" in nodeid else nodeid for nodeid in failing_tests]
 
                 # Create heatmap data
                 heatmap_data = []
@@ -1588,9 +1454,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
             # For each session with failures, check if it forms a recurring pattern
             session_failure_patterns = {}
             for session_id, failed_tests in session_failures.items():
-                if (
-                    len(failed_tests) >= 2
-                ):  # Only consider sessions with multiple failures
+                if len(failed_tests) >= 2:  # Only consider sessions with multiple failures
                     # Create a frozen set of failed tests to use as a dictionary key
                     pattern = frozenset(failed_tests)
                     if pattern not in session_failure_patterns:
@@ -1618,9 +1482,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                     "tests": [test for test in pattern if test not in assigned_tests],
                     "count": count,
                     "test_names": [
-                        test.split("::")[-1] if "::" in test else test
-                        for test in pattern
-                        if test not in assigned_tests
+                        test.split("::")[-1] if "::" in test else test for test in pattern if test not in assigned_tests
                     ],
                 }
 
@@ -1641,9 +1503,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
 
             # Fill the co-failure matrix by analyzing session failures
             for session_id, failed_tests in session_failures.items():
-                if (
-                    len(failed_tests) > 1
-                ):  # Only consider sessions with multiple failures
+                if len(failed_tests) > 1:  # Only consider sessions with multiple failures
                     for i, test1 in enumerate(failed_tests):
                         for test2 in failed_tests[i + 1 :]:
                             if test1 in co_failures and test2 in co_failures[test1]:
@@ -1677,21 +1537,15 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                             )
 
             # Sort by correlation percentage
-            significant_co_failures.sort(
-                key=lambda x: x["correlation_pct"], reverse=True
-            )
+            significant_co_failures.sort(key=lambda x: x["correlation_pct"], reverse=True)
 
             # Display co-failing groups
             if co_failing_groups:
                 # Create tabs for different visualizations
-                subtab1, subtab2, subtab3 = st.tabs(
-                    ["Group View", "Correlation Table", "Network Graph"]
-                )
+                subtab1, subtab2, subtab3 = st.tabs(["Group View", "Correlation Table", "Network Graph"])
 
                 with subtab1:
-                    for i, group in enumerate(
-                        co_failing_groups[:5]
-                    ):  # Show top 5 groups
+                    for i, group in enumerate(co_failing_groups[:5]):  # Show top 5 groups
                         with st.expander(
                             f"Group {i+1}: {len(group['tests'])} tests, failed together {group['count']} times"
                         ):
@@ -1699,9 +1553,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                             for test_name in group["test_names"]:
                                 st.markdown(f"- `{test_name}`")
 
-                            st.markdown(
-                                f"**Failure frequency:** {group['count']} sessions"
-                            )
+                            st.markdown(f"**Failure frequency:** {group['count']} sessions")
 
                             # Calculate potential root causes based on test names
                             common_words = set()
@@ -1714,9 +1566,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
 
                             if common_words:
                                 st.markdown("**Potential common elements:**")
-                                st.markdown(
-                                    ", ".join(f"`{word}`" for word in common_words)
-                                )
+                                st.markdown(", ".join(f"`{word}`" for word in common_words))
 
                 with subtab2:
                     # Display co-failing test pairs in a table
@@ -1747,9 +1597,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                             "Co-Failures",
                             "Correlation %",
                         ]
-                        display_df["Correlation %"] = (
-                            display_df["Correlation %"].round(1).astype(str) + "%"
-                        )
+                        display_df["Correlation %"] = display_df["Correlation %"].round(1).astype(str) + "%"
 
                         # Show the table with the most significant correlations
                         st.dataframe(display_df.head(20), use_container_width=True)
@@ -1765,9 +1613,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
 
                     # Prepare data for the network graph
                     # Only include the top correlations to avoid cluttering the graph
-                    top_correlations = significant_co_failures[
-                        : min(30, len(significant_co_failures))
-                    ]
+                    top_correlations = significant_co_failures[: min(30, len(significant_co_failures))]
 
                     if top_correlations:
                         # Create nodes and edges for the network graph
@@ -1775,23 +1621,13 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                         edges = []
 
                         for corr in top_correlations:
-                            test1_short = (
-                                corr["test1"].split("::")[-1]
-                                if "::" in corr["test1"]
-                                else corr["test1"]
-                            )
-                            test2_short = (
-                                corr["test2"].split("::")[-1]
-                                if "::" in corr["test2"]
-                                else corr["test2"]
-                            )
+                            test1_short = corr["test1"].split("::")[-1] if "::" in corr["test1"] else corr["test1"]
+                            test2_short = corr["test2"].split("::")[-1] if "::" in corr["test2"] else corr["test2"]
 
                             nodes.add(test1_short)
                             nodes.add(test2_short)
 
-                            edges.append(
-                                (test1_short, test2_short, corr["correlation_pct"])
-                            )
+                            edges.append((test1_short, test2_short, corr["correlation_pct"]))
 
                         # Create node list with failure counts as size
                         node_sizes = {}
@@ -1809,18 +1645,12 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                                 node_df = pd.DataFrame(
                                     {
                                         "id": list(nodes),
-                                        "size": [
-                                            node_sizes.get(node, 1) for node in nodes
-                                        ],
-                                        "failures": [
-                                            node_sizes.get(node, 1) for node in nodes
-                                        ],
+                                        "size": [node_sizes.get(node, 1) for node in nodes],
+                                        "failures": [node_sizes.get(node, 1) for node in nodes],
                                     }
                                 )
 
-                                edge_df = pd.DataFrame(
-                                    edges, columns=["source", "target", "weight"]
-                                )
+                                edge_df = pd.DataFrame(edges, columns=["source", "target", "weight"])
 
                                 # Create the network graph
                                 import networkx as nx
@@ -1881,14 +1711,8 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                                     marker=dict(
                                         showscale=True,
                                         colorscale="YlOrRd",
-                                        color=[
-                                            G.nodes[node]["failures"]
-                                            for node in G.nodes()
-                                        ],
-                                        size=[
-                                            10 + G.nodes[node]["failures"] * 2
-                                            for node in G.nodes()
-                                        ],
+                                        color=[G.nodes[node]["failures"] for node in G.nodes()],
+                                        size=[10 + G.nodes[node]["failures"] * 2 for node in G.nodes()],
                                         colorbar=dict(
                                             thickness=15,
                                             title="Failures",
@@ -1897,10 +1721,7 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                                         ),
                                         line=dict(width=2),
                                     ),
-                                    text=[
-                                        f"{node}<br>Failures: {G.nodes[node]['failures']}"
-                                        for node in G.nodes()
-                                    ],
+                                    text=[f"{node}<br>Failures: {G.nodes[node]['failures']}" for node in G.nodes()],
                                 )
 
                                 # Create the figure
@@ -1940,13 +1761,9 @@ def display_test_impact_analysis(api: InsightAPI, sut: Optional[str], days: int)
                                 st.error(f"Error creating network graph: {e}")
                                 st.code(traceback.format_exc())
                         else:
-                            st.info(
-                                "Not enough co-failing tests to create a network graph."
-                            )
+                            st.info("Not enough co-failing tests to create a network graph.")
                     else:
-                        st.info(
-                            "No significant co-failing test patterns detected in the selected time period."
-                        )
+                        st.info("No significant co-failing test patterns detected in the selected time period.")
             else:
                 st.info("No recurring co-failing test groups identified.")
     except Exception as e:
@@ -1990,10 +1807,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                 for s in sessions:
                     if hasattr(s, "session_start_time") and s.session_start_time:
                         # Use NormalizedDatetime to handle timezone differences
-                        if (
-                            NormalizedDatetime(s.session_start_time)
-                            >= normalized_cutoff
-                        ):
+                        if NormalizedDatetime(s.session_start_time) >= normalized_cutoff:
                             filtered_sessions.append(s)
 
                 sessions = filtered_sessions
@@ -2006,9 +1820,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
             return
 
         # Create tabs for different failure pattern analyses
-        tab1, tab2, tab3 = st.tabs(
-            ["Error Message Patterns", "Stack Trace Analysis", "Temporal Patterns"]
-        )
+        tab1, tab2, tab3 = st.tabs(["Error Message Patterns", "Stack Trace Analysis", "Temporal Patterns"])
 
         # Extract all failed tests with error messages
         failed_tests = []
@@ -2044,11 +1856,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                             lines = error_message.split("\n")
                             if lines:
                                 error_message = lines[0].strip()
-                                stack_trace = (
-                                    "\n".join(lines[1:]).strip()
-                                    if len(lines) > 1
-                                    else None
-                                )
+                                stack_trace = "\n".join(lines[1:]).strip() if len(lines) > 1 else None
                         elif isinstance(longrepr, dict):
                             # Dictionary representation
                             if "message" in longrepr:
@@ -2062,9 +1870,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                     # Add to failed tests list
                     failed_tests.append(
                         {
-                            "nodeid": (
-                                test.nodeid if hasattr(test, "nodeid") else "Unknown"
-                            ),
+                            "nodeid": (test.nodeid if hasattr(test, "nodeid") else "Unknown"),
                             "test_name": (
                                 test.nodeid.split("::")[-1]
                                 if hasattr(test, "nodeid") and "::" in test.nodeid
@@ -2130,9 +1936,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                     # Display sample data
                     for pattern, details in sample_patterns.items():
                         with st.expander(f"{pattern} ({details['count']} occurrences)"):
-                            st.markdown(
-                                f"**Affected Tests:** {', '.join(details['tests'])}"
-                            )
+                            st.markdown(f"**Affected Tests:** {', '.join(details['tests'])}")
                             st.markdown(f"**First Seen:** {details['first_seen']}")
                             st.markdown(f"**Last Seen:** {details['last_seen']}")
                             st.markdown("**Potential Root Causes:**")
@@ -2260,15 +2064,9 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                 if pattern_list:
                     st.write("Common error messages across test failures")
 
-                    for i, pattern in enumerate(
-                        pattern_list[:10]
-                    ):  # Show top 10 patterns
-                        with st.expander(
-                            f"{pattern['pattern']} ({pattern['count']} occurrences)"
-                        ):
-                            st.markdown(
-                                f"**Affected Tests:** {', '.join(pattern['tests'])}"
-                            )
+                    for i, pattern in enumerate(pattern_list[:10]):  # Show top 10 patterns
+                        with st.expander(f"{pattern['pattern']} ({pattern['count']} occurrences)"):
+                            st.markdown(f"**Affected Tests:** {', '.join(pattern['tests'])}")
                             st.markdown("**Example Errors:**")
                             for example in pattern["examples"]:
                                 st.markdown(f"- In test `{example['test_name']}`:")
@@ -2281,10 +2079,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                             if "AssertionError" in pattern["pattern"]:
                                 st.markdown("- Calculation logic error")
                                 st.markdown("- Test expectations need updating")
-                            elif (
-                                "ImportError" in pattern["pattern"]
-                                or "ModuleNotFoundError" in pattern["pattern"]
-                            ):
+                            elif "ImportError" in pattern["pattern"] or "ModuleNotFoundError" in pattern["pattern"]:
                                 st.markdown("- Missing dependency")
                                 st.markdown("- Environment configuration issue")
                             elif "AttributeError" in pattern["pattern"]:
@@ -2292,9 +2087,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                                     "- Missing Attribute: Attempting to access a property or method that doesn't exist"
                                 )
                             elif "TypeError" in pattern["pattern"]:
-                                st.markdown(
-                                    "- Type Mismatch: Function received an incompatible argument type"
-                                )
+                                st.markdown("- Type Mismatch: Function received an incompatible argument type")
                             elif "ValueError" in pattern["pattern"]:
                                 st.markdown(
                                     "- Invalid Value: Function received a value that is the right type but inappropriate"
@@ -2308,28 +2101,15 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                                     "- Index Out of Range: Attempted to access a list element that doesn't exist"
                                 )
                             elif "FileNotFoundError" in pattern["pattern"]:
-                                st.markdown(
-                                    "- Missing File: Required file doesn't exist at the expected location"
-                                )
+                                st.markdown("- Missing File: Required file doesn't exist at the expected location")
                             elif "PermissionError" in pattern["pattern"]:
-                                st.markdown(
-                                    "- Permission Issue: Insufficient permissions to access a resource"
-                                )
-                            elif (
-                                "TimeoutError" in pattern["pattern"]
-                                or "timeout" in pattern["pattern"].lower()
-                            ):
-                                st.markdown(
-                                    "- Timeout: Operation took too long to complete"
-                                )
+                                st.markdown("- Permission Issue: Insufficient permissions to access a resource")
+                            elif "TimeoutError" in pattern["pattern"] or "timeout" in pattern["pattern"].lower():
+                                st.markdown("- Timeout: Operation took too long to complete")
                             else:
-                                st.markdown(
-                                    "- Examine the error message and stack trace for more specific information"
-                                )
+                                st.markdown("- Examine the error message and stack trace for more specific information")
                 else:
-                    st.info(
-                        "No error patterns could be identified from the failed tests."
-                    )
+                    st.info("No error patterns could be identified from the failed tests.")
 
             with tab2:
                 st.subheader("Stack Trace Analysis")
@@ -2359,9 +2139,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                             # Extract function name if available (usually in the next line)
                             func_name = "unknown"
                             if trace_lines.index(line) + 1 < len(trace_lines):
-                                next_line = trace_lines[
-                                    trace_lines.index(line) + 1
-                                ].strip()
+                                next_line = trace_lines[trace_lines.index(line) + 1].strip()
                                 if next_line.startswith("in "):
                                     func_name = next_line[3:].strip()
 
@@ -2415,9 +2193,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
 
                 # Display stack frame analysis
                 if frame_list:
-                    st.write(
-                        f"Found {len(frame_list)} distinct failure locations in the code"
-                    )
+                    st.write(f"Found {len(frame_list)} distinct failure locations in the code")
 
                     # Create a bar chart of top failure locations
                     top_frames = frame_list[:10]  # Top 10 failure locations
@@ -2425,10 +2201,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                     fig = go.Figure()
                     fig.add_trace(
                         go.Bar(
-                            x=[
-                                f"{frame['file_name']}:{frame['func_name']}"
-                                for frame in top_frames
-                            ],
+                            x=[f"{frame['file_name']}:{frame['func_name']}" for frame in top_frames],
                             y=[frame["count"] for frame in top_frames],
                             marker_color="indianred",
                         )
@@ -2446,28 +2219,20 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
 
                     # Show detailed information for each failure location
                     for i, frame in enumerate(top_frames):
-                        with st.expander(
-                            f"{frame['file_name']}:{frame['func_name']} - {frame['count']} failures"
-                        ):
+                        with st.expander(f"{frame['file_name']}:{frame['func_name']} - {frame['count']} failures"):
                             st.markdown(f"**File:** `{frame['file_name']}`")
                             st.markdown(f"**Function:** `{frame['func_name']}`")
-                            st.markdown(
-                                f"**Line Numbers:** {', '.join(frame['line_numbers'])}"
-                            )
+                            st.markdown(f"**Line Numbers:** {', '.join(frame['line_numbers'])}")
                             st.markdown(f"**Failed Tests:** {frame['test_count']}")
 
                             # Show a sample of failed tests
                             if frame["tests"]:
                                 st.markdown("**Sample Failed Tests:**")
                                 for test in frame["tests"][:5]:  # Show up to 5 tests
-                                    test_name = (
-                                        test.split("::")[-1] if "::" in test else test
-                                    )
+                                    test_name = test.split("::")[-1] if "::" in test else test
                                     st.markdown(f"- `{test_name}`")
                 else:
-                    st.info(
-                        "No stack trace information could be extracted from the failed tests."
-                    )
+                    st.info("No stack trace information could be extracted from the failed tests.")
 
             with tab3:
                 st.subheader("Temporal Failure Patterns")
@@ -2486,11 +2251,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                         continue
 
                     # Extract date from session time
-                    session_date = (
-                        test["session_time"].date()
-                        if hasattr(test["session_time"], "date")
-                        else None
-                    )
+                    session_date = test["session_time"].date() if hasattr(test["session_time"], "date") else None
                     if not session_date:
                         continue
 
@@ -2508,11 +2269,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                         continue
 
                     # Extract hour from session time
-                    session_hour = (
-                        test["session_time"].hour
-                        if hasattr(test["session_time"], "hour")
-                        else None
-                    )
+                    session_hour = test["session_time"].hour if hasattr(test["session_time"], "hour") else None
                     if session_hour is None:
                         continue
 
@@ -2526,9 +2283,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                 if date_failures:
                     dates = sorted(date_failures.keys())
                     failure_counts = [date_failures[date]["count"] for date in dates]
-                    unique_test_counts = [
-                        len(date_failures[date]["tests"]) for date in dates
-                    ]
+                    unique_test_counts = [len(date_failures[date]["tests"]) for date in dates]
 
                     # Create time series chart
                     fig = go.Figure()
@@ -2573,18 +2328,12 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                     # Check for trends
                     if len(dates) >= 3:
                         # Simple trend detection
-                        first_half = sum(failure_counts[: len(failure_counts) // 2]) / (
-                            len(failure_counts) // 2
+                        first_half = sum(failure_counts[: len(failure_counts) // 2]) / (len(failure_counts) // 2)
+                        second_half = sum(failure_counts[len(failure_counts) // 2 :]) / (
+                            len(failure_counts) - len(failure_counts) // 2
                         )
-                        second_half = sum(
-                            failure_counts[len(failure_counts) // 2 :]
-                        ) / (len(failure_counts) - len(failure_counts) // 2)
 
-                        trend_percentage = (
-                            ((second_half - first_half) / first_half * 100)
-                            if first_half > 0
-                            else 0
-                        )
+                        trend_percentage = ((second_half - first_half) / first_half * 100) if first_half > 0 else 0
 
                         if abs(trend_percentage) >= 10:  # 10% change threshold
                             if trend_percentage > 0:
@@ -2601,19 +2350,12 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                     all_hours = list(range(24))
 
                     # Fill in missing hours with zeros
-                    all_hourly_counts = [
-                        hour_failures.get(hour, {"count": 0})["count"]
-                        for hour in all_hours
-                    ]
+                    all_hourly_counts = [hour_failures.get(hour, {"count": 0})["count"] for hour in all_hours]
 
                     # Create hour distribution chart
                     fig = go.Figure()
 
-                    fig.add_trace(
-                        go.Bar(
-                            x=all_hours, y=all_hourly_counts, marker_color="indianred"
-                        )
-                    )
+                    fig.add_trace(go.Bar(x=all_hours, y=all_hourly_counts, marker_color="indianred"))
 
                     fig.update_layout(
                         title="Failures by Hour of Day",
@@ -2626,21 +2368,16 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                     st.plotly_chart(fig, use_container_width=True)
 
                     # Check for time-of-day patterns
-                    max_hour = all_hours[
-                        all_hourly_counts.index(max(all_hourly_counts))
-                    ]
+                    max_hour = all_hours[all_hourly_counts.index(max(all_hourly_counts))]
                     max_count = max(all_hourly_counts)
                     avg_count = (
-                        sum(all_hourly_counts)
-                        / len([c for c in all_hourly_counts if c > 0])
+                        sum(all_hourly_counts) / len([c for c in all_hourly_counts if c > 0])
                         if any(all_hourly_counts)
                         else 0
                     )
 
                     if max_count > 2 * avg_count:  # Significant spike
-                        st.warning(
-                            f"⚠️ Significant spike in failures at hour {max_hour}:00 (UTC)"
-                        )
+                        st.warning(f"⚠️ Significant spike in failures at hour {max_hour}:00 (UTC)")
 
                         # Categorize time periods
                         if 0 <= max_hour < 6:
@@ -2665,9 +2402,7 @@ def display_failure_pattern_analysis(api: InsightAPI, sut: Optional[str], days: 
                         )
 
             if not date_failures and not hour_failures:
-                st.info(
-                    "Not enough temporal data to analyze failure patterns over time."
-                )
+                st.info("Not enough temporal data to analyze failure patterns over time.")
 
     except Exception as e:
         st.error(f"Error displaying failure pattern analysis: {e}")
@@ -2747,16 +2482,11 @@ def main():
 
         # Add HTML report generation section
         with st.sidebar.expander("Generate HTML Report", expanded=False):
-            st.markdown(
-                "Generate a standalone HTML report with all test results and visualizations."
-            )
+            st.markdown("Generate a standalone HTML report with all test results and visualizations.")
 
             report_title = st.text_input(
                 "Report Title",
-                value="Test Report - "
-                + selected_sut
-                + " - "
-                + datetime.now().strftime("%Y-%m-%d"),
+                value="Test Report - " + selected_sut + " - " + datetime.now().strftime("%Y-%m-%d"),
                 help="Custom title for the HTML report",
             )
 
@@ -2777,9 +2507,7 @@ def main():
                     import tempfile
 
                     # Create a temporary file for the report
-                    with tempfile.NamedTemporaryFile(
-                        suffix=".html", delete=False
-                    ) as tmp:
+                    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
                         report_path = tmp.name
 
                     # Build the command
@@ -2802,14 +2530,10 @@ def main():
                         st.download_button(
                             label="Download HTML Report",
                             data=report_content,
-                            file_name="pytest_insight_report_"
-                            + datetime.now().strftime("%Y%m%d_%H%M%S")
-                            + ".html",
+                            file_name="pytest_insight_report_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".html",
                             mime="text/html",
                         )
-                        st.success(
-                            "Report generated successfully! Click the button above to download."
-                        )
+                        st.success("Report generated successfully! Click the button above to download.")
                     else:
                         # Error
                         st.error("Error generating report: " + process.stderr)
@@ -2822,14 +2546,10 @@ def main():
         st.sidebar.header("Dashboard Controls")
 
         # Add shutdown button
-        if st.sidebar.button(
-            "Shutdown Dashboard", type="primary", use_container_width=True
-        ):
+        if st.sidebar.button("Shutdown Dashboard", type="primary", use_container_width=True):
             st.sidebar.warning("Shutting down dashboard server...")
             # Create a flag file that will be checked by the dashboard launcher
-            shutdown_file = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "shutdown_dashboard.flag"
-            )
+            shutdown_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "shutdown_dashboard.flag")
             with open(shutdown_file, "w") as f:
                 f.write(str(datetime.now()))
 

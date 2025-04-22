@@ -87,18 +87,14 @@ class PredictiveAnalytics:
 
             # Simple linear trend for demonstration
             # In a real implementation, use more sophisticated time series models
-            x = np.array(
-                [(d - dates[0]).total_seconds() / 86400 for d in dates]
-            ).reshape(-1, 1)
+            x = np.array([(d - dates[0]).total_seconds() / 86400 for d in dates]).reshape(-1, 1)
             y = np.array(outcomes)
 
             model = LinearRegression()
             model.fit(x, y)
 
             # Predict for future days
-            future_days = np.array(
-                [len(dates) + i for i in range(1, days_ahead + 1)]
-            ).reshape(-1, 1)
+            future_days = np.array([len(dates) + i for i in range(1, days_ahead + 1)]).reshape(-1, 1)
             predicted_values = model.predict(future_days)
 
             # Calculate average failure probability over the prediction period
@@ -115,21 +111,15 @@ class PredictiveAnalytics:
                     {
                         "nodeid": nodeid,
                         "probability": avg_probability,
-                        "recent_failures": sum(
-                            outcomes[-3:]
-                        ),  # Count of failures in last 3 runs
+                        "recent_failures": sum(outcomes[-3:]),  # Count of failures in last 3 runs
                     }
                 )
 
         # Sort high risk tests by probability
-        high_risk_tests = sorted(
-            high_risk_tests, key=lambda x: x["probability"], reverse=True
-        )
+        high_risk_tests = sorted(high_risk_tests, key=lambda x: x["probability"], reverse=True)
 
         # Calculate overall confidence based on data quantity and quality
-        confidence = min(
-            1.0, len(sorted_sessions) / 20
-        )  # More sessions = higher confidence
+        confidence = min(1.0, len(sorted_sessions) / 20)  # More sessions = higher confidence
 
         return {
             "predictions": predictions,
@@ -170,9 +160,7 @@ class PredictiveAnalytics:
 
                 # Add test features
                 test_features[test.nodeid]["durations"].append(test.duration)
-                test_features[test.nodeid]["outcomes"].append(
-                    1 if test.outcome == TestOutcome.FAILED else 0
-                )
+                test_features[test.nodeid]["outcomes"].append(1 if test.outcome == TestOutcome.FAILED else 0)
 
                 # Count reruns if available
                 rerun_count = 0
@@ -220,9 +208,7 @@ class PredictiveAnalytics:
         scores = model.decision_function(feature_matrix)
 
         # Convert to anomaly score (0-1, higher = more anomalous)
-        anomaly_scores = {
-            nodeid: 1 - (score + 1) / 2 for nodeid, score in zip(test_nodeids, scores)
-        }
+        anomaly_scores = {nodeid: 1 - (score + 1) / 2 for nodeid, score in zip(test_nodeids, scores)}
 
         # Identify anomalies (tests with negative scores in isolation forest)
         anomalies = [
@@ -296,9 +282,7 @@ class PredictiveAnalytics:
             # Count unreliable tests
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
                 daily_stability[date_key]["unreliable_tests"] += sum(
-                    1
-                    for g in session.rerun_test_groups
-                    if g.final_outcome == TestOutcome.PASSED and len(g.tests) > 1
+                    1 for g in session.rerun_test_groups if g.final_outcome == TestOutcome.PASSED and len(g.tests) > 1
                 )
 
         # Calculate daily stability scores
@@ -311,23 +295,19 @@ class PredictiveAnalytics:
 
             # Calculate stability score (0-100)
             pass_rate = metrics["passed_tests"] / metrics["total_tests"]
-            nonreliability_rate = (
-                metrics["unreliable_tests"] / metrics["total_tests"]
-                if metrics["total_tests"] > 0
-                else 0
+            reliability_rate = 1 - (
+                metrics["unreliable_tests"] / metrics["total_tests"] if metrics["total_tests"] > 0 else 0
             )
 
-            # Weighted score: 70% pass rate, 30% non-repeatability
-            stability_score = (pass_rate * 70) + ((1 - nonreliability_rate) * 30)
+            # Weighted score: 70% pass rate, 30% reliability
+            stability_score = (pass_rate * 70) + (reliability_rate * 30)
 
             dates.append(datetime.fromisoformat(date_key))
             stability_scores.append(stability_score)
 
         if len(stability_scores) < 5:
             return {
-                "current_stability": (
-                    np.mean(stability_scores) if stability_scores else None
-                ),
+                "current_stability": (np.mean(stability_scores) if stability_scores else None),
                 "forecasted_stability": None,
                 "trend_direction": "unknown",
                 "contributing_factors": [],
@@ -338,9 +318,7 @@ class PredictiveAnalytics:
         current_stability = np.mean(stability_scores[-3:])
 
         # Fit linear regression to predict trend
-        x = np.array([(d - dates[0]).total_seconds() / 86400 for d in dates]).reshape(
-            -1, 1
-        )
+        x = np.array([(d - dates[0]).total_seconds() / 86400 for d in dates]).reshape(-1, 1)
         y = np.array(stability_scores)
 
         model = LinearRegression()
@@ -372,31 +350,23 @@ class PredictiveAnalytics:
         ]
 
         if len(pass_rates) >= 5:
-            pass_rate_slope, _, _, _, _ = stats.linregress(
-                range(len(pass_rates)), pass_rates
-            )
+            pass_rate_slope, _, _, _, _ = stats.linregress(range(len(pass_rates)), pass_rates)
             if abs(pass_rate_slope) > 0.01:
                 direction = "increasing" if pass_rate_slope > 0 else "decreasing"
                 contributing_factors.append(f"Pass rate is {direction}")
 
         # Check reliability/repeatability trend
-        nonreliability_rates = [
-            metrics["unreliable_tests"] / metrics["total_tests"]
+        reliability_rates = [
+            1 - (metrics["unreliable_tests"] / metrics["total_tests"])
             for _, metrics in sorted(daily_stability.items())
             if metrics["total_tests"] > 0
         ]
 
-        if len(nonreliability_rates) >= 5:
-            nonreliability_rate_slope, _, _, _, _ = stats.linregress(
-                range(len(nonreliability_rates)), nonreliability_rates
-            )
-            if abs(nonreliability_rate_slope) > 0.01:
-                direction = (
-                    "increasing" if nonreliability_rate_slope > 0 else "decreasing"
-                )
-                contributing_factors.append(
-                    f"Test reliability/repeatability is {direction}"
-                )
+        if len(reliability_rates) >= 5:
+            reliability_rate_slope, _, _, _, _ = stats.linregress(range(len(reliability_rates)), reliability_rates)
+            if abs(reliability_rate_slope) > 0.01:
+                direction = "increasing" if reliability_rate_slope > 0 else "decreasing"
+                contributing_factors.append(f"Test reliability/repeatability is {direction}")
 
         return {
             "current_stability": current_stability,

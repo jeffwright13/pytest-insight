@@ -106,7 +106,7 @@ sections = [
 enabled = true
 # Minimum pass rate to be considered stable
 threshold = 0.85
-# Maximum nonreliability_rate rate to be considered stable
+# Maximum reliability_rate to be considered stable
 unreliable_threshold = 0.05
 
 [reports.performance]

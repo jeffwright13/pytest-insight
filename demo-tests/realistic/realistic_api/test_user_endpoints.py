@@ -137,7 +137,7 @@ def test_api_create_user_auth(api_client, mock_user_data):
             assert response.json()["id"] == mock_user_data["id"]
 
 
-# Nonreliability_rate test that fails intermittently due to rate limiting
+# Reliability_rate test that fails intermittently due to rate limiting
 def test_api_batch_operations(api_client):
     """Test batch operations that might hit rate limits."""
     # Simulate rate limiting errors randomly (about 20% of the time)

@@ -161,7 +161,7 @@ def test_login_with_valid_credentials(browser):
     assert "dashboard" in browser.current_url
 
 
-# Nonreliability_rate test - sometimes elements aren't immediately visible
+# Reliability_rate test - sometimes elements aren't immediately visible
 def test_dashboard_widgets_load(logged_in_browser):
     """Test that dashboard widgets load correctly."""
     browser = logged_in_browser

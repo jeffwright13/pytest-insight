@@ -56,12 +56,11 @@ class PracticeDataGenerator:
         days (int): Number of days to generate data for.
         targets_per_base (int): Number of targets per base SUT.
         start_date (Optional[datetime]): Start date for the data generation.
-        pass_rate (float): Percentage of passing tests.
-        nonreliability_rate (float): Percentage of unreliable tests.
-        warning_rate (float): Percentage of warning tests.
-        sut_filter (Optional[str]): Filter SUTs by prefix.
-        test_categories (Optional[list[str]]): List of test categories.
-
+        pass_rate (float): Probability of test passing.
+        reliability_rate (float): Probability of test being reliable (not flaky).
+        warning_rate (float): Probability of test producing a warning.
+        sut_filter (Optional[str]): SUT name filter.
+        test_categories (Optional[list[str]]): Which test categories to include.
     """
 
     def __init__(
@@ -72,7 +71,7 @@ class PracticeDataGenerator:
         targets_per_base: int = 3,
         start_date: Optional[datetime] = None,
         pass_rate: float = 0.45,
-        nonreliability_rate: float = 0.17,
+        reliability_rate: float = 0.9,
         warning_rate: float = 0.085,
         sut_filter: Optional[str] = None,
         test_categories: Optional[list[str]] = None,
@@ -80,15 +79,13 @@ class PracticeDataGenerator:
         self.storage_profile = storage_profile
         # Only use target_path if no storage_profile is provided
         self.target_path = (
-            None
-            if storage_profile
-            else (target_path or Path.home() / ".pytest_insight" / "practice.json")
+            None if storage_profile else (target_path or Path.home() / ".pytest_insight" / "practice.json")
         )
         self.days = days
         self.targets_per_base = targets_per_base
         self.start_date = start_date
         self.pass_rate = max(0.1, min(0.9, pass_rate))
-        self.nonreliability_rate = max(0.05, min(0.3, nonreliability_rate))
+        self.reliability_rate = max(0.1, min(0.99, reliability_rate))
         self.warning_rate = max(0.01, min(0.2, warning_rate))
         self.text_gen = TextGenerator()
 
@@ -108,9 +105,7 @@ class PracticeDataGenerator:
 
         # Filter SUTs if specified
         if sut_filter:
-            self.sut_variations = [
-                sut for sut in self.sut_variations if sut.startswith(sut_filter)
-            ]
+            self.sut_variations = [sut for sut in self.sut_variations if sut.startswith(sut_filter)]
             if not self.sut_variations:
                 raise ValueError(f"No SUTs found matching prefix '{sut_filter}'")
 
@@ -153,9 +148,7 @@ class PracticeDataGenerator:
             invalid_categories = set(test_categories) - set(self.test_patterns.keys())
             if invalid_categories:
                 raise ValueError(f"Invalid test categories: {invalid_categories}")
-            self.test_patterns = {
-                k: v for k, v in self.test_patterns.items() if k in test_categories
-            }
+            self.test_patterns = {k: v for k, v in self.test_patterns.items() if k in test_categories}
 
     def _get_test_time(self, offset_seconds: int = 0) -> datetime:
         """Get a consistent timezone-aware timestamp for tests.
@@ -189,17 +182,9 @@ class PracticeDataGenerator:
             start_time = start_time.replace(tzinfo=ZoneInfo("UTC"))
 
         caplog = self.text_gen.sentence()
-        capstderr = (
-            self.text_gen.sentence()
-            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-            else ""
-        )
+        capstderr = self.text_gen.sentence() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
         capstdout = self.text_gen.sentence()
-        longreprtext = (
-            self.text_gen.paragraph()
-            if outcome in [TestOutcome.FAILED, TestOutcome.ERROR]
-            else ""
-        )
+        longreprtext = self.text_gen.paragraph() if outcome in [TestOutcome.FAILED, TestOutcome.ERROR] else ""
 
         return TestResult(
             nodeid=nodeid,
@@ -227,9 +212,7 @@ class PracticeDataGenerator:
         )
 
         # Get test patterns for this module
-        test_patterns = self.test_patterns.get(module_type) or random.choice(
-            list(self.test_patterns.values())
-        )
+        test_patterns = self.test_patterns.get(module_type) or random.choice(list(self.test_patterns.values()))
 
         # Generate test results
         test_results = []
@@ -238,7 +221,7 @@ class PracticeDataGenerator:
 
         for test_pattern in test_patterns:
             # Determine if this test should be unreliable
-            is_unreliable = random.random() < self.nonreliability_rate
+            is_unreliable = random.random() > self.reliability_rate
 
             if is_unreliable:
                 # Create a rerun group
@@ -318,12 +301,8 @@ class PracticeDataGenerator:
             # Check if the profile has a valid file path
             if profile.file_path is None:
                 # Create a default path for this profile
-                default_path = str(
-                    Path.home() / ".pytest_insight" / f"{profile_name}.json"
-                )
-                print(
-                    f"Profile has no file path. Creating a new profile with path: {default_path}"
-                )
+                default_path = str(Path.home() / ".pytest_insight" / f"{profile_name}.json")
+                print(f"Profile has no file path. Creating a new profile with path: {default_path}")
 
                 # We can't modify the existing profile directly, so we need to create a new one
                 # First, remember if this was the active profile
@@ -356,9 +335,7 @@ class PracticeDataGenerator:
             # Profile doesn't exist, create it
             print(f"Creating new profile: {profile_name}")
             default_path = str(Path.home() / ".pytest_insight" / f"{profile_name}.json")
-            return profile_manager._create_profile(
-                name=profile_name, storage_type="json", file_path=default_path
-            )
+            return profile_manager._create_profile(name=profile_name, storage_type="json", file_path=default_path)
 
     def _save_to_file(self, all_sessions):
         """Save sessions directly to a file with metadata."""
@@ -399,25 +376,17 @@ class PracticeDataGenerator:
         for day in range(self.days):
             for sut_name in self.sut_variations:
                 # Generate a timestamp for this day
-                day_time = (
-                    self.start_date or datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
-                ) + timedelta(days=day)
+                day_time = (self.start_date or datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))) + timedelta(days=day)
 
                 # Create a base session
-                base_session = self._create_session(
-                    sut_name=sut_name, session_time=day_time, is_base=True
-                )
+                base_session = self._create_session(sut_name=sut_name, session_time=day_time, is_base=True)
                 all_sessions.append(base_session)
 
                 # Generate target sessions for this base
                 for _ in range(random.randint(1, self.targets_per_base)):
                     # Target sessions are within the same day but at different times
-                    target_time = day_time + timedelta(
-                        hours=random.randint(1, 8), minutes=random.randint(0, 59)
-                    )
-                    target_session = self._create_session(
-                        sut_name=sut_name, session_time=target_time
-                    )
+                    target_time = day_time + timedelta(hours=random.randint(1, 8), minutes=random.randint(0, 59))
+                    target_session = self._create_session(sut_name=sut_name, session_time=target_time)
                     all_sessions.append(target_session)
 
         # Save the generated data
@@ -436,9 +405,7 @@ class PracticeDataGenerator:
 
                 # Save sessions to the storage
                 storage.save_sessions(all_sessions)
-                print(
-                    f"Saved {len(all_sessions)} sessions to profile '{self.storage_profile}'"
-                )
+                print(f"Saved {len(all_sessions)} sessions to profile '{self.storage_profile}'")
                 print(f"Storage path: {self.target_path}")
 
             except Exception as e:
@@ -491,23 +458,23 @@ def main(
         0.45,
         "--pass-rate",
         "-p",
-        help="Base pass rate for tests (0.1-0.9)",
+        help="Probability of test passing (0.1-0.9)",
         min=0.1,
         max=0.9,
     ),
-    nonreliability_rate: float = typer.Option(
-        0.17,
-        "--unreliable-rate",
-        "-f",
-        help="Rate of unreliable tests (0.05-0.3)",
-        min=0.05,
-        max=0.3,
+    reliability_rate: float = typer.Option(
+        0.9,
+        "--reliability-rate",
+        "-r",
+        help="Probability of test being reliable (not flaky) (0.1-0.99)",
+        min=0.1,
+        max=0.99,
     ),
     warning_rate: float = typer.Option(
         0.085,
         "--warning-rate",
         "-w",
-        help="Base rate for test warnings (0.01-0.2)",
+        help="Probability of test producing a warning (0.01-0.2)",
         min=0.01,
         max=0.2,
     ),
@@ -541,7 +508,7 @@ def main(
         insight-gen --days 30 --targets 5
 
         # Generate data with custom outcome rates
-        insight-gen --pass-rate 0.6 --unreliable-rate 0.1 --warning-rate 0.05
+        insight-gen --pass-rate 0.6 --reliability-rate 0.8 --warning-rate 0.05
 
         # Generate data for specific SUT type and test categories
         insight-gen --sut-filter api- --categories api,integration
@@ -569,9 +536,7 @@ def main(
                 # Use datetime(2023, 1, 1) as base like conftest.py
                 base = datetime(2023, 1, 1, tzinfo=ZoneInfo("UTC"))
                 parsed_date = datetime.strptime(start_date, "%Y-%m-%d")
-                parsed_start_date = base + timedelta(
-                    days=(parsed_date - datetime(2023, 1, 1)).days
-                )
+                parsed_start_date = base + timedelta(days=(parsed_date - datetime(2023, 1, 1)).days)
             except ValueError as e:
                 if "format" in str(e):
                     raise typer.BadParameter("Start date must be in YYYY-MM-DD format")
@@ -597,7 +562,7 @@ def main(
             targets_per_base=targets,
             start_date=parsed_start_date,
             pass_rate=pass_rate,
-            nonreliability_rate=nonreliability_rate,
+            reliability_rate=reliability_rate,
             warning_rate=warning_rate,
             sut_filter=sut_filter,
             test_categories=test_categories,
@@ -616,9 +581,7 @@ def main(
 
         if not quiet:
             if storage_profile:
-                print(
-                    f"Generated practice data for {days} days using profile '{storage_profile}'"
-                )
+                print(f"Generated practice data for {days} days using profile '{storage_profile}'")
             else:
                 print(f"Generated practice data for {days} days")
             print(f"Data saved to: {generator.target_path}")

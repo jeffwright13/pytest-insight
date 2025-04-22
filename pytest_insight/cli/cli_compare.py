@@ -21,7 +21,7 @@ def compare_suts(
     """Compare test sessions between two SUTs.
 
     This command compares test sessions between two SUTs and identifies differences
-    such as new failures, new passes, nonreliability_rate tests, and performance changes.
+    such as new failures, new passes, reliability_rate tests, and performance changes.
 
     Examples:
         insight compare suts --base-sut service-v1 --target-sut service-v2
@@ -50,9 +50,7 @@ def compare_sessions(
     """
     from pytest_insight.cli.cli_dev import cli_compare_sessions
 
-    cli_compare_sessions(
-        base_session=base_session, target_session=target_session, profile=profile
-    )
+    cli_compare_sessions(base_session=base_session, target_session=target_session, profile=profile)
 
 
 if __name__ == "__main__":

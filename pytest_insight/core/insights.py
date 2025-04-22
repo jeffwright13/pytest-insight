@@ -69,58 +69,51 @@ class TestInsights:
             "most_common": outcome_counts.most_common(),
         }
 
-    def unreliable_tests(self) -> Dict[str, Any]:
-        """Identify unreliable tests across all sessions.
+    def reliability_tests(self) -> Dict[str, Any]:
+        """Identify reliability tests across all sessions.
 
-        An unreliable test is one that has been rerun and eventually passed.
+        A reliability test is one that has been rerun and eventually passed.
 
         Returns:
             Dict containing:
-            - unreliable_tests: Dict mapping nodeids to reliability data
-            - total_unreliable: Total number of unreliable tests
-            - most_unreliable: List of most unreliable tests by rerun count
+            - reliability_tests: Dict mapping nodeids to reliability data
+            - total_reliable: Total number of reliability tests
+            - most_reliable: List of most reliable tests by rerun count
         """
-        unreliable_tests = {}
+        reliability_tests = {}
 
         for session in self._sessions:
             if hasattr(session, "rerun_test_groups") and session.rerun_test_groups:
                 for rerun_group in session.rerun_test_groups:
+                    nodeid = rerun_group.nodeid
                     if rerun_group.final_outcome == TestOutcome.PASSED:
-                        nodeid = rerun_group.nodeid
-                        if nodeid not in unreliable_tests:
-                            unreliable_tests[nodeid] = {
+                        if nodeid not in reliability_tests:
+                            reliability_tests[nodeid] = {
                                 "reruns": 0,
                                 "sessions": set(),
-                                "pass_rate": 0.0,
+                                "final_outcomes": {},
                             }
-                        unreliable_tests[nodeid]["reruns"] += (
-                            len(rerun_group.tests) - 1
-                        )  # Subtract 1 for the final passing test
-                        unreliable_tests[nodeid]["sessions"].add(session.session_id)
+                        reliability_tests[nodeid]["reruns"] += 1
+                        reliability_tests[nodeid]["sessions"].add(session.session_id)
+                        reliability_tests[nodeid]["final_outcomes"][session.session_id] = rerun_group.final_outcome
 
-        # Calculate pass rates
-        for nodeid, data in unreliable_tests.items():
-            total_runs = data["reruns"] + len(
-                data["sessions"]
-            )  # Total runs = reruns + final passing runs
-            data["pass_rate"] = (
-                len(data["sessions"]) / total_runs if total_runs > 0 else 0
-            )
-            data["sessions"] = list(
-                data["sessions"]
-            )  # Convert set to list for serialization
+        # Calculate pass rate for each test
+        for nodeid, data in reliability_tests.items():
+            total_runs = data["reruns"] + 1
+            data["pass_rate"] = len(data["sessions"]) / total_runs if total_runs > 0 else 0
+            data["sessions"] = list(data["sessions"])  # Convert set to list for serialization
 
         # Sort by number of reruns
-        most_unreliable = sorted(
-            [(nodeid, data) for nodeid, data in unreliable_tests.items()],
+        most_reliable = sorted(
+            [(nodeid, data) for nodeid, data in reliability_tests.items()],
             key=lambda x: x[1]["reruns"],
             reverse=True,
         )
 
         return {
-            "unreliable_tests": unreliable_tests,
-            "total_unreliable": len(unreliable_tests),
-            "most_unreliable": most_unreliable,
+            "reliability_tests": reliability_tests,
+            "total_reliable": len(reliability_tests),
+            "most_reliable": most_reliable,
         }
 
     def test_reliability_metrics(self) -> Dict[str, Any]:
@@ -170,25 +163,17 @@ class TestInsights:
                 total_tests += len(session.test_results)
 
         # Calculate recovery rate
-        rerun_recovery_rate = (
-            (recovered_tests / total_reruns * 100) if total_reruns > 0 else 100
-        )
+        rerun_recovery_rate = (recovered_tests / total_reruns * 100) if total_reruns > 0 else 100
 
         # Calculate reliability index (100% minus percentage of unstable tests)
-        reliability_index = (
-            100 - (len(unstable_tests) / total_tests * 100) if total_tests > 0 else 100
-        )
+        reliability_index = 100 - (len(unstable_tests) / total_tests * 100) if total_tests > 0 else 100
 
         # Calculate health score penalty (1 point for each percent of tests that required reruns)
-        health_score_penalty = (
-            (len(unstable_tests) / total_tests * 100) if total_tests > 0 else 0
-        )
+        health_score_penalty = (len(unstable_tests) / total_tests * 100) if total_tests > 0 else 0
 
         # Convert sets to lists for serialization
         for nodeid, data in unstable_tests.items():
-            data["sessions"] = list(
-                data["sessions"]
-            )  # Convert set to list for serialization
+            data["sessions"] = list(data["sessions"])  # Convert set to list for serialization
 
         # Sort by number of reruns
         most_unstable = sorted(
@@ -336,9 +321,7 @@ class TestInsights:
                     test_run_counts[nodeid] += 1
 
         # Get the top N most frequently run tests
-        top_tests = sorted(test_run_counts.items(), key=lambda x: x[1], reverse=True)[
-            :limit
-        ]
+        top_tests = sorted(test_run_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
 
         # Calculate stability for each test on each date
         test_stability_timeline = {}
@@ -524,11 +507,7 @@ class TestInsights:
                                     break
 
                         # Create a meaningful pattern that combines error type and detail
-                        pattern = (
-                            f"{error_type}: {error_detail}"
-                            if error_detail
-                            else error_type
-                        )
+                        pattern = f"{error_type}: {error_detail}" if error_detail else error_type
 
                         # Truncate very long patterns
                         if len(pattern) > 100:
@@ -723,8 +702,8 @@ class TestInsights:
         pass_rate = passed_tests / total_tests if total_tests > 0 else 0
 
         # Get unreliable tests
-        unreliable_tests_data = self.unreliable_tests()
-        unreliable_tests = unreliable_tests_data["unreliable_tests"]
+        reliability_tests_data = self.reliability_tests()
+        reliability_tests = reliability_tests_data["reliability_tests"]
 
         # Get slowest tests for duration stability calculation
         slowest_tests_data = self.slowest_tests()
@@ -752,8 +731,7 @@ class TestInsights:
         # Calculate health factors
         health_factors = {
             "pass_rate": pass_rate * 50,  # 50% weight to pass rate
-            "reliability": (1 - len(unreliable_tests) / max(1, total_tests))
-            * 20,  # 20% weight to reliability
+            "reliability": (1 - len(reliability_tests) / max(1, total_tests)) * 20,  # 20% weight to reliability
             "duration_stability": 15,  # Default value, will be calculated below
             "failure_pattern": 15,  # Default value, will be calculated below
         }
@@ -763,14 +741,10 @@ class TestInsights:
             durations = [duration for _, duration in slowest_tests]
             if durations:
                 mean_duration = sum(durations) / len(durations)
-                variance = sum((d - mean_duration) ** 2 for d in durations) / len(
-                    durations
-                )
+                variance = sum((d - mean_duration) ** 2 for d in durations) / len(durations)
                 # Normalize: lower variance = higher score (max 15)
                 coefficient = 0.1  # Adjust based on typical variance values
-                health_factors["duration_stability"] = 15 * (
-                    1 / (1 + coefficient * variance)
-                )
+                health_factors["duration_stability"] = 15 * (1 / (1 + coefficient * variance))
 
         # Calculate failure pattern component
         if total_tests > 0:
@@ -815,8 +789,7 @@ class TestInsights:
         # Combine factors for reliability index (0-100)
         reliability_index = (
             pass_rate * 0.4  # 40% weight to pass rate
-            + (1 - len(unreliable_tests) / max(1, total_tests))
-            * 0.3  # 30% weight to reliability
+            + (1 - len(reliability_tests) / max(1, total_tests)) * 0.3  # 30% weight to reliability
             + environment_consistency * 0.15  # 15% weight to environment consistency
             + test_consistency * 0.15  # 15% weight to test result consistency
         ) * 100
@@ -896,21 +869,9 @@ class TestInsights:
                     mean2 = sum(outcomes2[:min_length]) / min_length
 
                     # Calculate variances and covariance
-                    var1 = (
-                        sum((x - mean1) ** 2 for x in outcomes1[:min_length])
-                        / min_length
-                    )
-                    var2 = (
-                        sum((x - mean2) ** 2 for x in outcomes2[:min_length])
-                        / min_length
-                    )
-                    cov = (
-                        sum(
-                            (outcomes1[i] - mean1) * (outcomes2[i] - mean2)
-                            for i in range(min_length)
-                        )
-                        / min_length
-                    )
+                    var1 = sum((x - mean1) ** 2 for x in outcomes1[:min_length]) / min_length
+                    var2 = sum((x - mean2) ** 2 for x in outcomes2[:min_length]) / min_length
+                    cov = sum((outcomes1[i] - mean1) * (outcomes2[i] - mean2) for i in range(min_length)) / min_length
 
                     # Calculate correlation coefficient
                     if var1 > 0 and var2 > 0:
@@ -1084,7 +1045,6 @@ class SessionInsights:
             analysis_or_sessions: Analysis instance OR list of TestSession objects
         """
         from pytest_insight.core.analysis import Analysis
-        from pytest_insight.core.models import TestSession
 
         # Defensive: allow for mocks in tests
         analysis_type = Analysis
@@ -1100,15 +1060,11 @@ class SessionInsights:
         if isinstance(analysis_or_sessions, analysis_type):
             self.analysis = analysis_or_sessions
             self._sessions = analysis_or_sessions._sessions
-        elif isinstance(analysis_or_sessions, list) and all(
-            hasattr(s, "test_results") for s in analysis_or_sessions
-        ):
+        elif isinstance(analysis_or_sessions, list) and all(hasattr(s, "test_results") for s in analysis_or_sessions):
             self.analysis = None
             self._sessions = analysis_or_sessions
         else:
-            raise TypeError(
-                "SessionInsights expects an Analysis instance or a list of TestSession objects."
-            )
+            raise TypeError("SessionInsights expects an Analysis instance or a list of TestSession objects.")
 
     def _get_sessions(self, days: Optional[int] = None):
         """Delegate to analysis.sessions._get_sessions for compatibility, or operate on direct session list."""
@@ -1121,11 +1077,7 @@ class SessionInsights:
         from datetime import datetime, timedelta
 
         cutoff = datetime.now() - timedelta(days=days)
-        return [
-            s
-            for s in self._sessions
-            if getattr(s, "start_time", None) and s.start_time >= cutoff
-        ]
+        return [s for s in self._sessions if getattr(s, "start_time", None) and s.start_time >= cutoff]
 
     def session_metrics(self, days: Optional[int] = None) -> Dict[str, Any]:
         """Calculate key session metrics (robust for both Analysis and direct list modes)."""
@@ -1140,11 +1092,7 @@ class SessionInsights:
                 except AttributeError:
                     # If neither works, return a default structure
                     return {
-                        "total_sessions": (
-                            len(self.analysis._sessions)
-                            if self.analysis._sessions
-                            else 0
-                        ),
+                        "total_sessions": (len(self.analysis._sessions) if self.analysis._sessions else 0),
                         "pass_rate": 0.0,
                         "avg_tests_per_session": 0.0,
                         "failure_rate": 0.0,
@@ -1168,8 +1116,7 @@ class SessionInsights:
             sum(
                 1
                 for t in getattr(s, "test_results", [])
-                if getattr(t, "outcome", None)
-                and getattr(t, "outcome").name == "PASSED"
+                if getattr(t, "outcome", None) and getattr(t, "outcome").name == "PASSED"
             )
             for s in sessions
         )
@@ -1177,8 +1124,7 @@ class SessionInsights:
             sum(
                 1
                 for t in getattr(s, "test_results", [])
-                if getattr(t, "outcome", None)
-                and getattr(t, "outcome").name == "FAILED"
+                if getattr(t, "outcome", None) and getattr(t, "outcome").name == "FAILED"
             )
             for s in sessions
         )
@@ -1186,8 +1132,7 @@ class SessionInsights:
             sum(
                 1
                 for t in getattr(s, "test_results", [])
-                if getattr(t, "outcome", None)
-                and getattr(t, "outcome").name == "WARNING"
+                if getattr(t, "outcome", None) and getattr(t, "outcome").name == "WARNING"
             )
             for s in sessions
         )
@@ -1195,11 +1140,7 @@ class SessionInsights:
         pass_rate = passed / total_tests if total_tests else 0.0
         failure_rate = failed / total_tests if total_tests else 0.0
         warning_rate = warned / total_tests if total_tests else 0.0
-        avg_duration = (
-            sum(getattr(s, "duration", 0.0) for s in sessions) / total_sessions
-            if total_sessions
-            else 0.0
-        )
+        avg_duration = sum(getattr(s, "duration", 0.0) for s in sessions) / total_sessions if total_sessions else 0.0
         return {
             "total_sessions": total_sessions,
             "pass_rate": pass_rate,
@@ -1237,15 +1178,11 @@ class SessionInsights:
             metrics["regression"] = regression
 
             # Add longest running tests
-            longest_tests = self.analysis.session_analysis.longest_running_tests(
-                days=days
-            )
+            longest_tests = self.analysis.session_analysis.longest_running_tests(days=days)
             metrics["longest_tests"] = longest_tests
 
             # Add test suite duration trend
-            duration_trend = self.analysis.session_analysis.test_suite_duration_trend(
-                days=days
-            )
+            duration_trend = self.analysis.session_analysis.test_suite_duration_trend(days=days)
             metrics["duration_trend"] = duration_trend
         else:
             # Fallback: compute what we can from self._sessions
@@ -1255,9 +1192,7 @@ class SessionInsights:
                     top_failing_tests as health_top_failing_tests,
                 )
 
-                metrics["top_failing_tests"] = health_top_failing_tests(
-                    self, days=days, limit=10
-                )
+                metrics["top_failing_tests"] = health_top_failing_tests(self, days=days, limit=10)
             except ImportError:
                 metrics["top_failing_tests"] = {"top_failing": [], "total_failures": 0}
             # Regression rate, longest tests, duration trend: leave empty or implement as needed
@@ -1274,9 +1209,7 @@ class SessionInsights:
             and hasattr(self.analysis, "session_analysis")
             and hasattr(self.analysis.session_analysis, "top_failing_tests")
         ):
-            return self.analysis.session_analysis.top_failing_tests(
-                days=days, limit=limit
-            )
+            return self.analysis.session_analysis.top_failing_tests(days=days, limit=limit)
         # Fallback: if health_metrics module is available, use it
         try:
             from pytest_insight.core.health_metrics import (
@@ -1316,9 +1249,7 @@ class SessionInsights:
             # Calculate pass rate for this session
             session_results = session.test_results
             if session_results:
-                session_pass_rate = sum(
-                    1 for t in session_results if t.outcome == "passed"
-                ) / len(session_results)
+                session_pass_rate = sum(1 for t in session_results if t.outcome == "passed") / len(session_results)
                 environments[env]["pass_rates"].append(session_pass_rate)
 
         # Calculate average pass rate for each environment
@@ -1336,13 +1267,9 @@ class SessionInsights:
         if len(env_pass_rates) > 1:
             env_pass_rate_values = list(env_pass_rates.values())
             mean_env_pass_rate = sum(env_pass_rate_values) / len(env_pass_rate_values)
-            env_variance = sum(
-                (r - mean_env_pass_rate) ** 2 for r in env_pass_rate_values
-            ) / len(env_pass_rate_values)
+            env_variance = sum((r - mean_env_pass_rate) ** 2 for r in env_pass_rate_values) / len(env_pass_rate_values)
             # Lower variance = higher consistency
-            consistency = 1 / (
-                1 + 10 * env_variance
-            )  # Scale factor of 10 for better distribution
+            consistency = 1 / (1 + 10 * env_variance)  # Scale factor of 10 for better distribution
             consistency = min(1, max(0, consistency))  # Clamp between 0 and 1
 
         return {
@@ -1412,9 +1339,7 @@ class TrendInsights:
         # Calculate average duration per day
         daily_durations = []
         for day, day_sessions in sorted(sessions_by_day.items()):
-            avg_duration = sum(s.session_duration for s in day_sessions) / len(
-                day_sessions
-            )
+            avg_duration = sum(s.session_duration for s in day_sessions) / len(day_sessions)
             daily_durations.append((day, avg_duration))
 
         # Calculate trend
@@ -1422,9 +1347,7 @@ class TrendInsights:
             first_duration = daily_durations[0][1]
             last_duration = daily_durations[-1][1]
             if first_duration > 0:
-                trend_percentage = (
-                    (last_duration - first_duration) / first_duration
-                ) * 100
+                trend_percentage = ((last_duration - first_duration) / first_duration) * 100
                 increasing = trend_percentage > 0
             else:
                 trend_percentage = 0.0
@@ -1487,9 +1410,7 @@ class TrendInsights:
             last_rate = daily_failure_rates[-1][1]
             if first_rate > 0:
                 trend_percentage = ((last_rate - first_rate) / first_rate) * 100
-                improving = (
-                    trend_percentage < 0
-                )  # Decreasing failure rate is an improvement
+                improving = trend_percentage < 0  # Decreasing failure rate is an improvement
             else:
                 trend_percentage = last_rate * 100
                 improving = trend_percentage <= 0
@@ -1538,25 +1459,17 @@ class TrendInsights:
         late_end = max(s.session_start_time for s in late_sessions).date()
 
         # Compare health
-        comparison = self.analysis.compare_health(
-            base_sessions=early_sessions, target_sessions=late_sessions
-        )
+        comparison = self.analysis.compare_health(base_sessions=early_sessions, target_sessions=late_sessions)
 
         # Calculate additional metrics
         early_test_count = sum(len(s.test_results) for s in early_sessions)
         late_test_count = sum(len(s.test_results) for s in late_sessions)
 
-        early_avg_duration = sum(s.session_duration for s in early_sessions) / len(
-            early_sessions
-        )
-        late_avg_duration = sum(s.session_duration for s in late_sessions) / len(
-            late_sessions
-        )
+        early_avg_duration = sum(s.session_duration for s in early_sessions) / len(early_sessions)
+        late_avg_duration = sum(s.session_duration for s in late_sessions) / len(late_sessions)
 
         duration_change = (
-            ((late_avg_duration - early_avg_duration) / early_avg_duration) * 100
-            if early_avg_duration > 0
-            else 0
+            ((late_avg_duration - early_avg_duration) / early_avg_duration) * 100 if early_avg_duration > 0 else 0
         )
 
         return {
@@ -1565,18 +1478,14 @@ class TrendInsights:
                 "sessions": len(early_sessions),
                 "tests": early_test_count,
                 "avg_duration": early_avg_duration,
-                "health_score": comparison["base_health"]["health_score"][
-                    "overall_score"
-                ],
+                "health_score": comparison["base_health"]["health_score"]["overall_score"],
             },
             "late_period": {
                 "date_range": (late_start, late_end),
                 "sessions": len(late_sessions),
                 "tests": late_test_count,
                 "avg_duration": late_avg_duration,
-                "health_score": comparison["target_health"]["health_score"][
-                    "overall_score"
-                ],
+                "health_score": comparison["target_health"]["health_score"]["overall_score"],
             },
             "health_difference": comparison["health_difference"],
             "improving": comparison["improved"],
@@ -1613,9 +1522,7 @@ class Insights:
         }
     """
 
-    def __init__(
-        self, analysis: Optional["Analysis"] = None, profile_name: Optional[str] = None
-    ):
+    def __init__(self, analysis: Optional["Analysis"] = None, profile_name: Optional[str] = None):
         """Initialize insight components.
 
         Args:
@@ -1727,7 +1634,9 @@ class Insights:
         for session in recent_sessions:
             test_results = getattr(session, "test_results", [])
             total = len(test_results)
-            passed = sum(1 for t in test_results if getattr(t, "outcome", None) and getattr(t, "outcome").name == "PASSED")
+            passed = sum(
+                1 for t in test_results if getattr(t, "outcome", None) and getattr(t, "outcome").name == "PASSED"
+            )
             rate = (passed / total * 100) if total else 0.0
             pass_rates.append(round(rate, 2))
 
@@ -1751,7 +1660,7 @@ class Insights:
         # Get key insights from each component
         test_insights = {
             "outcome_distribution": self.tests.outcome_distribution(),
-            "unreliable_tests": self.tests.unreliable_tests(),
+            "reliability_tests": self.tests.reliability_tests(),
             "slowest_tests": self.tests.slowest_tests(limit=5),
         }
 
@@ -1785,14 +1694,13 @@ class Insights:
             RED = Fore.RED
             YELLOW = Fore.YELLOW
             CYAN = Fore.CYAN
-            BLUE = Fore.BLUE
             MAGENTA = Style.BRIGHT
             BRIGHT = Style.BRIGHT
             RESET = Style.RESET_ALL
 
         except ImportError:
             # Define empty color constants if colorama is not available
-            GREEN = RED = YELLOW = CYAN = BLUE = MAGENTA = BRIGHT = RESET = ""
+            GREEN = RED = YELLOW = CYAN = MAGENTA = BRIGHT = RESET = ""
 
         # METADATA HEADER
         meta_lines = []
@@ -1802,12 +1710,8 @@ class Insights:
         meta_lines.append(f"{BRIGHT}{CYAN}Pytest Insight Summary{RESET}")
         if profile_name:
             meta_lines.append(f"{BRIGHT}Profile:{RESET} {profile_name}")
-        current_session = (
-            self.analysis._sessions[-1] if self.analysis._sessions else None
-        )
-        sut = getattr(current_session, "sut", None) or getattr(
-            self.analysis, "sut", None
-        )
+        current_session = self.analysis._sessions[-1] if self.analysis._sessions else None
+        sut = getattr(current_session, "sut", None) or getattr(self.analysis, "sut", None)
         if sut:
             meta_lines.append(f"{BRIGHT}SUT Name:{RESET} {sut}")
         system_name = getattr(current_session, "testing_system_name", None) or getattr(
@@ -1820,35 +1724,21 @@ class Insights:
         end_time = getattr(current_session, "session_stop_time", None)
         session_parts = []
         try:
-            start_dt = (
-                datetime.fromisoformat(start_time)
-                if isinstance(start_time, str)
-                else start_time
-            )
-            session_parts.append(
-                f"{BRIGHT}Session Start:{RESET} {start_dt.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
+            start_dt = datetime.fromisoformat(start_time) if isinstance(start_time, str) else start_time
+            session_parts.append(f"{BRIGHT}Session Start:{RESET} {start_dt.strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception:
             if start_time:
                 session_parts.append(f"{BRIGHT}Session Start:{RESET} {start_time}")
         try:
-            end_dt = (
-                datetime.fromisoformat(end_time)
-                if isinstance(end_time, str)
-                else end_time
-            )
-            session_parts.append(
-                f"{BRIGHT}Session End:{RESET} {end_dt.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
+            end_dt = datetime.fromisoformat(end_time) if isinstance(end_time, str) else end_time
+            session_parts.append(f"{BRIGHT}Session End:{RESET} {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception:
             if end_time:
                 session_parts.append(f"{BRIGHT}Session End:{RESET} {end_time}")
         try:
             if start_dt and end_dt:
                 duration = (end_dt - start_dt).total_seconds()
-                session_parts.append(
-                    f"{BRIGHT}Session Duration:{RESET} {duration:.1f} seconds"
-                )
+                session_parts.append(f"{BRIGHT}Session Duration:{RESET} {duration:.1f} seconds")
         except Exception:
             pass
         if session_parts:
@@ -1910,24 +1800,13 @@ class Insights:
             if total:
                 lines.append(f"{BRIGHT}Test Outcome Distribution:{RESET}")
                 for name, count in outcomes.items():
-                    color = (
-                        GREEN
-                        if name in ["PASSED", "XFAILED"]
-                        else RED if name in ["FAILED", "ERROR"] else YELLOW
-                    )
+                    color = GREEN if name in ["PASSED", "XFAILED"] else RED if name in ["FAILED", "ERROR"] else YELLOW
                     pct = 100 * count / total
-                    lines.append(
-                        f"  {color}{name.capitalize():<8}: {count:>3} ({pct:5.1f}%){RESET}"
-                    )
+                    lines.append(f"  {color}{name.capitalize():<8}: {count:>3} ({pct:5.1f}%){RESET}")
             # Slowest tests for this run (sorted by duration)
             test_results = getattr(current_session, "test_results", [])
             slowest = sorted(
-                [
-                    t
-                    for t in test_results
-                    if hasattr(t, "duration")
-                    and getattr(t, "duration", None) is not None
-                ],
+                [t for t in test_results if hasattr(t, "duration") and getattr(t, "duration", None) is not None],
                 key=lambda t: getattr(t, "duration", 0),
                 reverse=True,
             )[:5]
@@ -1937,9 +1816,7 @@ class Insights:
                     nodeid = getattr(test, "nodeid", None)
                     dur = getattr(test, "duration", None)
                     if nodeid and dur is not None:
-                        lines.append(
-                            f"  {MAGENTA}{nodeid}: {float(dur):.2f} seconds{RESET}"
-                        )
+                        lines.append(f"  {MAGENTA}{nodeid}: {float(dur):.2f} seconds{RESET}")
 
             # Rerun groups for this run (top 5, final outcome FAIL)
             rerun_groups = getattr(current_session, "rerun_test_groups", None)
@@ -1959,34 +1836,23 @@ class Insights:
                     reverse=True,
                 )
                 if failed_rerun_groups:
-                    lines.append(
-                        f"{BRIGHT}{YELLOW}Rerun Test Groups (This Run, Top 5 FAIL):{RESET}"
-                    )
+                    lines.append(f"{BRIGHT}{YELLOW}Rerun Test Groups (This Run, Top 5 FAIL):{RESET}")
                     for group in failed_rerun_groups[:5]:
                         nodeid = getattr(group, "nodeid", None)
                         reruns = len(getattr(group, "tests", [])) - 1
                         final_outcome = getattr(group, "final_outcome", None)
-                        lines.append(
-                            f"  {YELLOW}{nodeid}: {reruns} reruns, final outcome: {str(final_outcome)}{RESET}"
-                        )
+                        lines.append(f"  {YELLOW}{nodeid}: {reruns} reruns, final outcome: {str(final_outcome)}{RESET}")
             # Top failing rerun tests for this run
             rerun_failing = {}
             for test in test_results:
                 nodeid = getattr(test, "nodeid", None)
-                rerun = (
-                    getattr(test, "rerun", False) or getattr(test, "rerun_count", 0) > 0
-                )
-                failed = (
-                    getattr(test, "outcome", None)
-                    and getattr(test, "outcome").name == "FAILED"
-                )
+                rerun = getattr(test, "rerun", False) or getattr(test, "rerun_count", 0) > 0
+                failed = getattr(test, "outcome", None) and getattr(test, "outcome").name == "FAILED"
                 if nodeid and rerun and failed:
                     rerun_failing[nodeid] = rerun_failing.get(nodeid, 0) + 1
             if rerun_failing:
                 lines.append(f"{BRIGHT}{RED}Top Failing Rerun Tests (This Run):{RESET}")
-                for nodeid, count in sorted(
-                    rerun_failing.items(), key=lambda x: x[1], reverse=True
-                )[:5]:
+                for nodeid, count in sorted(rerun_failing.items(), key=lambda x: x[1], reverse=True)[:5]:
                     lines.append(f"  {RED}{nodeid}: {count} rerun failure(s){RESET}")
             # Session Health Score
             try:
@@ -1994,20 +1860,14 @@ class Insights:
 
                 session_score = session_health_score(current_session)
                 if session_score is not None:
-                    lines.append(
-                        f"{BRIGHT}{GREEN}Session Health Score:{RESET} {session_score:.2f}/100"
-                    )
+                    lines.append(f"{BRIGHT}{GREEN}Session Health Score:{RESET} {session_score:.2f}/100")
             except ImportError:
                 pass
 
         # SECTION 2: All Runs (historical)
         lines.append(f"\n{BRIGHT}{CYAN}Test Insights: All Runs{RESET}")
         # Use ALL sessions from storage for aggregate stats
-        all_sessions = (
-            self.analysis.storage.load_sessions()
-            if hasattr(self.analysis, "storage")
-            else []
-        )
+        all_sessions = self.analysis.storage.load_sessions() if hasattr(self.analysis, "storage") else []
         all_sessions_insights = SessionInsights(all_sessions)
         # Health Score
         health_report = self.analysis.health_report()
@@ -2037,39 +1897,25 @@ class Insights:
                 cat = rec.get("category", "").capitalize()
                 msg = rec.get("message", "")
                 priority = rec.get("priority", "").capitalize()
-                color = (
-                    RED
-                    if priority == "High"
-                    else YELLOW if priority == "Medium" else GREEN
-                )
+                color = RED if priority == "High" else YELLOW if priority == "Medium" else GREEN
                 # Extract test nodeids from message for bulleting
                 if ":" in msg and "," in msg:
                     prefix, tests = msg.split(":", 1)
                     test_list = [t.strip() for t in tests.split(",")]
-                    lines.append(
-                        f"  {color}• [{cat}] {prefix.strip()} ({priority}){RESET}"
-                    )
+                    lines.append(f"  {color}• [{cat}] {prefix.strip()} ({priority}){RESET}")
                     for t in test_list[:5]:
                         lines.append(f"    {color}- {t}{RESET}")
                 else:
                     lines.append(f"  {color}• [{cat}] {msg} ({priority}){RESET}")
         # Component Scores
         lines.append(f"{BRIGHT}Component Scores:{RESET}")
-        lines.append(
-            f"  {GREEN}Stability:   {component_scores.get('stability', 0):.2f}/100{RESET}"
-        )
+        lines.append(f"  {GREEN}Stability:   {component_scores.get('stability', 0):.2f}/100{RESET}")
         perf = component_scores.get("performance", 0)
-        perf_str = f"{perf:.2f}/100" if perf > 0 else f"N/A"
+        perf_str = f"{perf:.2f}/100" if perf > 0 else "N/A"
         lines.append(f"  {CYAN}Performance: {perf_str}{RESET}")
-        lines.append(
-            f"  {YELLOW}Warnings:    {component_scores.get('warnings', 0):.2f}/100{RESET}"
-        )
-        lines.append(
-            f"  {RED}Failure Rate:{component_scores.get('failure_rate', 0):.1f}%{RESET}"
-        )
-        lines.append(
-            f"  {YELLOW}Warning Rate:{component_scores.get('warning_rate', 0):.1f}%{RESET}"
-        )
+        lines.append(f"  {YELLOW}Warnings:    {component_scores.get('warnings', 0):.2f}/100{RESET}")
+        lines.append(f"  {RED}Failure Rate:{component_scores.get('failure_rate', 0):.1f}%{RESET}")
+        lines.append(f"  {YELLOW}Warning Rate:{component_scores.get('warning_rate', 0):.1f}%{RESET}")
         # Top Failing Tests (historical, top 5)
         top_failing = []
         if hasattr(all_sessions_insights, "top_failing_tests"):
@@ -2079,9 +1925,7 @@ class Insights:
                 if isinstance(tf_list, dict):
                     top_failing = list(tf_list.values())
                 else:
-                    top_failing = (
-                        list(tf_list) if isinstance(tf_list, (list, tuple)) else []
-                    )
+                    top_failing = list(tf_list) if isinstance(tf_list, (list, tuple)) else []
         elif hasattr(all_sessions_insights, "health_metrics"):
             tf = all_sessions_insights.health_metrics()
             if isinstance(tf, dict):
@@ -2089,9 +1933,7 @@ class Insights:
                 if isinstance(tf_list, dict):
                     top_failing = list(tf_list.values())
                 else:
-                    top_failing = (
-                        list(tf_list) if isinstance(tf_list, (list, tuple)) else []
-                    )
+                    top_failing = list(tf_list) if isinstance(tf_list, (list, tuple)) else []
         if top_failing:
             lines.append(f"{BRIGHT}{RED}Top Failing Tests:{RESET}")
             for test in top_failing[:5]:
@@ -2099,9 +1941,7 @@ class Insights:
                     nodeid = test.get("nodeid")
                     rate = test.get("failure_rate")
                     if nodeid and isinstance(rate, (int, float)):
-                        lines.append(
-                            f"  {RED}{nodeid}: {float(rate)*100 if rate <= 1 else float(rate):.1f}%{RESET}"
-                        )
+                        lines.append(f"  {RED}{nodeid}: {float(rate)*100 if rate <= 1 else float(rate):.1f}%{RESET}")
         # Top Failing Rerun Tests (historical, top 5 FAIL, last 10 days)
         try:
             # Limit sessions to last 10 days
@@ -2113,21 +1953,12 @@ class Insights:
                 for group in rerun_groups:
                     reruns = len(getattr(group, "tests", [])) - 1
                     final_outcome = getattr(group, "final_outcome", None)
-                    if (
-                        reruns > 0
-                        and final_outcome
-                        and getattr(final_outcome, "name", str(final_outcome))
-                        == "FAILED"
-                    ):
+                    if reruns > 0 and final_outcome and getattr(final_outcome, "name", str(final_outcome)) == "FAILED":
                         failed_rerun_groups.append((group, reruns, session))
             # Sort by rerun count descending
-            failed_rerun_groups = sorted(
-                failed_rerun_groups, key=lambda x: x[1], reverse=True
-            )
+            failed_rerun_groups = sorted(failed_rerun_groups, key=lambda x: x[1], reverse=True)
             if failed_rerun_groups:
-                lines.append(
-                    f"{BRIGHT}{YELLOW}Rerun Test Groups (All Sessions, Top 5 FAIL, Last 10 Days):{RESET}"
-                )
+                lines.append(f"{BRIGHT}{YELLOW}Rerun Test Groups (All Sessions, Top 5 FAIL, Last 10 Days):{RESET}")
                 for group, reruns, session in failed_rerun_groups[:5]:
                     nodeid = getattr(group, "nodeid", None)
                     final_outcome = getattr(group, "final_outcome", None)
@@ -2149,14 +1980,8 @@ class Insights:
                 name = getattr(outcome, "name", str(outcome))
                 pct = stats.get("percentage", 0)
                 count = stats.get("count", 0)
-                color = (
-                    GREEN
-                    if name in ["PASSED", "XFAILED"]
-                    else RED if name in ["FAILED", "ERROR"] else YELLOW
-                )
-                lines.append(
-                    f"  {color}{name.capitalize():<8}: {count:>3} ({pct:5.1f}%){RESET}"
-                )
+                color = GREEN if name in ["PASSED", "XFAILED"] else RED if name in ["FAILED", "ERROR"] else YELLOW
+                lines.append(f"  {color}{name.capitalize():<8}: {count:>3} ({pct:5.1f}%){RESET}")
 
         # Slowest Tests (historical, top 5)
         try:
@@ -2166,18 +1991,12 @@ class Insights:
                 if isinstance(slowest_list, dict):
                     slowest_list = list(slowest_list.values())
                 else:
-                    slowest_list = (
-                        list(slowest_list)
-                        if isinstance(slowest_list, (list, tuple))
-                        else []
-                    )
+                    slowest_list = list(slowest_list) if isinstance(slowest_list, (list, tuple)) else []
                 lines.append(f"{BRIGHT}{MAGENTA}Slowest Tests:{RESET}")
                 for test in slowest_list[:5]:
                     nodeid, dur = test
                     if isinstance(dur, (int, float)):
-                        lines.append(
-                            f"  {MAGENTA}{nodeid}: {float(dur):.2f} seconds{RESET}"
-                        )
+                        lines.append(f"  {MAGENTA}{nodeid}: {float(dur):.2f} seconds{RESET}")
         except Exception:
             pass
         # Display Pass Rate Trend (Last 7 runs)
