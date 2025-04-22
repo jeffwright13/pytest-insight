@@ -31,8 +31,7 @@ def sparkline(data: Any) -> str:
 
 
 def render_summary(api, section_cfg, terminal_config, return_panel=False):
-    summary_obj = api.session().insight("summary")
-    summary = summary_obj.as_dict() if hasattr(summary_obj, "as_dict") else summary_obj
+    summary = api.session_dict()
 
     # Attempt to extract SUT and system name for panel title
     sut_name = None
@@ -103,7 +102,7 @@ def render_summary(api, section_cfg, terminal_config, return_panel=False):
 
 
 def render_slowest_tests(api, section_cfg, terminal_config, return_panel=False):
-    test_insights = api.tests().insight("detailed")
+    test_insights = api.session_dict()
     limit = section_cfg.get("limit", 3)
     slowest = test_insights.get("slowest_tests", [])[:limit]
     if slowest:
@@ -146,7 +145,7 @@ def render_slowest_tests(api, section_cfg, terminal_config, return_panel=False):
 
 
 def render_unreliable_tests(api, section_cfg, terminal_config, return_panel=False):
-    test_insights = api.test().insight("detailed")
+    test_insights = api.session_dict()
     limit = section_cfg.get("limit", 3)
     columns = section_cfg.get(
         "columns", ["nodeid", "reliability", "runs", "failures", "unreliable_rate"]
@@ -203,7 +202,7 @@ def render_unreliable_tests(api, section_cfg, terminal_config, return_panel=Fals
 
 
 def render_trends(api, section_cfg, terminal_config, return_panel=False):
-    trend_insights = api.trend().insight("trend")
+    trend_insights = api.session_dict()
     duration_trends = trend_insights.get("duration_trends", {}).get(
         "avg_duration_by_day", {}
     )
@@ -238,12 +237,7 @@ def render_trends(api, section_cfg, terminal_config, return_panel=False):
 
 # --- BEGIN: Additional Section Renderers for All Facets ---
 def render_session(api, section_cfg, terminal_config, return_panel=False):
-    session_obj = api.session().insight("health")
-    session = (
-        session_obj
-        if isinstance(session_obj, dict)
-        else getattr(session_obj, "as_dict", lambda: session_obj)()
-    )
+    session = api.session_dict()
     if isinstance(session, dict):
         display_keys = section_cfg.get("fields") or list(session.keys())
         compact = {k: session.get(k, "") for k in display_keys}
@@ -272,11 +266,11 @@ def render_session(api, section_cfg, terminal_config, return_panel=False):
 
 
 def render_test(api, section_cfg, terminal_config, return_panel=False):
-    test_obj = api.test().insight("detailed")
-    if isinstance(test_obj, dict):
+    test_insights = api.session_dict()
+    if isinstance(test_insights, dict):
         # Show unreliable_tests and slowest_tests as example
-        unreliable = test_obj.get("unreliable_tests", [])
-        slowest = test_obj.get("slowest_tests", [])
+        unreliable = test_insights.get("unreliable_tests", [])
+        slowest = test_insights.get("slowest_tests", [])
         lines = []
         if unreliable:
             lines.append("Unreliable:")
@@ -305,20 +299,20 @@ def render_test(api, section_cfg, terminal_config, return_panel=False):
         else:
             return out
     else:
-        return str(test_obj)
+        return str(test_insights)
 
 
 def render_trend(api, section_cfg, terminal_config, return_panel=False):
-    trend_obj = api.trend().insight("trend")
+    trend_insights = api.session_dict()
     # Reuse render_trends for now
     return render_trends(api, section_cfg, terminal_config, return_panel)
 
 
 def render_compare(api, section_cfg, terminal_config, return_panel=False):
-    comp_obj = api.compare().insight("regression")
+    comp_insights = api.session_dict()
     if terminal_config.get("rich", True) and RICH_AVAILABLE:
         table = Table(show_header=False, box=box.ASCII2)
-        table.add_row(Text(str(comp_obj), style="magenta"))
+        table.add_row(Text(str(comp_insights), style="magenta"))
         panel = Panel(table, title="[magenta]Compare", border_style="magenta")
         if return_panel:
             return panel
@@ -327,14 +321,14 @@ def render_compare(api, section_cfg, terminal_config, return_panel=False):
         console.print(panel)
         return buffer.getvalue()
     else:
-        return str(comp_obj)
+        return str(comp_insights)
 
 
 def render_predictive(api, section_cfg, terminal_config, return_panel=False):
-    pred_obj = api.predictive().insight("predictive_failure")
+    pred_insights = api.session_dict()
     if terminal_config.get("rich", True) and RICH_AVAILABLE:
         table = Table(show_header=False, box=box.ASCII2)
-        table.add_row(Text(str(pred_obj), style="red"))
+        table.add_row(Text(str(pred_insights), style="red"))
         panel = Panel(table, title="[red]Predictive", border_style="red")
         if return_panel:
             return panel
@@ -343,14 +337,14 @@ def render_predictive(api, section_cfg, terminal_config, return_panel=False):
         console.print(panel)
         return buffer.getvalue()
     else:
-        return str(pred_obj)
+        return str(pred_insights)
 
 
 def render_meta(api, section_cfg, terminal_config, return_panel=False):
-    meta_obj = api.meta().insight("meta")
+    meta_insights = api.session_dict()
     if terminal_config.get("rich", True) and RICH_AVAILABLE:
         table = Table(show_header=False, box=box.ASCII2)
-        table.add_row(Text(str(meta_obj), style="cyan"))
+        table.add_row(Text(str(meta_insights), style="cyan"))
         panel = Panel(table, title="[cyan]Meta", border_style="cyan")
         if return_panel:
             return panel
@@ -359,14 +353,14 @@ def render_meta(api, section_cfg, terminal_config, return_panel=False):
         console.print(panel)
         return buffer.getvalue()
     else:
-        return str(meta_obj)
+        return str(meta_insights)
 
 
 def render_temporal(api, section_cfg, terminal_config, return_panel=False):
-    temporal_obj = api.temporal().insight("trend")
+    temporal_insights = api.session_dict()
     if terminal_config.get("rich", True) and RICH_AVAILABLE:
         table = Table(show_header=False, box=box.ASCII2)
-        table.add_row(Text(str(temporal_obj), style="blue"))
+        table.add_row(Text(str(temporal_insights), style="blue"))
         panel = Panel(table, title="[blue]Temporal", border_style="blue")
         if return_panel:
             return panel
@@ -375,7 +369,7 @@ def render_temporal(api, section_cfg, terminal_config, return_panel=False):
         console.print(panel)
         return buffer.getvalue()
     else:
-        return str(temporal_obj)
+        return str(temporal_insights)
 
 
 # --- END: Additional Section Renderers for All Facets ---

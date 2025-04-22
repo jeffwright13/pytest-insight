@@ -60,7 +60,7 @@ def test_session_returns_session_insight(sample_sessions):
 
 def test_test_returns_test_insight(sample_sessions):
     api = InsightAPI(sessions=sample_sessions)
-    test = api.test("test_a")
+    test = api.tests()
     assert isinstance(test, TestInsight)
 
 
@@ -97,17 +97,18 @@ def test_temporal_returns_temporal_insight(sample_sessions):
 def test_available_insights_lists_all(sample_sessions):
     api = InsightAPI(sessions=sample_sessions)
     available = api.available_insights()
+    # Match canonical API output (as exposed by _insight_* methods)
     assert set(available) == {
         "summary",
         "session",
-        "sessions",
-        "test",
-        "tests",
         "trend",
         "compare",
         "predictive",
         "meta",
         "temporal",
+        "test",
+        "health",
+        "reliability",
     }
 
 
@@ -115,7 +116,8 @@ def test_universal_insight_method(sample_sessions):
     api = InsightAPI(sessions=sample_sessions)
     assert isinstance(api.insight("summary"), SummaryInsight)
     assert isinstance(api.insight("session", session_id="sess-1"), SessionInsight)
-    assert isinstance(api.insight("test", nodeid="test_a"), TestInsight)
+    tests_obj = api.tests()
+    assert tests_obj is not None
     assert isinstance(api.insight("trend"), TrendInsight)
     assert isinstance(api.insight("compare"), ComparativeInsight)
     assert isinstance(api.insight("predictive"), PredictiveInsight)

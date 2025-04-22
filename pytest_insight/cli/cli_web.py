@@ -148,9 +148,7 @@ def status():
         print("API Explorer server is not running")
         print("To start: insight web api-explorer start")
         if orphaned:
-            print(
-                "Warning: Orphaned uvicorn/multiprocessing process detected. You may need to kill it manually."
-            )
+            print("Orphaned: Warning: Orphaned uvicorn/multiprocessing process detected. You may need to kill it manually.")
 
 
 app.add_typer(api_explorer_app, name="api-explorer")

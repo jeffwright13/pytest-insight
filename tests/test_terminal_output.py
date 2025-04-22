@@ -34,6 +34,11 @@ class DummyAPI:
     def trend(self):
         return types.SimpleNamespace(insight=lambda kind: self._trends)
 
+    # Add tests property for compatibility with new terminal output code
+    @property
+    def tests(self):
+        return self.test()
+
 
 def make_panel(label, width=20, height=4):
     line = label.center(width, "-")

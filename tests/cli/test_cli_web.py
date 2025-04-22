@@ -35,8 +35,10 @@ def test_status_not_running(capsys, mocker):
             os.remove(f)
         except FileNotFoundError:
             pass
-    cli_web.api_explorer_app.invoke(["status"])
-    out = capsys.readouterr().out
+    from typer.testing import CliRunner
+    runner = CliRunner()
+    result = runner.invoke(cli_web.api_explorer_app, ["status"])
+    out = result.output
     assert "not running" in out.lower()
     assert "to start" in out.lower()
 
@@ -51,8 +53,10 @@ def test_status_running(monkeypatch, tmp_path, capsys, mocker):
     with open(cli_web.INFO_FILE, "w") as f:
         f.write(f"host={host}\nport={port}\npid={pid}\ncmd=uvicorn ...\n")
     monkeypatch.setattr("psutil.Process", lambda p: mock.Mock(is_running=lambda: True))
-    cli_web.api_explorer_app.invoke(["status"])
-    out = capsys.readouterr().out
+    from typer.testing import CliRunner
+    runner = CliRunner()
+    result = runner.invoke(cli_web.api_explorer_app, ["status"])
+    out = result.output
     assert "running" in out.lower()
     assert host in out
     assert port in out
@@ -73,8 +77,10 @@ def test_stop_running(monkeypatch, capsys, mocker):
     fake_proc.is_running.return_value = False
     mocker.patch("psutil.Process", return_value=fake_proc)
     mocker.patch("psutil.wait_procs", return_value=([], []))
-    cli_web.api_explorer_app.invoke(["stop"])
-    out = capsys.readouterr().out
+    from typer.testing import CliRunner
+    runner = CliRunner()
+    result = runner.invoke(cli_web.api_explorer_app, ["stop"])
+    out = result.output
     assert "stopped" in out.lower() or "no process found" in out.lower()
     assert not os.path.exists(cli_web.PID_FILE)
     assert not os.path.exists(cli_web.INFO_FILE)
@@ -87,8 +93,10 @@ def test_stop_not_running(capsys):
             os.remove(f)
         except FileNotFoundError:
             pass
-    cli_web.api_explorer_app.invoke(["stop"])
-    out = capsys.readouterr().out
+    from typer.testing import CliRunner
+    runner = CliRunner()
+    result = runner.invoke(cli_web.api_explorer_app, ["stop"])
+    out = result.output
     assert "no running api explorer" in out.lower()
 
 
@@ -103,7 +111,9 @@ def test_status_orphaned(monkeypatch, capsys, mocker):
         "psutil.process_iter",
         lambda attrs: iter([mock.Mock(info={"cmdline": ["uvicorn", "foo"]})]),
     )
-    cli_web.api_explorer_app.invoke(["status"])
-    out = capsys.readouterr().out
+    from typer.testing import CliRunner
+    runner = CliRunner()
+    result = runner.invoke(cli_web.api_explorer_app, ["status"])
+    out = result.output
     assert "not running" in out.lower()
     assert "orphaned" in out.lower()

@@ -54,30 +54,34 @@ def populate_terminal_section(
     # Prepare API
     api = InsightAPI(sessions=sessions)
 
-    # Gather all available insights
-    summary = api.summary().insight()
-    session_insight = (
-        api.session().insight() if hasattr(api.session(), "insight") else ""
-    )
-    test_reliability = api.test().insight("reliability")
-    temporal_trend = api.temporal().insight("trend")
-    comparative_regression = api.comparative().insight("regression")
-    trend = api.trend().insight("trend")
-    predictive = api.predictive().insight("predictive_failure")
-    meta = api.meta().insight("maintenance_burden")
+    # Gather all available insights as structured data
+    summary = api.summary_dict()
+    session_metrics = api.session_dict()
+    test_metrics = api.test_dict()
+    temporal_metrics = api.temporal_dict()
+    comparative_metrics = api.comparative_dict()
+    trend_metrics = api.trend_dict()
+    predictive_metrics = api.predictive_dict()
+    meta_metrics = api.meta_dict()
 
     # Compose output
     output = header
     output += f"{HEADER}{BOLD}Pytest-Insight: Session Metrics{ENDC}\n"
     output += f"  {OKCYAN}Summary:{ENDC}      {OKGREEN}{summary}{ENDC}\n"
-    if session_insight:
-        output += f"  {OKCYAN}Session:{ENDC}      {session_insight}\n"
-    output += f"  {OKCYAN}Reliability:{ENDC}   {test_reliability}\n"
-    output += f"  {OKCYAN}Temporal Trend:{ENDC} {temporal_trend}\n"
-    output += f"  {OKCYAN}Regression:{ENDC}    {comparative_regression}\n"
-    output += f"  {OKCYAN}Trend:{ENDC}         {trend}\n"
-    output += f"  {OKCYAN}Predictive:{ENDC}    {predictive}\n"
-    output += f"  {OKCYAN}Meta:{ENDC}          {meta}\n"
+    if session_metrics:
+        output += f"  {OKCYAN}Session:{ENDC}      {session_metrics}\n"
+    if test_metrics:
+        output += f"  {OKCYAN}Reliability:{ENDC}   {test_metrics.get('test_reliability_metrics', test_metrics)}\n"
+    if temporal_metrics:
+        output += f"  {OKCYAN}Temporal Trend:{ENDC} {temporal_metrics}\n"
+    if comparative_metrics:
+        output += f"  {OKCYAN}Regression:{ENDC}    {comparative_metrics}\n"
+    if trend_metrics:
+        output += f"  {OKCYAN}Trend:{ENDC}         {trend_metrics}\n"
+    if predictive_metrics:
+        output += f"  {OKCYAN}Predictive:{ENDC}    {predictive_metrics}\n"
+    if meta_metrics:
+        output += f"  {OKCYAN}Meta:{ENDC}          {meta_metrics}\n"
     if extra:
         output += f"  {GREY}Extra:{ENDC}         {extra}\n"
     return output
