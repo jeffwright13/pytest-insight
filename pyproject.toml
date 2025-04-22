@@ -67,7 +67,7 @@ dev = [
 ]
 # All dependencies combined
 all = [
-    "pytest-insight[visualize,dev]",
+    "pytest-insight[visualize,dev,explorer]",
 ]
 
 [project.entry-points.pytest11]
