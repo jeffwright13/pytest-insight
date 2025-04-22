@@ -3265,5 +3265,54 @@ def cli_predict(
             console.print(traceback.format_exc(), style="red")
 
 
+@app.command("analyze_patterns")
+def cli_analyze_patterns(
+    sut: Optional[str] = typer.Option(None, help="System Under Test to analyze"),
+    days: int = typer.Option(10, help="Number of days to include in analysis"),
+    profile: Optional[str] = typer.Option(None, help="Storage profile to use"),
+):
+    """Analyze test patterns such as emerging failures, slowdowns, or correlated issues.
+
+    Args:
+        sut (str, optional): System Under Test to analyze. Defaults to None (all SUTs).
+        days (int, optional): Number of days to include in analysis. Defaults to 10.
+        profile (str, optional): Storage profile to use. Defaults to None (active profile).
+
+    Returns:
+        None. Prints results to the console.
+    """
+    from rich.console import Console
+    from rich.table import Table
+    from pytest_insight.core.core_api import InsightAPI
+    from pytest_insight.facets.trend import TrendInsight
+
+    console = Console()
+    api = InsightAPI(profile_name=profile)
+    analysis = api.analyze()
+    if sut:
+        analysis = analysis.for_sut(sut)
+    sessions = analysis.sessions.last_n_days(days=days)
+    if not sessions:
+        console.print(f"[yellow]No sessions found in the last {days} days.[/yellow]")
+        return
+    trend = TrendInsight(sessions)
+    patterns = trend.emerging_patterns()
+    if not patterns:
+        console.print(f"[green]No emerging patterns detected in the last {days} days.[/green]")
+        return
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Test NodeID", style="cyan")
+    table.add_column("Issue", style="red")
+    table.add_column("Details", style="green")
+    for p in patterns:
+        details = []
+        if "recent_failure_time" in p:
+            details.append(f"Last fail: {p['recent_failure_time']}")
+        if "max_duration" in p:
+            details.append(f"Max duration: {p['max_duration']:.2f}s")
+        table.add_row(p["nodeid"], p["issue"], ", ".join(details))
+    console.print(table)
+
+
 if __name__ == "__main__":
     app()
