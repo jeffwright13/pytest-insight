@@ -1,21 +1,26 @@
-from pytest_insight.core.analysis import calculate_reliability
-from pytest_insight.core.models import TestSession, TestOutcome
 from tabulate import tabulate
 
+from pytest_insight.core.analysis import calculate_reliability
+from pytest_insight.core.insight_base import Insight
+from pytest_insight.core.models import TestOutcome, TestSession
 
-class SummaryInsight:
-    """Aggregate stats and session-level metrics."""
+
+class SummaryInsight(Insight):
+    """
+    Provides summary analytics and aggregate statistics.
+    Inherits the Insight base interface.
+    """
 
     def __init__(self, sessions: list[TestSession]):
-        self.sessions = sessions
+        self._sessions = sessions
 
     def aggregate_stats(self):
-        total_sessions = len(self.sessions)
-        total_tests = sum(len(s.test_results) for s in self.sessions)
-        reliability = calculate_reliability(self.sessions)
+        total_sessions = len(self._sessions)
+        total_tests = sum(len(s.test_results) for s in self._sessions)
+        reliability = calculate_reliability(self._sessions)
         # Compute total counts for all possible outcomes at the session level
         outcome_counts = {k: 0 for k in TestOutcome.to_list()}
-        for s in self.sessions:
+        for s in self._sessions:
             for t in getattr(s, "test_results", []):
                 outcome = getattr(t, "outcome", None)
                 if isinstance(outcome, TestOutcome):
@@ -25,7 +30,10 @@ class SummaryInsight:
                 if outcome_key in outcome_counts:
                     outcome_counts[outcome_key] += 1
         # Compute percentages
-        outcome_percentages = {k: (outcome_counts[k] / total_tests * 100 if total_tests else 0.0) for k in outcome_counts}
+        outcome_percentages = {
+            k: (outcome_counts[k] / total_tests * 100 if total_tests else 0.0)
+            for k in outcome_counts
+        }
         return {
             "total_sessions": total_sessions,
             "total_tests": total_tests,
@@ -36,9 +44,11 @@ class SummaryInsight:
 
     def suite_level_metrics(self):
         # Example: average session duration
-        if not self.sessions:
+        if not self._sessions:
             return {"avg_duration": None}
-        avg_duration = sum((sum(t.duration for t in s.test_results) for s in self.sessions)) / len(self.sessions)
+        avg_duration = sum(
+            (sum(t.duration for t in s.test_results) for s in self._sessions)
+        ) / len(self._sessions)
         return {"avg_duration": avg_duration}
 
     def insight(self, kind: str = "summary", tabular: bool = True, **kwargs):
@@ -48,11 +58,11 @@ class SummaryInsight:
 
     def as_dict(self):
         """Return summary metrics as a dict for dashboard rendering."""
-        total_sessions = len(self.sessions)
-        total_tests = sum(len(s.test_results) for s in self.sessions)
-        reliability = calculate_reliability(self.sessions)
+        total_sessions = len(self._sessions)
+        total_tests = sum(len(s.test_results) for s in self._sessions)
+        reliability = calculate_reliability(self._sessions)
         outcome_counts = {k: 0 for k in TestOutcome.to_list()}
-        for s in self.sessions:
+        for s in self._sessions:
             for t in getattr(s, "test_results", []):
                 outcome = getattr(t, "outcome", None)
                 if isinstance(outcome, TestOutcome):
@@ -61,7 +71,10 @@ class SummaryInsight:
                     outcome_key = str(outcome).lower()
                 if outcome_key in outcome_counts:
                     outcome_counts[outcome_key] += 1
-        outcome_percentages = {k: (outcome_counts[k] / total_tests * 100 if total_tests else 0.0) for k in outcome_counts}
+        outcome_percentages = {
+            k: (outcome_counts[k] / total_tests * 100 if total_tests else 0.0)
+            for k in outcome_counts
+        }
         return {
             "total_sessions": total_sessions,
             "total_tests": total_tests,

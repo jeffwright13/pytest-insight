@@ -2,6 +2,7 @@
 Unit tests for TrendInsight filtering (by SUT, by test nodeid).
 Uses pytest and pytest-mock. Covers edge cases and verifies correct filtering.
 """
+
 from types import SimpleNamespace
 
 from pytest_insight.facets.trend import TrendInsight
@@ -11,7 +12,9 @@ def make_session(sut_name, nodeids):
     """Helper to create a fake TestSession-like object."""
     return SimpleNamespace(
         sut_name=sut_name,
-        test_results=[SimpleNamespace(nodeid=n, outcome="passed", duration=1.0) for n in nodeids],
+        test_results=[
+            SimpleNamespace(nodeid=n, outcome="passed", duration=1.0) for n in nodeids
+        ],
         session_start_time=None,
         session_duration=10.0,
     )
@@ -38,7 +41,9 @@ def test_filter_by_nodeid():
     trend = TrendInsight(sessions)
     filtered = trend.filter(nodeid="test_b")
     # Only sessions containing test_b
-    assert all(any(t.nodeid == "test_b" for t in s.test_results) for s in filtered.sessions)
+    assert all(
+        any(t.nodeid == "test_b" for t in s.test_results) for s in filtered.sessions
+    )
     assert len(filtered.sessions) == 2
 
 

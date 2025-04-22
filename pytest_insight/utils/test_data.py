@@ -31,11 +31,20 @@ class TextGenerator:
 
     @staticmethod
     def sentence() -> str:
-        return " ".join(TextGenerator.word() for _ in range(random.randint(*TextGenerator.WORDS_PER_SENTENCE))) + "."
+        return (
+            " ".join(
+                TextGenerator.word()
+                for _ in range(random.randint(*TextGenerator.WORDS_PER_SENTENCE))
+            )
+            + "."
+        )
 
     @staticmethod
     def paragraph() -> str:
-        return " ".join(TextGenerator.sentence() for _ in range(random.randint(*TextGenerator.SENTENCES_PER_PARAGRAPH)))
+        return " ".join(
+            TextGenerator.sentence()
+            for _ in range(random.randint(*TextGenerator.SENTENCES_PER_PARAGRAPH))
+        )
 
 
 class NodeId:

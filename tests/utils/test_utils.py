@@ -2,6 +2,7 @@ import datetime as dt
 from types import SimpleNamespace
 
 import pytest
+
 from pytest_insight.utils.utils import (
     NormalizedDatetime,
     create_after_filter,

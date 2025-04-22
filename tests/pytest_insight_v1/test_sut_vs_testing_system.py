@@ -38,7 +38,9 @@ def test_sut_name_defaults_to_directory_name():
         patch("pytest_insight.plugin.TestSession") as mock_test_session,
         patch("pytest_insight.plugin.storage"),
         patch("pytest_insight.plugin.insight_enabled", return_value=True),
-        patch("pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]),
+        patch(
+            "pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]
+        ),
         patch("pytest_insight.plugin.datetime") as mock_datetime,
         patch("pytest_insight.core.analysis.Analysis"),
         patch("pytest_insight.core.insights.Insights"),
@@ -86,7 +88,9 @@ def test_sut_name_uses_custom_value_when_specified():
         patch("pytest_insight.plugin.TestSession") as mock_test_session,
         patch("pytest_insight.plugin.storage"),
         patch("pytest_insight.plugin.insight_enabled", return_value=True),
-        patch("pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]),
+        patch(
+            "pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]
+        ),
         patch("pytest_insight.plugin.datetime") as mock_datetime,
         patch("pytest_insight.core.analysis.Analysis"),
         patch("pytest_insight.core.insights.Insights"),
@@ -134,7 +138,9 @@ def test_sut_name_fallback_when_directory_name_fails():
         patch("pytest_insight.plugin.TestSession") as mock_test_session,
         patch("pytest_insight.plugin.storage"),
         patch("pytest_insight.plugin.insight_enabled", return_value=True),
-        patch("pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]),
+        patch(
+            "pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]
+        ),
         patch("os.path.basename", side_effect=OSError("Mocked error")),
         patch("pytest_insight.plugin.datetime") as mock_datetime,
         patch("pytest_insight.core.analysis.Analysis"),
@@ -185,7 +191,9 @@ def test_test_system_name_override():
         patch("pytest_insight.plugin.TestSession") as mock_test_session,
         patch("pytest_insight.plugin.storage"),
         patch("pytest_insight.plugin.insight_enabled", return_value=True),
-        patch("pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]),
+        patch(
+            "pytest_insight.plugin.group_tests_into_rerun_test_groups", return_value=[]
+        ),
         patch("pytest_insight.plugin.datetime") as mock_datetime,
         patch("pytest_insight.core.analysis.Analysis"),
         patch("pytest_insight.core.insights.Insights"),

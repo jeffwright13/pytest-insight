@@ -210,7 +210,9 @@ class TestDatetimeFilters:
         assert filter_func(session2) is False
 
         # Test with timezone-aware equal datetime
-        session3 = self.MockSession(datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc))
+        session3 = self.MockSession(
+            datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        )
         assert filter_func(session3) is True
 
     def test_not_equals_filter(self):

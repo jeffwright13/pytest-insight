@@ -1,6 +1,11 @@
 import os
+import sys
+import types
 
 import pytest
+
+# Mock 'sparklines' globally before any plugin loads
+sys.modules["sparklines"] = types.ModuleType("sparklines")
 
 # Import your new ProfileManager and get_profile_manager from the new codebase
 # from pytest_insight.storage import get_profile_manager

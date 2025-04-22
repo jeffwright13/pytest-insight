@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from pytest_insight.facets.trend import TrendInsight
 
 
@@ -8,7 +9,13 @@ def make_test_result(nodeid, outcome="passed", duration=1.0):
     return SimpleNamespace(nodeid=nodeid, outcome=outcome, duration=duration)
 
 
-def make_session(session_id, results=None, session_start_time=None, session_duration=None, sut_name=None):
+def make_session(
+    session_id,
+    results=None,
+    session_start_time=None,
+    session_duration=None,
+    sut_name=None,
+):
     return SimpleNamespace(
         session_id=session_id,
         test_results=results or [],
@@ -52,8 +59,18 @@ def test_emerging_patterns_none():
 
 
 def test_duration_trends():
-    s1 = make_session("s1", [], session_start_time=SimpleNamespace(date=lambda: "2023-01-01"), session_duration=2.0)
-    s2 = make_session("s2", [], session_start_time=SimpleNamespace(date=lambda: "2023-01-01"), session_duration=4.0)
+    s1 = make_session(
+        "s1",
+        [],
+        session_start_time=SimpleNamespace(date=lambda: "2023-01-01"),
+        session_duration=2.0,
+    )
+    s2 = make_session(
+        "s2",
+        [],
+        session_start_time=SimpleNamespace(date=lambda: "2023-01-01"),
+        session_duration=4.0,
+    )
     ti = TrendInsight([s1, s2])
     trends = ti.duration_trends()
     assert trends["avg_duration_by_day"]["2023-01-01"] == 3.0
@@ -80,7 +97,9 @@ def test_insight_trend_and_dispatch(mocker):
     out = ti.insight(kind="trend")
     assert "duration_trends" in out and "failure_trends" in out
     # summary/health dispatch
-    mock_summary = mocker.patch("pytest_insight.facets.summary.SummaryInsight", autospec=True)
+    mock_summary = mocker.patch(
+        "pytest_insight.facets.summary.SummaryInsight", autospec=True
+    )
     ti.insight(kind="summary")
     assert mock_summary.called
     ti.insight(kind="health")

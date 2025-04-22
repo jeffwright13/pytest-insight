@@ -2,7 +2,9 @@
 Unit tests for SessionQuery and test-level filtering in pytest-insight v2.
 Covers session-level and test-level filters, context preservation, and serialization.
 """
+
 import pytest
+
 from pytest_insight.core.models import TestResult, TestSession
 from pytest_insight.core.query import SessionQuery
 from pytest_insight.utils.utils import NormalizedDatetime
@@ -19,9 +21,27 @@ def sample_sessions():
         session_start_time=base_time1,
         session_tags={"env": "prod"},
         test_results=[
-            TestResult(nodeid="test_foo", outcome="passed", duration=1.0, start_time=base_time1, stop_time=base_time1),
-            TestResult(nodeid="test_bar", outcome="failed", duration=2.0, start_time=base_time1, stop_time=base_time1),
-            TestResult(nodeid="test_baz", outcome="passed", duration=3.0, start_time=base_time1, stop_time=base_time1),
+            TestResult(
+                nodeid="test_foo",
+                outcome="passed",
+                duration=1.0,
+                start_time=base_time1,
+                stop_time=base_time1,
+            ),
+            TestResult(
+                nodeid="test_bar",
+                outcome="failed",
+                duration=2.0,
+                start_time=base_time1,
+                stop_time=base_time1,
+            ),
+            TestResult(
+                nodeid="test_baz",
+                outcome="passed",
+                duration=3.0,
+                start_time=base_time1,
+                stop_time=base_time1,
+            ),
         ],
         rerun_test_groups=[],
         session_duration=10.0,
@@ -32,9 +52,27 @@ def sample_sessions():
         session_start_time=base_time2,
         session_tags={"env": "staging"},
         test_results=[
-            TestResult(nodeid="test_foo", outcome="failed", duration=4.0, start_time=base_time2, stop_time=base_time2),
-            TestResult(nodeid="test_bar", outcome="passed", duration=5.0, start_time=base_time2, stop_time=base_time2),
-            TestResult(nodeid="test_baz", outcome="passed", duration=6.0, start_time=base_time2, stop_time=base_time2),
+            TestResult(
+                nodeid="test_foo",
+                outcome="failed",
+                duration=4.0,
+                start_time=base_time2,
+                stop_time=base_time2,
+            ),
+            TestResult(
+                nodeid="test_bar",
+                outcome="passed",
+                duration=5.0,
+                start_time=base_time2,
+                stop_time=base_time2,
+            ),
+            TestResult(
+                nodeid="test_baz",
+                outcome="passed",
+                duration=6.0,
+                start_time=base_time2,
+                stop_time=base_time2,
+            ),
         ],
         rerun_test_groups=[],
         session_duration=10.0,

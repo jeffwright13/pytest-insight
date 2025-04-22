@@ -1,6 +1,7 @@
-from collections import defaultdict
-from tabulate import tabulate
 import pprint
+from collections import defaultdict
+
+from tabulate import tabulate
 
 from pytest_insight.core.models import TestSession
 
@@ -13,7 +14,9 @@ class TestInsight:
 
     def reliability_report(self):
         """Reliability metrics per test nodeid."""
-        stats = defaultdict(lambda: {"runs": 0, "passes": 0, "failures": 0, "total_duration": 0.0})
+        stats = defaultdict(
+            lambda: {"runs": 0, "passes": 0, "failures": 0, "total_duration": 0.0}
+        )
         for s in self.sessions:
             for t in s.test_results:
                 stats[t.nodeid]["runs"] += 1
@@ -39,6 +42,7 @@ class TestInsight:
     def outcome_distribution(self) -> dict:
         """Return distribution of test outcomes and total count across all sessions."""
         from collections import Counter
+
         counts = Counter()
         total = 0
         for s in self.sessions:
@@ -57,8 +61,7 @@ class TestInsight:
                     unreliable.add(getattr(t, "nodeid", None))
         metrics = self.test_reliability_metrics()
         unreliable_list = [
-            {"nodeid": nid, **metrics.get(nid, {})}
-            for nid in sorted(unreliable)
+            {"nodeid": nid, **metrics.get(nid, {})} for nid in sorted(unreliable)
         ]
         # Optionally sort by unreliable_rate descending
         unreliable_list.sort(key=lambda x: x.get("unreliable_rate", 0), reverse=True)
@@ -77,6 +80,7 @@ class TestInsight:
     def test_reliability_metrics(self) -> dict:
         """Compute reliability metrics for all tests."""
         from collections import defaultdict
+
         results = defaultdict(lambda: {"runs": 0, "unreliable": 0})
         for s in self.sessions:
             for t in getattr(s, "test_results", []):
@@ -105,6 +109,7 @@ class TestInsight:
     def insight(self, kind: str = "reliability", tabular: bool = True, **kwargs):
         if kind in {"summary", "health"}:
             from pytest_insight.facets.summary import SummaryInsight
+
             return SummaryInsight(self.sessions)
         if kind == "detailed":
             return {
@@ -129,13 +134,27 @@ class TestInsight:
         for s in self.sessions:
             for t in getattr(s, "test_results", []):
                 match = True
-                if "nodeid" in criteria and getattr(t, "nodeid", None) != criteria["nodeid"]:
+                if (
+                    "nodeid" in criteria
+                    and getattr(t, "nodeid", None) != criteria["nodeid"]
+                ):
                     match = False
-                if "outcome" in criteria and getattr(t, "outcome", None) != criteria["outcome"]:
+                if (
+                    "outcome" in criteria
+                    and getattr(t, "outcome", None) != criteria["outcome"]
+                ):
                     match = False
-                if "min_duration" in criteria and getattr(t, "duration", None) is not None and t.duration < criteria["min_duration"]:
+                if (
+                    "min_duration" in criteria
+                    and getattr(t, "duration", None) is not None
+                    and t.duration < criteria["min_duration"]
+                ):
                     match = False
-                if "max_duration" in criteria and getattr(t, "duration", None) is not None and t.duration > criteria["max_duration"]:
+                if (
+                    "max_duration" in criteria
+                    and getattr(t, "duration", None) is not None
+                    and t.duration > criteria["max_duration"]
+                ):
                     match = False
                 if match:
                     filtered_sessions.append(s)

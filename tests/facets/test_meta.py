@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from pytest_insight.facets.meta import MetaInsight
 
 
@@ -15,7 +16,7 @@ def make_session(session_id, results=None):
 def test_meta_insight_init():
     s1 = make_session("s1")
     mi = MetaInsight([s1])
-    assert mi.sessions == [s1]
+    assert mi._sessions == [s1]
 
 
 def test_maintenance_burden_empty():
@@ -60,10 +61,34 @@ def test_insight_meta_tabular_and_plain():
 def test_insight_summary_health_dispatch(mocker):
     s1 = make_session("s1")
     mi = MetaInsight([s1])
-    mock_summary = mocker.patch("pytest_insight.facets.summary.SummaryInsight", autospec=True)
+    mock_summary = mocker.patch(
+        "pytest_insight.facets.summary.SummaryInsight", autospec=True
+    )
     mi.insight(kind="summary")
     assert mock_summary.called
     mi.insight(kind="health")
     assert mock_summary.called
     with pytest.raises(ValueError):
         mi.insight(kind="nonsense")
+
+
+def test_meta_insight_interface_methods():
+    mi = MetaInsight([])
+    # insight() is implemented and tested elsewhere
+    # All other base methods should raise NotImplementedError unless implemented
+    with pytest.raises(NotImplementedError):
+        mi.tests()
+    with pytest.raises(NotImplementedError):
+        mi.sessions()
+    with pytest.raises(NotImplementedError):
+        mi.summary()
+    with pytest.raises(NotImplementedError):
+        mi.reliability()
+    with pytest.raises(NotImplementedError):
+        mi.trends()
+    with pytest.raises(NotImplementedError):
+        mi.comparison()
+    with pytest.raises(NotImplementedError):
+        mi.predict()
+    with pytest.raises(NotImplementedError):
+        mi.temporal()

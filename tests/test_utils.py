@@ -1,6 +1,7 @@
 import datetime as dt
 
 import pytest
+
 from pytest_insight.utils.utils import (
     NormalizedDatetime,
     create_after_filter,

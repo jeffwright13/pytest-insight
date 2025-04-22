@@ -2,6 +2,7 @@
 Unit tests for Insights and SessionInsights orchestrator in pytest-insight.
 Covers summary reports, health reports, and session metrics.
 """
+
 from datetime import datetime
 
 from pytest_insight.core.insights import Insights, SessionInsights
@@ -23,10 +24,16 @@ def make_session(test_results, session_id="sess1"):
 def test_sessioninsights_metrics_and_health():
     tests = [
         TestResult(
-            nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=datetime(2025, 4, 21, 10, 0, 0), duration=1.0
+            nodeid="test_foo",
+            outcome=TestOutcome.PASSED,
+            start_time=datetime(2025, 4, 21, 10, 0, 0),
+            duration=1.0,
         ),
         TestResult(
-            nodeid="test_bar", outcome=TestOutcome.FAILED, start_time=datetime(2025, 4, 21, 10, 0, 0), duration=1.0
+            nodeid="test_bar",
+            outcome=TestOutcome.FAILED,
+            start_time=datetime(2025, 4, 21, 10, 0, 0),
+            duration=1.0,
         ),
     ]
     sessions = [make_session(tests)]
@@ -44,7 +51,10 @@ def test_sessioninsights_metrics_and_health():
 def test_insights_summary_report():
     tests = [
         TestResult(
-            nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=datetime(2025, 4, 21, 10, 0, 0), duration=1.0
+            nodeid="test_foo",
+            outcome=TestOutcome.PASSED,
+            start_time=datetime(2025, 4, 21, 10, 0, 0),
+            duration=1.0,
         )
     ]
     sessions = [make_session(tests)]

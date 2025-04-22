@@ -1,10 +1,14 @@
 from tabulate import tabulate
 
+from pytest_insight.core.insight_base import Insight
 from pytest_insight.core.models import TestSession
 
 
-class SessionInsight:
-    """Metrics and health for a single session or group of sessions."""
+class SessionInsight(Insight):
+    """
+    Provides session-level analytics and metrics.
+    Inherits the Insight base interface.
+    """
 
     def __init__(self, sessions: list[TestSession]):
         self.sessions = sessions
@@ -30,8 +34,14 @@ class SessionInsight:
                     outcome_key = str(outcome).lower()
                 if outcome_key in outcome_counts:
                     outcome_counts[outcome_key] += 1
-            reliability = outcome_counts["passed"] / total_tests if total_tests else None
-            avg_duration = sum(t.duration for t in s.test_results) / total_tests if total_tests else None
+            reliability = (
+                outcome_counts["passed"] / total_tests if total_tests else None
+            )
+            avg_duration = (
+                sum(t.duration for t in s.test_results) / total_tests
+                if total_tests
+                else None
+            )
             metrics.append(
                 {
                     "session_id": s.session_id,
@@ -47,7 +57,13 @@ class SessionInsight:
 
     def session_reliability_distribution(self):
         """Return a dict with counts of session types (all passed, some failed, etc.)"""
-        dist = {"all_passed": 0, "some_failed": 0, "some_errored": 0, "all_skipped": 0, "mixed": 0}
+        dist = {
+            "all_passed": 0,
+            "some_failed": 0,
+            "some_errored": 0,
+            "all_skipped": 0,
+            "mixed": 0,
+        }
         for m in self.metrics():
             if m["total_tests"] == 0:
                 continue
@@ -69,7 +85,11 @@ class SessionInsight:
         for m in self.metrics():
             if m["total_tests"] == 0:
                 continue
-            if m["skipped"] == m["total_tests"] or m["xfailed"] == m["total_tests"] or m["rerun"] == m["total_tests"]:
+            if (
+                m["skipped"] == m["total_tests"]
+                or m["xfailed"] == m["total_tests"]
+                or m["rerun"] == m["total_tests"]
+            ):
                 suspicious.append(m)
         return suspicious
 
@@ -111,7 +131,11 @@ class SessionInsight:
                         "Pass": m["passed"],
                         "Fail": m["failed"],
                         "Err": m["error"],
-                        "Reliab (%)": f"{m['reliability']*100:.2f}" if m["reliability"] is not None else "N/A",
+                        "Reliab (%)": (
+                            f"{m['reliability']*100:.2f}"
+                            if m["reliability"] is not None
+                            else "N/A"
+                        ),
                     }
                 )
             if unrel_table:
@@ -160,7 +184,11 @@ class SessionInsight:
                         "Pass": m["passed"],
                         "Fail": m["failed"],
                         "Err": m["error"],
-                        "Reliab (%)": f"{m['reliability']*100:.2f}" if m["reliability"] is not None else "N/A",
+                        "Reliab (%)": (
+                            f"{m['reliability']*100:.2f}"
+                            if m["reliability"] is not None
+                            else "N/A"
+                        ),
                     }
                 )
             if unrel_table:
@@ -201,16 +229,19 @@ class SessionInsight:
             }
             for t in s.test_results:
                 outcome_counts[t.outcome] = outcome_counts.get(t.outcome, 0) + 1
-            metrics.append({
-                "session_id": getattr(s, "session_id", ""),
-                "total_tests": total_tests,
-                **outcome_counts,
-            })
+            metrics.append(
+                {
+                    "session_id": getattr(s, "session_id", ""),
+                    "total_tests": total_tests,
+                    **outcome_counts,
+                }
+            )
         return {"session_metrics": metrics}
 
     def insight(self, kind: str = "health", tabular: bool = True, **kwargs):
         if kind in {"summary", "health"}:
             from pytest_insight.facets.summary import SummaryInsight
+
             return SummaryInsight(self.sessions).as_dict()
         elif kind == "metrics":
             return self.metrics()
@@ -230,13 +261,33 @@ class SessionInsight:
         """
         filtered = self.sessions
         if "sut" in criteria:
-            filtered = [s for s in filtered if getattr(s, "sut_name", None) == criteria["sut"]]
+            filtered = [
+                s for s in filtered if getattr(s, "sut_name", None) == criteria["sut"]
+            ]
         if "min_tests" in criteria:
-            filtered = [s for s in filtered if len(getattr(s, "test_results", [])) >= criteria["min_tests"]]
+            filtered = [
+                s
+                for s in filtered
+                if len(getattr(s, "test_results", [])) >= criteria["min_tests"]
+            ]
         if "max_tests" in criteria:
-            filtered = [s for s in filtered if len(getattr(s, "test_results", [])) <= criteria["max_tests"]]
+            filtered = [
+                s
+                for s in filtered
+                if len(getattr(s, "test_results", [])) <= criteria["max_tests"]
+            ]
         if "after" in criteria:
-            filtered = [s for s in filtered if getattr(s, "session_start_time", None) and getattr(s, "session_start_time") >= criteria["after"]]
+            filtered = [
+                s
+                for s in filtered
+                if getattr(s, "session_start_time", None)
+                and getattr(s, "session_start_time") >= criteria["after"]
+            ]
         if "before" in criteria:
-            filtered = [s for s in filtered if getattr(s, "session_start_time", None) and getattr(s, "session_start_time") <= criteria["before"]]
+            filtered = [
+                s
+                for s in filtered
+                if getattr(s, "session_start_time", None)
+                and getattr(s, "session_start_time") <= criteria["before"]
+            ]
         return SessionInsight(filtered)

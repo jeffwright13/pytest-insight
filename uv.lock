@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.9"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -2394,6 +2395,7 @@ dependencies = [
     { name = "ipython", version = "9.1.0", source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "prompt-toolkit" },
     { name = "pytest" },
+    { name = "quantiphy" },
     { name = "rich" },
     { name = "sparklines" },
     { name = "tabulate" },
@@ -2405,6 +2407,7 @@ dependencies = [
 all = [
     { name = "black" },
     { name = "build" },
+    { name = "fastapi" },
     { name = "hatch" },
     { name = "isort" },
     { name = "jinja2" },
@@ -2414,13 +2417,18 @@ all = [
     { name = "pandas" },
     { name = "plotly" },
     { name = "pre-commit" },
+    { name = "prompt-toolkit" },
     { name = "pyflakes" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "pytest-rerunfailures" },
+    { name = "python-multipart" },
+    { name = "requests" },
+    { name = "rich" },
     { name = "ruff" },
     { name = "scikit-learn" },
     { name = "streamlit" },
+    { name = "uvicorn" },
 ]
 dev = [
     { name = "black" },
@@ -2483,10 +2491,11 @@ requires-dist = [
     { name = "pyflakes", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "pytest", specifier = ">=6.2.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
-    { name = "pytest-insight", extras = ["visualize", "dev"], marker = "extra == 'all'" },
+    { name = "pytest-insight", extras = ["visualize", "dev", "explorer"], marker = "extra == 'all'" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.10.0" },
     { name = "pytest-rerunfailures", marker = "extra == 'dev'", specifier = ">=12.0" },
     { name = "python-multipart", marker = "extra == 'explorer'", specifier = ">=0.0.6" },
+    { name = "quantiphy", specifier = ">=2.20" },
     { name = "requests", marker = "extra == 'explorer'", specifier = ">=2.28.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "rich", marker = "extra == 'explorer'", specifier = ">=13.0.0" },
@@ -2499,6 +2508,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.15.0" },
     { name = "uvicorn", marker = "extra == 'explorer'", specifier = ">=0.20.0" },
 ]
+provides-extras = ["visualize", "explorer", "dev", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2757,6 +2767,15 @@ wheels = [
     { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/bd/d4/2c64e54749536ad1633400f28d71e71e19375d00ce1fe9bb1123364dc927/pyzmq-26.4.0-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8112af16c406e4a93df2caef49f884f4c2bb2b558b0b5577ef0b2465d15c1abc" },
     { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/08/e6/34d119af43d06a8dcd88bf7a62dac69597eaba52b49ecce76ff06b40f1fd/pyzmq-26.4.0-pp39-pypy39_pp73-manylinux_2_28_x86_64.whl", hash = "sha256:c76c298683f82669cab0b6da59071f55238c039738297c69f187a542c6d40099" },
     { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/f8/49/b5e471d74a63318e51f30d329b17d2550bdededaab55baed2e2499de7ce4/pyzmq-26.4.0-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:49b6ca2e625b46f499fb081aaf7819a177f41eeb555acb05758aa97f4f95d147" },
+]
+
+[[package]]
+name = "quantiphy"
+version = "2.20"
+source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }
+sdist = { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/92/dc/dec6a98d5ef472812848c1141630f819bfaf2e469f3733083ded2f3b08aa/quantiphy-2.20.tar.gz", hash = "sha256:ba5375ac55c3b90077a793588dd5a88aaf81b2c3b0fc9c9359513ac39f6ed84d" }
+wheels = [
+    { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/37/91/42c59c137bf3d82a6525f3200f23ea6cad81f53828f96e187a519cdf34c3/quantiphy-2.20-py3-none-any.whl", hash = "sha256:afdf5f9d1cc87359bd7daf19dc1cb23808eb2e264d9395b36ca6527fb4d71b3a" },
 ]
 
 [[package]]

@@ -100,7 +100,9 @@ class Test_TestResult:
         result_dict = test_result.to_dict()
         assert isinstance(result_dict, dict)
         assert result_dict["nodeid"] == test_result.nodeid
-        assert result_dict["outcome"] == test_result.outcome.to_str()  # Use to_str() consistently
+        assert (
+            result_dict["outcome"] == test_result.outcome.to_str()
+        )  # Use to_str() consistently
         assert result_dict["start_time"] == test_result.start_time.isoformat()
         assert result_dict["duration"] == test_result.duration
         assert result_dict["caplog"] == test_result.caplog
@@ -144,7 +146,9 @@ class Test_TestResult:
             capstderr="",
             capstdout="",
         )
-        assert test_result.stop_time == test_result.start_time + timedelta(seconds=test_result.duration)
+        assert test_result.stop_time == test_result.start_time + timedelta(
+            seconds=test_result.duration
+        )
 
 
 class Test_TestSession:
@@ -170,8 +174,12 @@ class Test_TestSession:
         if session.rerun_test_groups:  # Rerun groups are optional
             for group in session.rerun_test_groups:
                 assert group.tests  # Each group has tests
-                assert all(test.outcome == TestOutcome.RERUN for test in group.tests[:-1])  # All but last are reruns
-                assert group.tests[-1].outcome != TestOutcome.RERUN  # Last test has final outcome
+                assert all(
+                    test.outcome == TestOutcome.RERUN for test in group.tests[:-1]
+                )  # All but last are reruns
+                assert (
+                    group.tests[-1].outcome != TestOutcome.RERUN
+                )  # Last test has final outcome
 
         # Validate test relationships
         outcomes = {test.outcome for test in session.test_results}
@@ -231,8 +239,12 @@ class Test_TestSession:
         assert isinstance(session_dict, dict)
         assert session_dict["sut_name"] == session.sut_name
         assert session_dict["session_id"] == session.session_id
-        assert session_dict["session_start_time"] == session.session_start_time.isoformat()
-        assert session_dict["session_stop_time"] == session.session_stop_time.isoformat()
+        assert (
+            session_dict["session_start_time"] == session.session_start_time.isoformat()
+        )
+        assert (
+            session_dict["session_stop_time"] == session.session_stop_time.isoformat()
+        )
         assert session_dict["session_duration"] == session.session_duration
         assert len(session_dict["test_results"]) == len(session.test_results)
         assert len(session_dict["rerun_test_groups"]) == len(session.rerun_test_groups)
@@ -253,19 +265,25 @@ class Test_TestSession:
         assert new_session.session_stop_time == session.session_stop_time
 
         # Duration should be calculated from timestamps
-        expected_duration = (session.session_stop_time - session.session_start_time).total_seconds()
+        expected_duration = (
+            session.session_stop_time - session.session_start_time
+        ).total_seconds()
         assert new_session.session_duration == expected_duration
 
         # Verify test results
         assert len(new_session.test_results) == len(session.test_results)
-        for new_result, orig_result in zip(new_session.test_results, session.test_results):
+        for new_result, orig_result in zip(
+            new_session.test_results, session.test_results
+        ):
             assert new_result.nodeid == orig_result.nodeid
             assert new_result.outcome == orig_result.outcome
             assert new_result.duration == orig_result.duration
 
         # Verify rerun groups
         assert len(new_session.rerun_test_groups) == len(session.rerun_test_groups)
-        for new_group, orig_group in zip(new_session.rerun_test_groups, session.rerun_test_groups):
+        for new_group, orig_group in zip(
+            new_session.rerun_test_groups, session.rerun_test_groups
+        ):
             assert new_group.nodeid == orig_group.nodeid
             assert len(new_group.tests) == len(orig_group.tests)
 
@@ -305,8 +323,14 @@ class Test_TestSession:
         # Verify timestamps are preserved with timezone info
         assert restored_session.session_start_time == session.session_start_time
         assert restored_session.session_stop_time == session.session_stop_time
-        assert restored_session.test_results[0].start_time == session.test_results[0].start_time
-        assert restored_session.test_results[1].start_time == session.test_results[1].start_time
+        assert (
+            restored_session.test_results[0].start_time
+            == session.test_results[0].start_time
+        )
+        assert (
+            restored_session.test_results[1].start_time
+            == session.test_results[1].start_time
+        )
 
 
 class Test_RerunTestGroup:
@@ -564,7 +588,9 @@ class Test_TestSessionBehavior:
 
         assert session.session_start_time.tzinfo is not None
         assert session.session_stop_time.tzinfo is not None
-        assert session.session_duration == 3600.0  # Check float duration instead of timedelta
+        assert (
+            session.session_duration == 3600.0
+        )  # Check float duration instead of timedelta
 
     def test_test_relationships(self, get_test_time):
         """Test relationships between tests in a session."""
@@ -597,8 +623,14 @@ class Test_TestSessionBehavior:
         assert session.test_results[0].start_time < session.test_results[1].start_time
 
         # Test outcome aggregation
-        assert len([t for t in session.test_results if t.outcome == TestOutcome.PASSED]) == 1
-        assert len([t for t in session.test_results if t.outcome == TestOutcome.FAILED]) == 1
+        assert (
+            len([t for t in session.test_results if t.outcome == TestOutcome.PASSED])
+            == 1
+        )
+        assert (
+            len([t for t in session.test_results if t.outcome == TestOutcome.FAILED])
+            == 1
+        )
 
     def test_session_metadata(self):
         """Test session metadata handling."""

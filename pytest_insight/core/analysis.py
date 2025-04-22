@@ -33,7 +33,10 @@ def calculate_reliability(sessions: list[TestSession]) -> float:
 
             # Initialize reliability for the test if not already present
             if test_name not in test_reliability:
-                test_reliability[test_name] = {"total_sessions": 0, "reliable_sessions": 0}
+                test_reliability[test_name] = {
+                    "total_sessions": 0,
+                    "reliable_sessions": 0,
+                }
 
             # Update session count
             test_reliability[test_name]["total_sessions"] += 1
@@ -48,8 +51,12 @@ def calculate_reliability(sessions: list[TestSession]) -> float:
                 test_reliability[test_name]["reliable_sessions"] += 1
 
     # Calculate the overall reliability score
-    reliable_tests = sum(reliability["reliable_sessions"] for reliability in test_reliability.values())
-    total_tests = sum(reliability["total_sessions"] for reliability in test_reliability.values())
+    reliable_tests = sum(
+        reliability["reliable_sessions"] for reliability in test_reliability.values()
+    )
+    total_tests = sum(
+        reliability["total_sessions"] for reliability in test_reliability.values()
+    )
 
     # Return the reliability score (0.0 if no tests, otherwise reliable_tests / total_tests)
     return reliable_tests / total_tests if total_tests > 0 else 0.0

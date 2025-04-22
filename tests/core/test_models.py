@@ -2,10 +2,17 @@
 Unit tests for core models: TestOutcome, TestResult, RerunTestGroup, TestSession.
 Covers enum conversion, serialization, context preservation, and error handling.
 """
+
 from datetime import datetime, timedelta
 
 import pytest
-from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+
+from pytest_insight.core.models import (
+    RerunTestGroup,
+    TestOutcome,
+    TestResult,
+    TestSession,
+)
 
 
 def test_testoutcome_from_str_and_to_str():
@@ -15,7 +22,15 @@ def test_testoutcome_from_str_and_to_str():
     with pytest.raises(ValueError):
         TestOutcome.from_str("not_a_real_outcome")
     assert TestOutcome.PASSED.to_str() == "passed"
-    assert set(TestOutcome.to_list()) == {"passed", "failed", "skipped", "xfailed", "xpassed", "rerun", "error"}
+    assert set(TestOutcome.to_list()) == {
+        "passed",
+        "failed",
+        "skipped",
+        "xfailed",
+        "xpassed",
+        "rerun",
+        "error",
+    }
     assert TestOutcome.FAILED.is_failed() is True
     assert TestOutcome.PASSED.is_failed() is False
 
@@ -24,13 +39,23 @@ def test_testresult_init_and_serialization():
     t0 = datetime(2025, 4, 21, 10, 0, 0)
     t1 = t0 + timedelta(seconds=2)
     # Only duration provided
-    tr1 = TestResult(nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=t0, duration=2.0)
+    tr1 = TestResult(
+        nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=t0, duration=2.0
+    )
     assert tr1.stop_time == t1
     # Only stop_time provided
-    tr2 = TestResult(nodeid="test_bar", outcome=TestOutcome.FAILED, start_time=t0, stop_time=t1)
+    tr2 = TestResult(
+        nodeid="test_bar", outcome=TestOutcome.FAILED, start_time=t0, stop_time=t1
+    )
     assert tr2.duration == 2.0
     # Both provided
-    tr3 = TestResult(nodeid="test_baz", outcome=TestOutcome.SKIPPED, start_time=t0, stop_time=t1, duration=2.0)
+    tr3 = TestResult(
+        nodeid="test_baz",
+        outcome=TestOutcome.SKIPPED,
+        start_time=t0,
+        stop_time=t1,
+        duration=2.0,
+    )
     assert tr3.duration == 2.0 and tr3.stop_time == t1
     # Serialization
     d = tr1.to_dict()
@@ -48,8 +73,12 @@ def test_testresult_invalid_init():
 
 def test_reruntestgroup_add_and_final_outcome():
     t0 = datetime(2025, 4, 21, 10, 0, 0)
-    tr1 = TestResult(nodeid="test_foo", outcome=TestOutcome.RERUN, start_time=t0, duration=1.0)
-    tr2 = TestResult(nodeid="test_foo", outcome=TestOutcome.FAILED, start_time=t0, duration=1.0)
+    tr1 = TestResult(
+        nodeid="test_foo", outcome=TestOutcome.RERUN, start_time=t0, duration=1.0
+    )
+    tr2 = TestResult(
+        nodeid="test_foo", outcome=TestOutcome.FAILED, start_time=t0, duration=1.0
+    )
     group = RerunTestGroup(nodeid="test_foo")
     group.add_test(tr1)
     group.add_test(tr2)
@@ -64,7 +93,9 @@ def test_reruntestgroup_add_and_final_outcome():
 def test_testsession_add_and_serialization():
     t0 = datetime(2025, 4, 21, 10, 0, 0)
     t1 = t0 + timedelta(seconds=10)
-    tr = TestResult(nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=t0, duration=2.0)
+    tr = TestResult(
+        nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=t0, duration=2.0
+    )
     group = RerunTestGroup(nodeid="test_foo")
     group.add_test(tr)
     session = TestSession(

@@ -28,7 +28,11 @@ def in_memory_storage():
 @pytest.mark.parametrize("storage_class", [InMemoryStorage, JSONStorage])
 def test_save_and_load_session(storage_class, tmp_path, test_session_basic):
     """Test saving and loading a session in both storage types."""
-    storage = storage_class(tmp_path / "sessions.json") if storage_class == JSONStorage else storage_class()
+    storage = (
+        storage_class(tmp_path / "sessions.json")
+        if storage_class == JSONStorage
+        else storage_class()
+    )
 
     assert storage.load_sessions() == []  # Should start empty
 
@@ -80,10 +84,14 @@ def test_get_storage_instance_json(mocker, tmp_path):
     profile_manager = ProfileManager(config_path=config_path)
 
     # Create a test profile
-    profile_manager._create_profile("test-profile", "json", str(tmp_path / "sessions.json"))
+    profile_manager._create_profile(
+        "test-profile", "json", str(tmp_path / "sessions.json")
+    )
 
     # Mock get_profile_manager to return our test instance
-    mocker.patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager)
+    mocker.patch(
+        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
+    )
 
     # Test with profile_name
     storage = get_storage_instance(profile_name="test-profile")
@@ -159,13 +167,17 @@ def test_save_sessions_bulk(tmp_path, get_test_time):
     # Verify all sessions were saved
     loaded_sessions = storage.load_sessions()
     assert len(loaded_sessions) == 5
-    assert {s.session_id for s in loaded_sessions} == {f"bulk-test-{i}" for i in range(5)}
+    assert {s.session_id for s in loaded_sessions} == {
+        f"bulk-test-{i}" for i in range(5)
+    }
 
 
 def test_handles_invalid_data_format(mocker, json_storage):
     """Test handling of invalid data format (non-list JSON)."""
     # Mock the _read_json_safely method instead of read_text
-    mocker.patch.object(json_storage, "_read_json_safely", return_value={"not": "a list"})
+    mocker.patch.object(
+        json_storage, "_read_json_safely", return_value={"not": "a list"}
+    )
 
     # Should handle gracefully and return empty list
     assert json_storage.load_sessions() == []
@@ -203,7 +215,9 @@ def test_handles_invalid_session_data(mocker, json_storage, get_test_time):
     assert sessions[0].session_id == "valid-test"
 
     # Verify error was printed
-    print_mock.assert_any_call(mocker.ANY)  # Any call with string containing error message
+    print_mock.assert_any_call(
+        mocker.ANY
+    )  # Any call with string containing error message
 
 
 def test_backup_on_json_decode_error(mocker, tmp_path):
@@ -283,7 +297,9 @@ def test_get_storage_instance_with_env_vars(mocker, tmp_path):
     profile_manager._create_profile(env_profile_name, "json", custom_path)
 
     # Mock get_profile_manager to return our test instance
-    mocker.patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager)
+    mocker.patch(
+        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
+    )
 
     # Mock environment variable for profile
     mocker.patch.dict(
@@ -308,10 +324,14 @@ def test_get_storage_instance_invalid_type(mocker, tmp_path):
     profile_manager = ProfileManager(config_path=config_path)
 
     # Create a test profile with invalid storage type
-    profile_manager._create_profile("invalid-profile", "invalid_type", str(tmp_path / "invalid.json"))
+    profile_manager._create_profile(
+        "invalid-profile", "invalid_type", str(tmp_path / "invalid.json")
+    )
 
     # Mock get_profile_manager to return our test instance
-    mocker.patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager)
+    mocker.patch(
+        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
+    )
 
     # Mock environment variable to be empty
     mocker.patch.dict("os.environ", {"PYTEST_INSIGHT_PROFILE": ""})
@@ -416,7 +436,9 @@ class TestStorageProfile:
         profile = StorageProfile("test-profile")
         assert profile.name == "test-profile"
         assert profile.storage_type == "json"
-        expected_path = str(Path.home() / ".pytest_insight" / "profiles" / "test-profile.json")
+        expected_path = str(
+            Path.home() / ".pytest_insight" / "profiles" / "test-profile.json"
+        )
         assert profile.file_path == expected_path
 
         # Check timestamp and user fields are set
@@ -424,7 +446,9 @@ class TestStorageProfile:
         assert isinstance(profile.last_modified, datetime)
         assert profile.created_by is not None
         assert profile.last_modified_by is not None
-        assert profile.created_by == profile.last_modified_by  # Same user for new profile
+        assert (
+            profile.created_by == profile.last_modified_by
+        )  # Same user for new profile
 
         # Create with custom values
         profile = StorageProfile("custom", "memory", "/custom/path")
@@ -826,7 +850,9 @@ class TestProfileManager:
 
         # Create a JSON profile (should be persisted)
         json_profile_name = "test-json-profile"
-        profile_manager._create_profile(json_profile_name, "json", str(tmp_path / "json-sessions.json"))
+        profile_manager._create_profile(
+            json_profile_name, "json", str(tmp_path / "json-sessions.json")
+        )
 
         # Create an in-memory profile (should not be persisted)
         memory_profile_name = "test-memory-profile"
@@ -855,8 +881,12 @@ class TestProfileManager:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Create profiles with different storage types
-        profile_manager._create_profile("json-profile-1", "json", str(tmp_path / "json1.json"))
-        profile_manager._create_profile("json-profile-2", "json", str(tmp_path / "json2.json"))
+        profile_manager._create_profile(
+            "json-profile-1", "json", str(tmp_path / "json1.json")
+        )
+        profile_manager._create_profile(
+            "json-profile-2", "json", str(tmp_path / "json2.json")
+        )
         profile_manager._create_profile("memory-profile-1", "memory")
         profile_manager._create_profile("memory-profile-2", "memory")
 
@@ -887,10 +917,18 @@ class TestProfileManager:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Create profiles with different name patterns
-        profile_manager._create_profile("test-abc-1", "json", str(tmp_path / "abc1.json"))
-        profile_manager._create_profile("test-abc-2", "json", str(tmp_path / "abc2.json"))
-        profile_manager._create_profile("test-xyz-1", "json", str(tmp_path / "xyz1.json"))
-        profile_manager._create_profile("other-profile", "json", str(tmp_path / "other.json"))
+        profile_manager._create_profile(
+            "test-abc-1", "json", str(tmp_path / "abc1.json")
+        )
+        profile_manager._create_profile(
+            "test-abc-2", "json", str(tmp_path / "abc2.json")
+        )
+        profile_manager._create_profile(
+            "test-xyz-1", "json", str(tmp_path / "xyz1.json")
+        )
+        profile_manager._create_profile(
+            "other-profile", "json", str(tmp_path / "other.json")
+        )
 
         # Test filtering by pattern
         abc_profiles = profile_manager.list_profiles(pattern="test-abc*")
@@ -923,9 +961,15 @@ class TestProfileManager:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Create various profiles for testing bulk deletion
-        profile_manager._create_profile("active-profile", "json", str(tmp_path / "active.json"))
-        profile_manager._create_profile("json-test-1", "json", str(tmp_path / "json1.json"))
-        profile_manager._create_profile("json-test-2", "json", str(tmp_path / "json2.json"))
+        profile_manager._create_profile(
+            "active-profile", "json", str(tmp_path / "active.json")
+        )
+        profile_manager._create_profile(
+            "json-test-1", "json", str(tmp_path / "json1.json")
+        )
+        profile_manager._create_profile(
+            "json-test-2", "json", str(tmp_path / "json2.json")
+        )
         profile_manager._create_profile("memory-test-1", "memory")
         profile_manager._create_profile("memory-test-2", "memory")
         profile_manager._create_profile("memory-other", "memory")
@@ -954,7 +998,9 @@ class TestProfileManager:
         assert "memory-other" in deleted_memory
 
         # Test bulk deletion by pattern
-        json_test_profiles_before = profile_manager.list_profiles(storage_type="json", pattern="json-test*")
+        json_test_profiles_before = profile_manager.list_profiles(
+            storage_type="json", pattern="json-test*"
+        )
         assert len(json_test_profiles_before) == 2
 
         # Delete JSON profiles matching pattern
@@ -967,7 +1013,9 @@ class TestProfileManager:
                 # Skip active profile
                 pass
 
-        json_test_profiles_after = profile_manager.list_profiles(storage_type="json", pattern="json-test*")
+        json_test_profiles_after = profile_manager.list_profiles(
+            storage_type="json", pattern="json-test*"
+        )
         assert len(json_test_profiles_after) == 0
         assert "json-test-1" in deleted_json
         assert "json-test-2" in deleted_json
@@ -997,10 +1045,14 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
+        monkeypatch.setattr(
+            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
+        )
 
         # Create test profiles
-        profile_manager._create_profile("json-profile", "json", str(tmp_path / "json-db.json"))
+        profile_manager._create_profile(
+            "json-profile", "json", str(tmp_path / "json-db.json")
+        )
         profile_manager._create_profile("memory-profile", "memory")
 
         # Get storage with json profile
@@ -1015,7 +1067,9 @@ class TestStorageWithProfiles:
         # Get default storage when no profile specified (should use default profile)
         # First, ensure default profile exists with json storage
         if "default" not in profile_manager.list_profiles():
-            profile_manager._create_profile("default", "json", str(tmp_path / "default-db.json"))
+            profile_manager._create_profile(
+                "default", "json", str(tmp_path / "default-db.json")
+            )
         else:
             # Update the default profile to use our test path
             default_profile = profile_manager.get_profile("default")
@@ -1042,10 +1096,14 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
+        monkeypatch.setattr(
+            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
+        )
 
         # Create test profile
-        profile_manager._create_profile("env-profile", "json", str(tmp_path / "env-db.json"))
+        profile_manager._create_profile(
+            "env-profile", "json", str(tmp_path / "env-db.json")
+        )
 
         # Set environment variable
         monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "env-profile")
@@ -1056,7 +1114,9 @@ class TestStorageWithProfiles:
         assert storage.file_path == tmp_path / "env-db.json"
 
         # Explicit profile should override env var
-        profile_manager._create_profile("explicit-profile", "json", str(tmp_path / "explicit-db.json"))
+        profile_manager._create_profile(
+            "explicit-profile", "json", str(tmp_path / "explicit-db.json")
+        )
         storage = get_storage_instance(profile_name="explicit-profile")
         assert storage.file_path == tmp_path / "explicit-db.json"
 
@@ -1075,7 +1135,9 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
+        monkeypatch.setattr(
+            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
+        )
 
         # Create profiles using the convenience functions
         # These will use our mocked profile manager
@@ -1162,7 +1224,9 @@ def test_load_sessions_streaming(mocker, tmp_path, get_test_time):
     storage._write_json_safely({"sessions": [s.to_dict() for s in sessions]})
 
     # Mock the _load_sessions_streaming method to ensure it's called
-    streaming_mock = mocker.patch.object(storage, "_load_sessions_streaming", return_value=sessions)
+    streaming_mock = mocker.patch.object(
+        storage, "_load_sessions_streaming", return_value=sessions
+    )
 
     # Load sessions with streaming
     loaded_sessions = storage.load_sessions(use_streaming=True)
@@ -1172,7 +1236,9 @@ def test_load_sessions_streaming(mocker, tmp_path, get_test_time):
 
     # Verify all sessions were loaded
     assert len(loaded_sessions) == 5
-    assert {s.session_id for s in loaded_sessions} == {f"streaming-test-{i}" for i in range(5)}
+    assert {s.session_id for s in loaded_sessions} == {
+        f"streaming-test-{i}" for i in range(5)
+    }
 
 
 def test_load_sessions_with_invalid_session_data(mocker, tmp_path):
@@ -1213,10 +1279,14 @@ def test_load_sessions_with_invalid_session_data(mocker, tmp_path):
     assert loaded_sessions[0].session_id == "valid-session"
 
     # Verify error was printed
-    print_mock.assert_any_call(mocker.ANY)  # Any call with string containing error message
+    print_mock.assert_any_call(
+        mocker.ANY
+    )  # Any call with string containing error message
 
 
-def test_load_sessions_fallback_when_ijson_not_available(mocker, tmp_path, get_test_time):
+def test_load_sessions_fallback_when_ijson_not_available(
+    mocker, tmp_path, get_test_time
+):
     """Test fallback to standard loading when ijson is not available."""
     # Create a storage instance
     storage_path = tmp_path / "sessions.json"
@@ -1249,11 +1319,15 @@ def test_load_sessions_fallback_when_ijson_not_available(mocker, tmp_path, get_t
     loaded_sessions = storage.load_sessions(use_streaming=True)
 
     # Verify warning was printed
-    warning_mock.assert_any_call("Warning: ijson not installed. Falling back to standard JSON loading.")
+    warning_mock.assert_any_call(
+        "Warning: ijson not installed. Falling back to standard JSON loading."
+    )
 
     # Verify all sessions were loaded correctly using the fallback method
     assert len(loaded_sessions) == 3
-    assert {s.session_id for s in loaded_sessions} == {f"fallback-test-{i}" for i in range(3)}
+    assert {s.session_id for s in loaded_sessions} == {
+        f"fallback-test-{i}" for i in range(3)
+    }
 
 
 def test_get_profile_metadata(tmp_path):
@@ -1299,7 +1373,9 @@ def test_get_profile_metadata(tmp_path):
     # Mock get_profile_manager to return our test instance
     from unittest.mock import patch
 
-    with patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager):
+    with patch(
+        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
+    ):
         # Test getting metadata for all profiles
         all_metadata = get_profile_metadata()
 

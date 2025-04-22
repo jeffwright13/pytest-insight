@@ -65,13 +65,19 @@ class HistoryDataGenerator:
         base, top = self.pass_rate_range
         if sut == self.suts[0]:
             # Improving
-            return min(top, base + (top - base) * self.trend_strength * day / (self.days - 1))
+            return min(
+                top, base + (top - base) * self.trend_strength * day / (self.days - 1)
+            )
         elif sut == self.suts[1]:
             # Declining
-            return max(base, top - (top - base) * self.trend_strength * day / (self.days - 1))
+            return max(
+                base, top - (top - base) * self.trend_strength * day / (self.days - 1)
+            )
         else:
             # Cyclic
-            return base + (top - base) * (0.5 + 0.5 * random.uniform(-1, 1) * self.trend_strength)
+            return base + (top - base) * (
+                0.5 + 0.5 * random.uniform(-1, 1) * self.trend_strength
+            )
 
     def _get_correlated_failures(self, day: int) -> List[str]:
         # Pick a group of tests to fail together (simulate correlation)
@@ -88,7 +94,11 @@ class HistoryDataGenerator:
                 sut = random.choice(self.suts)
                 session_id = f"{sut}-{day}-{s}-{random.randint(1000,9999)}"
                 pass_rate = self._get_pass_rate(day, sut)
-                correlated = self._get_correlated_failures(day) if random.random() < self.anomaly_rate else []
+                correlated = (
+                    self._get_correlated_failures(day)
+                    if random.random() < self.anomaly_rate
+                    else []
+                )
                 test_results = []
                 for tid in self.test_ids:
                     if tid in correlated:
@@ -118,14 +128,19 @@ class HistoryDataGenerator:
                 }
                 # Simulate rerun test groups for a subset of test_ids
                 rerun_test_groups = []
-                rerun_candidates = random.sample(self.test_ids, k=max(1, len(self.test_ids) // 4))
+                rerun_candidates = random.sample(
+                    self.test_ids, k=max(1, len(self.test_ids) // 4)
+                )
                 for nodeid in rerun_candidates:
                     rerun_results = [
                         TestResult(
                             nodeid=nodeid,
-                            outcome=TestOutcome.from_str(random.choice(["FAILED", "PASSED"])),
+                            outcome=TestOutcome.from_str(
+                                random.choice(["FAILED", "PASSED"])
+                            ),
                             start_time=day_time,
-                            stop_time=day_time + timedelta(seconds=random.uniform(0.1, 2)),
+                            stop_time=day_time
+                            + timedelta(seconds=random.uniform(0.1, 2)),
                             duration=random.uniform(0.1, 2),
                             caplog="Rerun log",
                             capstderr="",
@@ -158,7 +173,9 @@ class HistoryDataGenerator:
                 )
         return sessions
 
-    def save_profile(self, sessions: List[TestSession], profile_name: str, append: bool = False):
+    def save_profile(
+        self, sessions: List[TestSession], profile_name: str, append: bool = False
+    ):
         """
         Save sessions using the ProfileManager and get_storage_instance exclusively (no direct file handling).
         """
@@ -173,14 +190,16 @@ class HistoryDataGenerator:
         else:
             all_sessions = sessions
         # Save all sessions (overwrite or append)
-        if hasattr(storage, '_write_json_safely'):
+        if hasattr(storage, "_write_json_safely"):
             storage._write_json_safely([s.to_dict() for s in all_sessions])
         else:
             if not append:
                 storage.clear_sessions()
             for session in all_sessions:
                 storage.save_session(session)
-        typer.echo(f"Saved {len(sessions)} sessions to profile '{profile_name}' at {getattr(storage, 'file_path', 'unknown location')}")
+        typer.echo(
+            f"Saved {len(sessions)} sessions to profile '{profile_name}' at {getattr(storage, 'file_path', 'unknown location')}"
+        )
 
     def to_dict(self, sess: TestSession):
         return {
@@ -194,7 +213,11 @@ class HistoryDataGenerator:
             "test_results": [
                 {
                     "nodeid": tr.nodeid,
-                    "outcome": (tr.outcome.to_str() if hasattr(tr.outcome, "to_str") else str(tr.outcome)),
+                    "outcome": (
+                        tr.outcome.to_str()
+                        if hasattr(tr.outcome, "to_str")
+                        else str(tr.outcome)
+                    ),
                     "start_time": tr.start_time.isoformat(),
                     "stop_time": tr.stop_time.isoformat(),
                     "duration": tr.duration,
@@ -212,7 +235,11 @@ class HistoryDataGenerator:
                     "tests": [
                         {
                             "nodeid": t.nodeid,
-                            "outcome": (t.outcome.to_str() if hasattr(t.outcome, "to_str") else str(t.outcome)),
+                            "outcome": (
+                                t.outcome.to_str()
+                                if hasattr(t.outcome, "to_str")
+                                else str(t.outcome)
+                            ),
                             "start_time": t.start_time.isoformat(),
                             "stop_time": t.stop_time.isoformat(),
                             "duration": t.duration,
@@ -237,20 +264,28 @@ app = typer.Typer()
 def generate(
     days: int = typer.Option(30, help="Number of days of history to generate."),
     sessions_per_day: int = typer.Option(4, help="Sessions per day."),
-    suts: str = typer.Option("api-service,ui-service,db-service", help="Comma-separated SUT names."),
+    suts: str = typer.Option(
+        "api-service,ui-service,db-service", help="Comma-separated SUT names."
+    ),
     test_ids: str = typer.Option(
         "test_login,test_logout,test_create_user,test_delete_user,test_update_profile,test_list_items,test_db_connect,test_db_query,test_api_health,test_ui_render",
         help="Comma-separated test ids.",
     ),
     trend_strength: float = typer.Option(0.7, help="Trend strength (0-1)."),
-    anomaly_rate: float = typer.Option(0.05, help="Rate of correlated/anomalous failures."),
+    anomaly_rate: float = typer.Option(
+        0.05, help="Rate of correlated/anomalous failures."
+    ),
     correlation_groups: int = typer.Option(3, help="Number of correlated test groups."),
     pass_rate_min: float = typer.Option(0.5, help="Minimum pass rate."),
     pass_rate_max: float = typer.Option(0.95, help="Maximum pass rate."),
     warning_rate: float = typer.Option(0.1, help="Warning rate."),
     seed: Optional[int] = typer.Option(None, help="Random seed for reproducibility."),
-    profile_name: str = typer.Option("default", help="Storage profile to use (default: 'default')."),
-    append: bool = typer.Option(False, help="Append to existing profile instead of overwriting."),
+    profile_name: str = typer.Option(
+        "default", help="Storage profile to use (default: 'default')."
+    ),
+    append: bool = typer.Option(
+        False, help="Append to existing profile instead of overwriting."
+    ),
 ):
     """Generate historical test data and save using a pytest-insight storage profile (via ProfileManager)."""
     generator = HistoryDataGenerator(
@@ -267,13 +302,20 @@ def generate(
     )
     sessions = generator.generate()
     generator.save_profile(sessions, profile_name, append)
-    typer.echo(f"Generated {len(sessions)} sessions and saved to profile '{profile_name}'")
+    typer.echo(
+        f"Generated {len(sessions)} sessions and saved to profile '{profile_name}'"
+    )
 
 
 @app.command()
 def purge_profiles(
-    force: bool = typer.Option(False, help="Actually delete profiles and files (required for destructive action)."),
-    dry_run: bool = typer.Option(False, help="Show what would be deleted, but don't actually delete anything."),
+    force: bool = typer.Option(
+        False,
+        help="Actually delete profiles and files (required for destructive action).",
+    ),
+    dry_run: bool = typer.Option(
+        False, help="Show what would be deleted, but don't actually delete anything."
+    ),
 ):
     """Purge all pytest-insight storage profiles and their data files (with dry run support)."""
     profile_mgr = ProfileManager()
@@ -291,7 +333,9 @@ def purge_profiles(
         raise typer.Exit(0)
 
     if not force:
-        typer.echo("This is a destructive operation. Use --force to actually delete all profiles and files.")
+        typer.echo(
+            "This is a destructive operation. Use --force to actually delete all profiles and files."
+        )
         raise typer.Exit(1)
 
     for prof in profiles:

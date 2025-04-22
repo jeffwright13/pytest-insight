@@ -27,7 +27,10 @@ class ShellPatternFilter:
     def __post_init__(self):
         if not isinstance(self.pattern, str) or not self.pattern:
             raise InvalidQueryParameterError("Pattern must be a non-empty string.")
-        if not isinstance(self.field_name, str) or self.field_name not in self.ALLOWED_FIELDS:
+        if (
+            not isinstance(self.field_name, str)
+            or self.field_name not in self.ALLOWED_FIELDS
+        ):
             raise InvalidQueryParameterError(f"Invalid field name: {self.field_name}")
 
     def matches(self, test: TestResult) -> bool:
@@ -79,6 +82,8 @@ class RegexPatternFilter:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "RegexPatternFilter":
-        instance = cls(pattern=data["pattern"], field_name=data.get("field_name", "nodeid"))
+        instance = cls(
+            pattern=data["pattern"], field_name=data.get("field_name", "nodeid")
+        )
         instance._compiled_regex = re.compile(instance.pattern)
         return instance

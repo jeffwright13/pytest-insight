@@ -8,7 +8,9 @@ def console_insights(sessions: list[TestSession] = None, profile: str = None):
     pass
 
 
-def populate_terminal_section(sessions: list[TestSession], extra: Optional[dict] = None) -> str:
+def populate_terminal_section(
+    sessions: list[TestSession], extra: Optional[dict] = None
+) -> str:
     """Format the pytest-insight terminal section for display.
 
     Args:
@@ -18,26 +20,33 @@ def populate_terminal_section(sessions: list[TestSession], extra: Optional[dict]
     Returns:
         str: Formatted string for terminal output.
     """
-    from pytest_insight.insight_api import InsightAPI
     import sys
 
+    from pytest_insight.insight_api import InsightAPI
+
     # ANSI color codes
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    GREY = '\033[90m'
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+    GREY = "\033[90m"
 
     # Compose header for context
-    sut_name = sessions[0].sut_name if sessions and hasattr(sessions[0], "sut_name") else "unknown-sut"
+    sut_name = (
+        sessions[0].sut_name
+        if sessions and hasattr(sessions[0], "sut_name")
+        else "unknown-sut"
+    )
     system_name = (
         sessions[0].testing_system["name"]
-        if sessions and hasattr(sessions[0], "testing_system") and "name" in sessions[0].testing_system
+        if sessions
+        and hasattr(sessions[0], "testing_system")
+        and "name" in sessions[0].testing_system
         else "unknown-system"
     )
     header = f"[Session Insight: SUT={sut_name} System={system_name}]\n"
@@ -47,13 +56,15 @@ def populate_terminal_section(sessions: list[TestSession], extra: Optional[dict]
 
     # Gather all available insights
     summary = api.summary().insight()
-    session_insight = api.session().insight() if hasattr(api.session(), 'insight') else ''
-    test_reliability = api.test().insight('reliability')
-    temporal_trend = api.temporal().insight('trend')
-    comparative_regression = api.comparative().insight('regression')
-    trend = api.trend().insight('trend')
-    predictive = api.predictive().insight('predictive_failure')
-    meta = api.meta().insight('maintenance_burden')
+    session_insight = (
+        api.session().insight() if hasattr(api.session(), "insight") else ""
+    )
+    test_reliability = api.test().insight("reliability")
+    temporal_trend = api.temporal().insight("trend")
+    comparative_regression = api.comparative().insight("regression")
+    trend = api.trend().insight("trend")
+    predictive = api.predictive().insight("predictive_failure")
+    meta = api.meta().insight("maintenance_burden")
 
     # Compose output
     output = header

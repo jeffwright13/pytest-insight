@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from pytest_insight.facets.comparative import ComparativeInsight
 
 
@@ -12,16 +13,18 @@ def sessions_factory():
         for sut, test_lists in suts_tests.items():
             for test_outcomes in test_lists:
                 test_results = [SimpleNamespace(outcome=o) for o in test_outcomes]
-                sessions.append(SimpleNamespace(sut_name=sut, test_results=test_results))
+                sessions.append(
+                    SimpleNamespace(sut_name=sut, test_results=test_results)
+                )
         return sessions
 
     return _make
 
 
 def test_init_empty_and_nonempty(sessions_factory):
-    assert ComparativeInsight([]).sessions == []
+    assert ComparativeInsight([])._sessions == []
     s = sessions_factory({"A": [["passed"]]})
-    assert ComparativeInsight(s).sessions == s
+    assert ComparativeInsight(s)._sessions == s
 
 
 def test_compare_suts_basic(sessions_factory):
@@ -95,3 +98,25 @@ def test_as_dict_two_and_one_sut(sessions_factory):
     ci = ComparativeInsight(s)
     d = ci.as_dict()
     assert d["sut_comparison"] is None
+
+
+def test_comparative_insight_interface_methods():
+    ci = ComparativeInsight([])
+    # insight() is implemented and tested elsewhere
+    # All other base methods should raise NotImplementedError unless implemented
+    with pytest.raises(NotImplementedError):
+        ci.tests()
+    with pytest.raises(NotImplementedError):
+        ci.sessions()
+    with pytest.raises(NotImplementedError):
+        ci.summary()
+    with pytest.raises(NotImplementedError):
+        ci.reliability()
+    with pytest.raises(NotImplementedError):
+        ci.trends()
+    with pytest.raises(NotImplementedError):
+        ci.meta()
+    with pytest.raises(NotImplementedError):
+        ci.predict()
+    with pytest.raises(NotImplementedError):
+        ci.temporal()

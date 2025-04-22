@@ -13,8 +13,9 @@ def testdir_or_pytester(request):
 
 def strip_ansi(s):
     import re
-    ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
-    return ansi_escape.sub('', s)
+
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+    return ansi_escape.sub("", s)
 
 
 def test_plugin_registers_and_runs(testdir_or_pytester):

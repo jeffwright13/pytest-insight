@@ -49,7 +49,12 @@ class NormalizedDatetime:
 
     def to_json(self):
         """Return ISO string for JSON serialization."""
-        return self.dt.isoformat().replace("+00:00", "Z") if self.dt.tzinfo and self.dt.tzinfo.utcoffset(self.dt) == dt_module.timedelta(0) else self.dt.isoformat()
+        return (
+            self.dt.isoformat().replace("+00:00", "Z")
+            if self.dt.tzinfo
+            and self.dt.tzinfo.utcoffset(self.dt) == dt_module.timedelta(0)
+            else self.dt.isoformat()
+        )
 
     def __getattr__(self, name):
         # Delegate all unknown attributes/methods to the underlying datetime
@@ -70,8 +75,12 @@ class NormalizedDatetime:
     def _normalize_for_comparison(
         dt1: dt_module.datetime, dt2: dt_module.datetime
     ) -> Tuple[dt_module.datetime, dt_module.datetime]:
-        dt1_has_tzinfo = dt1.tzinfo is not None and dt1.tzinfo.utcoffset(dt1) is not None
-        dt2_has_tzinfo = dt2.tzinfo is not None and dt2.tzinfo.utcoffset(dt2) is not None
+        dt1_has_tzinfo = (
+            dt1.tzinfo is not None and dt1.tzinfo.utcoffset(dt1) is not None
+        )
+        dt2_has_tzinfo = (
+            dt2.tzinfo is not None and dt2.tzinfo.utcoffset(dt2) is not None
+        )
         if dt1_has_tzinfo == dt2_has_tzinfo:
             return dt1, dt2
         if dt1_has_tzinfo and not dt2_has_tzinfo:

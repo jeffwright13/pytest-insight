@@ -2,13 +2,18 @@ import datetime as dt
 from types import SimpleNamespace
 
 import pytest
+
 from pytest_insight.facets.temporal import TemporalInsight
 
 
 @pytest.fixture
 def make_test_session():
     def _make(session_id, start_time, results=None):
-        return SimpleNamespace(session_id=session_id, session_start_time=start_time, test_results=results or [])
+        return SimpleNamespace(
+            session_id=session_id,
+            session_start_time=start_time,
+            test_results=results or [],
+        )
 
     return _make
 
@@ -24,7 +29,7 @@ def make_test_result():
 def test_temporal_insight_init(make_test_session):
     s1 = make_test_session("s1", dt.datetime(2023, 1, 1))
     ti = TemporalInsight([s1])
-    assert ti.sessions == [s1]
+    assert ti._sessions == [s1]
 
 
 def test_trend_over_time_empty():
@@ -98,7 +103,9 @@ def test_insight_trend_no_data():
 def test_insight_summary_health_dispatch(mocker, make_test_session):
     s = make_test_session("s1", dt.datetime(2023, 1, 1))
     ti = TemporalInsight([s])
-    mock_summary = mocker.patch("pytest_insight.facets.summary.SummaryInsight", autospec=True)
+    mock_summary = mocker.patch(
+        "pytest_insight.facets.summary.SummaryInsight", autospec=True
+    )
     ti.insight(kind="summary")
     assert mock_summary.called
     ti.insight(kind="health")
@@ -118,3 +125,23 @@ def test_as_dict(make_test_session):
     ti = TemporalInsight([s1, s2])
     d = ti.as_dict()
     assert d == {"sessions": ["s1", "s2"]}
+
+
+def test_temporal_insight_interface_methods():
+    ti = TemporalInsight([])
+    # insight() is implemented and tested elsewhere
+    # All other base methods should raise NotImplementedError unless implemented
+    with pytest.raises(NotImplementedError):
+        ti.tests()
+    with pytest.raises(NotImplementedError):
+        ti.sessions()
+    with pytest.raises(NotImplementedError):
+        ti.summary()
+    with pytest.raises(NotImplementedError):
+        ti.reliability()
+    with pytest.raises(NotImplementedError):
+        ti.comparison()
+    with pytest.raises(NotImplementedError):
+        ti.meta()
+    with pytest.raises(NotImplementedError):
+        ti.predict()

@@ -2,7 +2,9 @@
 
 from datetime import datetime, timedelta
 from typing import List
+
 from pytest_insight.utils.utils import NormalizedDatetime
+
 from .filters import RegexPatternFilter, ShellPatternFilter
 from .models import TestSession
 
@@ -28,6 +30,7 @@ class SerializableFilter:
     Provides methods for converting filter objects to a dictionary (for storage or transmission)
     and reconstructing them from a dictionary.
     """
+
     def to_dict(self):
         """
         Convert the filter object to a dictionary.
@@ -63,6 +66,7 @@ class SessionQuery:
         query = SessionQuery(sessions)
         recent = query.for_sut("service").in_last_days(7).execute()
     """
+
     def __init__(self, sessions: List[TestSession]):
         """
         Initialize a SessionQuery.
@@ -85,13 +89,22 @@ class SessionQuery:
             self (SessionQuery): Enables method chaining.
         """
         if match_type == "exact":
-            self.filters.append(lambda s: str(getattr(s, "sut_name", "")).lower() == str(sut_name).lower())
+            self.filters.append(
+                lambda s: str(getattr(s, "sut_name", "")).lower()
+                == str(sut_name).lower()
+            )
         elif match_type == "substring":
-            self.filters.append(lambda s: str(sut_name).lower() in str(getattr(s, "sut_name", "")).lower())
+            self.filters.append(
+                lambda s: str(sut_name).lower()
+                in str(getattr(s, "sut_name", "")).lower()
+            )
         elif match_type == "regex":
             import re
+
             pattern = re.compile(str(sut_name), flags=regex_flags)
-            self.filters.append(lambda s: bool(pattern.search(str(getattr(s, "sut_name", "")))))
+            self.filters.append(
+                lambda s: bool(pattern.search(str(getattr(s, "sut_name", ""))))
+            )
         else:
             raise ValueError(f"Invalid match_type: {match_type}")
         return self
@@ -106,7 +119,9 @@ class SessionQuery:
             self (SessionQuery): Enables method chaining.
         """
         cutoff = NormalizedDatetime.now() - timedelta(days=days)
-        self.filters.append(lambda s: NormalizedDatetime(s.session_start_time) >= cutoff)
+        self.filters.append(
+            lambda s: NormalizedDatetime(s.session_start_time) >= cutoff
+        )
         return self
 
     def with_reruns(self):
@@ -130,6 +145,7 @@ class SessionQuery:
         Returns:
             self (SessionQuery): Enables method chaining.
         """
+
         def tag_match(s):
             for k, v in tags.items():
                 val = str(s.session_tags.get(k, ""))
@@ -142,12 +158,14 @@ class SessionQuery:
                         return False
                 elif match_type == "regex":
                     import re
+
                     pattern = re.compile(v_str, flags=regex_flags)
                     if not pattern.search(val):
                         return False
                 else:
                     raise ValueError(f"Invalid match_type: {match_type}")
             return True
+
         self.filters.append(tag_match)
         return self
 
@@ -158,7 +176,9 @@ class SessionQuery:
         Returns:
             self (SessionQuery): Enables method chaining.
         """
-        self.filters.append(lambda s: any(getattr(tr, "has_warning", False) for tr in s.test_results))
+        self.filters.append(
+            lambda s: any(getattr(tr, "has_warning", False) for tr in s.test_results)
+        )
         return self
 
     def with_outcome(self, outcome: str, test_level: bool = True):
@@ -175,9 +195,17 @@ class SessionQuery:
             self (SessionQuery): Enables method chaining.
         """
         if test_level:
-            self.filters.append(lambda s: any(getattr(tr, "outcome", None) == outcome for tr in s.test_results))
+            self.filters.append(
+                lambda s: any(
+                    getattr(tr, "outcome", None) == outcome for tr in s.test_results
+                )
+            )
         else:
-            self.filters.append(lambda s: all(getattr(tr, "outcome", None) == outcome for tr in s.test_results))
+            self.filters.append(
+                lambda s: all(
+                    getattr(tr, "outcome", None) == outcome for tr in s.test_results
+                )
+            )
         return self
 
     def with_unreliable(self):
@@ -187,7 +215,9 @@ class SessionQuery:
         Returns:
             self (SessionQuery): Enables method chaining.
         """
-        self.filters.append(lambda s: any(getattr(tr, "unreliable", False) for tr in s.test_results))
+        self.filters.append(
+            lambda s: any(getattr(tr, "unreliable", False) for tr in s.test_results)
+        )
         return self
 
     def filter_by_test(self):
@@ -214,7 +244,9 @@ class SessionQuery:
             return {"total_sessions": len(filtered)}
         elif kind == "health":
             # Example health metric: percent sessions with all tests passed
-            healthy = sum(all(t.outcome == "passed" for t in s.test_results) for s in filtered)
+            healthy = sum(
+                all(t.outcome == "passed" for t in s.test_results) for s in filtered
+            )
             return {"healthy_sessions": healthy, "total_sessions": len(filtered)}
         else:
             return {"info": f"Unknown insight kind: {kind}"}
@@ -239,7 +271,11 @@ class SessionQuery:
             dict: Dictionary representation of the query object.
         """
         return {
-            "filters": [getattr(f, "to_dict", lambda: None)() for f in self.filters if hasattr(f, "to_dict")],
+            "filters": [
+                getattr(f, "to_dict", lambda: None)()
+                for f in self.filters
+                if hasattr(f, "to_dict")
+            ],
             "sessions": [s.session_id for s in self.sessions],
         }
 
@@ -269,6 +305,7 @@ class TestQuery:
 
     Supports a fluent interface for chaining filters.
     """
+
     def __init__(self, parent_query: SessionQuery):
         """
         Initialize a TestQuery.
@@ -303,7 +340,11 @@ class TestQuery:
         Returns:
             self (TestQuery): Enables method chaining.
         """
-        self.test_filters.append(lambda t: min_dur <= getattr(t, "duration", getattr(t, "session_duration", 0)) <= max_dur)
+        self.test_filters.append(
+            lambda t: min_dur
+            <= getattr(t, "duration", getattr(t, "session_duration", 0))
+            <= max_dur
+        )
         return self
 
     def with_pattern(self, pattern: str, field_name: str = "nodeid"):
@@ -431,8 +472,16 @@ class TestQuery:
             dict: Dictionary representation of the query object.
         """
         return {
-            "test_filters": [getattr(f, "to_dict", lambda: None)() for f in self.test_filters if hasattr(f, "to_dict")],
-            "parent_query": (self.parent_query.to_dict() if hasattr(self.parent_query, "to_dict") else None),
+            "test_filters": [
+                getattr(f, "to_dict", lambda: None)()
+                for f in self.test_filters
+                if hasattr(f, "to_dict")
+            ],
+            "parent_query": (
+                self.parent_query.to_dict()
+                if hasattr(self.parent_query, "to_dict")
+                else None
+            ),
         }
 
     @classmethod
@@ -459,42 +508,69 @@ class TestQuery:
 # --- STUB: For v1 compatibility only ---
 class Query:
     """Stub for v1 compatibility. All methods raise NotImplementedError."""
+
     def __init__(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def for_sut(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def in_last_days(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def with_reruns(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def with_tags(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def with_warning(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def with_outcome(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def with_unreliable(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def filter_by_test(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def insight(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def execute(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     def to_dict(self, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )
 
     @classmethod
     def from_dict(cls, *args, **kwargs):
-        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+        raise NotImplementedError(
+            "Query is not implemented in v2. Use SessionQuery instead."
+        )

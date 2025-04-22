@@ -50,7 +50,9 @@ def test_file_locking_prevents_concurrent_writes():
             thread.join(1.0)  # Wait for the thread to finish or timeout
 
             # Verify that the timeout was reached
-            assert timeout_reached, "Expected a timeout when lock is held by another process"
+            assert (
+                timeout_reached
+            ), "Expected a timeout when lock is held by another process"
         finally:
             # Release the lock
             lock.release()
@@ -101,7 +103,9 @@ def test_write_json_safely_uses_file_lock():
 def test_file_lock_prevents_data_corruption():
     """Test that file locking prevents data corruption during concurrent writes."""
     # Create a temporary file for testing
-    with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(
+        suffix=".json", mode="w", delete=False
+    ) as temp_file:
         temp_path = temp_file.name
         # Initialize with empty data
         json.dump({"sessions": []}, temp_file)
@@ -157,7 +161,9 @@ def test_file_lock_prevents_data_corruption():
             thread.join()
 
         # Verify that all writes were successful
-        assert successful_writes == num_threads, f"Expected {num_threads} successful writes, got {successful_writes}"
+        assert (
+            successful_writes == num_threads
+        ), f"Expected {num_threads} successful writes, got {successful_writes}"
 
         # Verify the file contains valid JSON
         with open(temp_path, "r") as f:

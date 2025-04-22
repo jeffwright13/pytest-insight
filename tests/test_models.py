@@ -1,7 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+
+from pytest_insight.core.models import (
+    RerunTestGroup,
+    TestOutcome,
+    TestResult,
+    TestSession,
+)
 from pytest_insight.utils.utils import NormalizedDatetime
 
 

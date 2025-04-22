@@ -2,6 +2,7 @@
 Config loader for pytest-insight dashboard and UI settings (TOML-based).
 Supports Python 3.7+ (uses tomli for <3.11, tomllib for >=3.11).
 """
+
 import os
 import sys
 
@@ -14,9 +15,16 @@ _DEFAULT_CONFIG = {
     "dashboard": {
         "sections": ["summary", "slowest_tests", "unreliable_tests", "trends"],
         "insights": {
-            "summary": {"show": True, "fields": ["total_sessions", "total_tests", "pass_rate", "fail_rate"]},
+            "summary": {
+                "show": True,
+                "fields": ["total_sessions", "total_tests", "pass_rate", "fail_rate"],
+            },
             "slowest_tests": {"show": True, "limit": 5},
-            "unreliable_tests": {"show": True, "limit": 5, "columns": ["nodeid", "reliability", "runs", "failures"]},
+            "unreliable_tests": {
+                "show": True,
+                "limit": 5,
+                "columns": ["nodeid", "reliability", "runs", "failures"],
+            },
             "trends": {"show": True, "types": ["duration", "failures"]},
         },
         "formatting": {
@@ -33,9 +41,16 @@ _DEFAULT_TERMINAL_CONFIG = {
     "enabled": True,
     "sections": ["summary", "slowest_tests", "unreliable_tests", "trends"],
     "insights": {
-        "summary": {"show": True, "fields": ["total_sessions", "total_tests", "pass_rate", "fail_rate"]},
+        "summary": {
+            "show": True,
+            "fields": ["total_sessions", "total_tests", "pass_rate", "fail_rate"],
+        },
         "slowest_tests": {"show": True, "limit": 5},
-        "unreliable_tests": {"show": True, "limit": 5, "columns": ["nodeid", "reliability", "runs", "failures"]},
+        "unreliable_tests": {
+            "show": True,
+            "limit": 5,
+            "columns": ["nodeid", "reliability", "runs", "failures"],
+        },
         "trends": {"show": True, "types": ["duration", "failures"]},
     },
 }
@@ -109,12 +124,14 @@ def load_terminal_config(path: str = None) -> dict:
         print(f"[pytest-insight] Failed to load terminal config: {e}\nUsing defaults.")
         return _DEFAULT_TERMINAL_CONFIG
 
+
 def terminal_output_enabled(config: dict) -> bool:
     """
     Returns True if terminal output is enabled in the config.
     Respects the PYTEST_INSIGHT_TERMINAL environment variable if set.
     """
     import os
+
     env_val = os.getenv("PYTEST_INSIGHT_TERMINAL")
     if env_val is not None:
         return env_val.strip().lower() not in ("0", "false", "no", "off", "n", "")

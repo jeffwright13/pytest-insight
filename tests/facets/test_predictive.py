@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from pytest_insight.facets.predictive import PredictiveInsight
 
 
@@ -9,13 +10,15 @@ def make_test_result(outcome):
 
 
 def make_session(session_start_time=None, test_results=None):
-    return SimpleNamespace(session_start_time=session_start_time, test_results=test_results or [])
+    return SimpleNamespace(
+        session_start_time=session_start_time, test_results=test_results or []
+    )
 
 
 def test_init_empty_and_nonempty():
-    assert PredictiveInsight([]).sessions == []
+    assert PredictiveInsight([])._sessions == []
     s = [make_session()]
-    assert PredictiveInsight(s).sessions == s
+    assert PredictiveInsight(s)._sessions == s
 
 
 def test_forecast_no_sessions():
@@ -96,3 +99,25 @@ def test_as_dict():
     pi = PredictiveInsight([s1, s2])
     d = pi.as_dict()
     assert "future_reliability" in d and "trend" in d and "warning" in d
+
+
+def test_predictive_insight_interface_methods():
+    pi = PredictiveInsight([])
+    # insight() is implemented and tested elsewhere
+    # All other base methods should raise NotImplementedError unless implemented
+    with pytest.raises(NotImplementedError):
+        pi.tests()
+    with pytest.raises(NotImplementedError):
+        pi.sessions()
+    with pytest.raises(NotImplementedError):
+        pi.summary()
+    with pytest.raises(NotImplementedError):
+        pi.reliability()
+    with pytest.raises(NotImplementedError):
+        pi.trends()
+    with pytest.raises(NotImplementedError):
+        pi.comparison()
+    with pytest.raises(NotImplementedError):
+        pi.meta()
+    with pytest.raises(NotImplementedError):
+        pi.temporal()

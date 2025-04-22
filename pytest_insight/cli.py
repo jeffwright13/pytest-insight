@@ -4,6 +4,7 @@ pytest-insight CLI entrypoint (Typer-based)
 Usage:
     python -m pytest_insight.cli [COMMAND]
 """
+
 import typer
 from rich import print
 
@@ -61,7 +62,9 @@ def dev_shell(profile: str = typer.Option(None, help="Profile name to load")):
         c.TerminalInteractiveShell.banner1 = banner
         start_ipython(argv=[], user_ns=local_ns, config=c)
     except ImportError:
-        print("[yellow]IPython not installed. Falling back to standard Python REPL.[/yellow]")
+        print(
+            "[yellow]IPython not installed. Falling back to standard Python REPL.[/yellow]"
+        )
         import code
 
         code.interact(local=local_ns, banner=banner)
@@ -77,17 +80,21 @@ def console(profile: str = typer.Option(None, help="Profile name to load")):
 def api_explorer(
     host: str = typer.Option("127.0.0.1", help="Host to serve the API Explorer UI on"),
     port: int = typer.Option(8001, help="Port to serve the API Explorer UI on"),
-    reload: bool = typer.Option(True, help="Enable auto-reload for development")
+    reload: bool = typer.Option(True, help="Enable auto-reload for development"),
 ):
     """Launch the self-discovering API Explorer UI (Swagger-like, chainable)."""
     try:
-        import uvicorn
         from importlib.util import find_spec
+
+        import uvicorn
+
         # Check if the explorer app exists
         if not find_spec("pytest_insight.web_api.explorer.explorer_app"):
             print("[red]Explorer app not found. Please ensure it is installed.")
             raise typer.Exit(1)
-        print(f"[bold green]Launching API Explorer UI at http://{host}:{port} ...[/bold green]")
+        print(
+            f"[bold green]Launching API Explorer UI at http://{host}:{port} ...[/bold green]"
+        )
         uvicorn.run(
             "pytest_insight.web_api.explorer.explorer_app:app",
             host=host,

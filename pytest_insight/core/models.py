@@ -184,7 +184,9 @@ class TestResult:
             nodeid=data["nodeid"],
             outcome=TestOutcome.from_str(data["outcome"]),
             start_time=datetime.fromisoformat(data["start_time"]),
-            stop_time=datetime.fromisoformat(data["stop_time"]) if data["stop_time"] else None,
+            stop_time=(
+                datetime.fromisoformat(data["stop_time"]) if data["stop_time"] else None
+            ),
             duration=data.get("duration"),
             caplog=data.get("caplog", ""),
             capstderr=data.get("capstderr", ""),
@@ -254,7 +256,9 @@ class RerunTestGroup:
             RerunTestGroup: Instantiated RerunTestGroup object.
         """
         if not isinstance(data, dict):
-            raise ValueError(f"Invalid data for RerunTestGroup. Expected dict, got {type(data)}")
+            raise ValueError(
+                f"Invalid data for RerunTestGroup. Expected dict, got {type(data)}"
+            )
 
         group = cls(nodeid=data["nodeid"])
         group.tests = [TestResult.from_dict(t) for t in data["tests"]]
@@ -298,12 +302,18 @@ class TestSession:
             ValueError: If neither session_stop_time nor session_duration is provided.
         """
         if self.session_stop_time is None and self.session_duration is None:
-            raise ValueError("Either session_stop_time or session_duration must be provided")
+            raise ValueError(
+                "Either session_stop_time or session_duration must be provided"
+            )
 
         if self.session_stop_time is None:
-            self.session_stop_time = self.session_start_time + timedelta(seconds=self.session_duration)
+            self.session_stop_time = self.session_start_time + timedelta(
+                seconds=self.session_duration
+            )
         elif self.session_duration is None:
-            self.session_duration = (self.session_stop_time - self.session_start_time).total_seconds()
+            self.session_duration = (
+                self.session_stop_time - self.session_start_time
+            ).total_seconds()
 
     def to_dict(self) -> Dict:
         """
@@ -340,7 +350,9 @@ class TestSession:
         from pytest_insight.utils.utils import NormalizedDatetime
 
         if not isinstance(data, dict):
-            raise ValueError(f"Invalid data for TestSession. Expected dict, got {type(data)}")
+            raise ValueError(
+                f"Invalid data for TestSession. Expected dict, got {type(data)}"
+            )
 
         session = cls(
             sut_name=data["sut_name"],

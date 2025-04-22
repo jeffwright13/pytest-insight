@@ -11,15 +11,19 @@ Usage (Python):
     from pytest_insight.scripts.introspect_api import introspect_api
     print(introspect_api(MyClass, markdown=True))
 """
-import sys
+
 import importlib
 import inspect
+import sys
 from typing import get_type_hints
+
 
 def introspect_api(api_cls, markdown=False):
     """Return documentation for an API class as a string (Markdown or plain text)."""
     lines = []
-    lines.append(f"# API: {api_cls.__name__}\n" if markdown else f"API: {api_cls.__name__}\n")
+    lines.append(
+        f"# API: {api_cls.__name__}\n" if markdown else f"API: {api_cls.__name__}\n"
+    )
     doc = inspect.getdoc(api_cls) or ""
     lines.append(doc)
     lines.append("\n## Methods\n" if markdown else "\nMethods:\n")
@@ -34,7 +38,11 @@ def introspect_api(api_cls, markdown=False):
             if param.name == "self":
                 continue
             annotation = type_hints.get(param.name, "Any")
-            default = f" = {param.default!r}" if param.default != inspect.Parameter.empty else ""
+            default = (
+                f" = {param.default!r}"
+                if param.default != inspect.Parameter.empty
+                else ""
+            )
             if markdown:
                 params.append(f"`{param.name}`: `{annotation}`{default}")
             else:
@@ -50,16 +58,19 @@ def introspect_api(api_cls, markdown=False):
                 lines.append(f"    {doc}\n")
     return "\n".join(lines)
 
+
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python introspect_api.py <module> <class> [--markdown] [output.md]")
+        print(
+            "Usage: python introspect_api.py <module> <class> [--markdown] [output.md]"
+        )
         sys.exit(1)
     module_name, class_name = sys.argv[1:3]
     markdown = False
     output_file = None
-    if '--markdown' in sys.argv:
+    if "--markdown" in sys.argv:
         markdown = True
-        idx = sys.argv.index('--markdown')
+        idx = sys.argv.index("--markdown")
         if len(sys.argv) > idx + 1:
             output_file = sys.argv[idx + 1]
     elif len(sys.argv) > 3:
@@ -72,6 +83,7 @@ def main():
             f.write(doc_str)
     else:
         print(doc_str)
+
 
 if __name__ == "__main__":
     main()

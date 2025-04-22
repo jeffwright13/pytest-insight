@@ -99,14 +99,18 @@ def pytest_configure(config: Config):
                 f"[pytest-insight] Created new profile '{insight_config_values['insight_profile']}'",
                 file=sys.stderr,
             )
-        storage = get_storage_instance(profile_name=insight_config_values["insight_profile"])
+        storage = get_storage_instance(
+            profile_name=insight_config_values["insight_profile"]
+        )
     except Exception as e:
         print(f"[pytest-insight] Error initializing storage: {e}", file=sys.stderr)
         return
 
 
 @pytest.hookimpl
-def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config):
+def pytest_terminal_summary(
+    terminalreporter: TerminalReporter, exitstatus: Union[int, ExitCode], config: Config
+):
     if not insight_enabled(config):
         return
     global storage
@@ -168,10 +172,14 @@ def pytest_terminal_summary(terminalreporter: TerminalReporter, exitstatus: Unio
         terminalreporter.write_line(output_str)
 
 
-def group_tests_into_rerun_test_groups(test_results: List[TestResult]) -> List[RerunTestGroup]:
+def group_tests_into_rerun_test_groups(
+    test_results: List[TestResult],
+) -> List[RerunTestGroup]:
     rerun_test_groups: Dict[str, RerunTestGroup] = {}
     for test_result in test_results:
         if test_result.nodeid not in rerun_test_groups:
-            rerun_test_groups[test_result.nodeid] = RerunTestGroup(nodeid=test_result.nodeid)
+            rerun_test_groups[test_result.nodeid] = RerunTestGroup(
+                nodeid=test_result.nodeid
+            )
         rerun_test_groups[test_result.nodeid].add_test(test_result)
     return [group for group in rerun_test_groups.values() if len(group.tests) > 1]

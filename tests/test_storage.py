@@ -6,6 +6,7 @@ import json
 import os
 
 import pytest
+
 from pytest_insight.utils.test_data import random_test_session, random_test_sessions
 
 
@@ -92,8 +93,12 @@ def test_get_storage_instance_json(monkeypatch, tmp_path, basic_test_session):
     """Test get_storage_instance returns JSONStorage for a profile."""
     config_path = tmp_path / "profiles.json"
     profile_manager = ProfileManager(config_path=config_path)
-    profile_manager._create_profile("test-profile", "json", str(tmp_path / "sessions.json"))
-    monkeypatch.setattr("pytest_insight.storage.get_profile_manager", lambda: profile_manager)
+    profile_manager._create_profile(
+        "test-profile", "json", str(tmp_path / "sessions.json")
+    )
+    monkeypatch.setattr(
+        "pytest_insight.storage.get_profile_manager", lambda: profile_manager
+    )
     storage = get_storage_instance(profile_name="test-profile")
     assert isinstance(storage, JSONStorage)
     assert str(storage.file_path) == str(tmp_path / "sessions.json")
@@ -163,7 +168,9 @@ def test_profile_manager_create_and_get(tmp_path):
     """Test creating and retrieving profiles with ProfileManager."""
     config_path = tmp_path / "profiles.json"
     manager = ProfileManager(config_path=config_path)
-    profile = manager._create_profile("test-profile", "json", str(tmp_path / "sessions.json"))
+    profile = manager._create_profile(
+        "test-profile", "json", str(tmp_path / "sessions.json")
+    )
     assert profile.name == "test-profile"
     assert manager.get_profile("test-profile").name == "test-profile"
 
@@ -216,6 +223,8 @@ def test_get_storage_instance_invalid_type(monkeypatch, tmp_path):
     config_path = tmp_path / "profiles.json"
     profile_manager = ProfileManager(config_path=config_path)
     profile_manager._create_profile("bad", "invalid", str(tmp_path / "bad.json"))
-    monkeypatch.setattr("pytest_insight.storage.get_profile_manager", lambda: profile_manager)
+    monkeypatch.setattr(
+        "pytest_insight.storage.get_profile_manager", lambda: profile_manager
+    )
     with pytest.raises(ValueError):
         get_storage_instance(profile_name="bad")

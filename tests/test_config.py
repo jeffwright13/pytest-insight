@@ -1,6 +1,7 @@
 """
 Tests for pytest_insight.config (terminal config loader and enable/disable logic).
 """
+
 import textwrap
 
 from pytest_insight.utils import config as insight_config
@@ -33,7 +34,10 @@ def test_load_terminal_config_from_file(tmp_path):
     assert config["insights"]["summary"]["fields"] == ["total_sessions", "pass_rate"]
     assert config["insights"]["unreliable_tests"]["show"] is False
     assert config["insights"]["unreliable_tests"]["limit"] == 3
-    assert config["insights"]["unreliable_tests"]["columns"] == ["nodeid", "reliability"]
+    assert config["insights"]["unreliable_tests"]["columns"] == [
+        "nodeid",
+        "reliability",
+    ]
 
 
 def test_terminal_output_enabled_respects_env(monkeypatch):

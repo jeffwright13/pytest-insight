@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from pytest_insight.facets.summary import SummaryInsight
 
 
@@ -26,7 +27,7 @@ def make_session(session_id, results=None):
 def test_summary_insight_init():
     s1 = make_session("s1")
     si = SummaryInsight([s1])
-    assert si.sessions == [s1]
+    assert si._sessions == [s1]
 
 
 def test_aggregate_stats_empty():
@@ -64,11 +65,16 @@ def test_aggregate_stats_mixed_outcomes():
 
 def test_aggregate_stats_unexpected_outcomes():
     # Outcomes not in TestOutcome, should not be counted
-    results = [make_test_result("skipped"), make_test_result("foo")]  # "skipped" is valid, "foo" is not
+    results = [
+        make_test_result("skipped"),
+        make_test_result("foo"),
+    ]  # "skipped" is valid, "foo" is not
     s = make_session("s1", results)
     si = SummaryInsight([s])
     stats = si.aggregate_stats()
-    assert stats["outcome_counts"].get("skipped", 0) == 1  # "skipped" is a valid outcome
+    assert (
+        stats["outcome_counts"].get("skipped", 0) == 1
+    )  # "skipped" is a valid outcome
     assert stats["outcome_counts"].get("foo", 0) == 0  # "foo" is not a valid outcome
 
 
@@ -127,3 +133,25 @@ def test_as_dict_mixed():
     assert d["fail_rate"] == pytest.approx(33.333, rel=1e-2)
     assert d["outcome_counts"]["passed"] == 2
     assert d["outcome_counts"]["failed"] == 1
+
+
+def test_summary_insight_interface_methods():
+    si = SummaryInsight([])
+    # insight() is implemented and tested elsewhere
+    # All other base methods should raise NotImplementedError unless implemented
+    with pytest.raises(NotImplementedError):
+        si.tests()
+    with pytest.raises(NotImplementedError):
+        si.sessions()
+    with pytest.raises(NotImplementedError):
+        si.reliability()
+    with pytest.raises(NotImplementedError):
+        si.trends()
+    with pytest.raises(NotImplementedError):
+        si.comparison()
+    with pytest.raises(NotImplementedError):
+        si.meta()
+    with pytest.raises(NotImplementedError):
+        si.predict()
+    with pytest.raises(NotImplementedError):
+        si.temporal()

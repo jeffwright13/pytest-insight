@@ -19,7 +19,6 @@ dependencies = [
     "sparklines>=0.5.0",
     "tabulate>=0.9.0",
     "tomli>=2.2.1",
-    "ipython>=8.18.1",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +33,8 @@ visualize = [
     "jinja2>=3.1.2",
     "markdown>=3.4.0",
     "networkx>=3.2.1",
+    "ipython>=8.18.1",
+    "quantiphy>=2.20",
 ]
 
 explorer = [
@@ -74,8 +75,8 @@ all = [
 insight = "pytest_insight.plugin"
 
 [project.scripts]
-# New unified CLI command
-insight = "pytest_insight.cli:app"
+# Unified CLI entrypoint
+insight = "pytest_insight.cli.cli_main:app"
 insight-explorer = "pytest_insight.cli_explorer:main"
 
 [build-system]

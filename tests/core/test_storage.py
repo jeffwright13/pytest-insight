@@ -2,10 +2,12 @@
 Unit tests for core storage: StorageProfile and ProfileManager.
 Covers profile creation, serialization, profile switching, error handling, and backup logic.
 """
+
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+
 from pytest_insight.core.storage import ProfileManager, StorageProfile
 
 
@@ -34,7 +36,9 @@ def test_storageprofile_to_from_dict():
 def test_profilemanager_create_and_switch(tmp_path):
     config_path = tmp_path / "profiles.json"
     mgr = ProfileManager(config_path=config_path)
-    mgr._create_profile("prof1", storage_type="json", file_path=str(tmp_path / "prof1.json"))
+    mgr._create_profile(
+        "prof1", storage_type="json", file_path=str(tmp_path / "prof1.json")
+    )
     mgr._save_profiles()
     assert mgr.get_profile("prof1").name == "prof1"
     mgr.switch_profile("prof1")

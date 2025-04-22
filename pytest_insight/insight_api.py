@@ -1,3 +1,4 @@
+from pytest_insight.core.insight_base import Insight
 from pytest_insight.facets.comparative import ComparativeInsight
 from pytest_insight.facets.meta import MetaInsight
 from pytest_insight.facets.predictive import PredictiveInsight
@@ -8,7 +9,7 @@ from pytest_insight.facets.test import TestInsight
 from pytest_insight.facets.trend import TrendInsight
 
 
-class InsightAPI:
+class InsightAPI(Insight):
     """
     Unified entry point for all test insights (faceted interface).
     Provides fluent, composable access to all analytics facets.
@@ -41,7 +42,9 @@ class InsightAPI:
     def session(self, session_id=None, **kwargs):
         """Return SessionInsight for all or a filtered session."""
         if session_id is not None:
-            filtered = [s for s in self.sessions if getattr(s, "session_id", None) == session_id]
+            filtered = [
+                s for s in self.sessions if getattr(s, "session_id", None) == session_id
+            ]
             return SessionInsight(filtered)
         return SessionInsight(self.sessions)
 
@@ -73,9 +76,11 @@ class InsightAPI:
     def available_insights(self):
         """Return a list of available insight kinds (introspected from insight methods)."""
         import inspect
+
         # Find all methods starting with _insight_*
         insight_methods = [
-            name[len("_insight_"):] for name, method in inspect.getmembers(self, predicate=inspect.ismethod)
+            name[len("_insight_") :]
+            for name, method in inspect.getmembers(self, predicate=inspect.ismethod)
             if name.startswith("_insight_")
         ]
         return sorted(insight_methods)
@@ -91,22 +96,31 @@ class InsightAPI:
     # --- Insight factory methods ---
     def _insight_summary(self, **kwargs):
         return SummaryInsight(self.sessions)
+
     def _insight_health(self, **kwargs):
         return SummaryInsight(self.sessions)
+
     def _insight_reliability(self, **kwargs):
         return self.tests().insight("reliability", **kwargs)
+
     def _insight_trend(self, **kwargs):
         return self.trend(**kwargs)
+
     def _insight_session(self, **kwargs):
         return self.session(**kwargs)
+
     def _insight_test(self, **kwargs):
         return self.tests(**kwargs)
+
     def _insight_predictive(self, **kwargs):
         return self.predictive(**kwargs)
+
     def _insight_meta(self, **kwargs):
         return self.meta(**kwargs)
+
     def _insight_compare(self, **kwargs):
         return self.compare(**kwargs)
+
     def _insight_temporal(self, **kwargs):
         return self.temporal(**kwargs)
 

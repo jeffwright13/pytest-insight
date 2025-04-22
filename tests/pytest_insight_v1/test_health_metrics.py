@@ -301,7 +301,9 @@ class Test_HealthMetrics:
         assert len(longest_tests) > 0
 
         # The update_user test should be among the slowest
-        update_user_test = next((t for t in longest_tests if t[0] == "test_api.py::test_update_user"), None)
+        update_user_test = next(
+            (t for t in longest_tests if t[0] == "test_api.py::test_update_user"), None
+        )
         assert update_user_test is not None
         assert update_user_test[1] >= 7.0  # Should be the slowest test
 
@@ -412,7 +414,9 @@ class Test_HealthMetrics:
         single_analysis = SessionAnalysis(sessions=[single_session])
 
         single_regression = single_analysis.regression_rate()
-        assert single_regression["regression_rate"] == 0.0  # Can't regress with one session
+        assert (
+            single_regression["regression_rate"] == 0.0
+        )  # Can't regress with one session
 
         # With a single session, we might not be able to calculate a trend
         # Just verify the method doesn't raise an exception

@@ -2,10 +2,16 @@
 Unit tests for ShellPatternFilter and RegexPatternFilter in pytest-insight v2.
 Covers matching logic, error handling, and edge cases.
 """
+
 from types import SimpleNamespace
 
 import pytest
-from pytest_insight.core.filters import InvalidQueryParameterError, RegexPatternFilter, ShellPatternFilter
+
+from pytest_insight.core.filters import (
+    InvalidQueryParameterError,
+    RegexPatternFilter,
+    ShellPatternFilter,
+)
 
 
 @pytest.mark.parametrize(
