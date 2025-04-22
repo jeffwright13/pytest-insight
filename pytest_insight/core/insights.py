@@ -99,4 +99,16 @@ class SessionInsights:
         """
         return self.session_metrics()
 
+# --- STUB: For v1 compatibility only ---
+class TestInsights:
+    """Stub for v1 compatibility. All methods raise NotImplementedError."""
+    def __init__(self, *args, **kwargs):
+        pass
+    def error_patterns(self, *args, **kwargs):
+        raise NotImplementedError("TestInsights is not implemented in v2.")
+    def flakiness(self, *args, **kwargs):
+        raise NotImplementedError("TestInsights is not implemented in v2.")
+    def trends(self, *args, **kwargs):
+        raise NotImplementedError("TestInsights is not implemented in v2.")
+
 # Removed TestInsights and TrendInsights classes. All analytics logic will be moved to the corresponding singular classes in facets/.

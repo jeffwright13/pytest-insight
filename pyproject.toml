@@ -76,6 +76,7 @@ insight = "pytest_insight.plugin"
 [project.scripts]
 # New unified CLI command
 insight = "pytest_insight.cli:app"
+insight-explorer = "pytest_insight.cli_explorer:main"
 
 [build-system]
 requires = ["hatchling"]

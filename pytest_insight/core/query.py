@@ -454,3 +454,47 @@ class TestQuery:
             fcls = FILTER_TYPE_REGISTRY[ftype]
             obj.test_filters.append(fcls.from_dict(fdata))
         return obj
+
+
+# --- STUB: For v1 compatibility only ---
+class Query:
+    """Stub for v1 compatibility. All methods raise NotImplementedError."""
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def for_sut(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def in_last_days(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def with_reruns(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def with_tags(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def with_warning(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def with_outcome(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def with_unreliable(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def filter_by_test(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def insight(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def execute(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    def to_dict(self, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")
+
+    @classmethod
+    def from_dict(cls, *args, **kwargs):
+        raise NotImplementedError("Query is not implemented in v2. Use SessionQuery instead.")

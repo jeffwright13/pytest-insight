@@ -2383,7 +2383,7 @@ wheels = [
 
 [[package]]
 name = "pytest-insight"
-version = "0.9.2"
+version = "0.9.3"
 source = { editable = "." }
 dependencies = [
     { name = "colorama" },
@@ -2405,7 +2405,6 @@ dependencies = [
 all = [
     { name = "black" },
     { name = "build" },
-    { name = "fastapi" },
     { name = "hatch" },
     { name = "isort" },
     { name = "jinja2" },
@@ -2419,12 +2418,9 @@ all = [
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "pytest-rerunfailures" },
-    { name = "python-multipart" },
-    { name = "requests" },
     { name = "ruff" },
     { name = "scikit-learn" },
     { name = "streamlit" },
-    { name = "uvicorn" },
 ]
 dev = [
     { name = "black" },
@@ -2438,19 +2434,24 @@ dev = [
     { name = "pytest-rerunfailures" },
     { name = "ruff" },
 ]
-visualize = [
+explorer = [
     { name = "fastapi" },
+    { name = "jinja2" },
+    { name = "prompt-toolkit" },
+    { name = "python-multipart" },
+    { name = "requests" },
+    { name = "rich" },
+    { name = "uvicorn" },
+]
+visualize = [
     { name = "jinja2" },
     { name = "markdown" },
     { name = "networkx", version = "3.2.1", source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }, marker = "python_full_version < '3.10'" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pandas" },
     { name = "plotly" },
-    { name = "python-multipart" },
-    { name = "requests" },
     { name = "scikit-learn" },
     { name = "streamlit" },
-    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -2464,12 +2465,13 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.3.0" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=0.10.0" },
     { name = "colorama", specifier = ">=0.4.6" },
-    { name = "fastapi", marker = "extra == 'visualize'", specifier = ">=0.95.0" },
+    { name = "fastapi", marker = "extra == 'explorer'", specifier = ">=0.95.0" },
     { name = "filelock", specifier = ">=3.12.0" },
     { name = "hatch", marker = "extra == 'dev'", specifier = ">=1.14.0" },
     { name = "ijson", specifier = ">=3.3.0" },
     { name = "ipython", specifier = ">=8.18.1" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
+    { name = "jinja2", marker = "extra == 'explorer'", specifier = ">=3.1.2" },
     { name = "jinja2", marker = "extra == 'visualize'", specifier = ">=3.1.2" },
     { name = "markdown", marker = "extra == 'visualize'", specifier = ">=3.4.0" },
     { name = "networkx", marker = "extra == 'visualize'", specifier = ">=3.2.1" },
@@ -2477,15 +2479,17 @@ requires-dist = [
     { name = "plotly", marker = "extra == 'visualize'", specifier = ">=5.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.3.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.0" },
+    { name = "prompt-toolkit", marker = "extra == 'explorer'", specifier = ">=3.0.0" },
     { name = "pyflakes", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "pytest", specifier = ">=6.2.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "pytest-insight", extras = ["visualize", "dev"], marker = "extra == 'all'" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.10.0" },
     { name = "pytest-rerunfailures", marker = "extra == 'dev'", specifier = ">=12.0" },
-    { name = "python-multipart", marker = "extra == 'visualize'", specifier = ">=0.0.6" },
-    { name = "requests", marker = "extra == 'visualize'", specifier = ">=2.28.0" },
+    { name = "python-multipart", marker = "extra == 'explorer'", specifier = ">=0.0.6" },
+    { name = "requests", marker = "extra == 'explorer'", specifier = ">=2.28.0" },
     { name = "rich", specifier = ">=13.0.0" },
+    { name = "rich", marker = "extra == 'explorer'", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.0.270" },
     { name = "scikit-learn", marker = "extra == 'visualize'", specifier = ">=1.2.0" },
     { name = "sparklines", specifier = ">=0.5.0" },
@@ -2493,7 +2497,7 @@ requires-dist = [
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "tomli", specifier = ">=2.2.1" },
     { name = "typer", specifier = ">=0.15.0" },
-    { name = "uvicorn", marker = "extra == 'visualize'", specifier = ">=0.20.0" },
+    { name = "uvicorn", marker = "extra == 'explorer'", specifier = ">=0.20.0" },
 ]
 
 [package.metadata.requires-dev]
