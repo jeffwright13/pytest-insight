@@ -1,5 +1,6 @@
-from pytest_insight.core.models import TestSession
 from tabulate import tabulate
+
+from pytest_insight.core.models import TestSession
 
 
 class TrendInsight:
@@ -15,32 +16,38 @@ class TrendInsight:
         """
         # Group by test nodeid and look for sudden changes in reliability
         from collections import defaultdict
+
         patterns = []
         test_history = defaultdict(list)
         for s in self.sessions:
             for t in s.test_results:
-                test_history[t.nodeid].append((getattr(s, 'session_start_time', None), t.outcome, t.duration))
+                test_history[t.nodeid].append((getattr(s, "session_start_time", None), t.outcome, t.duration))
         for nodeid, records in test_history.items():
             failures = [r for r in records if r[1] == "failed"]
             if len(failures) > 2:
-                patterns.append({
-                    "nodeid": nodeid,
-                    "issue": f"{len(failures)} failures detected",
-                    "recent_failure_time": failures[-1][0],
-                })
+                patterns.append(
+                    {
+                        "nodeid": nodeid,
+                        "issue": f"{len(failures)} failures detected",
+                        "recent_failure_time": failures[-1][0],
+                    }
+                )
             # Detect slowdowns
             durations = [r[2] for r in records]
             if len(durations) > 5 and max(durations) > 2 * sum(durations) / len(durations):
-                patterns.append({
-                    "nodeid": nodeid,
-                    "issue": "Significant slowdown detected",
-                    "max_duration": max(durations),
-                })
+                patterns.append(
+                    {
+                        "nodeid": nodeid,
+                        "issue": "Significant slowdown detected",
+                        "max_duration": max(durations),
+                    }
+                )
         return patterns
 
     def duration_trends(self) -> dict:
         """Analyze duration trends over time. Returns average duration by day."""
         from collections import defaultdict
+
         by_date = defaultdict(list)
         for s in self.sessions:
             dt = getattr(s, "session_start_time", None)
@@ -53,6 +60,7 @@ class TrendInsight:
     def failure_trends(self) -> dict:
         """Analyze failure trends over time. Returns failure rates by day."""
         from collections import defaultdict
+
         by_date = defaultdict(lambda: {"failed": 0, "total": 0})
         for s in self.sessions:
             dt = getattr(s, "session_start_time", None)
@@ -70,6 +78,7 @@ class TrendInsight:
     def insight(self, kind: str = "trend", tabular: bool = True, **kwargs):
         if kind in {"summary", "health"}:
             from pytest_insight.facets.summary import SummaryInsight
+
             return SummaryInsight(self.sessions)
         if kind == "trend":
             return {
@@ -92,11 +101,13 @@ class TrendInsight:
             if tabular:
                 rows = []
                 for p in patterns:
-                    rows.append([
-                        p.get("nodeid", ""),
-                        p.get("issue", ""),
-                        p.get("recent_failure_time", p.get("max_duration", ""))
-                    ])
+                    rows.append(
+                        [
+                            p.get("nodeid", ""),
+                            p.get("issue", ""),
+                            p.get("recent_failure_time", p.get("max_duration", "")),
+                        ]
+                    )
                 return tabulate(rows, headers=["NodeID", "Issue", "Detail"], tablefmt="github")
             else:
                 msg = f"Detected {len(patterns)} emerging pattern(s):\n"
@@ -126,5 +137,9 @@ class TrendInsight:
             filtered_sessions = [s for s in filtered_sessions if getattr(s, "sut_name", None) == sut]
         if nodeid is not None:
             # Only keep sessions that have at least one test with the nodeid
-            filtered_sessions = [s for s in filtered_sessions if any(getattr(t, "nodeid", None) == nodeid for t in getattr(s, "test_results", []))]
+            filtered_sessions = [
+                s
+                for s in filtered_sessions
+                if any(getattr(t, "nodeid", None) == nodeid for t in getattr(s, "test_results", []))
+            ]
         return TrendInsight(filtered_sessions)

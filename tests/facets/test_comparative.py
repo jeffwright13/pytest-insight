@@ -1,6 +1,8 @@
-import pytest
 from types import SimpleNamespace
+
+import pytest
 from pytest_insight.facets.comparative import ComparativeInsight
+
 
 @pytest.fixture
 def sessions_factory():
@@ -12,26 +14,32 @@ def sessions_factory():
                 test_results = [SimpleNamespace(outcome=o) for o in test_outcomes]
                 sessions.append(SimpleNamespace(sut_name=sut, test_results=test_results))
         return sessions
+
     return _make
+
 
 def test_init_empty_and_nonempty(sessions_factory):
     assert ComparativeInsight([]).sessions == []
     s = sessions_factory({"A": [["passed"]]})
     assert ComparativeInsight(s).sessions == s
 
+
 def test_compare_suts_basic(sessions_factory):
-    s = sessions_factory({
-        "A": [["passed", "failed"], ["passed"]],
-        "B": [["failed"], ["passed", "passed"]],
-    })
+    s = sessions_factory(
+        {
+            "A": [["passed", "failed"], ["passed"]],
+            "B": [["failed"], ["passed", "passed"]],
+        }
+    )
     ci = ComparativeInsight(s)
     result = ci.compare_suts("A", "B")
     assert result["A"]["sessions"] == 2
     assert result["B"]["sessions"] == 2
     assert result["A"]["passes"] == 2
     assert result["B"]["passes"] == 2
-    assert result["A"]["reliability"] == 2/3
-    assert result["B"]["reliability"] == 2/3
+    assert result["A"]["reliability"] == 2 / 3
+    assert result["B"]["reliability"] == 2 / 3
+
 
 def test_compare_suts_zero_and_missing(sessions_factory):
     s = sessions_factory({"A": [[]], "B": [[]]})
@@ -45,16 +53,20 @@ def test_compare_suts_zero_and_missing(sessions_factory):
     assert r["A"]["reliability"] is None
     assert r["B"]["reliability"] is None
 
+
 def test_insight_regression_tabular_and_nontabular(sessions_factory):
-    s = sessions_factory({
-        "A": [["passed", "failed"]],
-        "B": [["passed"]],
-    })
+    s = sessions_factory(
+        {
+            "A": [["passed", "failed"]],
+            "B": [["passed"]],
+        }
+    )
     ci = ComparativeInsight(s)
     tab = ci.insight(kind="regression", tabular=True)
     assert "Reliability" in tab and "A" in tab
     nontab = ci.insight(kind="regression", tabular=False)
     assert "Reliability by SUT" in nontab
+
 
 def test_insight_summary_health_dispatch(mocker, sessions_factory):
     s = sessions_factory({"A": [["passed"]]})
@@ -65,10 +77,12 @@ def test_insight_summary_health_dispatch(mocker, sessions_factory):
     for kind in ("summary", "health"):
         assert ci.insight(kind=kind) is fake
 
+
 def test_insight_invalid_kind(sessions_factory):
     ci = ComparativeInsight(sessions_factory({}))
     with pytest.raises(ValueError):
         ci.insight(kind="notareal")
+
 
 def test_as_dict_two_and_one_sut(sessions_factory):
     # Two SUTs triggers comparison

@@ -2,10 +2,11 @@
 Unit tests for Insights and SessionInsights orchestrator in pytest-insight.
 Covers summary reports, health reports, and session metrics.
 """
-import pytest
 from datetime import datetime
-from pytest_insight.core.models import TestOutcome, TestResult, TestSession
+
 from pytest_insight.core.insights import Insights, SessionInsights
+from pytest_insight.core.models import TestOutcome, TestResult, TestSession
+
 
 def make_session(test_results, session_id="sess1"):
     t0 = datetime(2025, 4, 21, 10, 0, 0)
@@ -18,9 +19,16 @@ def make_session(test_results, session_id="sess1"):
         test_results=test_results,
     )
 
+
 def test_sessioninsights_metrics_and_health():
-    tests = [TestResult(nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=datetime(2025,4,21,10,0,0), duration=1.0),
-             TestResult(nodeid="test_bar", outcome=TestOutcome.FAILED, start_time=datetime(2025,4,21,10,0,0), duration=1.0)]
+    tests = [
+        TestResult(
+            nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=datetime(2025, 4, 21, 10, 0, 0), duration=1.0
+        ),
+        TestResult(
+            nodeid="test_bar", outcome=TestOutcome.FAILED, start_time=datetime(2025, 4, 21, 10, 0, 0), duration=1.0
+        ),
+    ]
     sessions = [make_session(tests)]
     insights = SessionInsights(sessions)
     metrics = insights.session_metrics()
@@ -32,8 +40,13 @@ def test_sessioninsights_metrics_and_health():
     assert "reliability" in health
     assert health["total_sessions"] == 1
 
+
 def test_insights_summary_report():
-    tests = [TestResult(nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=datetime(2025,4,21,10,0,0), duration=1.0)]
+    tests = [
+        TestResult(
+            nodeid="test_foo", outcome=TestOutcome.PASSED, start_time=datetime(2025, 4, 21, 10, 0, 0), duration=1.0
+        )
+    ]
     sessions = [make_session(tests)]
     insights = Insights(sessions)
     summary = insights.summary_report()
@@ -41,6 +54,7 @@ def test_insights_summary_report():
     assert "session_insights" in summary
     assert isinstance(summary["health"], dict)
     assert isinstance(summary["session_insights"], dict)
+
 
 def test_empty_sessions():
     insights = Insights([])

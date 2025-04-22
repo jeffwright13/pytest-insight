@@ -1,15 +1,17 @@
-import pytest
 import datetime as dt
 from types import SimpleNamespace
+
+import pytest
 from pytest_insight.utils.utils import (
     NormalizedDatetime,
-    create_equals_filter,
-    create_not_equals_filter,
-    create_before_filter,
-    create_before_or_equals_filter,
     create_after_filter,
     create_after_or_equals_filter,
+    create_before_filter,
+    create_before_or_equals_filter,
+    create_equals_filter,
+    create_not_equals_filter,
 )
+
 
 def test_normalized_datetime_init_and_str():
     naive = dt.datetime(2023, 1, 1, 12, 0, 0)
@@ -21,38 +23,42 @@ def test_normalized_datetime_init_and_str():
     assert "naive" in repr(nd_naive)
     assert "aware" in repr(nd_aware)
 
+
 def test_normalized_datetime_now():
     nd = NormalizedDatetime.now()
     assert isinstance(nd, NormalizedDatetime)
 
+
 def test_normalized_datetime_from_iso_and_json():
     iso = "2023-01-01T12:00:00+00:00"
     nd = NormalizedDatetime.from_iso(iso)
-    assert nd.dt == dt.datetime(2023,1,1,12,0,0, tzinfo=dt.timezone.utc)
+    assert nd.dt == dt.datetime(2023, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
     # from_json None
     assert NormalizedDatetime.from_json(None) is None
     # from_json datetime
-    d = dt.datetime(2023,1,1,12,0,0)
+    d = dt.datetime(2023, 1, 1, 12, 0, 0)
     nd2 = NormalizedDatetime.from_json(d)
     assert isinstance(nd2, NormalizedDatetime)
     # from_json iso string
     nd3 = NormalizedDatetime.from_json(iso)
-    assert nd3.dt == dt.datetime(2023,1,1,12,0,0, tzinfo=dt.timezone.utc)
+    assert nd3.dt == dt.datetime(2023, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
     # from_json already NormalizedDatetime
     nd4 = NormalizedDatetime.from_json(nd3)
     assert nd4 is nd3
 
+
 def test_normalized_datetime_to_iso_and_json():
-    aware = dt.datetime(2023,1,1,12,0,0, tzinfo=dt.timezone.utc)
+    aware = dt.datetime(2023, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
     nd = NormalizedDatetime(aware)
     assert nd.to_iso() == aware.isoformat()
     assert nd.to_json().endswith("Z")
-    naive = dt.datetime(2023,1,1,12,0,0)
+    naive = dt.datetime(2023, 1, 1, 12, 0, 0)
     nd2 = NormalizedDatetime(naive)
     assert nd2.to_json() == naive.isoformat()
 
+
 def test_normalized_datetime_comparisons():
-    base = dt.datetime(2023,1,1,12,0,0)
+    base = dt.datetime(2023, 1, 1, 12, 0, 0)
     nd = NormalizedDatetime(base)
     nd2 = NormalizedDatetime(base)
     later = NormalizedDatetime(base + dt.timedelta(hours=1))
@@ -67,11 +73,12 @@ def test_normalized_datetime_comparisons():
     assert not (nd != base)
     assert nd < base + dt.timedelta(hours=1)
     # Compare with None
-    assert not (nd == None)
-    assert nd != None
+    assert nd is not None
+    assert nd is not None
+
 
 def test_normalized_datetime_arithmetic():
-    base = dt.datetime(2023,1,1,12,0,0)
+    base = dt.datetime(2023, 1, 1, 12, 0, 0)
     nd = NormalizedDatetime(base)
     one_hour = dt.timedelta(hours=1)
     nd2 = nd + one_hour
@@ -86,12 +93,14 @@ def test_normalized_datetime_arithmetic():
     diff2 = nd2 - base
     assert diff2 == one_hour
 
+
 def test_normalized_datetime_type_errors():
-    nd = NormalizedDatetime(dt.datetime(2023,1,1,12,0,0))
+    nd = NormalizedDatetime(dt.datetime(2023, 1, 1, 12, 0, 0))
     with pytest.raises(TypeError):
         nd._get_normalized_pair("not a datetime")
-    assert (nd.__add__("not a timedelta") is NotImplemented)
-    assert (nd.__sub__("not a datetime") is NotImplemented)
+    assert nd.__add__("not a timedelta") is NotImplemented
+    assert nd.__sub__("not a datetime") is NotImplemented
+
 
 def test_normalized_datetime_getattr_delegation():
     d = dt.datetime(2023, 1, 1, 12, 34, 56)
@@ -103,6 +112,7 @@ def test_normalized_datetime_getattr_delegation():
     assert nd.hour == 12
     assert nd.minute == 34
     assert nd.second == 56
+
 
 def test_normalized_datetime_naive_aware_comparison():
     naive = dt.datetime(2023, 1, 1, 12, 0, 0)
@@ -118,42 +128,49 @@ def test_normalized_datetime_naive_aware_comparison():
     assert nd_naive < nd_later_aware
     assert nd_later_aware > nd_naive
 
+
 def make_session(dt_obj):
     return SimpleNamespace(session_start_time=dt_obj)
 
+
 def test_create_equals_filter():
-    d = dt.datetime(2023,1,1,12,0,0)
+    d = dt.datetime(2023, 1, 1, 12, 0, 0)
     f = create_equals_filter(d)
     assert f(make_session(d))
     assert not f(make_session(d + dt.timedelta(seconds=1)))
 
+
 def test_create_not_equals_filter():
-    d = dt.datetime(2023,1,1,12,0,0)
+    d = dt.datetime(2023, 1, 1, 12, 0, 0)
     f = create_not_equals_filter(d)
     assert not f(make_session(d))
     assert f(make_session(d + dt.timedelta(seconds=1)))
 
+
 def test_create_before_filter():
-    d = dt.datetime(2023,1,1,12,0,0)
+    d = dt.datetime(2023, 1, 1, 12, 0, 0)
     f = create_before_filter(d)
     assert f(make_session(d - dt.timedelta(seconds=1)))
     assert not f(make_session(d))
 
+
 def test_create_before_or_equals_filter():
-    d = dt.datetime(2023,1,1,12,0,0)
+    d = dt.datetime(2023, 1, 1, 12, 0, 0)
     f = create_before_or_equals_filter(d)
     assert f(make_session(d - dt.timedelta(seconds=1)))
     assert f(make_session(d))
     assert not f(make_session(d + dt.timedelta(seconds=1)))
 
+
 def test_create_after_filter():
-    d = dt.datetime(2023,1,1,12,0,0)
+    d = dt.datetime(2023, 1, 1, 12, 0, 0)
     f = create_after_filter(d)
     assert f(make_session(d + dt.timedelta(seconds=1)))
     assert not f(make_session(d))
 
+
 def test_create_after_or_equals_filter():
-    d = dt.datetime(2023,1,1,12,0,0)
+    d = dt.datetime(2023, 1, 1, 12, 0, 0)
     f = create_after_or_equals_filter(d)
     assert f(make_session(d + dt.timedelta(seconds=1)))
     assert f(make_session(d))

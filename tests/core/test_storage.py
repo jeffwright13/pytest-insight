@@ -2,12 +2,12 @@
 Unit tests for core storage: StorageProfile and ProfileManager.
 Covers profile creation, serialization, profile switching, error handling, and backup logic.
 """
-import pytest
-import tempfile
-import os
-from pathlib import Path
 from datetime import datetime, timedelta
-from pytest_insight.core.storage import StorageProfile, ProfileManager
+from pathlib import Path
+
+import pytest
+from pytest_insight.core.storage import ProfileManager, StorageProfile
+
 
 def test_storageprofile_to_from_dict():
     now = datetime(2025, 4, 21, 10, 0, 0)
@@ -30,10 +30,11 @@ def test_storageprofile_to_from_dict():
     assert isinstance(prof2.created, datetime)
     assert isinstance(prof2.last_modified, datetime)
 
+
 def test_profilemanager_create_and_switch(tmp_path):
     config_path = tmp_path / "profiles.json"
     mgr = ProfileManager(config_path=config_path)
-    prof = mgr._create_profile("prof1", storage_type="json", file_path=str(tmp_path/"prof1.json"))
+    mgr._create_profile("prof1", storage_type="json", file_path=str(tmp_path / "prof1.json"))
     mgr._save_profiles()
     assert mgr.get_profile("prof1").name == "prof1"
     mgr.switch_profile("prof1")
@@ -42,6 +43,7 @@ def test_profilemanager_create_and_switch(tmp_path):
         mgr.get_profile("does_not_exist")
     with pytest.raises(ValueError):
         mgr.switch_profile("does_not_exist")
+
 
 def test_profilemanager_delete_and_list(tmp_path):
     config_path = tmp_path / "profiles.json"
@@ -58,6 +60,7 @@ def test_profilemanager_delete_and_list(tmp_path):
     mgr.delete_profile("prof1")
     assert "prof1" not in mgr.list_profiles()
 
+
 def test_profilemanager_backup_and_cleanup(tmp_path):
     config_path = tmp_path / "profiles.json"
     mgr = ProfileManager(config_path=config_path)
@@ -72,6 +75,7 @@ def test_profilemanager_backup_and_cleanup(tmp_path):
     backups = mgr.list_backups()
     assert len(backups) <= 5
 
+
 def test_profilemanager_load_and_save(tmp_path):
     config_path = tmp_path / "profiles.json"
     mgr = ProfileManager(config_path=config_path)
@@ -82,12 +86,14 @@ def test_profilemanager_load_and_save(tmp_path):
     assert "profA" in mgr2.list_profiles()
     assert mgr2.get_profile("profA").name == "profA"
 
+
 def test_profilemanager_error_on_duplicate(tmp_path):
     config_path = tmp_path / "profiles.json"
     mgr = ProfileManager(config_path=config_path)
     mgr._create_profile("profA")
     with pytest.raises(ValueError):
         mgr._create_profile("profA")
+
 
 def test_profilemanager_fileio_edge_cases(tmp_path, mocker):
     config_path = tmp_path / "profiles.json"
@@ -103,12 +109,14 @@ def test_profilemanager_fileio_edge_cases(tmp_path, mocker):
     # Only the default profile should remain after failed load
     assert set(mgr.profiles.keys()) == {"default"}
 
+
 def test_storageprofile_default_path(monkeypatch, tmp_path):
     # Patch Path.home to tmp_path to avoid polluting real home
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     prof = StorageProfile(name="profX")
     assert Path(prof.file_path).parent.exists()
     assert prof.file_path.endswith("profX.json")
+
 
 def test_profilemanager_list_profiles_pattern(tmp_path):
     config_path = tmp_path / "profiles.json"

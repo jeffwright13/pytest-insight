@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>pytest-insight API Explorer</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; }
+        .container { max-width: 900px; margin: auto; }
+        .chain-box { background: #f8f8f8; border: 1px solid #ccc; padding: 1em; margin-top: 1em; }
+        .method-list { margin-bottom: 1em; }
+        .method-item { margin-bottom: 0.5em; }
+        .preview-box { background: #e8f7ee; border: 1px solid #b2dfdb; padding: 1em; margin-top: 1em; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>pytest-insight API Explorer</h1>
+    <div id="profile-section" style="margin-bottom: 1em; padding: 1em; border: 1px solid #ccc; background: #f5f5f5;">
+        <h3>Profile Management</h3>
+        <label>Active Profile:
+            <select id="profile-select"></select>
+        </label>
+        <button type="button" id="set-active-profile">Set Active</button>
+        <button type="button" id="delete-profile">Delete</button>
+        <button type="button" id="create-profile">Create New</button>
+        <span id="profile-status" style="margin-left:1em;color:#1976d2;"></span>
+        <div id="profile-metadata" style="margin-top:0.5em;font-size:0.95em;color:#333;"></div>
+    </div>
+    <form id="api-form">
+        <label>Module:
+            <input type="text" id="module" value="pytest_insight.insight_api" style="width: 350px;" />
+        </label>
+        <label>Class:
+            <input type="text" id="class_" value="InsightAPI" style="width: 150px;" />
+        </label>
+        <button type="button" id="load-api">Load API</button>
+    </form>
+    <div id="method-list" class="method-list"></div>
+    <div id="context-guidance" style="margin:1em 0;padding:1em;background:#f0f4f8;border:1px solid #b3c6e0;display:none;"></div>
+    <div class="chain-box">
+        <h3>Chain Builder</h3>
+        <ol id="chain"></ol>
+        <button type="button" id="clear-chain">Clear Chain</button>
+        <button type="button" id="execute-chain" style="margin-left:1em;background:#1976d2;color:white;">Execute</button>
+    </div>
+    <div class="preview-box">
+        <h3>Live Preview</h3>
+        <pre id="preview"></pre>
+    </div>
+    <div class="preview-box">
+        <h3>Execution Result</h3>
+        <div id="execution-result" style="background:#fff;border:1px solid #ccc;padding:1em;overflow:auto;"></div>
+    </div>
+</div>
+<script>
+const methodList = document.getElementById('method-list');
+const chainList = document.getElementById('chain');
+const previewBox = document.getElementById('preview');
+const profileSelect = document.getElementById('profile-select');
+const profileStatus = document.getElementById('profile-status');
+const profileMetadata = document.getElementById('profile-metadata');
+let apiMethods = [];
+let chain = [];
+let activeProfile = null;
+
+// ---- Profile Management ----
+async function loadProfiles() {
+    const resp = await fetch('/profiles');
+    const data = await resp.json();
+    profileSelect.innerHTML = '';
+    (data.profiles || []).forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        profileSelect.appendChild(opt);
+    });
+    await loadActiveProfile();
+}
+
+async function loadActiveProfile() {
+    const resp = await fetch('/profiles/active');
+    const data = await resp.json();
+    activeProfile = data.active_profile;
+    if (activeProfile) {
+        profileSelect.value = activeProfile;
+        await loadProfileMetadata(activeProfile);
+    }
+}
+
+async function loadProfileMetadata(name) {
+    const resp = await fetch(`/profiles/${encodeURIComponent(name)}`);
+    const data = await resp.json();
+    if (data.profile) {
+        const p = data.profile;
+        profileMetadata.innerHTML =
+            `<b>Name:</b> ${p.name} &nbsp; <b>Type:</b> ${p.storage_type} &nbsp; <b>Path:</b> ${p.file_path}<br>` +
+            `<b>Created:</b> ${p.created} by ${p.created_by}<br>` +
+            `<b>Last Modified:</b> ${p.last_modified} by ${p.last_modified_by}`;
+    } else {
+        profileMetadata.textContent = data.error || '';
+    }
+}
+
+document.getElementById('set-active-profile').onclick = async function() {
+    const name = profileSelect.value;
+    const resp = await fetch('/profiles/active', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
+    const data = await resp.json();
+    profileStatus.textContent = data.status === 'success' ? 'Active profile set.' : data.error;
+    await loadActiveProfile();
+};
+
+document.getElementById('delete-profile').onclick = async function() {
+    const name = profileSelect.value;
+    if (!confirm(`Delete profile '${name}'? This cannot be undone.`)) return;
+    const resp = await fetch(`/profiles/${encodeURIComponent(name)}`, {method:'DELETE'});
+    const data = await resp.json();
+    profileStatus.textContent = data.status === 'success' ? 'Profile deleted.' : data.error;
+    await loadProfiles();
+};
+
+document.getElementById('create-profile').onclick = async function() {
+    const name = prompt('Enter new profile name:');
+    if (!name) return;
+    const resp = await fetch('/profiles', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
+    const data = await resp.json();
+    profileStatus.textContent = data.status === 'success' ? 'Profile created.' : data.error;
+    await loadProfiles();
+};
+
+profileSelect.onchange = async function() {
+    await loadProfileMetadata(profileSelect.value);
+    updateContextGuidance();
+};
+
+// ---- API/Chain UI ----
+function renderMethods() {
+    methodList.innerHTML = '<h3>Available Methods</h3>';
+    apiMethods.forEach((m, idx) => {
+        const params = m.params.map(p => `<input placeholder="${p.name}: ${p.type}" data-param="${p.name}" style="width:100px;"/>`).join(' ');
+        methodList.innerHTML += `<div class="method-item"><button type='button' onclick='addToChain(${idx})'>Add</button> <b>${m.name}</b>(${params}) <span style='color:#888;'>${m.doc}</span></div>`;
+    });
+}
+
+function renderChain() {
+    chainList.innerHTML = '';
+    chain.forEach((item, idx) => {
+        const params = item.params.map(p => JSON.stringify(p.value)).join(', ');
+        chainList.innerHTML += `<li>${item.name}(${params}) 
+            <button type='button' onclick='moveChainUp(${idx})' ${idx === 0 ? 'disabled' : ''}>↑</button>
+            <button type='button' onclick='moveChainDown(${idx})' ${idx === chain.length - 1 ? 'disabled' : ''}>↓</button>
+            <button type='button' onclick='removeFromChain(${idx})'>Remove</button>
+        </li>`;
+    });
+    renderPreview();
+    updateContextGuidance();
+}
+
+function renderPreview() {
+    let code = 'query';
+    chain.forEach(item => {
+        const params = item.params.map(p => JSON.stringify(p.value)).join(', ');
+        code += `.${item.name}(${params})`;
+    });
+    previewBox.textContent = code;
+}
+
+window.addToChain = function(idx) {
+    const method = apiMethods[idx];
+    const paramInputs = methodList.querySelectorAll(`.method-item:nth-child(${idx+2}) input`);
+    const params = method.params.map((p, i) => ({...p, value: paramInputs[i].value}));
+    chain.push({ name: method.name, params });
+    renderChain();
+};
+
+window.removeFromChain = function(idx) {
+    chain.splice(idx, 1);
+    renderChain();
+};
+
+window.moveChainUp = function(idx) {
+    if (idx > 0) {
+        [chain[idx - 1], chain[idx]] = [chain[idx], chain[idx - 1]];
+        renderChain();
+    }
+};
+
+window.moveChainDown = function(idx) {
+    if (idx < chain.length - 1) {
+        [chain[idx], chain[idx + 1]] = [chain[idx + 1], chain[idx]];
+        renderChain();
+    }
+};
+
+document.getElementById('load-api').onclick = async function() {
+    const module = document.getElementById('module').value;
+    const class_ = document.getElementById('class_').value;
+    const resp = await fetch(`/introspect?module=${encodeURIComponent(module)}&class_=${encodeURIComponent(class_)}`);
+    const data = await resp.json();
+    apiMethods = data.methods || [];
+    renderMethods();
+    chain = [];
+    renderChain();
+    updateContextGuidance();
+};
+
+document.getElementById('clear-chain').onclick = function() {
+    chain = [];
+    renderChain();
+};
+
+document.getElementById('execute-chain').onclick = async function() {
+    const module = document.getElementById('module').value;
+    const class_ = document.getElementById('class_').value;
+    const profile = profileSelect.value;
+    const chainPayload = chain.map(item => ({
+        name: item.name,
+        params: item.params.map(p => p.value)
+    }));
+    const payload = {
+        profile,
+        module,
+        class_,
+        chain: chainPayload
+    };
+    document.getElementById('execution-result').innerHTML = '<em>Running...</em>';
+    const resp = await fetch('/execute_chain', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const text = await resp.text();
+    document.getElementById('execution-result').innerHTML = text;
+};
+
+// ---- Contextual Guidance ----
+async function updateContextGuidance() {
+    const module = document.getElementById('module').value;
+    const class_ = document.getElementById('class_').value;
+    const profile = profileSelect.value;
+    const chainPayload = chain.map(item => ({
+        name: item.name,
+        params: item.params.map(p => p.value)
+    }));
+    const payload = {
+        profile,
+        module,
+        class_,
+        chain: chainPayload
+    };
+    const guidanceDiv = document.getElementById('context-guidance');
+    guidanceDiv.style.display = 'block';
+    guidanceDiv.innerHTML = '<em>Loading next valid methods/properties...</em>';
+    try {
+        const resp = await fetch('/introspect_chain', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.error) {
+            guidanceDiv.innerHTML = `<span style='color:red;'>${data.error}</span>`;
+            return;
+        }
+        let html = '<b>Next valid methods:</b><ul>';
+        (data.methods || []).forEach(m => {
+            html += `<li><b>${m.name}</b>${m.signature}<br><span style='color:#555;'>${m.doc}</span></li>`;
+        });
+        html += '</ul>';
+        html += '<b>Next valid properties:</b><ul>';
+        (data.properties || []).forEach(p => {
+            html += `<li><b>${p.name}</b><br><span style='color:#555;'>${p.doc}</span></li>`;
+        });
+        html += '</ul>';
+        guidanceDiv.innerHTML = html;
+    } catch (e) {
+        guidanceDiv.innerHTML = '<span style="color:red;">Failed to load guidance.</span>';
+    }
+}
+
+document.getElementById('module').onchange = updateContextGuidance;
+document.getElementById('class_').onchange = updateContextGuidance;
+
+// Load profiles and default API on page load
+window.onload = async () => {
+    await loadProfiles();
+    document.getElementById('load-api').click();
+};
+</script>
+</body>
+</html>

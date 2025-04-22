@@ -1,0 +1,209 @@
+"""
+FastAPI app for the self-discovering, chainable API Explorer UI.
+This is a placeholder. Integrate dynamic introspection and UI logic here.
+"""
+from fastapi import FastAPI, Request, Body
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+import importlib
+import inspect
+from typing import get_type_hints
+import os
+from pytest_insight.core.storage import ProfileManager
+from pydantic import BaseModel
+from typing import List, Any, Dict
+
+app = FastAPI(title="pytest-insight API Explorer")
+
+# Set up Jinja2 templates
+TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
+templates = Jinja2Templates(directory=TEMPLATE_DIR)
+
+profile_manager = ProfileManager()
+
+@app.get("/", response_class=HTMLResponse)
+def explorer_home(request: Request):
+    """Serve the interactive API explorer UI."""
+    return templates.TemplateResponse("explorer.html", {"request": request})
+
+@app.get("/introspect")
+def introspect_api(module: str, class_: str, markdown: bool = False):
+    """Dynamically introspect any API class and return its structure as JSON or Markdown."""
+    try:
+        mod = importlib.import_module(module)
+        api_cls = getattr(mod, class_)
+    except (ImportError, AttributeError) as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    def get_api_structure(api_cls):
+        methods = []
+        for name, member in inspect.getmembers(api_cls, predicate=inspect.isfunction):
+            if name.startswith("_"):
+                continue
+            sig = inspect.signature(member)
+            doc = inspect.getdoc(member) or ""
+            type_hints = get_type_hints(member)
+            params = []
+            for param in sig.parameters.values():
+                if param.name == "self":
+                    continue
+                annotation = str(type_hints.get(param.name, "Any"))
+                default = param.default if param.default != inspect.Parameter.empty else None
+                params.append({
+                    "name": param.name,
+                    "type": annotation,
+                    "default": default,
+                })
+            methods.append({
+                "name": name,
+                "params": params,
+                "doc": doc,
+            })
+        return {
+            "class": api_cls.__name__,
+            "doc": inspect.getdoc(api_cls) or "",
+            "methods": methods,
+        }
+
+    api_struct = get_api_structure(api_cls)
+    if markdown:
+        from pytest_insight.scripts.introspect_api import introspect_api as markdown_doc
+        return HTMLResponse(f"<pre>{markdown_doc(api_cls, markdown=True)}</pre>")
+    return JSONResponse(api_struct)
+
+@app.get("/profiles")
+def list_profiles():
+    """List all available profiles."""
+    profiles = profile_manager.list_profiles()
+    return JSONResponse({"profiles": [p for p in profiles]})
+
+@app.post("/profiles")
+def create_profile(name: str):
+    """Create a new profile by name."""
+    try:
+        profile_manager._create_profile(name)
+        return JSONResponse({"status": "success", "profile": name})
+    except Exception as e:
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
+
+@app.delete("/profiles/{name}")
+def delete_profile(name: str):
+    """Delete a profile by name."""
+    try:
+        profile_manager.delete_profile(name)
+        return JSONResponse({"status": "success", "profile": name})
+    except Exception as e:
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
+
+@app.post("/profiles/active")
+def set_active_profile(name: str):
+    """Set the active profile."""
+    try:
+        profile_manager.switch_profile(name)
+        return JSONResponse({"status": "success", "active_profile": name})
+    except Exception as e:
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
+
+@app.get("/profiles/active")
+def get_active_profile():
+    """Get the currently active profile."""
+    try:
+        profile = profile_manager.get_active_profile()
+        return JSONResponse({"active_profile": profile.name})
+    except Exception as e:
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
+
+@app.get("/profiles/{name}")
+def get_profile_metadata(name: str):
+    """Get metadata/details for a profile."""
+    try:
+        profile = profile_manager.get_profile(name)
+        return JSONResponse({"profile": profile.to_dict()})
+    except Exception as e:
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
+
+class ChainStep(BaseModel):
+    name: str
+    params: List[Any]
+
+class ExecuteChainRequest(BaseModel):
+    profile: str
+    module: str
+    class_: str
+    chain: List[ChainStep]
+
+class IntrospectChainRequest(BaseModel):
+    profile: str
+    module: str
+    class_: str
+    chain: List[ChainStep]
+
+@app.post("/introspect_chain")
+def introspect_chain(req: IntrospectChainRequest = Body(...)):
+    """Introspect the next valid methods/properties after executing the current chain."""
+    import inspect
+    try:
+        mod = importlib.import_module(req.module)
+        api_cls = getattr(mod, req.class_)
+        # Instantiate API object, passing profile if supported
+        try:
+            api_obj = api_cls(profile=req.profile)
+        except TypeError:
+            api_obj = api_cls()
+        obj = api_obj
+        for step in req.chain:
+            attr = getattr(obj, step.name, None)
+            if attr is None:
+                return JSONResponse({"error": f"Attribute or method '{step.name}' not found."}, status_code=400)
+            if callable(attr):
+                obj = attr(*step.params)
+            elif not step.params:
+                obj = attr
+            else:
+                return JSONResponse({"error": f"'{step.name}' is not callable and does not accept parameters."}, status_code=400)
+        # Now introspect next valid methods/properties
+        methods = []
+        props = []
+        for name in dir(obj):
+            if name.startswith("_"): continue
+            member = getattr(obj, name)
+            doc = inspect.getdoc(member) or ""
+            if callable(member):
+                sig = str(inspect.signature(member))
+                methods.append({"name": name, "signature": sig, "doc": doc})
+            else:
+                props.append({"name": name, "doc": doc})
+        return JSONResponse({"methods": methods, "properties": props})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+@app.post("/execute_chain")
+def execute_chain(req: ExecuteChainRequest = Body(...)):
+    """Execute a chain of API calls and return the result. Supports both method and property access."""
+    try:
+        mod = importlib.import_module(req.module)
+        api_cls = getattr(mod, req.class_)
+        # Instantiate API object, passing profile if supported
+        try:
+            api_obj = api_cls(profile=req.profile)
+        except TypeError:
+            api_obj = api_cls()
+        obj = api_obj
+        for step in req.chain:
+            attr = getattr(obj, step.name, None)
+            if attr is None:
+                return JSONResponse({"error": f"Attribute or method '{step.name}' not found."}, status_code=400)
+            if callable(attr):
+                obj = attr(*step.params)
+            elif not step.params:  # property access
+                obj = attr
+            else:
+                return JSONResponse({"error": f"'{step.name}' is not callable and does not accept parameters."}, status_code=400)
+        # Try to jsonify the result, fallback to str
+        try:
+            import orjson
+            return HTMLResponse(f"<pre>{orjson.dumps(obj, option=orjson.OPT_INDENT_2).decode()}</pre>")
+        except Exception:
+            return HTMLResponse(f"<pre>{str(obj)}</pre>")
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)

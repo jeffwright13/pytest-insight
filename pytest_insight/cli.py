@@ -9,26 +9,30 @@ from rich import print
 
 app = typer.Typer(help="Pytest Insight: Unified analytics CLI")
 
+
 @app.command()
 def dev_shell(profile: str = typer.Option(None, help="Profile name to load")):
     """Start an interactive developer shell with InsightAPI and profile manager loaded (IPython preferred)."""
     try:
-        from pytest_insight.insight_api import InsightAPI
         from pytest_insight.core.storage import ProfileManager
+        from pytest_insight.insight_api import InsightAPI
     except ImportError as e:
         print(f"[red]Error importing dependencies: {e}")
         raise typer.Exit(1)
     print("[bold green]Launching dev shell...[/bold green]")
     profile_manager = ProfileManager()
     api = InsightAPI(profile=profile)
+
     def load_profile(name):
         """Switch to a different profile and return a new InsightAPI instance."""
         return InsightAPI(profile=name)
+
     def list_profiles():
         """List all available profiles."""
         print("Available profiles:")
         for pname in profile_manager.profiles:
             print(f"  - {pname}")
+
     banner = (
         "\n[Pytest Insight Dev Shell]\n"
         f"Profile: {profile or 'default'}\n"
@@ -42,25 +46,58 @@ def dev_shell(profile: str = typer.Option(None, help="Profile name to load")):
         "list_profiles": list_profiles,
     }
     try:
-        from IPython import start_ipython
         import sys
+
+        from IPython import start_ipython
+
         class DummyMod:
             pass
+
         # IPython expects __main__ to be a module with __file__
         sys.modules["__main__"].__file__ = "pytest_insight/cli.py"
         from traitlets.config import Config
+
         c = Config()
         c.TerminalInteractiveShell.banner1 = banner
         start_ipython(argv=[], user_ns=local_ns, config=c)
     except ImportError:
         print("[yellow]IPython not installed. Falling back to standard Python REPL.[/yellow]")
         import code
+
         code.interact(local=local_ns, banner=banner)
+
 
 @app.command()
 def console(profile: str = typer.Option(None, help="Profile name to load")):
     """Shortcut: Launch the interactive developer shell (same as dev_shell)."""
     return dev_shell(profile=profile)
+
+
+@app.command()
+def api_explorer(
+    host: str = typer.Option("127.0.0.1", help="Host to serve the API Explorer UI on"),
+    port: int = typer.Option(8001, help="Port to serve the API Explorer UI on"),
+    reload: bool = typer.Option(True, help="Enable auto-reload for development")
+):
+    """Launch the self-discovering API Explorer UI (Swagger-like, chainable)."""
+    try:
+        import uvicorn
+        from importlib.util import find_spec
+        # Check if the explorer app exists
+        if not find_spec("pytest_insight.web_api.explorer.explorer_app"):
+            print("[red]Explorer app not found. Please ensure it is installed.")
+            raise typer.Exit(1)
+        print(f"[bold green]Launching API Explorer UI at http://{host}:{port} ...[/bold green]")
+        uvicorn.run(
+            "pytest_insight.web_api.explorer.explorer_app:app",
+            host=host,
+            port=port,
+            reload=reload,
+        )
+    except ImportError as e:
+        print(f"[red]Error: {e}. Did you install with the [explorer] extra?")
+        raise typer.Exit(1)
+
 
 if __name__ == "__main__":
     app()

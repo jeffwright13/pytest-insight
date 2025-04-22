@@ -2,9 +2,11 @@
 Unit tests for core models: TestOutcome, TestResult, RerunTestGroup, TestSession.
 Covers enum conversion, serialization, context preservation, and error handling.
 """
-import pytest
 from datetime import datetime, timedelta
-from pytest_insight.core.models import TestOutcome, TestResult, RerunTestGroup, TestSession
+
+import pytest
+from pytest_insight.core.models import RerunTestGroup, TestOutcome, TestResult, TestSession
+
 
 def test_testoutcome_from_str_and_to_str():
     assert TestOutcome.from_str("passed") == TestOutcome.PASSED
@@ -16,6 +18,7 @@ def test_testoutcome_from_str_and_to_str():
     assert set(TestOutcome.to_list()) == {"passed", "failed", "skipped", "xfailed", "xpassed", "rerun", "error"}
     assert TestOutcome.FAILED.is_failed() is True
     assert TestOutcome.PASSED.is_failed() is False
+
 
 def test_testresult_init_and_serialization():
     t0 = datetime(2025, 4, 21, 10, 0, 0)
@@ -36,10 +39,12 @@ def test_testresult_init_and_serialization():
     assert tr1_restored.outcome == TestOutcome.PASSED
     assert tr1_restored.duration == 2.0
 
+
 def test_testresult_invalid_init():
     t0 = datetime(2025, 4, 21, 10, 0, 0)
     with pytest.raises(ValueError):
         TestResult(nodeid="test_fail", outcome=TestOutcome.PASSED, start_time=t0)
+
 
 def test_reruntestgroup_add_and_final_outcome():
     t0 = datetime(2025, 4, 21, 10, 0, 0)
@@ -54,6 +59,7 @@ def test_reruntestgroup_add_and_final_outcome():
     group_restored = RerunTestGroup.from_dict(d)
     assert group_restored.nodeid == "test_foo"
     assert group_restored.final_outcome == TestOutcome.FAILED
+
 
 def test_testsession_add_and_serialization():
     t0 = datetime(2025, 4, 21, 10, 0, 0)

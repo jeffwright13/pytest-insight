@@ -1,17 +1,22 @@
-import pytest
 from types import SimpleNamespace
+
+import pytest
 from pytest_insight.facets.predictive import PredictiveInsight
+
 
 def make_test_result(outcome):
     return SimpleNamespace(outcome=outcome)
 
+
 def make_session(session_start_time=None, test_results=None):
     return SimpleNamespace(session_start_time=session_start_time, test_results=test_results or [])
+
 
 def test_init_empty_and_nonempty():
     assert PredictiveInsight([]).sessions == []
     s = [make_session()]
     assert PredictiveInsight(s).sessions == s
+
 
 def test_forecast_no_sessions():
     pi = PredictiveInsight([])
@@ -19,6 +24,7 @@ def test_forecast_no_sessions():
     assert result["future_reliability"] is None
     assert result["trend"] is None
     assert "No sessions" in result["warning"]
+
 
 def test_forecast_one_session():
     dt = SimpleNamespace(date=lambda: "2023-01-01")
@@ -28,6 +34,7 @@ def test_forecast_one_session():
     assert result["future_reliability"] == 1.0
     assert result["trend"] is None
     assert "Not enough data" in result["warning"]
+
 
 def test_forecast_trend_downward():
     # Two days, reliability drops
@@ -41,6 +48,7 @@ def test_forecast_trend_downward():
     assert result["trend"] < 0
     assert "downward" in (result["warning"] or "")
 
+
 def test_forecast_trend_upward():
     dt1 = SimpleNamespace(date=lambda: "2023-01-01")
     dt2 = SimpleNamespace(date=lambda: "2023-01-02")
@@ -51,6 +59,7 @@ def test_forecast_trend_upward():
     assert result["future_reliability"] > 0.0
     assert result["trend"] > 0
     assert result["warning"] is None
+
 
 def test_insight_predictive_tabular_and_plain():
     dt1 = SimpleNamespace(date=lambda: "2023-01-01")
@@ -63,6 +72,7 @@ def test_insight_predictive_tabular_and_plain():
     assert "Forecasted Reliability" in tab
     assert "forecasted reliability" in plain.lower()
 
+
 def test_insight_summary_health_dispatch(mocker):
     s = [make_session()]
     pi = PredictiveInsight(s)
@@ -71,10 +81,12 @@ def test_insight_summary_health_dispatch(mocker):
     for kind in ("summary", "health"):
         assert pi.insight(kind=kind) is fake
 
+
 def test_insight_invalid_kind():
     pi = PredictiveInsight([])
     with pytest.raises(ValueError):
         pi.insight(kind="notareal")
+
 
 def test_as_dict():
     dt1 = SimpleNamespace(date=lambda: "2023-01-01")

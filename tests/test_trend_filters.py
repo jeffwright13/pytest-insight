@@ -2,9 +2,10 @@
 Unit tests for TrendInsight filtering (by SUT, by test nodeid).
 Uses pytest and pytest-mock. Covers edge cases and verifies correct filtering.
 """
-import pytest
 from types import SimpleNamespace
+
 from pytest_insight.facets.trend import TrendInsight
+
 
 def make_session(sut_name, nodeids):
     """Helper to create a fake TestSession-like object."""
@@ -14,6 +15,7 @@ def make_session(sut_name, nodeids):
         session_start_time=None,
         session_duration=10.0,
     )
+
 
 def test_filter_by_sut():
     sessions = [
@@ -26,6 +28,7 @@ def test_filter_by_sut():
     assert all(s.sut_name == "api-service" for s in filtered.sessions)
     assert len(filtered.sessions) == 2
 
+
 def test_filter_by_nodeid():
     sessions = [
         make_session("api-service", ["test_a", "test_b"]),
@@ -37,6 +40,7 @@ def test_filter_by_nodeid():
     # Only sessions containing test_b
     assert all(any(t.nodeid == "test_b" for t in s.test_results) for s in filtered.sessions)
     assert len(filtered.sessions) == 2
+
 
 def test_filter_by_sut_and_nodeid():
     sessions = [
@@ -51,6 +55,7 @@ def test_filter_by_sut_and_nodeid():
     assert filtered.sessions[0].sut_name == "api-service"
     assert any(t.nodeid == "test_b" for t in filtered.sessions[0].test_results)
 
+
 def test_filter_no_match():
     sessions = [
         make_session("api-service", ["test_a"]),
@@ -61,6 +66,7 @@ def test_filter_no_match():
     assert filtered.sessions == []
     filtered2 = trend.filter(nodeid="does_not_exist")
     assert filtered2.sessions == []
+
 
 def test_trend_methods_on_filtered():
     sessions = [
