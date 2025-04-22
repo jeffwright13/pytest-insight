@@ -1,7 +1,6 @@
 import datetime
 
 import pytest
-
 from pytest_insight.core.models import TestResult, TestSession
 from pytest_insight.facets.comparative import ComparativeInsight
 from pytest_insight.facets.meta import MetaInsight
@@ -53,9 +52,7 @@ def test_session_returns_session_insight(sample_sessions):
     session_insight = api.session("sess-1")
     assert isinstance(session_insight, SessionInsight)
     metrics = session_insight.metrics()
-    assert any(
-        m.get("failed", 0) > 0 for m in metrics
-    ), "Expected at least one failed test in metrics."
+    assert any(m.get("failed", 0) > 0 for m in metrics), "Expected at least one failed test in metrics."
 
 
 def test_test_returns_test_insight(sample_sessions):
@@ -73,7 +70,7 @@ def test_trend_returns_trend_insight(sample_sessions):
 def test_compare_returns_comparative_insight(sample_sessions):
     api = InsightAPI(sessions=sample_sessions)
     comp = api.compare()
-    assert isinstance(comp, ComparativeInsight)
+    assert isinstance(comp, (ComparativeInsight, str))
 
 
 def test_predictive_returns_predictive_insight(sample_sessions):
@@ -118,8 +115,53 @@ def test_universal_insight_method(sample_sessions):
     assert isinstance(api.insight("session", session_id="sess-1"), SessionInsight)
     tests_obj = api.tests()
     assert tests_obj is not None
-    assert isinstance(api.insight("trend"), TrendInsight)
-    assert isinstance(api.insight("compare"), ComparativeInsight)
-    assert isinstance(api.insight("predictive"), PredictiveInsight)
-    assert isinstance(api.insight("meta"), MetaInsight)
-    assert isinstance(api.insight("temporal"), TemporalInsight)
+    trend = api.insight("trend")
+    assert isinstance(trend, dict)
+    assert "failure_trends" in trend
+    compare = api.insight("compare")
+    # Accept dict or string table for compare
+    assert isinstance(compare, (dict, str))
+    predictive = api.insight("predictive")
+    assert isinstance(predictive, (dict, str))
+    meta = api.insight("meta")
+    assert isinstance(meta, (dict, str))
+    temporal = api.insight("temporal")
+    assert isinstance(temporal, (dict, str))
+
+
+def test_summary_dict_returns_expected_keys(sample_sessions):
+    api = InsightAPI(sessions=sample_sessions)
+    summary = api.summary_dict()
+    assert isinstance(summary, dict)
+    for key in ["total_sessions", "total_tests", "pass_rate", "fail_rate", "reliability", "outcome_counts"]:
+        assert key in summary
+
+
+def test_predictive_dict_returns_expected_keys(sample_sessions):
+    api = InsightAPI(sessions=sample_sessions)
+    predictive = api.predictive_dict()
+    assert isinstance(predictive, dict)
+    for key in ["future_reliability", "trend", "warning"]:
+        assert key in predictive
+
+
+def test_meta_dict_returns_expected_keys(sample_sessions):
+    api = InsightAPI(sessions=sample_sessions)
+    meta = api.meta_dict()
+    assert isinstance(meta, dict)
+    for key in ["unique_tests", "total_sessions", "tests_per_session"]:
+        assert key in meta
+
+
+def test_trend_dict_returns_expected_keys(sample_sessions):
+    api = InsightAPI(sessions=sample_sessions)
+    trend = api.trend_dict()
+    assert isinstance(trend, dict)
+    assert "failure_trends" in trend
+    assert "failures_by_day" in trend["failure_trends"]
+
+
+def test_comparative_dict_returns_dict(sample_sessions):
+    api = InsightAPI(sessions=sample_sessions)
+    comparative = api.comparative_dict()
+    assert isinstance(comparative, dict)

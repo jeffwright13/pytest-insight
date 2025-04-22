@@ -1,5 +1,4 @@
 import os
-import signal
 import subprocess
 from pathlib import Path
 
@@ -8,7 +7,7 @@ import typer
 
 app = typer.Typer(
     help="Web-based tools (API Explorer, Dashboard, etc.)",
-    add_help_option=False,
+    add_help_option=True,
     no_args_is_help=True,
 )
 
@@ -21,16 +20,12 @@ PID_FILE = os.path.expanduser("~/.pytest_insight/api_explorer.pid")
 INFO_FILE = os.path.expanduser("~/.pytest_insight/api_explorer.info")
 
 
-@api_explorer_app.command(
-    "start", help="Start the API Explorer web UI (background by default)"
-)
+@api_explorer_app.command("start", help="Start the API Explorer web UI (background by default)")
 def start(
     host: str = typer.Option("127.0.0.1", help="Host to serve the API Explorer UI on"),
     port: int = typer.Option(8001, help="Port to serve the API Explorer UI on"),
     reload: bool = typer.Option(True, help="Enable auto-reload for development"),
-    foreground: bool = typer.Option(
-        False, "--foreground", help="Run in foreground (blocks terminal)"
-    ),
+    foreground: bool = typer.Option(False, "--foreground", help="Run in foreground (blocks terminal)"),
 ):
     """Start the API Explorer UI (FastAPI/Uvicorn)."""
     from importlib.util import find_spec
@@ -55,9 +50,7 @@ def start(
     if reload:
         cmd.append("--reload")
     if foreground:
-        print(
-            f"Launching API Explorer UI at http://{host}:{port} (foreground, Ctrl+C to stop)..."
-        )
+        print(f"Launching API Explorer UI at http://{host}:{port} (foreground, Ctrl+C to stop)...")
         subprocess.run(cmd)
     else:
         with open(os.devnull, "w") as devnull:
@@ -66,10 +59,8 @@ def start(
             f.write(str(proc.pid))
         with open(INFO_FILE, "w") as f:
             f.write(f"host={host}\nport={port}\npid={proc.pid}\ncmd={' '.join(cmd)}\n")
-        print(
-            f"API Explorer started in background at http://{host}:{port} (PID {proc.pid})"
-        )
-        print(f"To stop it, run: insight web api-explorer stop")
+        print(f"API Explorer started in background at http://{host}:{port} (PID {proc.pid})")
+        print("To stop it, run: insight web api-explorer stop")
 
 
 @api_explorer_app.command("stop", help="Stop the background API Explorer server")
@@ -106,7 +97,7 @@ def stop():
 def status():
     """Show if the API Explorer server is running, with host/port info, PID, and stop/start commands."""
     running = False
-    host = port = pid = cmd = None
+    host = port = pid = None
     orphaned = False
     if os.path.exists(PID_FILE) and os.path.exists(INFO_FILE):
         try:
@@ -125,8 +116,7 @@ def status():
         # Check for orphaned uvicorn/multiprocessing children
         for proc in psutil.process_iter(["pid", "cmdline"]):
             if proc.info["cmdline"] and any(
-                "uvicorn" in arg or "multiprocessing" in arg
-                for arg in proc.info["cmdline"]
+                "uvicorn" in arg or "multiprocessing" in arg for arg in proc.info["cmdline"]
             ):
                 orphaned = True
     if running:
@@ -139,16 +129,18 @@ def status():
                 elif line.startswith("pid="):
                     pid = line.split("=", 1)[1].strip()
                 elif line.startswith("cmd="):
-                    cmd = line.split("=", 1)[1].strip()
+                    line.split("=", 1)[1].strip()
         print("API Explorer server is running")
         print(f"URL: http://{host}:{port}")
         print(f"PID: {pid}")
-        print(f"To stop: insight web api-explorer stop")
+        print("To stop: insight web api-explorer stop")
     else:
         print("API Explorer server is not running")
         print("To start: insight web api-explorer start")
         if orphaned:
-            print("Orphaned: Warning: Orphaned uvicorn/multiprocessing process detected. You may need to kill it manually.")
+            print(
+                "Orphaned: Warning: Orphaned uvicorn/multiprocessing process detected. You may need to kill it manually."
+            )
 
 
 app.add_typer(api_explorer_app, name="api-explorer")
