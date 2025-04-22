@@ -15,28 +15,6 @@
 <body>
 <div class="container">
     <h1>pytest-insight API Explorer</h1>
-    <div id="profile-section" style="margin-bottom: 1em; padding: 1em; border: 1px solid #ccc; background: #f5f5f5;">
-        <h3>Profile Management</h3>
-        <label>Active Profile:
-            <select id="profile-select"></select>
-        </label>
-        <button type="button" id="set-active-profile">Set Active</button>
-        <button type="button" id="delete-profile">Delete</button>
-        <button type="button" id="create-profile">Create New</button>
-        <span id="profile-status" style="margin-left:1em;color:#1976d2;"></span>
-        <div id="profile-metadata" style="margin-top:0.5em;font-size:0.95em;color:#333;"></div>
-    </div>
-    <form id="api-form">
-        <label>Module:
-            <input type="text" id="module" value="pytest_insight.insight_api" style="width: 350px;" />
-        </label>
-        <label>Class:
-            <input type="text" id="class_" value="InsightAPI" style="width: 150px;" />
-        </label>
-        <button type="button" id="load-api">Load API</button>
-    </form>
-    <div id="method-list" class="method-list"></div>
-    <div id="context-guidance" style="margin:1em 0;padding:1em;background:#f0f4f8;border:1px solid #b3c6e0;display:none;"></div>
     <div class="chain-box">
         <h3>Chain Builder</h3>
         <ol id="chain"></ol>
@@ -51,6 +29,35 @@
         <h3>Execution Result</h3>
         <div id="execution-result" style="background:#fff;border:1px solid #ccc;padding:1em;overflow:auto;"></div>
     </div>
+    <div class="preview-box" id="debug-box" style="display:none;">
+        <h3 style="display:inline;">Debug Output</h3>
+        <button type="button" id="toggle-debug" style="float:right;">Close</button>
+        <pre id="debug-output" style="margin-top:1em;"></pre>
+    </div>
+    <button type="button" id="open-debug" style="margin:1em 0;">Show Debug Output</button>
+    <div id="profile-section" style="margin-bottom: 1em; padding: 1em; border: 1px solid #ccc; background: #f5f5f5;">
+        <h3>Profile Management</h3>
+        <label>Active Profile:
+            <select id="profile-select"></select>
+        </label>
+        <button type="button" id="set-active-profile">Set Active</button>
+        <button type="button" id="delete-profile">Delete</button>
+        <button type="button" id="create-profile">Create New</button>
+        <span id="profile-status" style="margin-left:1em;color:#1976d2;"></span>
+        <div id="profile-metadata" style="margin-top:0.5em;font-size:0.95em;color:#333;"></div>
+        <div id="profile-stats" style="margin-top:0.5em;font-size:0.95em;color:#333; background:#eef7fa; border:1px solid #b3c6e0; padding:0.7em;"></div>
+    </div>
+    <form id="api-form">
+        <label>Module:
+            <input type="text" id="module" value="pytest_insight.insight_api" style="width: 350px;" />
+        </label>
+        <label>Class:
+            <input type="text" id="class_" value="InsightAPI" style="width: 150px;" />
+        </label>
+        <button type="button" id="load-api">Load API</button>
+    </form>
+    <div id="method-list" class="method-list"></div>
+    <div id="context-guidance" style="margin:1em 0;padding:1em;background:#f0f4f8;border:1px solid #b3c6e0;display:none;"></div>
 </div>
 <script>
 const methodList = document.getElementById('method-list');
@@ -59,9 +66,29 @@ const previewBox = document.getElementById('preview');
 const profileSelect = document.getElementById('profile-select');
 const profileStatus = document.getElementById('profile-status');
 const profileMetadata = document.getElementById('profile-metadata');
+const profileStats = document.getElementById('profile-stats');
+const debugBox = document.getElementById('debug-box');
+const debugOutput = document.getElementById('debug-output');
+const openDebug = document.getElementById('open-debug');
+const toggleDebug = document.getElementById('toggle-debug');
 let apiMethods = [];
 let chain = [];
 let activeProfile = null;
+
+// Debug Output Controls
+openDebug.onclick = function() {
+    debugBox.style.display = '';
+    openDebug.style.display = 'none';
+};
+toggleDebug.onclick = function() {
+    debugBox.style.display = 'none';
+    openDebug.style.display = '';
+};
+
+// Example: Append debug info (replace with real debug logging as needed)
+function appendDebug(message) {
+    debugOutput.textContent += message + '\n';
+}
 
 // ---- Profile Management ----
 async function loadProfiles() {
@@ -101,6 +128,27 @@ async function loadProfileMetadata(name) {
     }
 }
 
+async function loadProfileStats(name) {
+    const resp = await fetch(`/profile_stats?profile=${encodeURIComponent(name)}`);
+    const data = await resp.json();
+    if (data.profile) {
+        let html = `<b>Profile:</b> ${data.profile}<br>`;
+        html += `<b>Total Sessions:</b> ${data.total_sessions}<br>`;
+        html += `<b>SUTs:</b> (${data.num_suts}) ${data.suts.join(', ') || 'None'}<br>`;
+        html += `<b>Testing Systems:</b> (${data.num_testing_systems}) ${data.testing_systems.join(', ') || 'None'}<br>`;
+        if (data.summary) {
+            html += `<b>Summary:</b><pre style='margin:0;background:#eef;'>${JSON.stringify(data.summary, null, 2)}</pre>`;
+        }
+        profileStats.innerHTML = html;
+    } else {
+        profileStats.textContent = data.error || '';
+    }
+}
+
+async function refreshProfileStats() {
+    await loadProfileStats(profileSelect.value);
+}
+
 document.getElementById('set-active-profile').onclick = async function() {
     const name = profileSelect.value;
     const resp = await fetch('/profiles/active', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
@@ -129,6 +177,7 @@ document.getElementById('create-profile').onclick = async function() {
 
 profileSelect.onchange = async function() {
     await loadProfileMetadata(profileSelect.value);
+    await refreshProfileStats();
     updateContextGuidance();
 };
 
@@ -223,6 +272,7 @@ document.getElementById('execute-chain').onclick = async function() {
         chain: chainPayload
     };
     document.getElementById('execution-result').innerHTML = '<em>Running...</em>';
+    appendDebug(`[${new Date().toLocaleTimeString()}] Executing chain: ` + JSON.stringify(payload));
     const resp = await fetch('/execute_chain', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -230,6 +280,7 @@ document.getElementById('execute-chain').onclick = async function() {
     });
     const text = await resp.text();
     document.getElementById('execution-result').innerHTML = text;
+    appendDebug(`[${new Date().toLocaleTimeString()}] Received response (${resp.status}):\n` + text);
 };
 
 // ---- Contextual Guidance ----
@@ -283,6 +334,7 @@ document.getElementById('class_').onchange = updateContextGuidance;
 // Load profiles and default API on page load
 window.onload = async () => {
     await loadProfiles();
+    await refreshProfileStats();
     document.getElementById('load-api').click();
 };
 </script>

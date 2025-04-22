@@ -6,22 +6,22 @@ This is a placeholder. Integrate dynamic introspection and UI logic here.
 import importlib
 import inspect
 import os
-from typing import Any, Dict, List, get_type_hints
+from typing import Any, List, get_type_hints
 
-from fastapi import Body, FastAPI, Request
+from fastapi import Body, FastAPI, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-
+from pytest_insight.scripts.introspect_api import introspect_api as introspect_api_markdown
 from pytest_insight.core.storage import ProfileManager
+from pytest_insight.insight_api import InsightAPI
+import orjson
 
 app = FastAPI(title="pytest-insight API Explorer")
 
 # Set up Jinja2 templates
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 templates = Jinja2Templates(directory=TEMPLATE_DIR)
-
-profile_manager = ProfileManager()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -44,28 +44,36 @@ def introspect_api(module: str, class_: str, markdown: bool = False):
         for name, member in inspect.getmembers(api_cls, predicate=inspect.isfunction):
             if name.startswith("_"):
                 continue
-            sig = inspect.signature(member)
+            try:
+                sig = inspect.signature(member)
+            except (ValueError, TypeError):
+                sig = None
             doc = inspect.getdoc(member) or ""
             type_hints = get_type_hints(member)
             params = []
-            for param in sig.parameters.values():
-                if param.name == "self":
-                    continue
-                annotation = str(type_hints.get(param.name, "Any"))
-                default = (
-                    param.default if param.default != inspect.Parameter.empty else None
-                )
-                params.append(
-                    {
-                        "name": param.name,
-                        "type": annotation,
-                        "default": default,
-                    }
-                )
+            if sig:
+                for param in sig.parameters.values():
+                    if param.name == "self":
+                        continue
+                    annotation = str(type_hints.get(param.name, "Any"))
+                    default = (
+                        param.default if param.default != inspect.Parameter.empty else None
+                    )
+                    params.append(
+                        {
+                            "name": param.name,
+                            "type": annotation,
+                            "default": default,
+                        }
+                    )
+                sig_str = str(sig)
+            else:
+                sig_str = "(builtin or unavailable)"
             methods.append(
                 {
                     "name": name,
                     "params": params,
+                    "signature": sig_str,
                     "doc": doc,
                 }
             )
@@ -77,23 +85,24 @@ def introspect_api(module: str, class_: str, markdown: bool = False):
 
     api_struct = get_api_structure(api_cls)
     if markdown:
-        from pytest_insight.scripts.introspect_api import introspect_api as markdown_doc
-
-        return HTMLResponse(f"<pre>{markdown_doc(api_cls, markdown=True)}</pre>")
+        return HTMLResponse(f"<pre>{introspect_api_markdown(api_cls, markdown=True)}</pre>")
     return JSONResponse(api_struct)
 
 
 @app.get("/profiles")
 def list_profiles():
     """List all available profiles."""
+    # Always reload the profile manager to pick up new profiles
+    profile_manager = ProfileManager()  # Re-instantiate to force reload
     profiles = profile_manager.list_profiles()
-    return JSONResponse({"profiles": [p for p in profiles]})
+    return JSONResponse({"profiles": list(profiles)})
 
 
 @app.post("/profiles")
 def create_profile(name: str):
     """Create a new profile by name."""
     try:
+        profile_manager = ProfileManager()
         profile_manager._create_profile(name)
         return JSONResponse({"status": "success", "profile": name})
     except Exception as e:
@@ -104,6 +113,7 @@ def create_profile(name: str):
 def delete_profile(name: str):
     """Delete a profile by name."""
     try:
+        profile_manager = ProfileManager()
         profile_manager.delete_profile(name)
         return JSONResponse({"status": "success", "profile": name})
     except Exception as e:
@@ -114,6 +124,7 @@ def delete_profile(name: str):
 def set_active_profile(name: str):
     """Set the active profile."""
     try:
+        profile_manager = ProfileManager()
         profile_manager.switch_profile(name)
         return JSONResponse({"status": "success", "active_profile": name})
     except Exception as e:
@@ -124,6 +135,7 @@ def set_active_profile(name: str):
 def get_active_profile():
     """Get the currently active profile."""
     try:
+        profile_manager = ProfileManager()
         profile = profile_manager.get_active_profile()
         return JSONResponse({"active_profile": profile.name})
     except Exception as e:
@@ -134,6 +146,7 @@ def get_active_profile():
 def get_profile_metadata(name: str):
     """Get metadata/details for a profile."""
     try:
+        profile_manager = ProfileManager()
         profile = profile_manager.get_profile(name)
         return JSONResponse({"profile": profile.to_dict()})
     except Exception as e:
@@ -162,8 +175,6 @@ class IntrospectChainRequest(BaseModel):
 @app.post("/introspect_chain")
 def introspect_chain(req: IntrospectChainRequest = Body(...)):
     """Introspect the next valid methods/properties after executing the current chain."""
-    import inspect
-
     try:
         mod = importlib.import_module(req.module)
         api_cls = getattr(mod, req.class_)
@@ -200,7 +211,10 @@ def introspect_chain(req: IntrospectChainRequest = Body(...)):
             member = getattr(obj, name)
             doc = inspect.getdoc(member) or ""
             if callable(member):
-                sig = str(inspect.signature(member))
+                try:
+                    sig = str(inspect.signature(member))
+                except (ValueError, TypeError):
+                    sig = "(builtin or unavailable)"
                 methods.append({"name": name, "signature": sig, "doc": doc})
             else:
                 props.append({"name": name, "doc": doc})
@@ -241,8 +255,6 @@ def execute_chain(req: ExecuteChainRequest = Body(...)):
                 )
         # Try to jsonify the result, fallback to str
         try:
-            import orjson
-
             return HTMLResponse(
                 f"<pre>{orjson.dumps(obj, option=orjson.OPT_INDENT_2).decode()}</pre>"
             )
@@ -250,3 +262,38 @@ def execute_chain(req: ExecuteChainRequest = Body(...)):
             return HTMLResponse(f"<pre>{str(obj)}</pre>")
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.get("/profile_stats")
+def profile_stats(profile: str = Query(None), filtered: bool = Query(False)):
+    """
+    Return stats for the given profile (or active profile if not given).
+    If filtered=True, returns stats for the current filtered set of sessions (if supported).
+    """
+    profile_manager = ProfileManager()
+    if profile:
+        prof = profile_manager.get_profile(profile)
+    else:
+        prof = profile_manager.get_active_profile()
+    sessions = prof.load_sessions()
+    api = InsightAPI(sessions)
+    # Gather stats
+    summary = api.summary_report()
+    # SUTs and testing systems
+    suts = set()
+    systems = set()
+    for sess in sessions:
+        suts.add(getattr(sess, "sut", None))
+        systems.add(getattr(sess, "testing_system", None))
+    # Remove None
+    suts.discard(None)
+    systems.discard(None)
+    return JSONResponse({
+        "profile": prof.name,
+        "total_sessions": len(sessions),
+        "suts": sorted(list(suts)),
+        "num_suts": len(suts),
+        "testing_systems": sorted(list(systems)),
+        "num_testing_systems": len(systems),
+        "summary": summary,
+    })

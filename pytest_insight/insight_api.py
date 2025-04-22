@@ -213,3 +213,15 @@ class InsightAPI(Insight):
     @property
     def temporal_facet(self):
         return TemporalInsight(self._sessions)
+
+    @property
+    def session_facet(self):
+        return SessionInsight(self._sessions)
+
+    @property
+    def test_facet(self):
+        return TestInsight(self._sessions)
+
+    @property
+    def trend_facet(self):
+        return TrendInsight(self._sessions)
