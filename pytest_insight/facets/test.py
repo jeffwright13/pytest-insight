@@ -1,7 +1,4 @@
-import pprint
 from collections import defaultdict
-
-from tabulate import tabulate
 
 from pytest_insight.core.models import TestSession
 
@@ -14,9 +11,7 @@ class TestInsight:
 
     def reliability_report(self):
         """Reliability metrics per test nodeid."""
-        stats = defaultdict(
-            lambda: {"runs": 0, "passes": 0, "failures": 0, "total_duration": 0.0}
-        )
+        stats = defaultdict(lambda: {"runs": 0, "passes": 0, "failures": 0, "total_duration": 0.0})
         for s in self.sessions:
             for t in s.test_results:
                 stats[t.nodeid]["runs"] += 1
@@ -60,9 +55,7 @@ class TestInsight:
                 if getattr(t, "unreliable", False):
                     unreliable.add(getattr(t, "nodeid", None))
         metrics = self.test_reliability_metrics()
-        unreliable_list = [
-            {"nodeid": nid, **metrics.get(nid, {})} for nid in sorted(unreliable)
-        ]
+        unreliable_list = [{"nodeid": nid, **metrics.get(nid, {})} for nid in sorted(unreliable)]
         # Optionally sort by unreliable_rate descending
         unreliable_list.sort(key=lambda x: x.get("unreliable_rate", 0), reverse=True)
         return unreliable_list[:limit]
@@ -110,7 +103,7 @@ class TestInsight:
         if kind in {"summary", "health"}:
             from pytest_insight.facets.summary import SummaryInsight
 
-            return SummaryInsight(self.sessions)
+            return SummaryInsight(self.sessions).as_dict()
         if kind == "detailed":
             return {
                 "outcome_distribution": self.outcome_distribution(),
@@ -134,15 +127,9 @@ class TestInsight:
         for s in self.sessions:
             for t in getattr(s, "test_results", []):
                 match = True
-                if (
-                    "nodeid" in criteria
-                    and getattr(t, "nodeid", None) != criteria["nodeid"]
-                ):
+                if "nodeid" in criteria and getattr(t, "nodeid", None) != criteria["nodeid"]:
                     match = False
-                if (
-                    "outcome" in criteria
-                    and getattr(t, "outcome", None) != criteria["outcome"]
-                ):
+                if "outcome" in criteria and getattr(t, "outcome", None) != criteria["outcome"]:
                     match = False
                 if (
                     "min_duration" in criteria

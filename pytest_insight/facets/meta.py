@@ -1,5 +1,3 @@
-from tabulate import tabulate
-
 from pytest_insight.core.insight_base import Insight
 from pytest_insight.core.models import TestSession
 
@@ -21,9 +19,7 @@ class MetaInsight(Insight):
         return {
             "unique_tests": len(unique_tests),
             "total_sessions": len(self._sessions),
-            "tests_per_session": (
-                len(unique_tests) / len(self._sessions) if self._sessions else None
-            ),
+            "tests_per_session": (len(unique_tests) / len(self._sessions) if self._sessions else None),
         }
 
     def as_dict(self):
@@ -34,32 +30,13 @@ class MetaInsight(Insight):
         if kind in {"summary", "health"}:
             from pytest_insight.facets.summary import SummaryInsight
 
-            return SummaryInsight(self._sessions)
+            return SummaryInsight(self._sessions).as_dict()
         if kind == "meta":
             burden = self.maintenance_burden()
-            if tabular:
-                rows = [
-                    [
-                        burden["unique_tests"],
-                        burden["total_sessions"],
-                        (
-                            f"{burden['tests_per_session']:.2f}"
-                            if burden["tests_per_session"] is not None
-                            else "N/A"
-                        ),
-                    ]
-                ]
-                return tabulate(
-                    rows,
-                    headers=["Unique Tests", "Sessions", "Tests/Session"],
-                    tablefmt="github",
-                )
-            else:
-                return (
-                    f"Unique tests: {burden['unique_tests']}, "
-                    f"Sessions: {burden['total_sessions']}, "
-                    f"Tests/session: {burden['tests_per_session']:.2f}"
-                    if burden["tests_per_session"] is not None
-                    else "Tests/session: N/A"
-                )
+            # Always return structured data
+            return {
+                "unique_tests": burden["unique_tests"],
+                "total_sessions": burden["total_sessions"],
+                "tests_per_session": burden["tests_per_session"],
+            }
         raise ValueError(f"Unsupported insight kind: {kind}")

@@ -1,5 +1,3 @@
-from tabulate import tabulate
-
 from pytest_insight.core.insight_base import Insight
 from pytest_insight.core.models import TestSession
 
@@ -34,14 +32,8 @@ class SessionInsight(Insight):
                     outcome_key = str(outcome).lower()
                 if outcome_key in outcome_counts:
                     outcome_counts[outcome_key] += 1
-            reliability = (
-                outcome_counts["passed"] / total_tests if total_tests else None
-            )
-            avg_duration = (
-                sum(t.duration for t in s.test_results) / total_tests
-                if total_tests
-                else None
-            )
+            reliability = outcome_counts["passed"] / total_tests if total_tests else None
+            avg_duration = sum(t.duration for t in s.test_results) / total_tests if total_tests else None
             metrics.append(
                 {
                     "session_id": s.session_id,
@@ -85,11 +77,7 @@ class SessionInsight(Insight):
         for m in self.metrics():
             if m["total_tests"] == 0:
                 continue
-            if (
-                m["skipped"] == m["total_tests"]
-                or m["xfailed"] == m["total_tests"]
-                or m["rerun"] == m["total_tests"]
-            ):
+            if m["skipped"] == m["total_tests"] or m["xfailed"] == m["total_tests"] or m["rerun"] == m["total_tests"]:
                 suspicious.append(m)
         return suspicious
 
@@ -101,116 +89,15 @@ class SessionInsight(Insight):
 
     def health_report(self, tabular: bool = True):
         if not self.sessions:
-            return "No session data."
+            return {"error": "No session data."}
         dist = self.session_reliability_distribution()
         suspicious = self.suspicious_sessions()
         top_unrel = self.top_unreliable_sessions()
-        if tabular:
-            lines = []
-            lines.append("Session Reliability Distribution:")
-            dist_table = [
-                {"Type": label, "Count": dist[k]}
-                for k, label in [
-                    ("all_passed", "All Passed"),
-                    ("some_failed", "Some Failed"),
-                    ("some_errored", "Some Errored"),
-                    ("all_skipped", "All Skipped"),
-                    ("mixed", "Mixed Outcomes"),
-                ]
-            ]
-            lines.append(tabulate(dist_table, headers="keys", tablefmt="github"))
-            lines.append("")
-            lines.append("Top 5 Most Unreliable Sessions:")
-            unrel_table = []
-            for m in top_unrel:
-                unrel_table.append(
-                    {
-                        "Session ID": m["session_id"],
-                        "Date": str(m["date"])[:10] if m["date"] else "",
-                        "SUT": m["sut"],
-                        "Pass": m["passed"],
-                        "Fail": m["failed"],
-                        "Err": m["error"],
-                        "Reliab (%)": (
-                            f"{m['reliability']*100:.2f}"
-                            if m["reliability"] is not None
-                            else "N/A"
-                        ),
-                    }
-                )
-            if unrel_table:
-                lines.append(tabulate(unrel_table, headers="keys", tablefmt="github"))
-            else:
-                lines.append("(No unreliable sessions)")
-            lines.append("")
-            lines.append("Suspicious Sessions (all skipped/xfailed/rerun):")
-            susp_table = [
-                {
-                    "Session ID": m["session_id"],
-                    "SUT": m["sut"],
-                    "Total Tests": m["total_tests"],
-                    "Date": str(m["date"])[:10] if m["date"] else "",
-                }
-                for m in suspicious
-            ]
-            if susp_table:
-                lines.append(tabulate(susp_table, headers="keys", tablefmt="github"))
-            else:
-                lines.append("(No suspicious sessions)")
-            return "\n".join(lines)
-        else:
-            lines = []
-            lines.append("Session Reliability Distribution:")
-            dist_table = [
-                {"Type": label, "Count": dist[k]}
-                for k, label in [
-                    ("all_passed", "All Passed"),
-                    ("some_failed", "Some Failed"),
-                    ("some_errored", "Some Errored"),
-                    ("all_skipped", "All Skipped"),
-                    ("mixed", "Mixed Outcomes"),
-                ]
-            ]
-            lines.append(str(dist_table))
-            lines.append("")
-            lines.append("Top 5 Most Unreliable Sessions:")
-            unrel_table = []
-            for m in top_unrel:
-                unrel_table.append(
-                    {
-                        "Session ID": m["session_id"],
-                        "Date": str(m["date"])[:10] if m["date"] else "",
-                        "SUT": m["sut"],
-                        "Pass": m["passed"],
-                        "Fail": m["failed"],
-                        "Err": m["error"],
-                        "Reliab (%)": (
-                            f"{m['reliability']*100:.2f}"
-                            if m["reliability"] is not None
-                            else "N/A"
-                        ),
-                    }
-                )
-            if unrel_table:
-                lines.append(str(unrel_table))
-            else:
-                lines.append("(No unreliable sessions)")
-            lines.append("")
-            lines.append("Suspicious Sessions (all skipped/xfailed/rerun):")
-            susp_table = [
-                {
-                    "Session ID": m["session_id"],
-                    "SUT": m["sut"],
-                    "Total Tests": m["total_tests"],
-                    "Date": str(m["date"])[:10] if m["date"] else "",
-                }
-                for m in suspicious
-            ]
-            if susp_table:
-                lines.append(str(susp_table))
-            else:
-                lines.append("(No suspicious sessions)")
-            return "\n".join(lines)
+        return {
+            "session_reliability_distribution": dist,
+            "suspicious_sessions": suspicious,
+            "top_unreliable_sessions": top_unrel,
+        }
 
     def as_dict(self):
         """Return session-level metrics as a dict for dashboard rendering."""
@@ -261,33 +148,21 @@ class SessionInsight(Insight):
         """
         filtered = self.sessions
         if "sut" in criteria:
-            filtered = [
-                s for s in filtered if getattr(s, "sut_name", None) == criteria["sut"]
-            ]
+            filtered = [s for s in filtered if getattr(s, "sut_name", None) == criteria["sut"]]
         if "min_tests" in criteria:
-            filtered = [
-                s
-                for s in filtered
-                if len(getattr(s, "test_results", [])) >= criteria["min_tests"]
-            ]
+            filtered = [s for s in filtered if len(getattr(s, "test_results", [])) >= criteria["min_tests"]]
         if "max_tests" in criteria:
-            filtered = [
-                s
-                for s in filtered
-                if len(getattr(s, "test_results", [])) <= criteria["max_tests"]
-            ]
+            filtered = [s for s in filtered if len(getattr(s, "test_results", [])) <= criteria["max_tests"]]
         if "after" in criteria:
             filtered = [
                 s
                 for s in filtered
-                if getattr(s, "session_start_time", None)
-                and getattr(s, "session_start_time") >= criteria["after"]
+                if getattr(s, "session_start_time", None) and getattr(s, "session_start_time") >= criteria["after"]
             ]
         if "before" in criteria:
             filtered = [
                 s
                 for s in filtered
-                if getattr(s, "session_start_time", None)
-                and getattr(s, "session_start_time") <= criteria["before"]
+                if getattr(s, "session_start_time", None) and getattr(s, "session_start_time") <= criteria["before"]
             ]
         return SessionInsight(filtered)

@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-
 from pytest_insight.facets.predictive import PredictiveInsight
 
 
@@ -10,9 +9,7 @@ def make_test_result(outcome):
 
 
 def make_session(session_start_time=None, test_results=None):
-    return SimpleNamespace(
-        session_start_time=session_start_time, test_results=test_results or []
-    )
+    return SimpleNamespace(session_start_time=session_start_time, test_results=test_results or [])
 
 
 def test_init_empty_and_nonempty():
@@ -72,17 +69,22 @@ def test_insight_predictive_tabular_and_plain():
     pi = PredictiveInsight([s1, s2])
     tab = pi.insight(kind="predictive_failure", tabular=True)
     plain = pi.insight(kind="predictive_failure", tabular=False)
-    assert "Forecasted Reliability" in tab
-    assert "forecasted reliability" in plain.lower()
+    # Both must be dicts with expected keys
+    for output in (tab, plain):
+        assert isinstance(output, dict)
+        assert "future_reliability" in output
+        assert "trend" in output
+        assert "warning" in output
 
 
 def test_insight_summary_health_dispatch(mocker):
     s = [make_session()]
     pi = PredictiveInsight(s)
-    fake = object()
+    fake = mocker.Mock()
+    fake.as_dict.return_value = {"sentinel": True}
     mocker.patch("pytest_insight.facets.summary.SummaryInsight", return_value=fake)
     for kind in ("summary", "health"):
-        assert pi.insight(kind=kind) is fake
+        assert pi.insight(kind=kind) == {"sentinel": True}
 
 
 def test_insight_invalid_kind():

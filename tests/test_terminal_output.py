@@ -3,7 +3,6 @@ Tests for the adaptive, config-driven terminal layout manager in terminal_output
 """
 
 import re
-import textwrap
 import types
 
 from pytest_insight.utils.terminal_output import render_insights_in_terminal
@@ -59,8 +58,6 @@ def make_ansi_panel(label, width=20, height=4, color=None, bold=False):
 
 
 def strip_ansi(s):
-    import re
-
     ansi_escape = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
     return ansi_escape.sub("", s)
 
@@ -130,12 +127,11 @@ def test_render_insights_in_terminal_min_panel_width(monkeypatch):
 def test_render_insights_in_terminal_with_ansi(monkeypatch):
     class AnsiAPI(DummyAPI):
         def session(self):
-            return types.SimpleNamespace(
-                insight=lambda kind: {"total_sessions": f"{ANSI_BOLD}5{ANSI_RESET}"}
-            )
+            return types.SimpleNamespace(insight=lambda kind: {"total_sessions": f"{ANSI_BOLD}5{ANSI_RESET}"})
+
     api = AnsiAPI()
     patch_api_with_session_dict(api, {"total_sessions": f"{ANSI_BOLD}5{ANSI_RESET}"})
-    config = {"sections": ["summary"], "columns": 1, "width": 40}
+    config = {"sections": ["summary"], "columns": 1, "width": 40, "rich": False}
     out = render_insights_in_terminal(api, config)
     # Should contain the value 5 in any cell
     out_stripped = strip_ansi(out)
@@ -154,12 +150,11 @@ def test_render_insights_in_terminal_long_label(monkeypatch):
 
     class LongLabelAPI(DummyAPI):
         def session(self):
-            return types.SimpleNamespace(
-                insight=lambda kind: {"total_sessions": long_label}
-            )
+            return types.SimpleNamespace(insight=lambda kind: {"total_sessions": long_label})
+
     api = LongLabelAPI()
     patch_api_with_session_dict(api, {"total_sessions": long_label})
-    config = {"sections": ["summary"], "columns": 1, "width": 80}
+    config = {"sections": ["summary"], "columns": 1, "width": 80, "rich": False}
     out = render_insights_in_terminal(api, config)
     out_stripped = strip_ansi(out)
     # Robust: check for long_label in any cell
@@ -172,26 +167,20 @@ def test_render_insights_in_terminal_short_label(monkeypatch):
 
     class ShortLabelAPI(DummyAPI):
         def session(self):
-            return types.SimpleNamespace(
-                insight=lambda kind: {"total_sessions": short_label}
-            )
+            return types.SimpleNamespace(insight=lambda kind: {"total_sessions": short_label})
+
     api = ShortLabelAPI()
     patch_api_with_session_dict(api, {"total_sessions": short_label})
-    config = {"sections": ["summary"], "columns": 1, "width": 20}
+    config = {"sections": ["summary"], "columns": 1, "width": 20, "rich": False}
     out = render_insights_in_terminal(api, config)
     out_stripped = strip_ansi(out)
     # Robust: check for short_label in any cell
     assert any(short_label in cell for line in out_stripped.splitlines() for cell in line.split("|"))
     lines = out_stripped.splitlines()
     value_lines = [line for line in lines if short_label in line]
-    assert any(
-        line.startswith("|") and line.endswith("|") and "Y" in line
-        for line in value_lines
-    )
+    assert any(line.startswith("|") and line.endswith("|") and "Y" in line for line in value_lines)
 
-
-import types
 
 def patch_api_with_session_dict(api, summary=None):
-    if not hasattr(api, "session_dict"):
-        api.session_dict = lambda: summary if summary is not None else {}
+    # Always override session_dict to ensure test patching works
+    api.session_dict = lambda: summary if summary is not None else {}

@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-
 from pytest_insight.facets.comparative import ComparativeInsight
 
 
@@ -13,9 +12,7 @@ def sessions_factory():
         for sut, test_lists in suts_tests.items():
             for test_outcomes in test_lists:
                 test_results = [SimpleNamespace(outcome=o) for o in test_outcomes]
-                sessions.append(
-                    SimpleNamespace(sut_name=sut, test_results=test_results)
-                )
+                sessions.append(SimpleNamespace(sut_name=sut, test_results=test_results))
         return sessions
 
     return _make
@@ -65,20 +62,26 @@ def test_insight_regression_tabular_and_nontabular(sessions_factory):
         }
     )
     ci = ComparativeInsight(s)
+    # Structured output is always returned
     tab = ci.insight(kind="regression", tabular=True)
-    assert "Reliability" in tab and "A" in tab
+    assert isinstance(tab, dict)
+    assert "sut_reliability" in tab
+    assert any(item["SUT"] == "A" for item in tab["sut_reliability"])
     nontab = ci.insight(kind="regression", tabular=False)
-    assert "Reliability by SUT" in nontab
+    assert isinstance(nontab, dict)
+    assert "sut_reliability" in nontab
+    assert any(item["SUT"] == "B" for item in nontab["sut_reliability"])
 
 
 def test_insight_summary_health_dispatch(mocker, sessions_factory):
     s = sessions_factory({"A": [["passed"]]})
     ci = ComparativeInsight(s)
-    fake = object()
+    fake = mocker.Mock()
+    fake.as_dict.return_value = {"sentinel": True}
     # Patch where SummaryInsight is imported (facets.summary)
     mocker.patch("pytest_insight.facets.summary.SummaryInsight", return_value=fake)
     for kind in ("summary", "health"):
-        assert ci.insight(kind=kind) is fake
+        assert ci.insight(kind=kind) == {"sentinel": True}
 
 
 def test_insight_invalid_kind(sessions_factory):

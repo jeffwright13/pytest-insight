@@ -2,7 +2,6 @@ import datetime as dt
 from types import SimpleNamespace
 
 import pytest
-
 from pytest_insight.facets.temporal import TemporalInsight
 
 
@@ -81,8 +80,14 @@ def test_insight_trend_tabular(make_test_session, make_test_result):
     s = make_test_session("s1", dt.datetime(2023, 1, 1), results)
     ti = TemporalInsight([s])
     out = ti.insight(kind="trend", tabular=True)
-    assert "Interval" in out and "Reliability" in out
-    assert "100.00%" in out
+    assert isinstance(out, dict)
+    assert "trend_series" in out
+    entry = out["trend_series"][0]
+    assert "interval" in entry
+    assert "reliability" in entry
+    assert "total_tests" in entry
+    assert entry["reliability"] == 1.0
+    assert entry["total_tests"] == 2
 
 
 def test_insight_trend_notabular(make_test_session, make_test_result):
@@ -90,22 +95,26 @@ def test_insight_trend_notabular(make_test_session, make_test_result):
     s = make_test_session("s1", dt.datetime(2023, 1, 1), results)
     ti = TemporalInsight([s])
     out = ti.insight(kind="trend", tabular=False)
-    assert "Most recent reliability:" in out
-    assert "100.00%" in out
+    assert isinstance(out, dict)
+    assert "trend_series" in out
+    entry = out["trend_series"][0]
+    assert "interval" in entry
+    assert "reliability" in entry
+    assert "total_tests" in entry
+    assert entry["reliability"] == 1.0
+    assert entry["total_tests"] == 2
 
 
 def test_insight_trend_no_data():
     ti = TemporalInsight([])
     out = ti.insight(kind="trend", tabular=True)
-    assert out == "No trend data."
+    assert out == {"trend_series": []}
 
 
 def test_insight_summary_health_dispatch(mocker, make_test_session):
     s = make_test_session("s1", dt.datetime(2023, 1, 1))
     ti = TemporalInsight([s])
-    mock_summary = mocker.patch(
-        "pytest_insight.facets.summary.SummaryInsight", autospec=True
-    )
+    mock_summary = mocker.patch("pytest_insight.facets.summary.SummaryInsight", autospec=True)
     ti.insight(kind="summary")
     assert mock_summary.called
     ti.insight(kind="health")

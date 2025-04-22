@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-
 from pytest_insight.facets.meta import MetaInsight
 
 
@@ -54,16 +53,18 @@ def test_insight_meta_tabular_and_plain():
     mi = MetaInsight([s1])
     tabular = mi.insight(kind="meta", tabular=True)
     plain = mi.insight(kind="meta", tabular=False)
-    assert "Unique Tests" in tabular
-    assert "Unique Tests" in plain or "Tests/session" in plain
+    # Both must be dicts with expected keys
+    for output in (tabular, plain):
+        assert isinstance(output, dict)
+        assert "unique_tests" in output
+        assert "total_sessions" in output
+        assert "tests_per_session" in output
 
 
 def test_insight_summary_health_dispatch(mocker):
     s1 = make_session("s1")
     mi = MetaInsight([s1])
-    mock_summary = mocker.patch(
-        "pytest_insight.facets.summary.SummaryInsight", autospec=True
-    )
+    mock_summary = mocker.patch("pytest_insight.facets.summary.SummaryInsight", autospec=True)
     mi.insight(kind="summary")
     assert mock_summary.called
     mi.insight(kind="health")

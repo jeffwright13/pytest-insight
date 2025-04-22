@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-
 from pytest_insight.facets.summary import SummaryInsight
 
 
@@ -72,9 +71,7 @@ def test_aggregate_stats_unexpected_outcomes():
     s = make_session("s1", results)
     si = SummaryInsight([s])
     stats = si.aggregate_stats()
-    assert (
-        stats["outcome_counts"].get("skipped", 0) == 1
-    )  # "skipped" is a valid outcome
+    assert stats["outcome_counts"].get("skipped", 0) == 1  # "skipped" is a valid outcome
     assert stats["outcome_counts"].get("foo", 0) == 0  # "foo" is not a valid outcome
 
 
@@ -98,8 +95,14 @@ def test_suite_level_metrics_average():
 def test_insight_valid_kinds():
     s = make_session("s1")
     si = SummaryInsight([s])
-    assert si.insight(kind="summary") is si
-    assert si.insight(kind="health") is si
+    for kind in ("summary", "health"):
+        result = si.insight(kind=kind)
+        assert isinstance(result, dict)
+        assert "total_sessions" in result
+        assert "total_tests" in result
+        assert "pass_rate" in result
+        assert "fail_rate" in result
+        assert "outcome_counts" in result
 
 
 def test_insight_invalid_kind():

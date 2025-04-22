@@ -31,11 +31,11 @@ def start(
     from importlib.util import find_spec
 
     if not find_spec("pytest_insight.web_api.explorer.explorer_app"):
-        print("Explorer app not found. Please ensure it is installed.")
+        typer.echo("Explorer app not found. Please ensure it is installed.")
         raise typer.Exit(1)
     Path(os.path.dirname(PID_FILE)).mkdir(parents=True, exist_ok=True)
     if os.path.exists(PID_FILE):
-        print(
+        typer.echo(
             f"API Explorer appears to already be running (PID file exists at {PID_FILE}). Use 'insight web api-explorer stop' first."
         )
         raise typer.Exit(1)
@@ -50,7 +50,7 @@ def start(
     if reload:
         cmd.append("--reload")
     if foreground:
-        print(f"Launching API Explorer UI at http://{host}:{port} (foreground, Ctrl+C to stop)...")
+        typer.echo(f"Launching API Explorer UI at http://{host}:{port} (foreground, Ctrl+C to stop)...")
         subprocess.run(cmd)
     else:
         with open(os.devnull, "w") as devnull:
@@ -59,15 +59,15 @@ def start(
             f.write(str(proc.pid))
         with open(INFO_FILE, "w") as f:
             f.write(f"host={host}\nport={port}\npid={proc.pid}\ncmd={' '.join(cmd)}\n")
-        print(f"API Explorer started in background at http://{host}:{port} (PID {proc.pid})")
-        print("To stop it, run: insight web api-explorer stop")
+        typer.echo(f"API Explorer started in background at http://{host}:{port} (PID {proc.pid})")
+        typer.echo("To stop it, run: insight web api-explorer stop")
 
 
 @api_explorer_app.command("stop", help="Stop the background API Explorer server")
 def stop():
     """Stop the background API Explorer server."""
     if not os.path.exists(PID_FILE):
-        print("No running API Explorer server found (no PID file).")
+        typer.echo("No running API Explorer server found (no PID file).")
         if os.path.exists(INFO_FILE):
             os.remove(INFO_FILE)
         raise typer.Exit(1)
@@ -82,11 +82,11 @@ def stop():
         _, alive = psutil.wait_procs([p] + children, timeout=5)
         for a in alive:
             a.kill()
-        print(f"Stopped API Explorer server and all child processes (PID {pid}).")
+        typer.echo(f"Stopped API Explorer server and all child processes (PID {pid}).")
     except psutil.NoSuchProcess:
-        print(f"No process found with PID {pid}. Removing stale PID file.")
+        typer.echo(f"No process found with PID {pid}. Removing stale PID file.")
     except Exception as e:
-        print(f"Error stopping server: {e}")
+        typer.echo(f"Error stopping server: {e}")
     if os.path.exists(PID_FILE):
         os.remove(PID_FILE)
     if os.path.exists(INFO_FILE):
@@ -130,15 +130,15 @@ def status():
                     pid = line.split("=", 1)[1].strip()
                 elif line.startswith("cmd="):
                     line.split("=", 1)[1].strip()
-        print("API Explorer server is running")
-        print(f"URL: http://{host}:{port}")
-        print(f"PID: {pid}")
-        print("To stop: insight web api-explorer stop")
+        typer.echo("API Explorer server is running")
+        typer.echo(f"URL: http://{host}:{port}")
+        typer.echo(f"PID: {pid}")
+        typer.echo("To stop: insight web api-explorer stop")
     else:
-        print("API Explorer server is not running")
-        print("To start: insight web api-explorer start")
+        typer.echo("API Explorer server is not running")
+        typer.echo("To start: insight web api-explorer start")
         if orphaned:
-            print(
+            typer.echo(
                 "Orphaned: Warning: Orphaned uvicorn/multiprocessing process detected. You may need to kill it manually."
             )
 

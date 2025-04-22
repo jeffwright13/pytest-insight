@@ -1,5 +1,3 @@
-from tabulate import tabulate
-
 from pytest_insight.core.analysis import calculate_reliability
 from pytest_insight.core.insight_base import Insight
 from pytest_insight.core.models import TestOutcome, TestSession
@@ -31,8 +29,7 @@ class SummaryInsight(Insight):
                     outcome_counts[outcome_key] += 1
         # Compute percentages
         outcome_percentages = {
-            k: (outcome_counts[k] / total_tests * 100 if total_tests else 0.0)
-            for k in outcome_counts
+            k: (outcome_counts[k] / total_tests * 100 if total_tests else 0.0) for k in outcome_counts
         }
         return {
             "total_sessions": total_sessions,
@@ -46,14 +43,12 @@ class SummaryInsight(Insight):
         # Example: average session duration
         if not self._sessions:
             return {"avg_duration": None}
-        avg_duration = sum(
-            (sum(t.duration for t in s.test_results) for s in self._sessions)
-        ) / len(self._sessions)
+        avg_duration = sum((sum(t.duration for t in s.test_results) for s in self._sessions)) / len(self._sessions)
         return {"avg_duration": avg_duration}
 
     def insight(self, kind: str = "summary", tabular: bool = True, **kwargs):
         if kind in {"summary", "health"}:
-            return self
+            return self.as_dict()
         raise ValueError(f"Unsupported insight kind: {kind}")
 
     def as_dict(self):
@@ -72,8 +67,7 @@ class SummaryInsight(Insight):
                 if outcome_key in outcome_counts:
                     outcome_counts[outcome_key] += 1
         outcome_percentages = {
-            k: (outcome_counts[k] / total_tests * 100 if total_tests else 0.0)
-            for k in outcome_counts
+            k: (outcome_counts[k] / total_tests * 100 if total_tests else 0.0) for k in outcome_counts
         }
         return {
             "total_sessions": total_sessions,

@@ -1,7 +1,6 @@
 from collections import defaultdict
 
 import numpy as np
-from tabulate import tabulate
 
 from pytest_insight.core.insight_base import Insight
 from pytest_insight.core.models import TestSession
@@ -37,16 +36,12 @@ class PredictiveInsight(Insight):
         daily_reliability = []
         for day, group in sorted(buckets.items()):
             total_tests = sum(len(sess.test_results) for sess in group)
-            passes = sum(
-                1 for sess in group for t in sess.test_results if t.outcome == "passed"
-            )
+            passes = sum(1 for sess in group for t in sess.test_results if t.outcome == "passed")
             reliability = passes / total_tests if total_tests else 0.0
             daily_reliability.append((day, reliability))
         if len(daily_reliability) < 2:
             return {
-                "future_reliability": (
-                    daily_reliability[-1][1] if daily_reliability else None
-                ),
+                "future_reliability": (daily_reliability[-1][1] if daily_reliability else None),
                 "trend": None,
                 "warning": "Not enough data for trend.",
             }
@@ -70,36 +65,12 @@ class PredictiveInsight(Insight):
         if kind in {"summary", "health"}:
             from pytest_insight.facets.summary import SummaryInsight
 
-            return SummaryInsight(self._sessions)
+            return SummaryInsight(self._sessions).as_dict()
         if kind == "predictive_failure":
             forecast = self.forecast()
             rel = forecast.get("future_reliability")
             trend = forecast.get("trend")
             warning = forecast.get("warning")
-            if tabular:
-                rows = [
-                    [
-                        f"{rel:.2%}" if rel is not None else "N/A",
-                        (
-                            f"{'downward' if trend < 0 else 'upward'} ({trend:+.2%}/day)"
-                            if trend is not None
-                            else "N/A"
-                        ),
-                        warning or "",
-                    ]
-                ]
-                return tabulate(
-                    rows,
-                    headers=["Forecasted Reliability", "Trend", "Warning"],
-                    tablefmt="github",
-                )
-            else:
-                if rel is None:
-                    return warning or "Forecasted Reliability: N/A"
-                msg = f"Next session forecasted reliability: {rel:.2%}. "
-                if trend is not None:
-                    msg += f"Trend: {'downward' if trend < 0 else 'upward'} ({trend:+.2%}/day). "
-                if warning:
-                    msg += f"Warning: {warning}"
-                return msg
+            # Always return structured data
+            return {"future_reliability": rel, "trend": trend, "warning": warning}
         raise ValueError(f"Unsupported insight kind: {kind}")
