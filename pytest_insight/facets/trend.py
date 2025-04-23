@@ -108,6 +108,12 @@ class TrendInsight:
             "emerging_patterns": (self.emerging_patterns() if hasattr(self, "emerging_patterns") else None),
         }
 
+    def available_insights(self):
+        """
+        Return the available insight types for trend analytics.
+        """
+        return ["trend"]
+
     def filter(self, sut: str = None, nodeid: str = None):
         """Return a new TrendInsight filtered by SUT or test nodeid.
         Args:

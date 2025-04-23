@@ -59,6 +59,12 @@ class ComparativeInsight(Insight):
             return {"sut_reliability": summary}
         raise ValueError(f"Unsupported insight kind: {kind}")
 
+    def available_insights(self):
+        """
+        Return the available insight types for comparative analytics.
+        """
+        return ["compare"]
+
     def as_dict(self):
         """Return comparative metrics as a dict for dashboard rendering."""
         # Example: compare SUTs if at least two present

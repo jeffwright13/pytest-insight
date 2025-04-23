@@ -1,5 +1,4 @@
 from collections import defaultdict
-
 import numpy as np
 
 from pytest_insight.core.insight_base import Insight
@@ -8,7 +7,7 @@ from pytest_insight.core.models import TestSession
 
 class PredictiveInsight(Insight):
     """
-    Provides predictive analytics for test sessions.
+    Predictive analytics for test sessions (future reliability, trend warnings).
     Inherits the Insight base interface.
     """
 
@@ -32,16 +31,15 @@ class PredictiveInsight(Insight):
             date = getattr(s, "session_start_time", None)
             if date is not None:
                 buckets[date.date()].append(s)
-        # Calculate reliability per day
         daily_reliability = []
-        for day, group in sorted(buckets.items()):
-            total_tests = sum(len(sess.test_results) for sess in group)
-            passes = sum(1 for sess in group for t in sess.test_results if t.outcome == "passed")
-            reliability = passes / total_tests if total_tests else 0.0
-            daily_reliability.append((day, reliability))
+        for date, group in sorted(buckets.items()):
+            total_tests = sum(len(s.test_results) for s in group)
+            passes = sum(1 for s in group for t in s.test_results if t.outcome == "passed")
+            reliability = passes / total_tests if total_tests else None
+            daily_reliability.append((date, reliability))
         if len(daily_reliability) < 2:
             return {
-                "future_reliability": (daily_reliability[-1][1] if daily_reliability else None),
+                "future_reliability": None,
                 "trend": None,
                 "warning": "Not enough data for trend.",
             }
@@ -61,10 +59,15 @@ class PredictiveInsight(Insight):
         """Return predictive metrics as a dict for dashboard rendering."""
         return self.forecast()
 
+    def available_insights(self):
+        """
+        Return the available insight types for predictive analytics.
+        """
+        return ["predictive"]
+
     def insight(self, kind: str = "predictive_failure", tabular: bool = True, **kwargs):
         if kind in {"summary", "health"}:
             from pytest_insight.facets.summary import SummaryInsight
-
             return SummaryInsight(self._sessions).as_dict()
         if kind == "predictive_failure":
             forecast = self.forecast()

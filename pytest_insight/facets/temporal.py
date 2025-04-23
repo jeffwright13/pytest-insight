@@ -47,3 +47,9 @@ class TemporalInsight(Insight):
         """Return temporal metrics as a dict for dashboard rendering."""
         # Placeholder: just return all sessions for now
         return {"sessions": [s.session_id for s in self._sessions]}
+
+    def available_insights(self):
+        """
+        Return the available insight types for temporal analytics.
+        """
+        return ["temporal"]

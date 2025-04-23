@@ -47,8 +47,8 @@ class TestInsight:
                 total += 1
         return {"distribution": dict(counts), "total": total}
 
-    def unreliable_tests(self, limit=5) -> list:
-        """Return list of unreliable tests (marked unreliable in any session), with metrics."""
+    def unreliable_tests(self, limit=5) -> dict:
+        """Return list of unreliable tests (marked unreliable in any session), with metrics, as a dict for reporting consistency."""
         unreliable = set()
         for s in self.sessions:
             for t in getattr(s, "test_results", []):
@@ -58,17 +58,30 @@ class TestInsight:
         unreliable_list = [{"nodeid": nid, **metrics.get(nid, {})} for nid in sorted(unreliable)]
         # Optionally sort by unreliable_rate descending
         unreliable_list.sort(key=lambda x: x.get("unreliable_rate", 0), reverse=True)
-        return unreliable_list[:limit]
+        return {"unreliable_tests": unreliable_list[:limit]}
 
-    def slowest_tests(self, limit=5) -> list:
-        """Return the slowest tests across all sessions."""
+    def slowest_tests(self, limit=5) -> dict:
+        """Return the slowest tests across all sessions as a dict for reporting consistency."""
         tests = []
         for s in self.sessions:
             for t in getattr(s, "test_results", []):
                 if t.duration is not None:
                     tests.append({"nodeid": t.nodeid, "duration": t.duration})
         tests.sort(key=lambda x: x["duration"], reverse=True)
-        return tests[:limit]
+        return {"slowest_tests": tests[:limit]}
+
+    def flakiest_tests(self, limit=5) -> dict:
+        """Return list of flakiest tests (most outcome flips), with metrics, as a dict for reporting consistency."""
+        outcome_flips = {}
+        for s in self.sessions:
+            for t in getattr(s, "test_results", []):
+                nodeid = getattr(t, "nodeid", None)
+                flips = getattr(t, "flakiness", 0)
+                if nodeid is not None:
+                    outcome_flips[nodeid] = outcome_flips.get(nodeid, 0) + flips
+        sorted_flaky = sorted(outcome_flips.items(), key=lambda x: x[1], reverse=True)
+        flaky_list = [{"nodeid": nid, "flips": flips} for nid, flips in sorted_flaky[:limit]]
+        return {"flakiest_tests": flaky_list}
 
     def test_reliability_metrics(self) -> dict:
         """Compute reliability metrics for all tests."""
@@ -112,6 +125,12 @@ class TestInsight:
                 "test_reliability_metrics": self.test_reliability_metrics(),
             }
         raise ValueError(f"Unsupported insight kind: {kind}")
+
+    def available_insights(self):
+        """
+        Return the available insight types for test-level analytics.
+        """
+        return ["reliability", "test"]
 
     def filter(self, **criteria):
         """Return a new TestInsight with sessions containing tests matching given criteria.

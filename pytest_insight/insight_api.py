@@ -118,7 +118,7 @@ class InsightAPI(Insight):
     def test_dict(self):
         """Return test-level analytics as a structured dict.
         Returns:
-            dict: Test metrics (reliability, slowest tests, unreliable tests, etc).
+            dict: Test metrics (unreliable, slowest, flakiest, etc).
         """
         return TestInsight(self._sessions).as_dict()
 

@@ -58,6 +58,13 @@
     </form>
     <div id="method-list" class="method-list"></div>
     <div id="context-guidance" style="margin:1em 0;padding:1em;background:#f0f4f8;border:1px solid #b3c6e0;display:none;"></div>
+    <!-- Manual Chain Editor UI -->
+    <div style="margin:1em 0;padding:1em;background:#f3f3f3;border:1px solid #ccc;">
+      <h3>Manual Chain Editor</h3>
+      <textarea id="manualChain" rows="7" style="width:100%;font-family:monospace;"></textarea>
+      <button onclick="applyManualChain()">Apply Chain JSON</button>
+      <span id="manualChainStatus" style="color:#b71c1c;margin-left:1em;"></span>
+    </div>
 </div>
 <script>
 const methodList = document.getElementById('method-list');
@@ -184,17 +191,45 @@ profileSelect.onchange = async function() {
 // ---- API/Chain UI ----
 function renderMethods() {
     methodList.innerHTML = '<h3>Available Methods</h3>';
-    apiMethods.forEach((m, idx) => {
-        const params = m.params.map(p => `<input placeholder="${p.name}: ${p.type}" data-param="${p.name}" style="width:100px;"/>`).join(' ');
-        methodList.innerHTML += `<div class="method-item"><button type='button' onclick='addToChain(${idx})'>Add</button> <b>${m.name}</b>(${params}) <span style='color:#888;'>${m.doc}</span></div>`;
+    const groups = [
+        { key: 'analytics', label: 'Analytics & Reports', color: '#1976d2' },
+        { key: 'filtering', label: 'Filtering & Selection', color: '#388e3c' },
+        { key: 'utility', label: 'Utility & Other', color: '#616161' },
+    ];
+    groups.forEach(group => {
+        if (apiMethods[group.key] && apiMethods[group.key].length) {
+            methodList.innerHTML += `<h4 style="color:${group.color};margin-top:1.5em;">${group.label}</h4>`;
+            apiMethods[group.key].forEach((m, idx) => {
+                // Always allow Add for serialization/leaf methods
+                const alwaysAdd = ['as_dict', 'metrics_as_dict', 'to_dict', 'export_dict', 'export_sessions'].includes(m.name);
+                const params = m.params.map(p => `<input placeholder="${p.name}: ${p.type}" data-param="${p.name}" style="width:100px;"/>`).join(' ');
+                methodList.innerHTML += `<div class="method-item">` +
+                  (alwaysAdd || !m.name.startsWith('_') ? `<button type='button' onclick='addToChain("${group.key}",${idx})'>Add</button> ` : '') +
+                  `<b>${m.name}</b>(${params}) <span style='color:#888;'>${m.doc}</span></div>`;
+            });
+        }
     });
 }
+
+window.addToChain = function(groupKey, idx) {
+    const m = apiMethods[groupKey][idx];
+    // For each param, get the input value from DOM
+    const params = m.params.map(p => {
+        // Try to find the input for this param in the rendered method list
+        let input = document.querySelector(`input[data-param='${p.name}']`);
+        // If not found, fallback to empty string
+        let value = input ? input.value : '';
+        return { name: p.name, value: value };
+    });
+    chain.push({ name: m.name, params });
+    renderChain();
+};
 
 function renderChain() {
     chainList.innerHTML = '';
     chain.forEach((item, idx) => {
         const params = item.params.map(p => JSON.stringify(p.value)).join(', ');
-        chainList.innerHTML += `<li>${item.name}(${params}) 
+        chainList.innerHTML += `<li>${item.name}(${params})
             <button type='button' onclick='moveChainUp(${idx})' ${idx === 0 ? 'disabled' : ''}>↑</button>
             <button type='button' onclick='moveChainDown(${idx})' ${idx === chain.length - 1 ? 'disabled' : ''}>↓</button>
             <button type='button' onclick='removeFromChain(${idx})'>Remove</button>
@@ -202,6 +237,7 @@ function renderChain() {
     });
     renderPreview();
     updateContextGuidance();
+    updateManualChainEditor();
 }
 
 function renderPreview() {
@@ -212,14 +248,6 @@ function renderPreview() {
     });
     previewBox.textContent = code;
 }
-
-window.addToChain = function(idx) {
-    const method = apiMethods[idx];
-    const paramInputs = methodList.querySelectorAll(`.method-item:nth-child(${idx+2}) input`);
-    const params = method.params.map((p, i) => ({...p, value: paramInputs[i].value}));
-    chain.push({ name: method.name, params });
-    renderChain();
-};
 
 window.removeFromChain = function(idx) {
     chain.splice(idx, 1);
@@ -245,12 +273,17 @@ document.getElementById('load-api').onclick = async function() {
     const class_ = document.getElementById('class_').value;
     const resp = await fetch(`/introspect?module=${encodeURIComponent(module)}&class_=${encodeURIComponent(class_)}`);
     const data = await resp.json();
-    apiMethods = data.methods || [];
+    // Accept new grouped structure
+    apiMethods = {
+        analytics: data.analytics || [],
+        filtering: data.filtering || [],
+        utility: data.utility || []
+    };
     renderMethods();
     chain = [];
     renderChain();
     updateContextGuidance();
-};
+};                                          a
 
 document.getElementById('clear-chain').onclick = function() {
     chain = [];
@@ -330,6 +363,27 @@ async function updateContextGuidance() {
 
 document.getElementById('module').onchange = updateContextGuidance;
 document.getElementById('class_').onchange = updateContextGuidance;
+
+function updateManualChainEditor() {
+  document.getElementById('manualChain').value = JSON.stringify(chain, null, 2);
+}
+
+function applyManualChain() {
+  try {
+    const val = document.getElementById('manualChain').value;
+    const parsed = JSON.parse(val);
+    if (Array.isArray(parsed)) {
+      chain = parsed;
+      renderChain();
+      document.getElementById('manualChainStatus').textContent = 'Chain applied!';
+      setTimeout(()=>{document.getElementById('manualChainStatus').textContent='';}, 1500);
+    } else {
+      document.getElementById('manualChainStatus').textContent = 'Must be a JSON array.';
+    }
+  } catch(e) {
+    document.getElementById('manualChainStatus').textContent = 'Invalid JSON: ' + e.message;
+  }
+}
 
 // Load profiles and default API on page load
 window.onload = async () => {

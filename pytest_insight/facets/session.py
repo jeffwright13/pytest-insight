@@ -100,8 +100,15 @@ class SessionInsight(Insight):
         }
 
     def as_dict(self):
-        """Return session-level metrics as a dict for dashboard rendering."""
-        # Example: aggregate metrics for all sessions
+        """
+        Return all sessions as a list of dicts for serialization.
+        """
+        return [s.as_dict() if hasattr(s, 'as_dict') else s.__dict__ for s in self.sessions]
+
+    def metrics_as_dict(self):
+        """
+        Return session-level metrics as a dict for dashboard rendering.
+        """
         metrics = []
         for s in self.sessions:
             total_tests = len(s.test_results)
@@ -115,15 +122,27 @@ class SessionInsight(Insight):
                 "error": 0,
             }
             for t in s.test_results:
-                outcome_counts[t.outcome] = outcome_counts.get(t.outcome, 0) + 1
+                outcome = getattr(t, "outcome", None)
+                if hasattr(outcome, "value"):
+                    outcome_key = outcome.value.lower()
+                else:
+                    outcome_key = str(outcome).lower()
+                if outcome_key in outcome_counts:
+                    outcome_counts[outcome_key] += 1
+            reliability = outcome_counts["passed"] / total_tests if total_tests else None
+            avg_duration = sum(t.duration for t in s.test_results) / total_tests if total_tests else None
             metrics.append(
                 {
-                    "session_id": getattr(s, "session_id", ""),
+                    "session_id": s.session_id,
+                    "sut": getattr(s, "sut_name", ""),
+                    "date": getattr(s, "session_start_time", None),
                     "total_tests": total_tests,
-                    **outcome_counts,
+                    "reliability": reliability,
+                    "avg_duration": avg_duration,
+                    **{k: outcome_counts[k] for k in outcome_counts},
                 }
             )
-        return {"session_metrics": metrics}
+        return metrics
 
     def insight(self, kind: str = "health", tabular: bool = True, **kwargs):
         if kind in {"summary", "health"}:
@@ -135,6 +154,12 @@ class SessionInsight(Insight):
         elif kind == "key_metrics":
             return self.key_metrics()
         raise ValueError(f"Unsupported insight kind: {kind}")
+
+    def available_insights(self):
+        """
+        Return the available insight types for session-level analytics.
+        """
+        return ["summary", "health", "session"]
 
     def filter(self, **criteria):
         """Return a new SessionInsight with sessions matching the given criteria.
@@ -166,3 +191,10 @@ class SessionInsight(Insight):
                 if getattr(s, "session_start_time", None) and getattr(s, "session_start_time") <= criteria["before"]
             ]
         return SessionInsight(filtered)
+
+    def trends(self):
+        """
+        Return a TrendInsight object for these sessions (Everything Is Insight pattern).
+        """
+        from pytest_insight.facets.trend import TrendInsight
+        return TrendInsight(self.sessions)

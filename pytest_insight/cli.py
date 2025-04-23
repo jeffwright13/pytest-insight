@@ -8,8 +8,11 @@ Usage:
 import typer
 from rich import print
 
-app = typer.Typer(help="Pytest Insight: Unified analytics CLI")
+from pytest_insight.core.storage import ProfileManager
+from pytest_insight.insight_api import InsightAPI
 
+# Main app
+app = typer.Typer(help="Pytest Insight: Unified analytics CLI")
 
 @app.command()
 def dev_shell(profile: str = typer.Option(None, help="Profile name to load")):
@@ -71,12 +74,6 @@ def dev_shell(profile: str = typer.Option(None, help="Profile name to load")):
 
 
 @app.command()
-def console(profile: str = typer.Option(None, help="Profile name to load")):
-    """Shortcut: Launch the interactive developer shell (same as dev_shell)."""
-    return dev_shell(profile=profile)
-
-
-@app.command()
 def api_explorer(
     host: str = typer.Option("127.0.0.1", help="Host to serve the API Explorer UI on"),
     port: int = typer.Option(8001, help="Port to serve the API Explorer UI on"),
@@ -104,6 +101,34 @@ def api_explorer(
     except ImportError as e:
         print(f"[red]Error: {e}. Did you install with the [explorer] extra?")
         raise typer.Exit(1)
+
+
+# Report app (for standalone demo)
+report_app = typer.Typer(help="Run analytics reports")
+
+def get_api(profile: str) -> InsightAPI:
+    """Helper to load InsightAPI with the given profile."""
+    return InsightAPI(profile=profile)
+
+@report_app.command("summary")
+def summary(profile: str = typer.Option(None, help="Profile to use")):
+    """Print session summary metrics."""
+    api = get_api(profile)
+    print(api.summary().as_text())
+
+@report_app.command("flakiest")
+def flakiest(profile: str = typer.Option(None, help="Profile to use")):
+    """Show top flaky tests."""
+    api = get_api(profile)
+    print(api.test().flakiest_tests().as_text())
+
+@report_app.command("slowest")
+def slowest(profile: str = typer.Option(None, help="Profile to use")):
+    """Show slowest tests."""
+    api = get_api(profile)
+    print(api.test().slowest_tests().as_text())
+
+
 
 
 if __name__ == "__main__":

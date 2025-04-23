@@ -12,7 +12,7 @@ from fastapi import Body, FastAPI, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from pytest_insight.scripts.introspect_api import introspect_api as introspect_api_markdown
+from pytest_insight.scripts.introspect_api import introspect_api
 from pytest_insight.core.storage import ProfileManager
 from pytest_insight.insight_api import InsightAPI
 import orjson
@@ -32,15 +32,26 @@ def explorer_home(request: Request):
 
 @app.get("/introspect")
 def introspect_api(module: str, class_: str, markdown: bool = False):
-    """Dynamically introspect any API class and return its structure as JSON or Markdown."""
+    """Dynamically introspect any API class and return its structure as JSON or Markdown, grouped by facet and operation type."""
     try:
         mod = importlib.import_module(module)
         api_cls = getattr(mod, class_)
     except (ImportError, AttributeError) as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
+    def categorize_method(name, doc):
+        """Categorize method into analytics, filtering, or utility based on naming and docstring."""
+        analytics_keywords = ["report", "summary", "trend", "insight", "aggregate", "metrics", "compare", "forecast", "pattern"]
+        filter_keywords = ["filter", "with_", "for_", "in_", "by_", "apply"]
+        lname = name.lower()
+        if any(kw in lname for kw in analytics_keywords):
+            return "analytics"
+        if any(lname.startswith(kw) for kw in filter_keywords):
+            return "filtering"
+        return "utility"
+
     def get_api_structure(api_cls):
-        methods = []
+        grouped = {"analytics": [], "filtering": [], "utility": []}
         for name, member in inspect.getmembers(api_cls, predicate=inspect.isfunction):
             if name.startswith("_"):
                 continue
@@ -69,7 +80,8 @@ def introspect_api(module: str, class_: str, markdown: bool = False):
                 sig_str = str(sig)
             else:
                 sig_str = "(builtin or unavailable)"
-            methods.append(
+            category = categorize_method(name, doc)
+            grouped[category].append(
                 {
                     "name": name,
                     "params": params,
@@ -80,7 +92,9 @@ def introspect_api(module: str, class_: str, markdown: bool = False):
         return {
             "class": api_cls.__name__,
             "doc": inspect.getdoc(api_cls) or "",
-            "methods": methods,
+            "analytics": grouped["analytics"],
+            "filtering": grouped["filtering"],
+            "utility": grouped["utility"],
         }
 
     api_struct = get_api_structure(api_cls)
