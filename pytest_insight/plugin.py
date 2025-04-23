@@ -3,16 +3,18 @@ import os
 import platform
 import socket
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union
 
 import pytest
 from _pytest.config import Config
-from _pytest.terminal import TerminalReporter
+from _pytest.reports import TestReport
+from _pytest.terminal import TerminalReporter, WarningReport
 from pytest import ExitCode
 
 from pytest_insight.core.models import (
     RerunTestGroup,
+    TestOutcome,
     TestResult,
     TestSession,
 )
@@ -61,6 +63,12 @@ def pytest_addoption(parser):
         action="store",
         default=None,
         help="Specify the testing system name (overrides hostname)",
+    )
+    group.addoption(
+        "--insight-no-terminal",
+        action="store_true",
+        default=False,
+        help="Disable rendering of pytest-insight analytics in the terminal",
     )
 
 
@@ -125,12 +133,70 @@ def pytest_terminal_summary(
     sut_name = config_values["insight_sut_name"] or "unknown-sut"
     hostname = socket.gethostname()
     testing_system_name = config_values["insight_testing_system"] or hostname
+
+    stats = terminalreporter.stats
     test_results = []
     session_start = None
     session_end = None
     now = datetime.now()
     session_start = session_start or now
     session_end = session_end or now
+
+    # Process all test reports
+    for outcome, reports in stats.items():
+        if (
+            not outcome
+        ):  # looking for empty string "", only populated with 'setup' and 'teardown' reports
+            continue
+
+        if outcome == "warnings":
+            continue  # Handle warnings separately
+
+        for report in reports:
+            if not isinstance(report, TestReport):
+                continue
+
+            # Capture only call-phase or error failures from setup/teardown
+            if report.when == "call" or (
+                report.when in ("setup", "teardown")
+                and report.outcome in ("failed", "error")
+            ):
+                report_time = datetime.fromtimestamp(report.start)
+
+                if session_start is None or report_time < session_start:
+                    session_start = report_time
+                report_end = report_time + timedelta(seconds=report.duration)
+                if session_end is None or report_end > session_end:
+                    session_end = report_end
+
+                test_results.append(
+                    TestResult(
+                        nodeid=report.nodeid,
+                        outcome=(
+                            TestOutcome.from_str(outcome)
+                            if outcome
+                            else TestOutcome.SKIPPED
+                        ),
+                        start_time=report_time,
+                        duration=report.duration,
+                        caplog=getattr(report, "caplog", ""),
+                        capstderr=getattr(report, "capstderr", ""),
+                        capstdout=getattr(report, "capstdout", ""),
+                        longreprtext=str(report.longrepr) if report.longrepr else "",
+                        has_warning=bool(getattr(report, "warning_messages", [])),
+                    )
+                )
+
+    # Try to match individual WarningReport instances to TestResult instances, setting 'has_warning' to True if found
+    if "warnings" in stats:
+        for report in stats["warnings"]:
+            if isinstance(report, WarningReport):
+                # Find the corresponding TestResult instance
+                for test_result in test_results:
+                    if test_result.nodeid == report.nodeid:
+                        test_result.has_warning = True
+                        break
+
     # Always construct a session, even if no test results
     session = TestSession(
         sut_name=sut_name,  # Use config value
@@ -156,15 +222,20 @@ def pytest_terminal_summary(
         test_results=test_results,
     )
     session.testing_system["name"] = testing_system_name
+
     try:
         storage.save_session(session)
     except Exception as e:
         msg = f"Error: Failed to save session - {str(e)}"
         terminalreporter.write_line(msg, red=True)
-        print(f"[pytest-insight] {msg}", file=sys.stderr)
-    # Print summary always including SUT and system name
     # === RESTORE INSIGHT RENDERING ===
     terminal_config = load_terminal_config()
+    if config.getoption("insight_no_terminal", False):
+        print("[pytest-insight] Skipping analytics rendering")
+        return
+    else:
+        print("[pytest-insight] Rendering analytics in terminal")
+
     if terminal_output_enabled(terminal_config):
         api = InsightAPI([session])
         output_str = render_insights_in_terminal(api, terminal_config)
