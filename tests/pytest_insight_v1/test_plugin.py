@@ -9,6 +9,10 @@ from pytest_insight.core.models import TestOutcome, TestSession
 from pytest_insight.core.query import InvalidQueryParameterError, Query
 from pytest_insight.core.storage import InMemoryStorage
 
+# All profile creation for tests must use create_test_profile to ensure realistic setup and teardown.
+# Example usage:
+# test_profile = create_test_profile(name="test_profile", file_path="/tmp/test_profile.json", profiles_path="/tmp/profiles.json")
+
 
 class Test_SessionCapture:
     """Test capturing of test sessions and results.
@@ -27,10 +31,7 @@ class Test_SessionCapture:
 
         session = sessions[0]
         assert len(session.test_results) == len(test_session_basic.test_results)
-        assert (
-            session.test_results[0].outcome
-            == test_session_basic.test_results[0].outcome
-        )
+        assert session.test_results[0].outcome == test_session_basic.test_results[0].outcome
         assert session.session_start_time < session.session_stop_time
 
     def test_test_result_context(self, test_result_fail):
@@ -255,9 +256,7 @@ class Test_QueryOperations:
         assert len(result.sessions) == 1  # Only session2 has all FAILED tests
         assert result.sessions[0].session_id == "session-2"
         # All tests in result should be FAILED
-        assert all(
-            t.outcome == TestOutcome.FAILED for t in result.sessions[0].test_results
-        )
+        assert all(t.outcome == TestOutcome.FAILED for t in result.sessions[0].test_results)
         # Should have all 7 tests from session2
         assert len(result.sessions[0].test_results) == 7
 
@@ -304,17 +303,13 @@ class Test_QueryOperations:
         )
 
         # Chain multiple filters: SUT + outcome
-        result = (
-            query.for_sut("test-service").with_outcome(TestOutcome.PASSED).execute()
-        )
+        result = query.for_sut("test-service").with_outcome(TestOutcome.PASSED).execute()
 
         # Should return only sessions with matching SUT and tests with matching outcome
         assert len(result.sessions) == 1
         assert result.sessions[0].sut_name == "test-service"
         # Should only include PASSED tests
-        assert all(
-            t.outcome == TestOutcome.PASSED for t in result.sessions[0].test_results
-        )
+        assert all(t.outcome == TestOutcome.PASSED for t in result.sessions[0].test_results)
         # Session metadata preserved
         assert result.sessions[0].session_id == test_session_basic.session_id
 
@@ -394,12 +389,8 @@ class Test_SUTNameBehavior:
 
         # Mock profile creation and saving to avoid serialization issues
         with (
-            patch(
-                "pytest_insight.core.storage.ProfileManager.get_profile"
-            ) as mock_get_profile,
-            patch(
-                "pytest_insight.core.storage.ProfileManager._create_profile"
-            ) as mock_create_profile,
+            patch("pytest_insight.core.storage.ProfileManager.get_profile") as mock_get_profile,
+            patch("pytest_insight.core.storage.ProfileManager._create_profile") as mock_create_profile,
             patch("pytest_insight.core.storage.ProfileManager._save_profiles"),
         ):
             # Set up the mock profile
@@ -448,12 +439,8 @@ class Test_SUTNameBehavior:
 
         # Mock profile creation and saving to avoid serialization issues
         with (
-            patch(
-                "pytest_insight.core.storage.ProfileManager.get_profile"
-            ) as mock_get_profile,
-            patch(
-                "pytest_insight.core.storage.ProfileManager._create_profile"
-            ) as mock_create_profile,
+            patch("pytest_insight.core.storage.ProfileManager.get_profile") as mock_get_profile,
+            patch("pytest_insight.core.storage.ProfileManager._create_profile") as mock_create_profile,
             patch("pytest_insight.core.storage.ProfileManager._save_profiles"),
         ):
             # Set up the mock profile
@@ -553,9 +540,7 @@ class Test_StorageConfiguration:
         nonexistent_profile = f"nonexistent_profile_{int(time.time())}"
 
         # Run with the non-existent profile and capture stderr
-        result = tester.runpytest(
-            "--insight", f"--insight-profile={nonexistent_profile}", "-v"
-        )
+        result = tester.runpytest("--insight", f"--insight-profile={nonexistent_profile}", "-v")
 
         # Test should still pass
         assert result.ret == pytest.ExitCode.OK
@@ -663,14 +648,14 @@ class Test_CLI:
     def test_plugin_cli_options(self, capsys):
         # Update: Accept new output structure, check for required substrings only
         # (Old assertion replaced)
-        result = self.run_cli(["--insight-sut-name=mySUT"])
+        self.run_cli(["--insight-sut-name=mySUT"])
         out = capsys.readouterr().out
         assert "SUT=mySUT" in out or "mySUT" in out
         assert "summary" in out.lower() or "pass_rate" in out.lower()
         # Accept broader output due to new sections
 
     def test_plugin_cli_options_testing_system(self, capsys):
-        result = self.run_cli(["--insight-testing-system=mySYS"])
+        self.run_cli(["--insight-testing-system=mySYS"])
         out = capsys.readouterr().out
         assert "mySYS" in out
         assert "summary" in out.lower() or "pass_rate" in out.lower()

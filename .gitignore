@@ -42,3 +42,4 @@ Archive.zip
 
 # windsurf rules
 .windsurfrules
+pytest_insight_demo.db

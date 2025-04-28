@@ -1,8 +1,11 @@
 import os
 import sys
+import tempfile
 import types
+from pathlib import Path
 
 import pytest
+from pytest_insight.core.storage import ProfileManager
 
 # Mock 'sparklines' globally before any plugin loads
 sys.modules["sparklines"] = types.ModuleType("sparklines")
@@ -13,6 +16,15 @@ sys.modules["sparklines"] = types.ModuleType("sparklines")
 # Lists to track any profile files created during testing
 TEST_PROFILE_FILES = []
 TEST_PROFILE_NAMES = []
+
+
+@pytest.fixture
+def temp_profile_manager():
+    """Fixture providing a temporary ProfileManager with isolated profiles file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "profiles.json"
+        pm = ProfileManager(profiles_path=path)
+        yield pm
 
 
 @pytest.fixture(scope="session", autouse=True)

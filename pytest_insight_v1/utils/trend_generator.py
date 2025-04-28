@@ -13,7 +13,8 @@ from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from pytest_insight.core.models import TestOutcome, TestResult, TestSession
-from pytest_insight.utils.db_generator import PracticeDataGenerator
+# from pytest_insight.utils.db_generator import PracticeDataGenerator
+from db_generator import PracticeDataGenerator
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table

@@ -40,28 +40,28 @@ def render_summary(api, section_cfg, terminal_config, return_panel=False):
     if not summary or not isinstance(summary, dict) or not getattr(summary, "keys", lambda: [])():
         if hasattr(api, "_summary"):
             summary = getattr(api, "_summary", {})
-    # Attempt to extract SUT and system name for panel title
-    sut_name = None
-    system_name = None
-    if hasattr(api, "session"):
-        session_obj = api.session()
-        if hasattr(session_obj, "sessions") and session_obj.sessions:
-            first_sess = session_obj.sessions[0]
-            sut_name = getattr(first_sess, "sut_name", None)
-            system_name = getattr(first_sess, "testing_system", None)
-            if isinstance(system_name, dict):
-                system_name = system_name.get("name") or next(iter(system_name.values()), None)
-    panel_title = "[green]Summary"
-    if sut_name or system_name:
-        panel_title += " ("
-        if sut_name:
-            panel_title += f"SUT={sut_name}"
-        if system_name:
-            if sut_name:
-                panel_title += " "
-            panel_title += f"System={system_name}"
-        panel_title += ")"
     if isinstance(summary, dict):
+        # Attempt to extract SUT and system name for panel title
+        sut_name = None
+        system_name = None
+        if hasattr(api, "session"):
+            session_obj = api.session()
+            if hasattr(session_obj, "sessions") and session_obj.sessions:
+                first_sess = session_obj.sessions[0]
+                sut_name = getattr(first_sess, "sut_name", None)
+                system_name = getattr(first_sess, "testing_system", None)
+                if isinstance(system_name, dict):
+                    system_name = system_name.get("name") or next(iter(system_name.values()), None)
+        panel_title = "[green]Summary"
+        if sut_name or system_name:
+            panel_title += " ("
+            if sut_name:
+                panel_title += f"SUT={sut_name}"
+            if system_name:
+                if sut_name:
+                    panel_title += " "
+                panel_title += f"System={system_name}"
+            panel_title += ")"
         display_keys = section_cfg.get("fields")
         if not display_keys:
             display_keys = [
@@ -110,6 +110,24 @@ def render_summary(api, section_cfg, terminal_config, return_panel=False):
                 tablefmt="github",
                 showindex=False,
             )
+    elif isinstance(summary, list):
+        # Fallback: just show the list as a table
+        if summary:
+            out = tabulate(summary, headers="keys", tablefmt="github", showindex=False)
+        else:
+            out = "(No data)"
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(out, style="cyan"))
+            panel = Panel(table, title="[cyan]Summary", border_style="cyan")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return out
     else:
         return str(summary)
 
@@ -117,7 +135,13 @@ def render_summary(api, section_cfg, terminal_config, return_panel=False):
 def render_slowest_tests(api, section_cfg, terminal_config, return_panel=False):
     test_insights = api.session_dict()
     limit = section_cfg.get("limit", 3)
-    slowest = test_insights.get("slowest_tests", [])[:limit]
+    # Patch: handle both dict and list for test_insights
+    if isinstance(test_insights, dict):
+        slowest = test_insights.get("slowest_tests", [])[:limit]
+    elif isinstance(test_insights, list):
+        slowest = test_insights[:limit]
+    else:
+        slowest = []
     if slowest:
         if terminal_config.get("rich", True) and RICH_AVAILABLE:
             table = Table(show_header=True, header_style="bold magenta", box=box.ASCII2)
@@ -160,21 +184,26 @@ def render_slowest_tests(api, section_cfg, terminal_config, return_panel=False):
 def render_unreliable_tests(api, section_cfg, terminal_config, return_panel=False):
     test_insights = api.session_dict()
     # Fallback for DummyAPI in tests
-    least_reliable = test_insights.get("unreliable_tests")
-    if least_reliable is None and hasattr(api, "_unreliable"):
-        least_reliable = getattr(api, "_unreliable", [])
+    if isinstance(test_insights, dict):
+        least_reliable = test_insights.get("unreliable_tests")
+        if least_reliable is None and hasattr(api, "_unreliable"):
+            least_reliable = getattr(api, "_unreliable", [])
+        else:
+            least_reliable = least_reliable or []
+    elif isinstance(test_insights, list):
+        least_reliable = test_insights
     else:
-        least_reliable = least_reliable or []
+        least_reliable = []
     limit = section_cfg.get("limit", 3)
     columns = section_cfg.get("columns", ["nodeid", "reliability", "runs", "failures", "unreliable_rate"])
-    table_data = [{k: d.get(k, "") for k in columns} for d in least_reliable[:limit]] if least_reliable else []
-    if table_data:
+    least_reliable = least_reliable[:limit]
+    if least_reliable:
         if terminal_config.get("rich", True) and RICH_AVAILABLE:
             table = Table(show_header=True, header_style="bold red", box=box.ASCII2)
-            for col in columns:
-                table.add_column(str(col), style="yellow")
-            for row in table_data:
-                table.add_row(*[str(row[k]) for k in columns])
+            for c in columns:
+                table.add_column(str(c), style="yellow")
+            for row in least_reliable:
+                table.add_row(*[str(row.get(c, "")) for c in columns])
             panel = Panel(table, title="[red]Least Reliable Tests", border_style="red")
             if return_panel:
                 return panel
@@ -183,13 +212,13 @@ def render_unreliable_tests(api, section_cfg, terminal_config, return_panel=Fals
             console.print(panel)
             return buffer.getvalue()
         else:
-            return tabulate(table_data, headers="keys", tablefmt="github", showindex=False)
+            return tabulate(least_reliable, headers=columns, tablefmt="github", showindex=False)
     else:
         if terminal_config.get("rich", True) and RICH_AVAILABLE:
             table = Table(show_header=True, header_style="bold red", box=box.ASCII2)
-            for col in columns:
-                table.add_column(str(col), style="yellow")
-            table.add_row(*["(No data)" if i == 0 else "-" for i in range(len(columns))])
+            for h in columns:
+                table.add_column(h, style="yellow")
+            table.add_row("(No data)", "-")
             panel = Panel(table, title="[red]Least Reliable Tests", border_style="red")
             if return_panel:
                 return panel
@@ -211,8 +240,15 @@ def render_unreliable_tests(api, section_cfg, terminal_config, return_panel=Fals
 
 def render_trends(api, section_cfg, terminal_config, return_panel=False):
     trend_insights = api.session_dict()
-    duration_trends = trend_insights.get("duration_trends", {}).get("avg_duration_by_day", {})
-    failure_trends = trend_insights.get("failure_trends", {}).get("failures_by_day", {})
+    if isinstance(trend_insights, dict):
+        duration_trends = trend_insights.get("duration_trends", {}).get("avg_duration_by_day", {})
+        failure_trends = trend_insights.get("failure_trends", {}).get("failures_by_day", {})
+    elif isinstance(trend_insights, list):
+        duration_trends = {}
+        failure_trends = {}
+    else:
+        duration_trends = {}
+        failure_trends = {}
     trend_lines = []
     for trend_name, values in {
         "avg_duration": duration_trends,
@@ -223,8 +259,8 @@ def render_trends(api, section_cfg, terminal_config, return_panel=False):
         elif isinstance(values, (list, tuple)):
             series = values
         else:
-            series = [values]
-        line = f"{trend_name}: {sparkline(series)}  ({series[-1] if series else ''})"
+            series = []
+        line = f"{trend_name}: {sparklines(series)[0] if series else '(no data)'}"
         trend_lines.append(line)
     if terminal_config.get("rich", True) and RICH_AVAILABLE:
         table = Table(show_header=False, box=box.ASCII2)
@@ -267,6 +303,24 @@ def render_session(api, section_cfg, terminal_config, return_panel=False):
                 tablefmt="github",
                 showindex=False,
             )
+    elif isinstance(session, list):
+        # Fallback: just show the list as a table
+        if session:
+            out = tabulate(session, headers="keys", tablefmt="github", showindex=False)
+        else:
+            out = "(No data)"
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(out, style="blue"))
+            panel = Panel(table, title="[blue]Session", border_style="blue")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return out
     else:
         return str(session)
 
@@ -284,13 +338,29 @@ def render_test(api, section_cfg, terminal_config, return_panel=False):
         if slowest:
             lines.append("Slowest:")
             lines.append(tabulate(slowest, headers="keys", tablefmt="github", showindex=False))
-        if not lines:
-            lines.append("No test-level data.")
         out = "\n".join(lines)
         if terminal_config.get("rich", True) and RICH_AVAILABLE:
             table = Table(show_header=False, box=box.ASCII2)
             for line in lines:
                 table.add_row(Text(line, style="yellow"))
+            panel = Panel(table, title="[yellow]Test", border_style="yellow")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return out
+    elif isinstance(test_insights, list):
+        # Fallback: just show the list as a table
+        if test_insights:
+            out = tabulate(test_insights, headers="keys", tablefmt="github", showindex=False)
+        else:
+            out = "(No data)"
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(out, style="yellow"))
             panel = Panel(table, title="[yellow]Test", border_style="yellow")
             if return_panel:
                 return panel
@@ -312,64 +382,148 @@ def render_trend(api, section_cfg, terminal_config, return_panel=False):
 
 def render_compare(api, section_cfg, terminal_config, return_panel=False):
     comp_insights = api.session_dict()
-    if terminal_config.get("rich", True) and RICH_AVAILABLE:
-        table = Table(show_header=False, box=box.ASCII2)
-        table.add_row(Text(str(comp_insights), style="magenta"))
-        panel = Panel(table, title="[magenta]Compare", border_style="magenta")
-        if return_panel:
-            return panel
-        buffer = io.StringIO()
-        console = Console(record=True, force_terminal=True, file=buffer)
-        console.print(panel)
-        return buffer.getvalue()
+    if isinstance(comp_insights, dict):
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(str(comp_insights), style="magenta"))
+            panel = Panel(table, title="[magenta]Compare", border_style="magenta")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return str(comp_insights)
+    elif isinstance(comp_insights, list):
+        # Fallback: just show the list as a table
+        if comp_insights:
+            out = tabulate(comp_insights, headers="keys", tablefmt="github", showindex=False)
+        else:
+            out = "(No data)"
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(out, style="magenta"))
+            panel = Panel(table, title="[magenta]Compare", border_style="magenta")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return out
     else:
         return str(comp_insights)
 
 
 def render_predictive(api, section_cfg, terminal_config, return_panel=False):
     pred_insights = api.session_dict()
-    if terminal_config.get("rich", True) and RICH_AVAILABLE:
-        table = Table(show_header=False, box=box.ASCII2)
-        table.add_row(Text(str(pred_insights), style="red"))
-        panel = Panel(table, title="[red]Predictive", border_style="red")
-        if return_panel:
-            return panel
-        buffer = io.StringIO()
-        console = Console(record=True, force_terminal=True, file=buffer)
-        console.print(panel)
-        return buffer.getvalue()
+    if isinstance(pred_insights, dict):
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(str(pred_insights), style="red"))
+            panel = Panel(table, title="[red]Predictive", border_style="red")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return str(pred_insights)
+    elif isinstance(pred_insights, list):
+        # Fallback: just show the list as a table
+        if pred_insights:
+            out = tabulate(pred_insights, headers="keys", tablefmt="github", showindex=False)
+        else:
+            out = "(No data)"
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(out, style="red"))
+            panel = Panel(table, title="[red]Predictive", border_style="red")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return out
     else:
         return str(pred_insights)
 
 
 def render_meta(api, section_cfg, terminal_config, return_panel=False):
     meta_insights = api.session_dict()
-    if terminal_config.get("rich", True) and RICH_AVAILABLE:
-        table = Table(show_header=False, box=box.ASCII2)
-        table.add_row(Text(str(meta_insights), style="cyan"))
-        panel = Panel(table, title="[cyan]Meta", border_style="cyan")
-        if return_panel:
-            return panel
-        buffer = io.StringIO()
-        console = Console(record=True, force_terminal=True, file=buffer)
-        console.print(panel)
-        return buffer.getvalue()
+    if isinstance(meta_insights, dict):
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(str(meta_insights), style="cyan"))
+            panel = Panel(table, title="[cyan]Meta", border_style="cyan")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return str(meta_insights)
+    elif isinstance(meta_insights, list):
+        # Fallback: just show the list as a table
+        if meta_insights:
+            out = tabulate(meta_insights, headers="keys", tablefmt="github", showindex=False)
+        else:
+            out = "(No data)"
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(out, style="cyan"))
+            panel = Panel(table, title="[cyan]Meta", border_style="cyan")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return out
     else:
         return str(meta_insights)
 
 
 def render_temporal(api, section_cfg, terminal_config, return_panel=False):
     temporal_insights = api.session_dict()
-    if terminal_config.get("rich", True) and RICH_AVAILABLE:
-        table = Table(show_header=False, box=box.ASCII2)
-        table.add_row(Text(str(temporal_insights), style="blue"))
-        panel = Panel(table, title="[blue]Temporal", border_style="blue")
-        if return_panel:
-            return panel
-        buffer = io.StringIO()
-        console = Console(record=True, force_terminal=True, file=buffer)
-        console.print(panel)
-        return buffer.getvalue()
+    if isinstance(temporal_insights, dict):
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(str(temporal_insights), style="blue"))
+            panel = Panel(table, title="[blue]Temporal", border_style="blue")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return str(temporal_insights)
+    elif isinstance(temporal_insights, list):
+        # Fallback: just show the list as a table
+        if temporal_insights:
+            out = tabulate(temporal_insights, headers="keys", tablefmt="github", showindex=False)
+        else:
+            out = "(No data)"
+        if terminal_config.get("rich", True) and RICH_AVAILABLE:
+            table = Table(show_header=False, box=box.ASCII2)
+            table.add_row(Text(out, style="blue"))
+            panel = Panel(table, title="[blue]Temporal", border_style="blue")
+            if return_panel:
+                return panel
+            buffer = io.StringIO()
+            console = Console(record=True, force_terminal=True, file=buffer)
+            console.print(panel)
+            return buffer.getvalue()
+        else:
+            return out
     else:
         return str(temporal_insights)
 

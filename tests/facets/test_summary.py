@@ -3,6 +3,10 @@ from types import SimpleNamespace
 import pytest
 from pytest_insight.facets.summary import SummaryInsight
 
+# All profile creation for tests must use create_test_profile to ensure realistic setup and teardown.
+# Example usage:
+# test_profile = create_test_profile(name="test_profile", file_path="/tmp/test_profile.json", profiles_path="/tmp/profiles.json")
+
 
 class FakeEnum:
     def __init__(self, value):

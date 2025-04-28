@@ -13,6 +13,10 @@ from fastapi.testclient import TestClient
 from pytest_insight.core.storage import ProfileManager, StorageProfile
 from pytest_insight.rest_api.high_level_api import app
 
+# All profile creation for tests must use create_test_profile to ensure realistic setup and teardown.
+# Example usage:
+# test_profile = create_test_profile(name="test_profile", file_path="/tmp/test_profile.json", profiles_path="/tmp/profiles.json")
+
 # Create a test client
 client = TestClient(app)
 
@@ -26,13 +30,9 @@ class TestAPIEndpoints:
         self.mock_profile_manager = MagicMock(spec=ProfileManager)
 
         # Create mock profiles
-        self.default_profile = StorageProfile(
-            name="default", storage_type="json", file_path="/tmp/default.json"
-        )
+        self.default_profile = StorageProfile(name="default", storage_type="json", file_path="/tmp/default.json")
 
-        self.test_profile = StorageProfile(
-            name="test_profile", storage_type="json", file_path="/tmp/test_profile.json"
-        )
+        self.test_profile = StorageProfile(name="test_profile", storage_type="json", file_path="/tmp/test_profile.json")
 
         # Configure the mock profile manager
         self.mock_profile_manager.get_active_profile.return_value = self.default_profile
@@ -49,9 +49,7 @@ class TestAPIEndpoints:
         mock_get_profile_manager.return_value = self.mock_profile_manager
 
         # Mock the InsightAPI.query().execute() call
-        with patch(
-            "pytest_insight.rest_api.high_level_api.InsightAPI"
-        ) as mock_api_class:
+        with patch("pytest_insight.rest_api.high_level_api.InsightAPI") as mock_api_class:
             # The InsightAPI will be initialized with the active profile name
             mock_api = MagicMock()
             mock_api_class.return_value = mock_api
@@ -87,9 +85,7 @@ class TestAPIEndpoints:
         mock_get_profile_manager.return_value = self.mock_profile_manager
 
         # Mock the InsightAPI.with_profile().query().execute() calls
-        with patch(
-            "pytest_insight.rest_api.high_level_api.InsightAPI"
-        ) as mock_api_class:
+        with patch("pytest_insight.rest_api.high_level_api.InsightAPI") as mock_api_class:
             # Setup for default profile
             mock_default_api = MagicMock()
             mock_api_class.return_value = mock_default_api
@@ -151,9 +147,7 @@ class TestAPIEndpoints:
         self.mock_profile_manager.get_profile.return_value = self.default_profile
 
         # Mock the InsightAPI to raise an exception
-        with patch(
-            "pytest_insight.rest_api.high_level_api.InsightAPI"
-        ) as mock_api_class:
+        with patch("pytest_insight.rest_api.high_level_api.InsightAPI") as mock_api_class:
             mock_api = MagicMock()
             mock_api_class.return_value = mock_api
 
@@ -196,9 +190,7 @@ class TestAPIEndpoints:
                 # Verify the correct methods were called
                 mock_get_profile_manager.assert_called_once()
                 self.mock_profile_manager.get_active_profile.assert_called_once()
-                self.mock_profile_manager.get_profile.assert_called_with(
-                    self.default_profile.name
-                )
+                self.mock_profile_manager.get_profile.assert_called_with(self.default_profile.name)
                 mock_api.query.assert_called_once()
                 mock_query.execute.assert_called_once()
 
@@ -215,9 +207,7 @@ class TestAPIEndpoints:
 
         # Create a temporary test file for env profile
         env_file_path = "/tmp/env_profile.json"
-        env_profile = StorageProfile(
-            name="env_profile", storage_type="json", file_path=env_file_path
-        )
+        env_profile = StorageProfile(name="env_profile", storage_type="json", file_path=env_file_path)
 
         # Configure the mock profile manager to return the env_profile when requested
         self.mock_profile_manager.get_profile.side_effect = lambda name: (
@@ -226,9 +216,7 @@ class TestAPIEndpoints:
 
         # Mock the InsightAPI calls
         with (
-            patch(
-                "pytest_insight.rest_api.high_level_api.InsightAPI"
-            ) as mock_api_class,
+            patch("pytest_insight.rest_api.high_level_api.InsightAPI") as mock_api_class,
             patch.dict(os.environ, {"PYTEST_INSIGHT_PROFILE": "env_profile"}),
         ):
             # Setup for default profile API
@@ -298,9 +286,7 @@ class TestAPIEndpoints:
         mock_get_profile_manager.return_value = self.mock_profile_manager
 
         # Mock the InsightAPI to return no SUTs
-        with patch(
-            "pytest_insight.rest_api.high_level_api.InsightAPI"
-        ) as mock_api_class:
+        with patch("pytest_insight.rest_api.high_level_api.InsightAPI") as mock_api_class:
             # The InsightAPI will be initialized with the active profile name
             mock_api = MagicMock()
             mock_api_class.return_value = mock_api

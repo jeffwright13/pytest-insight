@@ -165,3 +165,55 @@ def test_comparative_dict_returns_dict(sample_sessions):
     api = InsightAPI(sessions=sample_sessions)
     comparative = api.comparative_dict()
     assert isinstance(comparative, dict)
+
+
+def test_api_profile_creation(tmp_path):
+    """Test that InsightAPI can load sessions from a newly created profile (when no profiles.json exists)."""
+    from pytest_insight.core.storage import ProfileManager
+
+    profiles_path = tmp_path / "profiles.json"
+    pm = ProfileManager(profiles_path=profiles_path)
+    assert not profiles_path.exists(), "profiles.json should not exist initially"
+    pm.create_profile("api_profile", "json")
+    assert profiles_path.exists(), "profiles.json should be created after API profile creation"
+    # Now use InsightAPI to load from this profile
+    from pytest_insight.insight_api import InsightAPI
+
+    api = InsightAPI(profile="api_profile")
+    # Should load with zero sessions, but not error
+    assert hasattr(api, "_sessions")
+    assert isinstance(api._sessions, list)
+
+
+def test_api_explicit_create_profile(tmp_path):
+    """Test that InsightAPI.create_profile explicitly creates a new profile and returns its metadata."""
+    import uuid
+
+    from pytest_insight.insight_api import InsightAPI
+
+    profiles_path = tmp_path / "profiles.json"
+    # Patch environment to use our test profiles path
+    import os
+
+    os.environ["PYTEST_INSIGHT_PROFILES_PATH"] = str(profiles_path)
+    # Reset the profile manager singleton to ensure isolation
+    import pytest_insight.core.storage as storage_mod
+
+    storage_mod._profile_manager = None
+    api = InsightAPI()
+    profile_name = f"explicit_profile_{uuid.uuid4().hex}"
+    # Create profile via API
+    meta = api.create_profile(profile_name, storage_type="json")
+    assert meta["name"] == profile_name
+    assert meta["storage_type"] == "json"
+    # Should now exist in manager
+    from pytest_insight.core.storage import get_profile_manager
+
+    pm = get_profile_manager(force_reload=True)
+    assert profile_name in pm.profiles
+    # Creating the same profile again should raise ValueError
+    with pytest.raises(ValueError):
+        api.create_profile(profile_name, storage_type="json")
+    # Clean up env
+    del os.environ["PYTEST_INSIGHT_PROFILES_PATH"]
+    storage_mod._profile_manager = None

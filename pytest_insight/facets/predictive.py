@@ -1,4 +1,5 @@
 from collections import defaultdict
+
 import numpy as np
 
 from pytest_insight.core.insight_base import Insight
@@ -38,6 +39,13 @@ class PredictiveInsight(Insight):
             reliability = passes / total_tests if total_tests else None
             daily_reliability.append((date, reliability))
         if len(daily_reliability) < 2:
+            if len(daily_reliability) == 1:
+                only_rel = daily_reliability[0][1]
+                return {
+                    "future_reliability": only_rel,
+                    "trend": None,
+                    "warning": "Only one session available; trend not computed.",
+                }
             return {
                 "future_reliability": None,
                 "trend": None,
@@ -68,6 +76,7 @@ class PredictiveInsight(Insight):
     def insight(self, kind: str = "predictive_failure", tabular: bool = True, **kwargs):
         if kind in {"summary", "health"}:
             from pytest_insight.facets.summary import SummaryInsight
+
             return SummaryInsight(self._sessions).as_dict()
         if kind == "predictive_failure":
             forecast = self.forecast()

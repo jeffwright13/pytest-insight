@@ -10,6 +10,7 @@ from pytest_insight.core.storage import (
     JSONStorage,
     get_storage_instance,
 )
+from tests.utils.profile_factory import create_test_profile
 
 
 @pytest.fixture
@@ -28,11 +29,7 @@ def in_memory_storage():
 @pytest.mark.parametrize("storage_class", [InMemoryStorage, JSONStorage])
 def test_save_and_load_session(storage_class, tmp_path, test_session_basic):
     """Test saving and loading a session in both storage types."""
-    storage = (
-        storage_class(tmp_path / "sessions.json")
-        if storage_class == JSONStorage
-        else storage_class()
-    )
+    storage = storage_class(tmp_path / "sessions.json") if storage_class == JSONStorage else storage_class()
 
     assert storage.load_sessions() == []  # Should start empty
 
@@ -84,14 +81,15 @@ def test_get_storage_instance_json(mocker, tmp_path):
     profile_manager = ProfileManager(config_path=config_path)
 
     # Create a test profile
-    profile_manager._create_profile(
-        "test-profile", "json", str(tmp_path / "sessions.json")
-    )
+    profile_manager.profiles = {
+        "test-profile": create_test_profile(
+            name="test-profile", file_path=str(tmp_path / "sessions.json"), profiles_path=tmp_path / "profiles.json"
+        )
+    }
+    profile_manager.active_profile_name = "test-profile"
 
     # Mock get_profile_manager to return our test instance
-    mocker.patch(
-        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
-    )
+    mocker.patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager)
 
     # Test with profile_name
     storage = get_storage_instance(profile_name="test-profile")
@@ -167,17 +165,13 @@ def test_save_sessions_bulk(tmp_path, get_test_time):
     # Verify all sessions were saved
     loaded_sessions = storage.load_sessions()
     assert len(loaded_sessions) == 5
-    assert {s.session_id for s in loaded_sessions} == {
-        f"bulk-test-{i}" for i in range(5)
-    }
+    assert {s.session_id for s in loaded_sessions} == {f"bulk-test-{i}" for i in range(5)}
 
 
 def test_handles_invalid_data_format(mocker, json_storage):
     """Test handling of invalid data format (non-list JSON)."""
     # Mock the _read_json_safely method instead of read_text
-    mocker.patch.object(
-        json_storage, "_read_json_safely", return_value={"not": "a list"}
-    )
+    mocker.patch.object(json_storage, "_read_json_safely", return_value={"not": "a list"})
 
     # Should handle gracefully and return empty list
     assert json_storage.load_sessions() == []
@@ -215,9 +209,7 @@ def test_handles_invalid_session_data(mocker, json_storage, get_test_time):
     assert sessions[0].session_id == "valid-test"
 
     # Verify error was printed
-    print_mock.assert_any_call(
-        mocker.ANY
-    )  # Any call with string containing error message
+    print_mock.assert_any_call(mocker.ANY)  # Any call with string containing error message
 
 
 def test_backup_on_json_decode_error(mocker, tmp_path):
@@ -294,12 +286,15 @@ def test_get_storage_instance_with_env_vars(mocker, tmp_path):
     # Create a test profile
     env_profile_name = "env-profile"
     custom_path = str(tmp_path / "custom_storage.json")
-    profile_manager._create_profile(env_profile_name, "json", custom_path)
+    profile_manager.profiles = {
+        env_profile_name: create_test_profile(
+            name=env_profile_name, file_path=custom_path, profiles_path=tmp_path / "profiles.json"
+        )
+    }
+    profile_manager.active_profile_name = env_profile_name
 
     # Mock get_profile_manager to return our test instance
-    mocker.patch(
-        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
-    )
+    mocker.patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager)
 
     # Mock environment variable for profile
     mocker.patch.dict(
@@ -324,14 +319,15 @@ def test_get_storage_instance_invalid_type(mocker, tmp_path):
     profile_manager = ProfileManager(config_path=config_path)
 
     # Create a test profile with invalid storage type
-    profile_manager._create_profile(
-        "invalid-profile", "invalid_type", str(tmp_path / "invalid.json")
-    )
+    profile_manager.profiles = {
+        "invalid-profile": create_test_profile(
+            name="invalid-profile", storage_type="invalid_type", profiles_path=tmp_path / "profiles.json"
+        )
+    }
+    profile_manager.active_profile_name = "invalid-profile"
 
     # Mock get_profile_manager to return our test instance
-    mocker.patch(
-        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
-    )
+    mocker.patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager)
 
     # Mock environment variable to be empty
     mocker.patch.dict("os.environ", {"PYTEST_INSIGHT_PROFILE": ""})
@@ -413,15 +409,6 @@ def test_selective_clear_sessions_in_memory(in_memory_storage, get_test_time):
     assert remaining_ids == {"clear-test-1", "clear-test-3"}
 
 
-@pytest.fixture
-def profile_manager(tmp_path):
-    """Fixture to create a ProfileManager with a temporary config file."""
-    from pytest_insight.core.storage import ProfileManager
-
-    config_path = tmp_path / "profiles.json"
-    return ProfileManager(config_path=config_path)
-
-
 class TestStorageProfile:
     """Tests for the StorageProfile class."""
 
@@ -436,9 +423,7 @@ class TestStorageProfile:
         profile = StorageProfile("test-profile")
         assert profile.name == "test-profile"
         assert profile.storage_type == "json"
-        expected_path = str(
-            Path.home() / ".pytest_insight" / "profiles" / "test-profile.json"
-        )
+        expected_path = str(Path.home() / ".pytest_insight" / "profiles" / "test-profile.json")
         assert profile.file_path == expected_path
 
         # Check timestamp and user fields are set
@@ -446,9 +431,7 @@ class TestStorageProfile:
         assert isinstance(profile.last_modified, datetime)
         assert profile.created_by is not None
         assert profile.last_modified_by is not None
-        assert (
-            profile.created_by == profile.last_modified_by
-        )  # Same user for new profile
+        assert profile.created_by == profile.last_modified_by  # Same user for new profile
 
         # Create with custom values
         profile = StorageProfile("custom", "memory", "/custom/path")
@@ -571,32 +554,41 @@ class TestProfileManager:
         assert "default" in profiles
         assert profile_manager.active_profile_name == "default"
 
-    def test_create_profile(self, profile_manager):
+    def test_create_profile(self, tmp_path):
         """Test creating a new profile."""
         # Create a new profile
-        profile = profile_manager._create_profile("test", "json", "/test/path")
+        profile = create_test_profile(
+            name="test", file_path=str(tmp_path / "test.json"), profiles_path=tmp_path / "profiles.json"
+        )
         assert profile.name == "test"
         assert profile.storage_type == "json"
-        assert profile.file_path == "/test/path"
+        assert profile.file_path == str(tmp_path / "test.json")
 
         # Profile should be in the list
         profiles = profile_manager.list_profiles()
         assert "test" in profiles
-        assert profiles["test"].file_path == "/test/path"
+        assert profiles["test"].file_path == str(tmp_path / "test.json")
 
         # Creating a duplicate profile should raise an error
         with pytest.raises(ValueError, match="Profile 'test' already exists"):
-            profile_manager._create_profile("test", "memory")
+            create_test_profile(
+                name="test", file_path=str(tmp_path / "test.json"), profiles_path=tmp_path / "profiles.json"
+            )
 
     def test_get_profile(self, profile_manager):
         """Test getting a profile."""
         # Create a test profile
-        profile_manager._create_profile("test", "json", "/test/path")
+        profile = create_test_profile(
+            name="test",
+            file_path=str(profile_manager.profiles_path.parent / "test.json"),
+            profiles_path=profile_manager.profiles_path,
+        )
+        profile_manager.profiles = {"test": profile}
 
         # Get by name
         profile = profile_manager.get_profile("test")
         assert profile.name == "test"
-        assert profile.file_path == "/test/path"
+        assert profile.file_path == str(profile_manager.profiles_path.parent / "test.json")
 
         # Get active profile
         profile = profile_manager.get_profile()
@@ -609,8 +601,14 @@ class TestProfileManager:
     def test_switch_profile(self, profile_manager):
         """Test switching between profiles."""
         # Create test profiles
-        profile_manager._create_profile("test1", "json", "/test1/path")
-        profile_manager._create_profile("test2", "memory", "/test2/path")
+        profile1 = create_test_profile(
+            name="test1",
+            file_path=str(profile_manager.profiles_path.parent / "test1.json"),
+            profiles_path=profile_manager.profiles_path,
+        )
+        profile2 = create_test_profile(name="test2", storage_type="memory", profiles_path=profile_manager.profiles_path)
+
+        profile_manager.profiles = {"test1": profile1, "test2": profile2}
 
         # Switch to test1
         profile = profile_manager.switch_profile("test1")
@@ -631,8 +629,14 @@ class TestProfileManager:
     def test_delete_profile(self, profile_manager):
         """Test deleting a profile."""
         # Create test profiles
-        profile_manager._create_profile("test1", "json", "/test1/path")
-        profile_manager._create_profile("test2", "memory", "/test2/path")
+        profile1 = create_test_profile(
+            name="test1",
+            file_path=str(profile_manager.profiles_path.parent / "test1.json"),
+            profiles_path=profile_manager.profiles_path,
+        )
+        profile2 = create_test_profile(name="test2", storage_type="memory", profiles_path=profile_manager.profiles_path)
+
+        profile_manager.profiles = {"test1": profile1, "test2": profile2}
 
         # Delete test1
         profile_manager.delete_profile("test1")
@@ -656,9 +660,13 @@ class TestProfileManager:
         # Create a profile manager and add profiles
         config_path = tmp_path / "profiles.json"
         manager1 = ProfileManager(config_path=config_path)
-        manager1._create_profile("test1", "json", "/test1/path")
-        manager1._create_profile("test2", "memory", "/test2/path")
-        manager1.switch_profile("test1")
+        manager1.profiles = {
+            "test1": create_test_profile(
+                name="test1", file_path=str(tmp_path / "test1.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "test2": create_test_profile(name="test2", storage_type="memory", profiles_path=tmp_path / "profiles.json"),
+        }
+        manager1.active_profile_name = "test1"
 
         # Create a new profile manager with the same config path
         manager2 = ProfileManager(config_path=config_path)
@@ -667,7 +675,7 @@ class TestProfileManager:
         profiles = manager2.list_profiles()
         assert "test1" in profiles
         assert profiles["test1"].storage_type == "json"
-        assert profiles["test1"].file_path == "/test1/path"
+        assert profiles["test1"].file_path == str(tmp_path / "test1.json")
 
         # Memory profiles are not persisted, so test2 should not be in the loaded profiles
         assert "test2" not in profiles
@@ -678,8 +686,16 @@ class TestProfileManager:
     def test_env_var_override(self, profile_manager, monkeypatch):
         """Test environment variable override for active profile."""
         # Create test profiles
-        profile_manager._create_profile("test1", "json", "/test1/path")
-        profile_manager._create_profile("env-profile", "memory", "/env/path")
+        profile1 = create_test_profile(
+            name="test1",
+            file_path=str(profile_manager.profiles_path.parent / "test1.json"),
+            profiles_path=profile_manager.profiles_path,
+        )
+        profile2 = create_test_profile(
+            name="env-profile", storage_type="memory", profiles_path=profile_manager.profiles_path
+        )
+
+        profile_manager.profiles = {"test1": profile1, "env-profile": profile2}
 
         # Set environment variable
         monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "env-profile")
@@ -706,7 +722,11 @@ class TestProfileManager:
         manager = ProfileManager(config_path=config_path)
 
         # Create a profile to have something to backup
-        manager._create_profile("test-profile", "json", "/test/path")
+        manager.profiles = {
+            "test-profile": create_test_profile(
+                name="test-profile", file_path=str(tmp_path / "test.json"), profiles_path=tmp_path / "profiles.json"
+            )
+        }
 
         # Create a backup
         backup_path = manager.backup_profiles()
@@ -773,8 +793,14 @@ class TestProfileManager:
         manager = ProfileManager(config_path=config_path)
 
         # Create original profiles
-        manager._create_profile("original1", "json", "/original1/path")
-        manager._create_profile("original2", "memory")
+        manager.profiles = {
+            "original1": create_test_profile(
+                name="original1", file_path=str(tmp_path / "original1.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "original2": create_test_profile(
+                name="original2", storage_type="memory", profiles_path=tmp_path / "profiles.json"
+            ),
+        }
 
         # Create a backup
         backup_path = manager.backup_profiles()
@@ -783,7 +809,11 @@ class TestProfileManager:
         # Create new profiles (replacing the originals)
         manager.delete_profile("original1")
         manager.delete_profile("original2")
-        manager._create_profile("new_profile", "json", "/new/path")
+        manager.profiles = {
+            "new_profile": create_test_profile(
+                name="new_profile", file_path=str(tmp_path / "new.json"), profiles_path=tmp_path / "profiles.json"
+            )
+        }
 
         # Verify new profile exists and old ones don't
         profiles = manager.list_profiles()
@@ -826,7 +856,11 @@ class TestProfileManager:
         manager = ProfileManager(config_path=config_path)
 
         # Create a profile to trigger _save_profiles
-        manager._create_profile("test_profile", "json", "/test/path")
+        manager.profiles = {
+            "test_profile": create_test_profile(
+                name="test_profile", file_path=str(tmp_path / "test.json"), profiles_path=tmp_path / "profiles.json"
+            )
+        }
 
         # Verify a backup was created
         backup_dir = config_path.parent / "backups"
@@ -834,7 +868,11 @@ class TestProfileManager:
         assert backup_files  # Simplified sequence length comparison
 
         # Create another profile to trigger another backup
-        manager._create_profile("another_profile", "memory")
+        manager.profiles = {
+            "another_profile": create_test_profile(
+                name="another_profile", storage_type="memory", profiles_path=tmp_path / "profiles.json"
+            )
+        }
 
         # Verify another backup was created
         backup_files_after = list(backup_dir.glob("profiles_backup_*.json"))
@@ -850,13 +888,21 @@ class TestProfileManager:
 
         # Create a JSON profile (should be persisted)
         json_profile_name = "test-json-profile"
-        profile_manager._create_profile(
-            json_profile_name, "json", str(tmp_path / "json-sessions.json")
-        )
+        profile_manager.profiles = {
+            json_profile_name: create_test_profile(
+                name=json_profile_name,
+                file_path=str(tmp_path / "json-sessions.json"),
+                profiles_path=tmp_path / "profiles.json",
+            )
+        }
 
         # Create an in-memory profile (should not be persisted)
         memory_profile_name = "test-memory-profile"
-        profile_manager._create_profile(memory_profile_name, "memory")
+        profile_manager.profiles = {
+            memory_profile_name: create_test_profile(
+                name=memory_profile_name, storage_type="memory", profiles_path=tmp_path / "profiles.json"
+            )
+        }
 
         # Verify both profiles are available during the session
         assert profile_manager.get_profile(json_profile_name) is not None
@@ -881,14 +927,20 @@ class TestProfileManager:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Create profiles with different storage types
-        profile_manager._create_profile(
-            "json-profile-1", "json", str(tmp_path / "json1.json")
-        )
-        profile_manager._create_profile(
-            "json-profile-2", "json", str(tmp_path / "json2.json")
-        )
-        profile_manager._create_profile("memory-profile-1", "memory")
-        profile_manager._create_profile("memory-profile-2", "memory")
+        profile_manager.profiles = {
+            "json-profile-1": create_test_profile(
+                name="json-profile-1", file_path=str(tmp_path / "json1.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "json-profile-2": create_test_profile(
+                name="json-profile-2", file_path=str(tmp_path / "json2.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "memory-profile-1": create_test_profile(
+                name="memory-profile-1", storage_type="memory", profiles_path=tmp_path / "profiles.json"
+            ),
+            "memory-profile-2": create_test_profile(
+                name="memory-profile-2", storage_type="memory", profiles_path=tmp_path / "profiles.json"
+            ),
+        }
 
         # Test filtering by JSON type
         json_profiles = profile_manager.list_profiles(storage_type="json")
@@ -917,18 +969,20 @@ class TestProfileManager:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Create profiles with different name patterns
-        profile_manager._create_profile(
-            "test-abc-1", "json", str(tmp_path / "abc1.json")
-        )
-        profile_manager._create_profile(
-            "test-abc-2", "json", str(tmp_path / "abc2.json")
-        )
-        profile_manager._create_profile(
-            "test-xyz-1", "json", str(tmp_path / "xyz1.json")
-        )
-        profile_manager._create_profile(
-            "other-profile", "json", str(tmp_path / "other.json")
-        )
+        profile_manager.profiles = {
+            "test-abc-1": create_test_profile(
+                name="test-abc-1", file_path=str(tmp_path / "abc1.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "test-abc-2": create_test_profile(
+                name="test-abc-2", file_path=str(tmp_path / "abc2.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "test-xyz-1": create_test_profile(
+                name="test-xyz-1", file_path=str(tmp_path / "xyz1.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "other-profile": create_test_profile(
+                name="other-profile", file_path=str(tmp_path / "other.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+        }
 
         # Test filtering by pattern
         abc_profiles = profile_manager.list_profiles(pattern="test-abc*")
@@ -961,18 +1015,26 @@ class TestProfileManager:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Create various profiles for testing bulk deletion
-        profile_manager._create_profile(
-            "active-profile", "json", str(tmp_path / "active.json")
-        )
-        profile_manager._create_profile(
-            "json-test-1", "json", str(tmp_path / "json1.json")
-        )
-        profile_manager._create_profile(
-            "json-test-2", "json", str(tmp_path / "json2.json")
-        )
-        profile_manager._create_profile("memory-test-1", "memory")
-        profile_manager._create_profile("memory-test-2", "memory")
-        profile_manager._create_profile("memory-other", "memory")
+        profile_manager.profiles = {
+            "active-profile": create_test_profile(
+                name="active-profile", file_path=str(tmp_path / "active.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "json-test-1": create_test_profile(
+                name="json-test-1", file_path=str(tmp_path / "json1.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "json-test-2": create_test_profile(
+                name="json-test-2", file_path=str(tmp_path / "json2.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "memory-test-1": create_test_profile(
+                name="memory-test-1", storage_type="memory", profiles_path=tmp_path / "profiles.json"
+            ),
+            "memory-test-2": create_test_profile(
+                name="memory-test-2", storage_type="memory", profiles_path=tmp_path / "profiles.json"
+            ),
+            "memory-other": create_test_profile(
+                name="memory-other", storage_type="memory", profiles_path=tmp_path / "profiles.json"
+            ),
+        }
 
         # Set the active profile
         profile_manager.switch_profile("active-profile")
@@ -998,9 +1060,7 @@ class TestProfileManager:
         assert "memory-other" in deleted_memory
 
         # Test bulk deletion by pattern
-        json_test_profiles_before = profile_manager.list_profiles(
-            storage_type="json", pattern="json-test*"
-        )
+        json_test_profiles_before = profile_manager.list_profiles(storage_type="json", pattern="json-test*")
         assert len(json_test_profiles_before) == 2
 
         # Delete JSON profiles matching pattern
@@ -1013,9 +1073,7 @@ class TestProfileManager:
                 # Skip active profile
                 pass
 
-        json_test_profiles_after = profile_manager.list_profiles(
-            storage_type="json", pattern="json-test*"
-        )
+        json_test_profiles_after = profile_manager.list_profiles(storage_type="json", pattern="json-test*")
         assert len(json_test_profiles_after) == 0
         assert "json-test-1" in deleted_json
         assert "json-test-2" in deleted_json
@@ -1045,15 +1103,17 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr(
-            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-        )
+        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
         # Create test profiles
-        profile_manager._create_profile(
-            "json-profile", "json", str(tmp_path / "json-db.json")
-        )
-        profile_manager._create_profile("memory-profile", "memory")
+        profile_manager.profiles = {
+            "json-profile": create_test_profile(
+                name="json-profile", file_path=str(tmp_path / "json-db.json"), profiles_path=tmp_path / "profiles.json"
+            ),
+            "memory-profile": create_test_profile(
+                name="memory-profile", storage_type="memory", profiles_path=tmp_path / "profiles.json"
+            ),
+        }
 
         # Get storage with json profile
         storage = get_storage_instance(profile_name="json-profile")
@@ -1067,9 +1127,13 @@ class TestStorageWithProfiles:
         # Get default storage when no profile specified (should use default profile)
         # First, ensure default profile exists with json storage
         if "default" not in profile_manager.list_profiles():
-            profile_manager._create_profile(
-                "default", "json", str(tmp_path / "default-db.json")
-            )
+            profile_manager.profiles = {
+                "default": create_test_profile(
+                    name="default",
+                    file_path=str(tmp_path / "default-db.json"),
+                    profiles_path=tmp_path / "profiles.json",
+                )
+            }
         else:
             # Update the default profile to use our test path
             default_profile = profile_manager.get_profile("default")
@@ -1096,14 +1160,14 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr(
-            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-        )
+        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
         # Create test profile
-        profile_manager._create_profile(
-            "env-profile", "json", str(tmp_path / "env-db.json")
-        )
+        profile_manager.profiles = {
+            "env-profile": create_test_profile(
+                name="env-profile", file_path=str(tmp_path / "env-db.json"), profiles_path=tmp_path / "profiles.json"
+            )
+        }
 
         # Set environment variable
         monkeypatch.setenv("PYTEST_INSIGHT_PROFILE", "env-profile")
@@ -1114,9 +1178,13 @@ class TestStorageWithProfiles:
         assert storage.file_path == tmp_path / "env-db.json"
 
         # Explicit profile should override env var
-        profile_manager._create_profile(
-            "explicit-profile", "json", str(tmp_path / "explicit-db.json")
-        )
+        profile_manager.profiles = {
+            "explicit-profile": create_test_profile(
+                name="explicit-profile",
+                file_path=str(tmp_path / "explicit-db.json"),
+                profiles_path=tmp_path / "profiles.json",
+            )
+        }
         storage = get_storage_instance(profile_name="explicit-profile")
         assert storage.file_path == tmp_path / "explicit-db.json"
 
@@ -1124,7 +1192,6 @@ class TestStorageWithProfiles:
         """Test convenience functions for profile management."""
         from pytest_insight.core.storage import (
             ProfileManager,
-            create_profile,
             get_active_profile,
             list_profiles,
             switch_profile,
@@ -1135,16 +1202,16 @@ class TestStorageWithProfiles:
         profile_manager = ProfileManager(config_path=config_path)
 
         # Patch the get_profile_manager function to return our test instance
-        monkeypatch.setattr(
-            "pytest_insight.core.storage.get_profile_manager", lambda: profile_manager
-        )
+        monkeypatch.setattr("pytest_insight.core.storage.get_profile_manager", lambda: profile_manager)
 
         # Create profiles using the convenience functions
         # These will use our mocked profile manager
-        profile1 = create_profile("profile1", "json", "/profile1/path")
+        profile1 = create_test_profile(
+            name="profile1", file_path="/profile1/path", profiles_path=tmp_path / "profiles.json"
+        )
         assert profile1.name == "profile1"
 
-        profile2 = create_profile("profile2", "memory")
+        profile2 = create_test_profile(name="profile2", storage_type="memory", profiles_path=tmp_path / "profiles.json")
         assert profile2.name == "profile2"
 
         # List profiles
@@ -1224,9 +1291,7 @@ def test_load_sessions_streaming(mocker, tmp_path, get_test_time):
     storage._write_json_safely({"sessions": [s.to_dict() for s in sessions]})
 
     # Mock the _load_sessions_streaming method to ensure it's called
-    streaming_mock = mocker.patch.object(
-        storage, "_load_sessions_streaming", return_value=sessions
-    )
+    streaming_mock = mocker.patch.object(storage, "_load_sessions_streaming", return_value=sessions)
 
     # Load sessions with streaming
     loaded_sessions = storage.load_sessions(use_streaming=True)
@@ -1236,9 +1301,7 @@ def test_load_sessions_streaming(mocker, tmp_path, get_test_time):
 
     # Verify all sessions were loaded
     assert len(loaded_sessions) == 5
-    assert {s.session_id for s in loaded_sessions} == {
-        f"streaming-test-{i}" for i in range(5)
-    }
+    assert {s.session_id for s in loaded_sessions} == {f"streaming-test-{i}" for i in range(5)}
 
 
 def test_load_sessions_with_invalid_session_data(mocker, tmp_path):
@@ -1279,14 +1342,10 @@ def test_load_sessions_with_invalid_session_data(mocker, tmp_path):
     assert loaded_sessions[0].session_id == "valid-session"
 
     # Verify error was printed
-    print_mock.assert_any_call(
-        mocker.ANY
-    )  # Any call with string containing error message
+    print_mock.assert_any_call(mocker.ANY)  # Any call with string containing error message
 
 
-def test_load_sessions_fallback_when_ijson_not_available(
-    mocker, tmp_path, get_test_time
-):
+def test_load_sessions_fallback_when_ijson_not_available(mocker, tmp_path, get_test_time):
     """Test fallback to standard loading when ijson is not available."""
     # Create a storage instance
     storage_path = tmp_path / "sessions.json"
@@ -1319,15 +1378,11 @@ def test_load_sessions_fallback_when_ijson_not_available(
     loaded_sessions = storage.load_sessions(use_streaming=True)
 
     # Verify warning was printed
-    warning_mock.assert_any_call(
-        "Warning: ijson not installed. Falling back to standard JSON loading."
-    )
+    warning_mock.assert_any_call("Warning: ijson not installed. Falling back to standard JSON loading.")
 
     # Verify all sessions were loaded correctly using the fallback method
     assert len(loaded_sessions) == 3
-    assert {s.session_id for s in loaded_sessions} == {
-        f"fallback-test-{i}" for i in range(3)
-    }
+    assert {s.session_id for s in loaded_sessions} == {f"fallback-test-{i}" for i in range(3)}
 
 
 def test_get_profile_metadata(tmp_path):
@@ -1373,9 +1428,7 @@ def test_get_profile_metadata(tmp_path):
     # Mock get_profile_manager to return our test instance
     from unittest.mock import patch
 
-    with patch(
-        "pytest_insight.core.storage.get_profile_manager", return_value=profile_manager
-    ):
+    with patch("pytest_insight.core.storage.get_profile_manager", return_value=profile_manager):
         # Test getting metadata for all profiles
         all_metadata = get_profile_metadata()
 

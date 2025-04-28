@@ -8,14 +8,13 @@ import inspect
 import os
 from typing import Any, List, get_type_hints
 
-from fastapi import Body, FastAPI, Request, Query
+import orjson
+from fastapi import Body, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from pytest_insight.scripts.introspect_api import introspect_api
-from pytest_insight.core.storage import ProfileManager
+from pytest_insight.core.storage import ProfileManager, get_profile_metadata
 from pytest_insight.insight_api import InsightAPI
-import orjson
 
 app = FastAPI(title="pytest-insight API Explorer")
 
@@ -41,7 +40,17 @@ def introspect_api(module: str, class_: str, markdown: bool = False):
 
     def categorize_method(name, doc):
         """Categorize method into analytics, filtering, or utility based on naming and docstring."""
-        analytics_keywords = ["report", "summary", "trend", "insight", "aggregate", "metrics", "compare", "forecast", "pattern"]
+        analytics_keywords = [
+            "report",
+            "summary",
+            "trend",
+            "insight",
+            "aggregate",
+            "metrics",
+            "compare",
+            "forecast",
+            "pattern",
+        ]
         filter_keywords = ["filter", "with_", "for_", "in_", "by_", "apply"]
         lname = name.lower()
         if any(kw in lname for kw in analytics_keywords):
@@ -67,9 +76,7 @@ def introspect_api(module: str, class_: str, markdown: bool = False):
                     if param.name == "self":
                         continue
                     annotation = str(type_hints.get(param.name, "Any"))
-                    default = (
-                        param.default if param.default != inspect.Parameter.empty else None
-                    )
+                    default = param.default if param.default != inspect.Parameter.empty else None
                     params.append(
                         {
                             "name": param.name,
@@ -105,41 +112,63 @@ def introspect_api(module: str, class_: str, markdown: bool = False):
 
 @app.get("/profiles")
 def list_profiles():
-    """List all available profiles."""
-    # Always reload the profile manager to pick up new profiles
-    profile_manager = ProfileManager()  # Re-instantiate to force reload
-    profiles = profile_manager.list_profiles()
-    return JSONResponse({"profiles": list(profiles)})
+    """List all available profiles with metadata."""
+    pm = ProfileManager()
+    pm.reload()
+    meta = get_profile_metadata()
+    if "error" in meta:
+        return JSONResponse({"status": "error", "error": meta["error"]}, status_code=500)
+    profiles = meta.get("profiles", {})
+    return JSONResponse({"profiles": profiles})
 
 
 @app.post("/profiles")
-def create_profile(name: str):
-    """Create a new profile by name."""
+def create_profile(
+    name: str = Body(...),
+    type: str = Body("json"),
+    path: str = Body(None),
+):
+    """Create a new storage profile with metadata."""
+    pm = ProfileManager()
     try:
-        profile_manager = ProfileManager()
-        profile_manager._create_profile(name)
-        return JSONResponse({"status": "success", "profile": name})
+        profile = pm.create_profile(name, type, path)
+        pm.reload()
+        return JSONResponse({"status": "success", "profile": profile.to_dict()})
     except Exception as e:
         return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
 
 
+@app.get("/profiles/{name}")
+def get_profile_metadata_endpoint(name: str):
+    """Get metadata/details for a profile."""
+    pm = ProfileManager()
+    pm.reload()
+    try:
+        profile = pm.get_profile(name)
+        return JSONResponse({"profile": profile.to_dict()})
+    except Exception as e:
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=404)
+
+
 @app.delete("/profiles/{name}")
 def delete_profile(name: str):
-    """Delete a profile by name."""
+    """Delete a storage profile."""
+    pm = ProfileManager()
     try:
-        profile_manager = ProfileManager()
-        profile_manager.delete_profile(name)
+        pm.delete_profile(name)
+        pm.reload()
         return JSONResponse({"status": "success", "profile": name})
     except Exception as e:
         return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
 
 
 @app.post("/profiles/active")
-def set_active_profile(name: str):
-    """Set the active profile."""
+def set_active_profile(name: str = Body(...)):
+    """Set the active/default storage profile."""
+    pm = ProfileManager()
     try:
-        profile_manager = ProfileManager()
-        profile_manager.switch_profile(name)
+        pm.switch_profile(name)
+        pm.reload()
         return JSONResponse({"status": "success", "active_profile": name})
     except Exception as e:
         return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
@@ -147,24 +176,14 @@ def set_active_profile(name: str):
 
 @app.get("/profiles/active")
 def get_active_profile():
-    """Get the currently active profile."""
+    """Get the currently active profile with metadata."""
+    pm = ProfileManager()
+    pm.reload()
     try:
-        profile_manager = ProfileManager()
-        profile = profile_manager.get_active_profile()
-        return JSONResponse({"active_profile": profile.name})
+        profile = pm.get_active_profile()
+        return JSONResponse({"active_profile": profile.to_dict()})
     except Exception as e:
-        return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
-
-
-@app.get("/profiles/{name}")
-def get_profile_metadata(name: str):
-    """Get metadata/details for a profile."""
-    try:
-        profile_manager = ProfileManager()
-        profile = profile_manager.get_profile(name)
-        return JSONResponse({"profile": profile.to_dict()})
-    except Exception as e:
-        return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=404)
 
 
 class ChainStep(BaseModel):
@@ -211,9 +230,7 @@ def introspect_chain(req: IntrospectChainRequest = Body(...)):
                 obj = attr
             else:
                 return JSONResponse(
-                    {
-                        "error": f"'{step.name}' is not callable and does not accept parameters."
-                    },
+                    {"error": f"'{step.name}' is not callable and does not accept parameters."},
                     status_code=400,
                 )
         # Now introspect next valid methods/properties
@@ -262,16 +279,12 @@ def execute_chain(req: ExecuteChainRequest = Body(...)):
                 obj = attr
             else:
                 return JSONResponse(
-                    {
-                        "error": f"'{step.name}' is not callable and does not accept parameters."
-                    },
+                    {"error": f"'{step.name}' is not callable and does not accept parameters."},
                     status_code=400,
                 )
         # Try to jsonify the result, fallback to str
         try:
-            return HTMLResponse(
-                f"<pre>{orjson.dumps(obj, option=orjson.OPT_INDENT_2).decode()}</pre>"
-            )
+            return HTMLResponse(f"<pre>{orjson.dumps(obj, option=orjson.OPT_INDENT_2).decode()}</pre>")
         except Exception:
             return HTMLResponse(f"<pre>{str(obj)}</pre>")
     except Exception as e:
@@ -302,12 +315,14 @@ def profile_stats(profile: str = Query(None), filtered: bool = Query(False)):
     # Remove None
     suts.discard(None)
     systems.discard(None)
-    return JSONResponse({
-        "profile": prof.name,
-        "total_sessions": len(sessions),
-        "suts": sorted(list(suts)),
-        "num_suts": len(suts),
-        "testing_systems": sorted(list(systems)),
-        "num_testing_systems": len(systems),
-        "summary": summary,
-    })
+    return JSONResponse(
+        {
+            "profile": prof.name,
+            "total_sessions": len(sessions),
+            "suts": sorted(list(suts)),
+            "num_suts": len(suts),
+            "testing_systems": sorted(list(systems)),
+            "num_testing_systems": len(systems),
+            "summary": summary,
+        }
+    )

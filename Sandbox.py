@@ -30,11 +30,11 @@ from pytest_insight.utils.history_generator import HistoryDataGenerator
 # print(f"Generated {len(sessions)} sessions and saved to {profile_path}")
 
 # Load sessions from a specific profile by name
-storage = get_storage_instance(profile_name="barnteen")
+storage = get_storage_instance(profile_name="default")
 sessions = storage.load_sessions()
 
 from pytest_insight.core.storage import switch_profile
-switch_profile("barnteen")
+switch_profile("default")
 
 from pytest_insight.core.storage import get_profile_manager
 pm = get_profile_manager()

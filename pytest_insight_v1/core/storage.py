@@ -328,136 +328,20 @@ class ProfileManager:
 
     def backup_profiles(self) -> Optional[Path]:
         """Create a timestamped backup of the profiles file.
-
-        Returns:
-            Path to the created backup file, or None if backup couldn't be created
-        """
-        if not self.config_path.exists():
-            print("No profiles file to backup")
-            return None
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_dir = self.config_path.parent / "backups"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-
-        # Add a unique identifier to ensure uniqueness even when backups are created in rapid succession
-        unique_id = str(uuid.uuid4())[:8]
-
-        backup_path = backup_dir / f"profiles_backup_{timestamp}_{unique_id}.json"
-        try:
-            shutil.copy2(self.config_path, backup_path)
-            print(f"Created profiles backup: {backup_path}")
-
-            # Keep only the 10 most recent backups
-            self._cleanup_old_backups(max_backups=10)
-
-            return backup_path
-        except Exception as e:
-            print(f"Failed to create backup: {e}")
-            return None
+        (Removed for storage-only mode)"""
+        pass
 
     def _cleanup_old_backups(self, max_backups: int = 10) -> None:
-        """Remove old backups, keeping only the most recent ones.
-
-        Args:
-            max_backups: Maximum number of backups to keep
-        """
-        backup_dir = self.config_path.parent / "backups"
-        if not backup_dir.exists():
-            return
-
-        backups = sorted(
-            backup_dir.glob("profiles_backup_*.json"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-
-        # Remove older backups beyond the max limit
-        for old_backup in backups[max_backups:]:
-            try:
-                old_backup.unlink()
-                print(f"Removed old backup: {old_backup}")
-            except Exception as e:
-                print(f"Failed to remove old backup {old_backup}: {e}")
+        """Remove old backups, keeping only the most recent ones. (Removed for storage-only mode)"""
+        pass
 
     def list_backups(self) -> List[Dict[str, Any]]:
-        """List available backup files with metadata.
-
-        Returns:
-            List of dictionaries with backup metadata
-        """
-        backup_dir = self.config_path.parent / "backups"
-        if not backup_dir.exists():
-            return []
-
-        backups = []
-        for backup_file in backup_dir.glob("profiles_backup_*.json"):
-            try:
-                # Extract timestamp from filename
-                # Handle both old format (profiles_backup_YYYYMMDD_HHMMSS.json)
-                # and new format (profiles_backup_YYYYMMDD_HHMMSS_uniqueid.json)
-                filename = backup_file.name
-                # Extract the timestamp part (after profiles_backup_ and before .json or _uniqueid)
-                timestamp_str = filename.replace("profiles_backup_", "").replace(".json", "")
-
-                # If there's an underscore after the timestamp, it's the new format with a unique ID
-                if "_" in timestamp_str:
-                    # Split by the last underscore to get the timestamp part
-                    timestamp_str = timestamp_str.rsplit("_", 1)[0]
-
-                # Parse the timestamp
-                timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
-
-                # Get file stats
-                stats = backup_file.stat()
-
-                backups.append(
-                    {
-                        "path": str(backup_file),
-                        "filename": backup_file.name,
-                        "timestamp": timestamp,
-                        "size": stats.st_size,
-                        "created": datetime.fromtimestamp(stats.st_ctime),
-                    }
-                )
-            except Exception as e:
-                print(f"Error processing backup {backup_file}: {e}")
-
-        # Sort by timestamp (newest first)
-        backups.sort(key=lambda x: x["timestamp"], reverse=True)
-        return backups
+        """List available backup files with metadata. (Removed for storage-only mode)"""
+        return []
 
     def restore_from_backup(self, backup_path: Union[str, Path]) -> bool:
-        """Restore profiles from a backup file.
-
-        Args:
-            backup_path: Path to the backup file to restore from
-
-        Returns:
-            True if restore was successful, False otherwise
-        """
-        backup_path = Path(backup_path) if isinstance(backup_path, str) else backup_path
-
-        if not backup_path.exists():
-            print(f"Backup file not found: {backup_path}")
-            return False
-
-        try:
-            # Create a backup of the current state before restoring
-            if self.config_path.exists():
-                self.backup_profiles()
-
-            # Copy the backup to the profiles location
-            shutil.copy2(backup_path, self.config_path)
-
-            # Reload the profiles
-            self._load_profiles()
-
-            print(f"Successfully restored profiles from {backup_path}")
-            return True
-        except Exception as e:
-            print(f"Failed to restore from backup {backup_path}: {e}")
-            return False
+        """Restore profiles from a backup file. (Removed for storage-only mode)"""
+        return False
 
 
 class BaseStorage:

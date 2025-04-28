@@ -21,6 +21,9 @@ dependencies = [
     "tomli>=2.2.1",
     "sqlalchemy>=2.0.40",
     "psycopg2>=2.9.10",
+    "google-cloud-storage>=3.1.0",
+    "pandas>=2.2.3",
+    "beautifulsoup4>=4.13.4",
 ]
 
 [project.optional-dependencies]

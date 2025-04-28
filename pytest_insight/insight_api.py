@@ -32,6 +32,7 @@ class InsightAPI(Insight):
             self._sessions = sessions
         elif profile is not None:
             from pytest_insight.core.storage import get_storage_instance
+
             storage = get_storage_instance(profile)
             self._sessions = storage.load_sessions()
         else:
@@ -88,6 +89,7 @@ class InsightAPI(Insight):
     def available_insights(self):
         """List available insight kinds."""
         import inspect
+
         return sorted(
             name[len("_insight_") :]
             for name, method in inspect.getmembers(self, predicate=inspect.ismethod)
@@ -225,3 +227,27 @@ class InsightAPI(Insight):
     @property
     def trend_facet(self):
         return TrendInsight(self._sessions)
+
+    def create_profile(self, name: str, storage_type: str = "json", file_path: str = None):
+        """Explicitly create a new storage profile and return its metadata.
+
+        Args:
+            name (str): Unique name for the profile
+            storage_type (str): Storage backend type (default: 'json')
+            file_path (str): Optional custom file path
+        Returns:
+            dict: Metadata for the created profile (flat keys for direct access)
+        Raises:
+            ValueError: If profile already exists or creation fails
+        """
+        from pytest_insight.core.storage import create_profile, get_profile_metadata
+
+        create_profile(name, storage_type, file_path)
+        meta = get_profile_metadata(name)
+        # Flatten and return only the profile-specific metadata for convenience
+        if "profile" in meta:
+            return meta["profile"]
+        elif "error" in meta:
+            raise ValueError(meta["error"])
+        else:
+            raise RuntimeError("Unexpected metadata structure: {}".format(meta))

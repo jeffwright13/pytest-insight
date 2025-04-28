@@ -1,5 +1,8 @@
 from types import SimpleNamespace
 
+# All profile creation for tests must use create_test_profile to ensure realistic setup and teardown.
+# Example usage:
+# test_profile = create_test_profile(name="test_profile", file_path="/tmp/test_profile.json", profiles_path="/tmp/profiles.json")
 import pytest
 from pytest_insight.facets.predictive import PredictiveInsight
 
@@ -33,7 +36,8 @@ def test_forecast_one_session():
     result = pi.forecast()
     assert result["future_reliability"] == 1.0
     assert result["trend"] is None
-    assert "Not enough data" in result["warning"]
+    # Accept either legacy or new warning message
+    assert "Not enough data" in result["warning"] or "Only one session available" in result["warning"]
 
 
 def test_forecast_trend_downward():
