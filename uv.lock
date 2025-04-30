@@ -428,7 +428,7 @@ name = "click"
 version = "8.1.8"
 source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "platform_system == 'Windows'" },
 ]
 sdist = { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/b9/2e/0090cbf739cee7d23781ad4b89a9894a41538e4fcf4c31dcdd705b78eb8b/click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a" }
 wheels = [
@@ -1088,7 +1088,7 @@ name = "ipykernel"
 version = "6.29.5"
 source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }
 dependencies = [
-    { name = "appnope", marker = "sys_platform == 'darwin'" },
+    { name = "appnope", marker = "platform_system == 'Darwin'" },
     { name = "comm" },
     { name = "debugpy" },
     { name = "ipython", version = "8.18.1", source = { registry = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/simple" }, marker = "python_full_version < '3.10'" },
@@ -2634,7 +2634,9 @@ dependencies = [
     { name = "ijson" },
     { name = "pandas" },
     { name = "prompt-toolkit" },
+    { name = "psutil" },
     { name = "psycopg2" },
+    { name = "pyarrow" },
     { name = "pytest" },
     { name = "rich" },
     { name = "sparklines" },
@@ -2740,7 +2742,9 @@ requires-dist = [
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.3.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.0" },
     { name = "prompt-toolkit", marker = "extra == 'explorer'", specifier = ">=3.0.0" },
+    { name = "psutil", specifier = ">=7.0.0" },
     { name = "psycopg2", specifier = ">=2.9.10" },
+    { name = "pyarrow", specifier = ">=19.0.1" },
     { name = "pyflakes", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "pytest", specifier = ">=6.2.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
@@ -3586,7 +3590,7 @@ dependencies = [
     { name = "toml" },
     { name = "tornado" },
     { name = "typing-extensions" },
-    { name = "watchdog", marker = "sys_platform != 'darwin'" },
+    { name = "watchdog", marker = "platform_system != 'Darwin'" },
 ]
 sdist = { url = "https://artifactory.tools.gems.energy/artifactory/api/pypi/python-virtual/packages/packages/3e/c0/7286284567e5045f0c587c426d0c41aee5d10c0a2e360e627a83037e9f0c/streamlit-1.44.1.tar.gz", hash = "sha256:c6914ed6d5b76870b461510476806db370f36425ae0e6654d227c988288198d3" }
 wheels = [

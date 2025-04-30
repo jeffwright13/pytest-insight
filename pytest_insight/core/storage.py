@@ -1029,6 +1029,9 @@ def get_storage_instance(
 
         if profile.storage_type.lower() == "json":
             return JSONStorage(profile.file_path)
+        elif profile.storage_type.lower() == "parquet":
+            from pytest_insight.storage.parquet_storage import ParquetStorage
+            return ParquetStorage(profile.file_path)
         elif profile.storage_type.lower() == "memory":
             return InMemoryStorage()
         else:
@@ -1040,6 +1043,9 @@ def get_storage_instance(
             profile = profile_manager.get_profile(env_profile)
             if profile.storage_type.lower() == "json":
                 return JSONStorage(profile.file_path)
+            elif profile.storage_type.lower() == "parquet":
+                from pytest_insight.storage.parquet_storage import ParquetStorage
+                return ParquetStorage(profile.file_path)
             elif profile.storage_type.lower() == "memory":
                 return InMemoryStorage()
             else:
@@ -1054,6 +1060,9 @@ def get_storage_instance(
     profile = profile_manager.get_active_profile()
     if profile.storage_type.lower() == "json":
         return JSONStorage(profile.file_path)
+    elif profile.storage_type.lower() == "parquet":
+        from pytest_insight.storage.parquet_storage import ParquetStorage
+        return ParquetStorage(profile.file_path)
     elif profile.storage_type.lower() == "memory":
         return InMemoryStorage()
     else:

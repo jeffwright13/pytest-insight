@@ -24,6 +24,8 @@ dependencies = [
     "google-cloud-storage>=3.1.0",
     "pandas>=2.2.3",
     "beautifulsoup4>=4.13.4",
+    "pyarrow>=19.0.1",
+    "psutil>=7.0.0",
 ]
 
 [project.optional-dependencies]

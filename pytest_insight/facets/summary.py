@@ -69,11 +69,19 @@ class SummaryInsight(Insight):
         outcome_percentages = {
             k: (outcome_counts[k] / total_tests * 100 if total_tests else 0.0) for k in outcome_counts
         }
+        # Defensive conversion: ensure all values are json-serializable
+        import json
+        def safe_convert(val):
+            try:
+                json.dumps(val)
+                return val
+            except Exception:
+                return str(val)
         return {
-            "total_sessions": total_sessions,
-            "total_tests": total_tests,
-            "pass_rate": outcome_percentages.get("passed", 0.0),
-            "fail_rate": outcome_percentages.get("failed", 0.0),
-            "reliability": reliability,
-            "outcome_counts": outcome_counts,
+            "total_sessions": safe_convert(total_sessions),
+            "total_tests": safe_convert(total_tests),
+            "pass_rate": safe_convert(outcome_percentages.get("passed", 0.0)),
+            "fail_rate": safe_convert(outcome_percentages.get("failed", 0.0)),
+            "reliability": safe_convert(reliability),
+            "outcome_counts": {k: safe_convert(v) for k, v in outcome_counts.items()},
         }

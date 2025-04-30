@@ -6,14 +6,14 @@ This is a placeholder. Integrate dynamic introspection and UI logic here.
 import importlib
 import inspect
 import os
-from typing import Any, List, get_type_hints
+from typing import Any, List, get_type_hints, Optional
 
 import orjson
 from fastapi import Body, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from pytest_insight.core.storage import ProfileManager, get_profile_metadata
+from pytest_insight.core.storage import ProfileManager, get_profile_metadata, get_storage_instance
 from pytest_insight.insight_api import InsightAPI
 
 app = FastAPI(title="pytest-insight API Explorer")
@@ -118,7 +118,7 @@ def list_profiles():
     meta = get_profile_metadata()
     if "error" in meta:
         return JSONResponse({"status": "error", "error": meta["error"]}, status_code=500)
-    profiles = meta.get("profiles", {})
+    profiles = list(meta.get("profiles", {}).keys())
     return JSONResponse({"profiles": profiles})
 
 
@@ -163,25 +163,31 @@ def delete_profile(name: str):
 
 
 @app.post("/profiles/active")
-def set_active_profile(name: str = Body(...)):
-    """Set the active/default storage profile."""
+def set_active_profile(
+    name: Optional[str] = Body(None),
+    name_query: Optional[str] = Query(None)
+):
+    # Prefer JSON body, fallback to query param
+    active_name = name or name_query
+    if not active_name:
+        return JSONResponse({"status": "error", "error": "Missing profile name"}, status_code=422)
     pm = ProfileManager()
     try:
-        pm.switch_profile(name)
-        pm.reload()
-        return JSONResponse({"status": "success", "active_profile": name})
+        pm.switch_profile(active_name)
+        return JSONResponse({"status": "success", "active_profile": active_name})
     except Exception as e:
         return JSONResponse({"status": "error", "error": str(e)}, status_code=400)
 
 
 @app.get("/profiles/active")
 def get_active_profile():
-    """Get the currently active profile with metadata."""
+    """Get the currently active profile name."""
     pm = ProfileManager()
     pm.reload()
     try:
         profile = pm.get_active_profile()
-        return JSONResponse({"active_profile": profile.to_dict()})
+        # Return just the name, not the dict
+        return JSONResponse({"active_profile": profile.name})
     except Exception as e:
         return JSONResponse({"status": "error", "error": str(e)}, status_code=404)
 
@@ -298,11 +304,13 @@ def profile_stats(profile: str = Query(None), filtered: bool = Query(False)):
     If filtered=True, returns stats for the current filtered set of sessions (if supported).
     """
     profile_manager = ProfileManager()
-    if profile:
-        prof = profile_manager.get_profile(profile)
-    else:
+    if not profile:
         prof = profile_manager.get_active_profile()
-    sessions = prof.load_sessions()
+    else:
+        prof = profile_manager.get_profile(profile)
+    # Use the correct storage backend
+    storage = get_storage_instance(profile_name=prof.name)
+    sessions = storage.load_sessions()
     api = InsightAPI(sessions)
     # Gather stats
     summary = api.summary_report()
