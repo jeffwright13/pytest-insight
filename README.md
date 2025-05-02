@@ -1,3 +1,44 @@
+# 🚦 Project Status: On Hiatus (as of 2025-05-02)
+
+**This project is currently on hold due to shifting priorities.**
+
+- The codebase is left in a partially complete, exploratory state.
+- Many features are implemented, but some are unfinished or experimental.
+- Documentation and design notes have been updated to help future contributors (or your future self) resume development efficiently.
+
+## 🧭 Guide for Future Contributors / Maintainers
+
+**If you're picking this up for the first time:**
+
+1. **Start with the `/docs/v1/00_README.md`** – This is the entry point for all documentation and includes a reading guide.
+2. **See `/docs/v1/01_CONCEPTUAL_FRAMEWORK.md`** – Explains the layered architecture and design philosophy.
+3. **Review `/docs/v1/02_ARCHITECTURE_OVERVIEW.md`** – Technical overview of the codebase.
+4. **Check `/docs/v1/03_STORAGE.md`** – Storage profile system and how data is managed.
+5. **See `/docs/v1/04_CLI_GUIDE.md`** – CLI usage and structure.
+
+**Project Highlights:**
+- Fluent, chainable API for querying, comparing, and analyzing pytest data
+- Storage profile system for flexible data management (see `core/storage.py`)
+- Interactive CLI and Streamlit dashboard
+- Predictive analytics and advanced test health metrics
+
+**What’s Incomplete or Experimental:**
+- Some analysis and insights features are stubs or prototypes
+- REST API is not fully unified with Python API (see `/web_api`)
+- Dashboard is functional but not fully polished
+- Some advanced metrics and federated analysis are planned but not implemented
+
+**Where to Resume:**
+- See the "State of the Project" and "Next Steps" in `/docs/v1/00_README.md`.
+- Most architectural decisions are documented in `/docs/v1/01_CONCEPTUAL_FRAMEWORK.md` and `/docs/v1/02_ARCHITECTURE_OVERVIEW.md`.
+- Open questions and roadmap ideas are at the end of major docs.
+
+**Contact:**
+- Original author: jwr003
+- Last update: 2025-05-02
+
+---
+
 # pytest-insight
 
 A pytest plugin for analyzing test health, performance, and patterns across test runs.

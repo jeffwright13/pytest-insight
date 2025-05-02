@@ -26,6 +26,8 @@ dependencies = [
     "beautifulsoup4>=4.13.4",
     "pyarrow>=19.0.1",
     "psutil>=7.0.0",
+    "matplotlib>=3.9.4",
+    "numpy>=2.0.2",
 ]
 
 [project.optional-dependencies]
